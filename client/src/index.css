@@ -1,0 +1,218 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(248, 250, 252);
+  --foreground: hsl(30, 41, 59);
+  --card: hsl(255, 255, 255);
+  --card-foreground: hsl(30, 41, 59);
+  --popover: hsl(255, 255, 255);
+  --popover-foreground: hsl(30, 41, 59);
+  --primary: hsl(37, 99, 235);
+  --primary-foreground: hsl(248, 250, 252);
+  --secondary: hsl(8, 145, 178);
+  --secondary-foreground: hsl(248, 250, 252);
+  --muted: hsl(241, 245, 249);
+  --muted-foreground: hsl(100, 116, 139);
+  --accent: hsl(245, 158, 11);
+  --accent-foreground: hsl(30, 41, 59);
+  --destructive: hsl(239, 68, 68);
+  --destructive-foreground: hsl(248, 250, 252);
+  --border: hsl(226, 232, 240);
+  --input: hsl(226, 232, 240);
+  --ring: hsl(37, 99, 235);
+  --chart-1: hsl(203, 88, 53);
+  --chart-2: hsl(159, 100, 36);
+  --chart-3: hsl(42, 92, 56);
+  --chart-4: hsl(147, 78, 41);
+  --chart-5: hsl(341, 75, 50);
+  --sidebar: hsl(180, 6, 97);
+  --sidebar-foreground: hsl(210, 25, 7);
+  --sidebar-primary: hsl(203, 88, 53);
+  --sidebar-primary-foreground: hsl(0, 0, 100);
+  --sidebar-accent: hsl(211, 51, 92);
+  --sidebar-accent-foreground: hsl(203, 88, 53);
+  --sidebar-border: hsl(205, 25, 90);
+  --sidebar-ring: hsl(202, 89, 53);
+  --font-sans: 'Inter', sans-serif;
+  --font-serif: Georgia, serif;
+  --font-mono: Menlo, monospace;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: hsl(0, 0, 0);
+  --foreground: hsl(200, 6, 91);
+  --card: hsl(228, 9, 10);
+  --card-foreground: hsl(0, 0, 85);
+  --popover: hsl(0, 0, 0);
+  --popover-foreground: hsl(200, 6, 91);
+  --primary: hsl(203, 87, 52);
+  --primary-foreground: hsl(0, 0, 100);
+  --secondary: hsl(195, 15, 94);
+  --secondary-foreground: hsl(210, 25, 7);
+  --muted: hsl(0, 0, 9);
+  --muted-foreground: hsl(210, 3, 46);
+  --accent: hsl(205, 70, 7);
+  --accent-foreground: hsl(203, 87, 52);
+  --destructive: hsl(356, 90, 54);
+  --destructive-foreground: hsl(0, 0, 100);
+  --border: hsl(210, 5, 14);
+  --input: hsl(207, 27, 18);
+  --ring: hsl(202, 89, 53);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply font-sans antialiased bg-background text-foreground;
+    font-size: 18px;
+    line-height: 1.6;
+  }
+}
+
+/* Progress Steps */
+.progress-step {
+  position: relative;
+  flex: 1;
+}
+
+.progress-step::before {
+  content: '';
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  width: 100%;
+  height: 3px;
+  background: hsl(var(--border));
+  z-index: 0;
+}
+
+.progress-step:first-child::before {
+  left: 50%;
+  width: 50%;
+}
+
+.progress-step:last-child::before {
+  width: 50%;
+}
+
+.progress-step.active::before,
+.progress-step.completed::before {
+  background: hsl(var(--primary));
+}
+
+.step-indicator {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: hsl(var(--muted));
+  border: 3px solid hsl(var(--border));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  z-index: 1;
+  font-weight: 600;
+  font-size: 16px;
+}
+
+.progress-step.active .step-indicator {
+  background: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  border-color: hsl(var(--primary));
+}
+
+.progress-step.completed .step-indicator {
+  background: hsl(var(--primary));
+  border-color: hsl(var(--primary));
+}
+
+/* File Upload Zone */
+.upload-zone {
+  border: 3px dashed hsl(var(--border));
+  border-radius: var(--radius);
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.upload-zone:hover {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--muted));
+}
+
+.upload-zone.dragover {
+  border-color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.1);
+}
+
+/* Status Badge */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 16px;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.status-sent { 
+  background: hsl(var(--primary) / 0.15); 
+  color: hsl(var(--primary)); 
+}
+
+.status-pending { 
+  background: hsl(var(--accent) / 0.15); 
+  color: hsl(var(--accent)); 
+}
+
+.status-received { 
+  background: hsl(159, 100%, 36% / 0.15); 
+  color: hsl(159, 100%, 36%); 
+}
+
+/* Email Thread */
+.email-thread-item {
+  position: relative;
+  padding-left: 40px;
+}
+
+.email-thread-item::before {
+  content: '';
+  position: absolute;
+  left: 15px;
+  top: 40px;
+  bottom: -20px;
+  width: 2px;
+  background: hsl(var(--border));
+}
+
+.email-thread-item:last-child::before {
+  display: none;
+}
+
+.email-thread-dot {
+  position: absolute;
+  left: 8px;
+  top: 24px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: hsl(var(--primary));
+  border: 3px solid hsl(var(--background));
+}
+
+/* Utility classes */
+.shadow-card {
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+}
+
+.shadow-card-lg {
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
