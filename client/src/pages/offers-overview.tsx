@@ -1,12 +1,16 @@
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Shield, Send, Clock, CheckCircle, Eye, Mail } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Shield, Send, Clock, CheckCircle, Eye, Mail, RefreshCw } from "lucide-react";
 
 export default function OffersOverview() {
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
   const userId = localStorage.getItem("userId");
 
   if (!userId) {
@@ -28,6 +32,43 @@ export default function OffersOverview() {
   const { data: comparisons = [] } = useQuery({
     queryKey: ["/api/comparisons/user", userId],
   });
+
+  // Check inbox mutation
+  const checkInboxMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/emails/check-inbox", {});
+      return response.json();
+    },
+    onSuccess: () => {
+      // Refresh threads and comparisons
+      queryClient.invalidateQueries({ queryKey: ["/api/emails/threads", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/comparisons/user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats", userId] });
+      toast({
+        title: "Indbakke tjekket",
+        description: "Nye emails er blevet hentet",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Fejl",
+        description: "Kunne ikke tjekke indbakke",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Auto-check inbox every 30 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      checkInboxMutation.mutate();
+    }, 30000);
+
+    // Check immediately on mount
+    checkInboxMutation.mutate();
+
+    return () => clearInterval(interval);
+  }, [userId]);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -93,11 +134,23 @@ export default function OffersOverview() {
       <main className="flex-1">
         <section className="py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-6xl mx-auto">
-            <div className="mb-8">
-              <h2 className="text-3xl font-bold text-foreground mb-3">Tilbudsoversigt</h2>
-              <p className="text-lg text-muted-foreground">
-                Følg status på dine forespørgsler og modtagne tilbud
-              </p>
+            <div className="mb-8 flex items-center justify-between">
+              <div>
+                <h2 className="text-3xl font-bold text-foreground mb-3">Tilbudsoversigt</h2>
+                <p className="text-lg text-muted-foreground">
+                  Følg status på dine forespørgsler og modtagne tilbud
+                </p>
+              </div>
+              <Button
+                onClick={() => checkInboxMutation.mutate()}
+                disabled={checkInboxMutation.isPending}
+                variant="outline"
+                className="gap-2"
+                data-testid="button-check-inbox"
+              >
+                <RefreshCw className={`w-5 h-5 ${checkInboxMutation.isPending ? 'animate-spin' : ''}`} />
+                Tjek for nye emails
+              </Button>
             </div>
 
             {/* Summary Cards */}
