@@ -15,6 +15,7 @@ export default function UploadOffer() {
   const userId = localStorage.getItem("userId");
   const [selectedCompany, setSelectedCompany] = useState("");
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
 
   if (!userId) {
     setLocation("/onboarding");
@@ -28,9 +29,9 @@ export default function UploadOffer() {
 
   // Upload offer mutation
   const uploadMutation = useMutation({
-    mutationFn: async (data: { files: FileList; companyId: string }) => {
+    mutationFn: async (data: { files: File[]; companyId: string }) => {
       const formData = new FormData();
-      Array.from(data.files).forEach((file) => {
+      data.files.forEach((file) => {
         formData.append("files", file);
       });
       formData.append("userId", userId!);
@@ -60,12 +61,14 @@ export default function UploadOffer() {
   });
 
   const handleFilesUploaded = (files: FileList) => {
-    const fileArray = Array.from(files).map((file) => ({
+    const fileArray = Array.from(files);
+    setPendingFiles(fileArray);
+    
+    const displayFiles = fileArray.map((file) => ({
       fileName: file.name,
       fileSize: file.size,
-      file: file,
     }));
-    setUploadedFiles(fileArray);
+    setUploadedFiles(displayFiles);
   };
 
   const handleSubmit = () => {
@@ -78,7 +81,7 @@ export default function UploadOffer() {
       return;
     }
 
-    if (uploadedFiles.length === 0) {
+    if (pendingFiles.length === 0) {
       toast({
         title: "Upload fil",
         description: "Du skal uploade mindst én fil",
@@ -87,13 +90,8 @@ export default function UploadOffer() {
       return;
     }
 
-    const dataTransfer = new DataTransfer();
-    uploadedFiles.forEach((fileObj) => {
-      dataTransfer.items.add(fileObj.file);
-    });
-
     uploadMutation.mutate({
-      files: dataTransfer.files,
+      files: pendingFiles,
       companyId: selectedCompany,
     });
   };
@@ -170,13 +168,13 @@ export default function UploadOffer() {
                 <div className="flex justify-end mt-8">
                   <Button
                     onClick={handleSubmit}
-                    disabled={uploadMutation.isPending || !selectedCompany || uploadedFiles.length === 0}
+                    disabled={uploadMutation.isPending || !selectedCompany || pendingFiles.length === 0}
                     size="lg"
                     className="text-lg px-12 py-4 gap-2"
                     data-testid="button-submit-offer"
                   >
                     <Upload className="w-5 h-5" />
-                    Upload og sammenlign
+                    {uploadMutation.isPending ? "Uploader..." : "Upload og sammenlign"}
                   </Button>
                 </div>
               </CardContent>
