@@ -141,6 +141,7 @@ Preferred communication style: Simple, everyday language.
 **Gmail Integration:**
 - Google APIs client library for Gmail access
 - OAuth2 authentication via Replit Connectors
+- Connected email: hej@bedretilbud.com
 - Dynamic token refresh mechanism
 - Read inbox capabilities for incoming offers
 - Send email with attachments

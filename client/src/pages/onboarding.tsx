@@ -127,40 +127,77 @@ export default function Onboarding() {
     }
   }, [currentStep, setLocation]);
 
-  const onUserInfoSubmit = (data: UserInfoForm) => {
+  const onUserInfoSubmit = async (data: UserInfoForm) => {
     if (userId) {
       // Update existing user
-      apiRequest("PUT", `/api/users/${userId}`, data)
-        .then(() => {
+      try {
+        await apiRequest("PUT", `/api/users/${userId}`, data);
+        toast({
+          title: "Oplysninger opdateret",
+          description: "Dine oplysninger er gemt",
+        });
+        handleNext();
+      } catch (error) {
+        toast({
+          title: "Fejl",
+          description: "Kunne ikke gemme oplysninger",
+          variant: "destructive",
+        });
+      }
+    } else {
+      // Create user and upload files
+      try {
+        const response = await apiRequest("POST", "/api/users", data);
+        const user = await response.json();
+        setUserId(user.id);
+        localStorage.setItem("userId", user.id);
+        
+        // Now upload files with the userId
+        if (uploadedFiles.length > 0) {
+          const formData = new FormData();
+          uploadedFiles.forEach((fileObj) => {
+            formData.append("files", fileObj.file);
+          });
+          formData.append("userId", user.id);
+          formData.append("documentType", "current");
+          
+          const uploadResponse = await apiRequest("POST", "/api/documents/upload", formData);
+          const documents = await uploadResponse.json();
+          setUploadedFiles(documents);
+          
           toast({
-            title: "Oplysninger opdateret",
+            title: "Bruger oprettet",
+            description: `Dine oplysninger og ${documents.length} dokumenter er gemt`,
+          });
+        } else {
+          toast({
+            title: "Bruger oprettet",
             description: "Dine oplysninger er gemt",
           });
-          handleNext();
-        })
-        .catch((error) => {
-          toast({
-            title: "Fejl",
-            description: "Kunne ikke gemme oplysninger",
-            variant: "destructive",
-          });
+        }
+        
+        handleNext();
+      } catch (error) {
+        toast({
+          title: "Fejl",
+          description: "Kunne ikke oprette bruger",
+          variant: "destructive",
         });
-    } else {
-      createUserMutation.mutate(data);
-      handleNext();
+      }
     }
   };
 
   const handleFilesUploaded = (files: FileList) => {
-    if (userId) {
-      uploadMutation.mutate(files);
-    } else {
-      toast({
-        title: "Fejl",
-        description: "Du skal først udfylde dine oplysninger",
-        variant: "destructive",
+    // Store files temporarily - they'll be uploaded after user creation
+    const tempFiles: any[] = [];
+    Array.from(files).forEach((file) => {
+      tempFiles.push({
+        fileName: file.name,
+        fileSize: file.size,
+        file: file
       });
-    }
+    });
+    setUploadedFiles(tempFiles);
   };
 
   const handleSendInquiries = () => {

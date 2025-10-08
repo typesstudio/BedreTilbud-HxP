@@ -84,6 +84,20 @@ export class MemStorage implements IStorage {
         email: "tilbud@topdanmark.dk", 
         description: "Konkurrencedygtige priser",
         active: true
+      },
+      {
+        id: randomUUID(),
+        name: "svphil",
+        email: "svphil@gmail.com",
+        description: "Personlig forsikringsrådgiver",
+        active: true
+      },
+      {
+        id: randomUUID(),
+        name: "Types Studio",
+        email: "hello@typesstudio.com",
+        description: "Moderne forsikringsløsninger",
+        active: true
       }
     ];
 
