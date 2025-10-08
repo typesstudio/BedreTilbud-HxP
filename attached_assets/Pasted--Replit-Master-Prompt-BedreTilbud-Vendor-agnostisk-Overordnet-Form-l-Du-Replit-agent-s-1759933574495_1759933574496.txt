@@ -1,0 +1,175 @@
+# Replit Master Prompt — BedreTilbud (Vendor‑agnostisk, Overordnet)
+
+**Formål:** Du (Replit/agent) skal udarbejde en *trinvis implementeringsplan* og bygge en MVP for **BedreTilbud**. Løsningen gør det muligt for en bruger at uploade sine nuværende forsikrings‑PDF’er, udsende dem til flere forsikringsselskaber, modtage og overvåge svar pr. e‑mail, udtrække data fra tilbuds‑PDF’er, og vise en *side‑by‑side* sammenligning i et klart, læsbart UI.
+
+> **Vigtigt:** Arbejd **overordnet og vendor‑agnostisk**. Brug generiske interfaces (f.eks. “Email Inbox Adapter”, “Storage Adapter”, “OCR Adapter”), så platformen kan køre uden at være låst til en bestemt udbyder. Brug eksisterende **Subframe**‑designfiler (tokens/komponenter) til UI.
+
+---
+
+## 0) Koncept & UX‑principper
+
+* **Målgruppe:** 50+; stor typografi, høj kontrast, minimal kognitiv belastning.
+* **Oplevelse:** “Upload → Vent → Få bedre tilbud” (så friktionsfri som muligt).
+* **Design:** Subframe som design‑ramme (typografi, spacing, farver, komponenter). Flade layouter (få kort), tydelige CTA’er, mobil først, men også god desktop.
+
+---
+
+## 1) Skærmbilleder (høj‑niveau)
+
+1. **Onboarding (2 trin)**
+
+   * **Trin 1: Upload**: Upload én eller flere PDF’er (nuværende forsikringer). Vis tydelig filstatus, størrelse, og sikkerhedstekst.
+   * **Trin 2: Spørgsmål + fritekst**: Få få enkle svar (fx boligtype/bil/ønsket selvrisiko) samt fritekst.
+
+2. **Tilbudsoversigt**
+
+   * Liste over selskaber og deres status (sendt, forventer svar, modtaget).
+   * Badges for “nyligt modtaget”, indikator for antal forventede svar, og link til “Se sammenligning”.
+
+3. **Sammenligning (kritisk)**
+
+   * Side‑by‑side: *Current vs. Offer*.
+   * Pris, dækninger, summer, selvrisiko, fordele/ulemper, og **AI‑anbefaling** (kort tekst).
+   * Overordnede highlights (fx “Spar X kr./år”, “+ udvidet rejse”); CTA “Skift”/“Bliv kontaktet”.
+
+4. **Profil/Indstillinger**
+
+   * Kontaktoplysninger, præferencer (selvrisiko/kommunikation), e‑mail‑synk status, log‑ud.
+
+---
+
+## 2) Funktionelle moduler (interfaces)
+
+* **PDF Upload Service**: accepterer flere filer, retur: fil‑metadata + opbevaringsnøgle.
+* **OCR Adapter**: input: PDF; output: struktureret JSON (vendor‑agnostisk).
+* **Policy Normalizer**: map/merge OCR‑JSON til et internt skema pr. forsikringstype.
+* **Comparison Engine**: input: {currentJSON, offerJSON} → output: {diffs, pro/cons, anbefaling, savings}.
+* **Email Inbox Adapter**: læs indbakke (fx IMAP/Graph/API), hent indkomne svar og vedhæftede PDF’er.
+* **Email Outbox Adapter**: send e‑mails pr. selskab (batchet), inkl. thread‑ID i emne/headers.
+* **Company Directory**: konfigurerbar liste over selskaber (navn, kontakt‑email, metadata).
+* **Workflow Orchestrator**: begivenhedsdrevet (upload → udsend → indkomne svar → OCR → comparison → UI‑opdatering).
+* **Storage Adapter**: abstraktion for lagring af PDF/JSON og hentning via sikre links.
+* **Audit/Events Log**: hændelser (sendt mail, modtaget svar, OCR gennemført, sammenligning klar).
+
+> Alle moduler skrives som interfaces + referenceimplementationer. Ingen hård vendor‑binding.
+
+---
+
+## 3) Konceptuel datastruktur (vendor‑agnostisk)
+
+* **User** {id, email, createdAt}
+* **Upload** {id, userId, files:[{id, name, size, storageKey}], createdAt}
+* **Company** {id, name, contactEmail, active}
+* **Dispatch** {id, userId, companyId, threadId, status, createdAt}
+* **Message** {id, dispatchId, direction:"out|in", subject, body, attachments:[{id, name, storageKey}], createdAt}
+* **Document** {id, source:"current|offer", companyId?, storageKey, ocrJsonKey?, policyType, createdAt}
+* **Comparison** {id, baseDocumentId, offerDocumentId, resultJsonKey, summary:{savings, pros, cons, verdict}, createdAt}
+* **Event** {id, kind, payloadJSON, createdAt}
+
+> **Note:** Én‑til‑én match pr. policyType (bil↔bil, hus↔hus …).
+
+---
+
+## 4) Trinvis implementeringsplan (med deltests)
+
+### Milestone A — UI & Mock (Subframe først)
+
+**Mål:** Få hele brugerrejsen klikbar med mock‑data (ingen backend‑binding endnu).
+**Opgaver:**
+
+1. Importér Subframe‑designfiler og opsæt design tokens.
+2. Byg Onboarding (2 trin) m. mock upload (fake progress).
+3. Byg Tilbudsoversigt m. fiktive selskaber og statuschips.
+4. Byg Sammenligning: brug to fiktive JSON‑objekter til at rendere **“Your Current vs. New Offer”** med savings/fordele/ulemper/CTA.
+   **Test‑kriterier:**
+
+* Kan uploade (mock) to PDF’er, lande på en sammenligningsskærm, og se et realistisk layout, som følger Subframe.
+
+### Milestone B — Lokal filhåndtering & Comparison Engine (uden OCR)
+
+**Mål:** Kør *rigtig* sammenligning på to lokalt udvalgte JSON‑filer (der repræsenterer OCR‑output).
+**Opgaver:**
+
+1. Implementér **Comparison Engine** (diff‑logik + heuristik for pro/cons + sammendrag).
+2. Lav en lille “JSON‑vælger” i UI til at pege på to filer (current/offer).
+3. Render resultatet i Sammenligning‑UI (Subframe‑stil).
+   **Test‑kriterier:**
+
+* Givet to JSON‑filer genererer engine et stabilt *resultJson* og UI viser korrekt diffs + anbefaling.
+
+### Milestone C — OCR Adapter (stub → rigtig adapter senere)
+
+**Mål:** Erstat manuelle JSON‑filer med en **OCR Adapter** der returnerer struktureret JSON.
+**Opgaver:**
+
+1. Definér OCR‑interface og referenceparser (kan starte med simpel tekstudtræk + regelbaseret parser).
+2. Gem OCR‑resultater via **Storage Adapter**; link til Document‑poster.
+3. Opdater UI‑flow: upload PDF → “Behandler…” → sammenligning når to dokumenter er klar.
+   **Test‑kriterier:**
+
+* Upload af to PDF’er producerer to JSON’er og en real‑time opdatering til Sammenlignings‑UI.
+
+### Milestone D — Email Inbox Adapter (overvågning af indbakke)
+
+**Mål:** Læs indbakke for svar, parse vedhæftede PDF’er, og føj dem til dokumentlisten.
+**Opgaver:**
+
+1. Implementér **Email Inbox Adapter** (læseadgang).
+2. Regler for tråd‑matching (threadId i emne/headers).
+3. Pipeline: ny e‑mail med PDF → Storage Adapter → OCR Adapter → Document → (valgfrit) auto‑comparison, hvis en “current” findes.
+   **Test‑kriterier:**
+
+* Når en testmail med PDF ankommer, registreres den i UI, OCR køres, og (hvis muligt) vises en sammenligning.
+
+### Milestone E — Email Outbox Adapter (udsending til selskaber)
+
+**Mål:** Udsend brugerens materiale til flere selskaber i én handling.
+**Opgaver:**
+
+1. Skærm “Vælg selskaber” → klik “Send”.
+2. **Email Outbox Adapter** sender én mail pr. selskab med relevante PDF’er + threadId.
+3. Rate‑limiting + retry + audit events.
+   **Test‑kriterier:**
+
+* Flere testmails sendes med korrekt indhold og thread‑metadata; inbox‑overvågning kan matche svar tilbage.
+
+### Milestone F — Orkestrering & E2E
+
+**Mål:** Saml alt til en robust end‑to‑end flow.
+**Opgaver:**
+
+1. Event‑drevet orkestrering (Upload→Dispatch→Inbox→OCR→Comparison→UI).
+2. Basis‑fejlhåndtering og genkørsel (idempotente jobs).
+3. Brugerens Tilbudsoversigt opdateres pålideligt ved nye begivenheder.
+   **Test‑kriterier:**
+
+* Fuld E2E: Upload current → Send til X selskaber → Modtag tilbud via mail → Auto‑OCR → Vis sammenligning.
+
+---
+
+## 5) Kvalitetskriterier
+
+* **A11y:** Stor skrift, tydelig kontrast, fokus‑tilstande, tastaturnavigation.
+* **Ydelse:** Progress‑feedback; ingen “tomme” ventetider uden UI‑status.
+* **Stabilitet:** Idempotente processer, tydelige events + audit log.
+* **Sikkerhed/Privatliv:** Krypteret transport, begrænset dataretention, sletning på forespørgsel, logging uden personfølsomt indhold.
+* **Testbarhed:** Hver milestone kan testes isoleret (unit + integration + manuelle UI‑checks).
+
+---
+
+## 6) Leveranceformat til hvert trin
+
+* **Plan:** Checkliste for opgaver + risiko/antagelser.
+* **Implementering:** Kort beskrivelse af kodeændringer.
+* **Tests:** Hvad blev testet, og hvordan kan reviewer reproducere det?
+* **Demo:** Link/screencast + prøvedata.
+
+---
+
+## 7) Næste handling for Replit/agent
+
+1. Start med **Milestone A (UI & Mock)**: Genskab de nævnte skærme i Subframe‑stilen med fiktive data.
+2. Lever en tjekliste + demo.
+3. Fortsæt til **Milestone B** osv., kun når forrige trin består tests.
+
+> **Målet:** En kørende, vendor‑agnostisk MVP, hvor vi først beviser værdien (to PDF’er → ægte sammenligning i vores ønskede Subframe‑design), dernæst kobler e‑mail‑overvågning på, og til sidst udsending til selskaber – alt sammen i små, sikre trin, der kan testes og valideres løbende.
