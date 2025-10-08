@@ -1,0 +1,189 @@
+import { useState } from "react";
+import { useLocation } from "wouter";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Shield, ArrowLeft, Upload } from "lucide-react";
+import FileUpload from "@/components/file-upload";
+
+export default function UploadOffer() {
+  const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const userId = localStorage.getItem("userId");
+  const [selectedCompany, setSelectedCompany] = useState("");
+  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+
+  if (!userId) {
+    setLocation("/onboarding");
+    return null;
+  }
+
+  // Get companies
+  const { data: companies = [] } = useQuery({
+    queryKey: ["/api/companies"],
+  });
+
+  // Upload offer mutation
+  const uploadMutation = useMutation({
+    mutationFn: async (data: { files: FileList; companyId: string }) => {
+      const formData = new FormData();
+      Array.from(data.files).forEach((file) => {
+        formData.append("files", file);
+      });
+      formData.append("userId", userId!);
+      formData.append("companyId", data.companyId);
+      formData.append("documentType", "offer");
+
+      const response = await apiRequest("POST", "/api/documents/upload", formData);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/emails/threads", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/comparisons/user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats", userId] });
+      toast({
+        title: "Tilbud uploadet",
+        description: "Dit tilbud er blevet behandlet og sammenlignet",
+      });
+      setLocation("/offers");
+    },
+    onError: () => {
+      toast({
+        title: "Fejl",
+        description: "Kunne ikke uploade tilbud",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleFilesUploaded = (files: FileList) => {
+    const fileArray = Array.from(files).map((file) => ({
+      fileName: file.name,
+      fileSize: file.size,
+      file: file,
+    }));
+    setUploadedFiles(fileArray);
+  };
+
+  const handleSubmit = () => {
+    if (!selectedCompany) {
+      toast({
+        title: "Vælg selskab",
+        description: "Du skal vælge hvilket selskab tilbuddet kommer fra",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (uploadedFiles.length === 0) {
+      toast({
+        title: "Upload fil",
+        description: "Du skal uploade mindst én fil",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const dataTransfer = new DataTransfer();
+    uploadedFiles.forEach((fileObj) => {
+      dataTransfer.items.add(fileObj.file);
+    });
+
+    uploadMutation.mutate({
+      files: dataTransfer.files,
+      companyId: selectedCompany,
+    });
+  };
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="bg-card border-b border-border sticky top-0 z-50 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-20">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
+                <Shield className="w-7 h-7 text-primary-foreground" strokeWidth={2.5} />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-foreground">BedreTilbud</h1>
+                <p className="text-sm text-muted-foreground">Find bedre forsikringer</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1">
+        <section className="py-12 px-4 sm:px-6 lg:px-8">
+          <div className="max-w-4xl mx-auto">
+            <Button
+              variant="ghost"
+              onClick={() => setLocation("/offers")}
+              className="mb-6 gap-2"
+              data-testid="button-back"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Tilbage til oversigt
+            </Button>
+
+            <Card className="shadow-card-lg">
+              <CardContent className="p-8">
+                <div className="text-center mb-8">
+                  <h2 className="text-3xl font-bold text-foreground mb-3">
+                    Upload modtaget tilbud
+                  </h2>
+                  <p className="text-lg text-muted-foreground">
+                    Upload PDF-tilbuddet du har modtaget fra et forsikringsselskab
+                  </p>
+                </div>
+
+                {/* Company Selection */}
+                <div className="mb-8">
+                  <label className="block text-lg font-semibold text-foreground mb-3">
+                    Hvilket selskab kommer tilbuddet fra?
+                  </label>
+                  <Select value={selectedCompany} onValueChange={setSelectedCompany}>
+                    <SelectTrigger className="w-full text-lg p-6" data-testid="select-company">
+                      <SelectValue placeholder="Vælg forsikringsselskab" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(companies as any[]).map((company: any) => (
+                        <SelectItem key={company.id} value={company.id}>
+                          {company.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* File Upload */}
+                <FileUpload
+                  onFilesUploaded={handleFilesUploaded}
+                  uploadedFiles={uploadedFiles}
+                  isUploading={uploadMutation.isPending}
+                />
+
+                <div className="flex justify-end mt-8">
+                  <Button
+                    onClick={handleSubmit}
+                    disabled={uploadMutation.isPending || !selectedCompany || uploadedFiles.length === 0}
+                    size="lg"
+                    className="text-lg px-12 py-4 gap-2"
+                    data-testid="button-submit-offer"
+                  >
+                    <Upload className="w-5 h-5" />
+                    Upload og sammenlign
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}

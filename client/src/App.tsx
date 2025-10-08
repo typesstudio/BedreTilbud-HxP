@@ -9,6 +9,7 @@ import Onboarding from "@/pages/onboarding";
 import OffersOverview from "@/pages/offers-overview";
 import Comparison from "@/pages/comparison";
 import EmailCorrespondence from "@/pages/email-correspondence";
+import UploadOffer from "@/pages/upload-offer";
 
 function Router() {
   return (
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/onboarding" component={Onboarding} />
       <Route path="/onboarding/:step" component={Onboarding} />
       <Route path="/offers" component={OffersOverview} />
+      <Route path="/upload-offer" component={UploadOffer} />
       <Route path="/comparison/:id" component={Comparison} />
       <Route path="/emails/:threadId" component={EmailCorrespondence} />
       <Route component={NotFound} />

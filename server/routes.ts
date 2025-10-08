@@ -101,6 +101,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
 
         documents.push(document);
+
+        // If it's an offer, create a comparison with current policy
+        if (documentType === 'offer' && req.body.companyId) {
+          const currentDocuments = await storage.getUserDocuments(userId, 'current');
+          if (currentDocuments.length > 0 && currentDocuments[0].ocrData) {
+            const comparison = await comparisonService.compareInsurancePolicies(
+              currentDocuments[0].ocrData as any,
+              ocrData
+            );
+
+            await storage.createComparison({
+              userId,
+              currentDocumentId: currentDocuments[0].id,
+              offerDocumentId: document.id,
+              companyId: req.body.companyId,
+              comparisonData: comparison,
+              aiRecommendation: comparison.verdict === 'recommended' 
+                ? 'Vi anbefaler dette tilbud - det giver dig bedre dækning til en lavere pris.'
+                : comparison.verdict === 'not_recommended'
+                ? 'Vi anbefaler ikke dette tilbud - dit nuværende forsikring er bedre.'
+                : 'Dette tilbud kan være interessant - gennemgå fordele og ulemper nøje.',
+              savings: comparison.savings || 0
+            });
+          }
+        }
       }
 
       res.json(documents);

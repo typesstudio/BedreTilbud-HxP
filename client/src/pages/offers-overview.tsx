@@ -58,17 +58,8 @@ export default function OffersOverview() {
     },
   });
 
-  // Auto-check inbox every 30 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      checkInboxMutation.mutate();
-    }, 30000);
-
-    // Check immediately on mount
-    checkInboxMutation.mutate();
-
-    return () => clearInterval(interval);
-  }, [userId]);
+  // Disabled auto-check due to Gmail scope limitations
+  // Manual check button is available instead
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -142,14 +133,13 @@ export default function OffersOverview() {
                 </p>
               </div>
               <Button
-                onClick={() => checkInboxMutation.mutate()}
-                disabled={checkInboxMutation.isPending}
-                variant="outline"
+                onClick={() => setLocation("/upload-offer")}
+                variant="default"
                 className="gap-2"
-                data-testid="button-check-inbox"
+                data-testid="button-upload-offer"
               >
-                <RefreshCw className={`w-5 h-5 ${checkInboxMutation.isPending ? 'animate-spin' : ''}`} />
-                Tjek for nye emails
+                <Mail className="w-5 h-5" />
+                <span>Upload modtaget tilbud</span>
               </Button>
             </div>
 
