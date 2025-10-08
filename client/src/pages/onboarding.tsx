@@ -35,6 +35,7 @@ export default function Onboarding() {
   const [currentStep, setCurrentStep] = useState(parseInt(step || "1"));
   const [userId, setUserId] = useState(localStorage.getItem("userId"));
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
 
   const form = useForm<UserInfoForm>({
@@ -153,10 +154,10 @@ export default function Onboarding() {
         localStorage.setItem("userId", user.id);
         
         // Now upload files with the userId
-        if (uploadedFiles.length > 0) {
+        if (pendingFiles.length > 0) {
           const formData = new FormData();
-          uploadedFiles.forEach((fileObj) => {
-            formData.append("files", fileObj.file);
+          pendingFiles.forEach((file) => {
+            formData.append("files", file);
           });
           formData.append("userId", user.id);
           formData.append("documentType", "current");
@@ -164,6 +165,7 @@ export default function Onboarding() {
           const uploadResponse = await apiRequest("POST", "/api/documents/upload", formData);
           const documents = await uploadResponse.json();
           setUploadedFiles(documents);
+          setPendingFiles([]);
           
           toast({
             title: "Bruger oprettet",
@@ -188,15 +190,14 @@ export default function Onboarding() {
   };
 
   const handleFilesUploaded = (files: FileList) => {
-    // Store files temporarily - they'll be uploaded after user creation
-    const tempFiles: any[] = [];
-    Array.from(files).forEach((file) => {
-      tempFiles.push({
-        fileName: file.name,
-        fileSize: file.size,
-        file: file
-      });
-    });
+    // Store File objects separately and display info
+    const fileArray = Array.from(files);
+    setPendingFiles(fileArray);
+    
+    const tempFiles: any[] = fileArray.map((file) => ({
+      fileName: file.name,
+      fileSize: file.size
+    }));
     setUploadedFiles(tempFiles);
   };
 
