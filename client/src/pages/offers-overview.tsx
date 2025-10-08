@@ -58,8 +58,8 @@ export default function OffersOverview() {
   };
 
   const getComparisonForThread = (threadId: string) => {
-    return comparisons.find((comp: any) => 
-      threads.find((t: any) => t.id === threadId && t.companyId === comp.companyId)
+    return (comparisons as any[]).find((comp: any) => 
+      (threads as any[]).find((t: any) => t.id === threadId && t.companyId === comp.companyId)
     );
   };
 
@@ -110,7 +110,7 @@ export default function OffersOverview() {
                       <Send className="w-5 h-5 text-primary" />
                     </div>
                     <p className="text-4xl font-bold text-foreground" data-testid="stats-sent">
-                      {stats.sent}
+                      {(stats as any).sent}
                     </p>
                   </CardContent>
                 </Card>
@@ -121,7 +121,7 @@ export default function OffersOverview() {
                       <Clock className="w-5 h-5 text-accent" />
                     </div>
                     <p className="text-4xl font-bold text-foreground" data-testid="stats-pending">
-                      {stats.pending}
+                      {(stats as any).pending}
                     </p>
                   </CardContent>
                 </Card>
@@ -132,7 +132,7 @@ export default function OffersOverview() {
                       <CheckCircle className="w-5 h-5 text-green-600" />
                     </div>
                     <p className="text-4xl font-bold text-foreground" data-testid="stats-received">
-                      {stats.received}
+                      {(stats as any).received}
                     </p>
                   </CardContent>
                 </Card>
@@ -141,7 +141,7 @@ export default function OffersOverview() {
 
             {/* Offers List */}
             <div className="space-y-4">
-              {threads.length === 0 ? (
+              {(threads as any[]).length === 0 ? (
                 <Card className="shadow-card text-center p-8">
                   <CardContent>
                     <Shield className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
@@ -160,7 +160,7 @@ export default function OffersOverview() {
                   </CardContent>
                 </Card>
               ) : (
-                threads.map((thread: any) => {
+                (threads as any[]).map((thread: any) => {
                   const comparison = getComparisonForThread(thread.id);
                   const hasComparison = comparison && comparison.savings;
                   
@@ -248,7 +248,7 @@ export default function OffersOverview() {
               )}
             </div>
 
-            {threads.length > 0 && (
+            {(threads as any[]).length > 0 && (
               <div className="mt-8 text-center">
                 <Button
                   variant="outline"

@@ -104,8 +104,14 @@ export class MemStorage implements IStorage {
   async createUser(insertUser: InsertUser): Promise<User> {
     const id = randomUUID();
     const user: User = { 
-      ...insertUser, 
-      id, 
+      id,
+      email: insertUser.email,
+      name: insertUser.name ?? null,
+      housingType: insertUser.housingType ?? null,
+      hasCar: insertUser.hasCar ?? null,
+      deductible: insertUser.deductible ?? null,
+      age: insertUser.age ?? null,
+      additionalInfo: insertUser.additionalInfo ?? null,
       createdAt: new Date() 
     };
     this.users.set(id, user);
@@ -132,7 +138,13 @@ export class MemStorage implements IStorage {
 
   async createCompany(insertCompany: InsertCompany): Promise<Company> {
     const id = randomUUID();
-    const company: Company = { ...insertCompany, id };
+    const company: Company = { 
+      id,
+      name: insertCompany.name,
+      email: insertCompany.email,
+      description: insertCompany.description ?? null,
+      active: insertCompany.active ?? null
+    };
     this.companies.set(id, company);
     return company;
   }
@@ -152,8 +164,14 @@ export class MemStorage implements IStorage {
   async createDocument(insertDocument: InsertDocument): Promise<Document> {
     const id = randomUUID();
     const document: Document = { 
-      ...insertDocument, 
-      id, 
+      id,
+      userId: insertDocument.userId ?? null,
+      fileName: insertDocument.fileName,
+      filePath: insertDocument.filePath,
+      fileSize: insertDocument.fileSize ?? null,
+      ocrData: insertDocument.ocrData ?? null,
+      documentType: insertDocument.documentType ?? null,
+      companyId: insertDocument.companyId ?? null,
       createdAt: new Date() 
     };
     this.documents.set(id, document);
@@ -176,8 +194,12 @@ export class MemStorage implements IStorage {
   async createEmailThread(insertThread: InsertEmailThread): Promise<EmailThread> {
     const id = randomUUID();
     const thread: EmailThread = { 
-      ...insertThread, 
-      id, 
+      id,
+      userId: insertThread.userId ?? null,
+      companyId: insertThread.companyId ?? null,
+      subject: insertThread.subject ?? null,
+      threadId: insertThread.threadId ?? null,
+      status: insertThread.status ?? null,
       createdAt: new Date() 
     };
     this.emailThreads.set(id, thread);
@@ -208,8 +230,14 @@ export class MemStorage implements IStorage {
   async createEmail(insertEmail: InsertEmail): Promise<Email> {
     const id = randomUUID();
     const email: Email = { 
-      ...insertEmail, 
-      id, 
+      id,
+      threadId: insertEmail.threadId ?? null,
+      messageId: insertEmail.messageId ?? null,
+      direction: insertEmail.direction ?? null,
+      subject: insertEmail.subject ?? null,
+      body: insertEmail.body ?? null,
+      attachments: insertEmail.attachments ?? null,
+      sentAt: insertEmail.sentAt ?? null,
       createdAt: new Date() 
     };
     this.emails.set(id, email);
@@ -228,8 +256,14 @@ export class MemStorage implements IStorage {
   async createComparison(insertComparison: InsertComparison): Promise<Comparison> {
     const id = randomUUID();
     const comparison: Comparison = { 
-      ...insertComparison, 
-      id, 
+      id,
+      userId: insertComparison.userId ?? null,
+      currentDocumentId: insertComparison.currentDocumentId ?? null,
+      offerDocumentId: insertComparison.offerDocumentId ?? null,
+      companyId: insertComparison.companyId ?? null,
+      comparisonData: insertComparison.comparisonData ?? null,
+      aiRecommendation: insertComparison.aiRecommendation ?? null,
+      savings: insertComparison.savings ?? null,
       createdAt: new Date() 
     };
     this.comparisons.set(id, comparison);

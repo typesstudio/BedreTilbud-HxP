@@ -496,7 +496,7 @@ export default function Onboarding() {
                   </div>
 
                   <div className="space-y-4 mb-8">
-                    {companies.map((company: any) => (
+                    {(companies as any[]).map((company: any) => (
                       <label
                         key={company.id}
                         className="flex items-center gap-4 p-6 border-2 border-border rounded-xl hover:border-primary cursor-pointer transition-colors bg-background"

@@ -18,13 +18,10 @@ export default function FileUpload({ onFilesUploaded, uploadedFiles, isUploading
     (acceptedFiles: File[]) => {
       if (acceptedFiles.length > 0) {
         // Convert File[] to FileList-like object
-        const fileList = {
-          length: acceptedFiles.length,
-          item: (index: number) => acceptedFiles[index],
-          ...acceptedFiles
-        } as FileList;
+        const dataTransfer = new DataTransfer();
+        acceptedFiles.forEach(file => dataTransfer.items.add(file));
         
-        onFilesUploaded(fileList);
+        onFilesUploaded(dataTransfer.files);
       }
     },
     [onFilesUploaded]

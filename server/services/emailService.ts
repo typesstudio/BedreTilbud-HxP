@@ -91,7 +91,7 @@ export class EmailService {
       return threadId.id;
     } catch (error) {
       console.error("Failed to send email:", error);
-      throw new Error(`Failed to send insurance inquiry: ${error.message}`);
+      throw new Error(`Failed to send insurance inquiry: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -126,8 +126,8 @@ export class EmailService {
       });
 
       const headers = message.data.payload?.headers || [];
-      const subject = headers.find(h => h.name === 'Subject')?.value || '';
-      const from = headers.find(h => h.name === 'From')?.value || '';
+      const subject = headers.find((h: any) => h.name === 'Subject')?.value || '';
+      const from = headers.find((h: any) => h.name === 'From')?.value || '';
       const threadId = message.data.threadId || '';
 
       // Find existing thread
@@ -173,7 +173,7 @@ export class EmailService {
               });
 
               // Create comparison if we have a current policy
-              const currentDocuments = await storage.getUserDocuments(existingThread.userId, 'current');
+              const currentDocuments = await storage.getUserDocuments(existingThread.userId ?? '', 'current');
               if (currentDocuments.length > 0) {
                 const currentDoc = currentDocuments[0];
                 if (currentDoc.ocrData) {
@@ -217,7 +217,7 @@ export class EmailService {
       // Generate auto-response
       if (body && existingThread.companyId) {
         const company = await storage.getCompany(existingThread.companyId);
-        const user = await storage.getUser(existingThread.userId);
+        const user = await storage.getUser(existingThread.userId ?? '');
         const sentEmails = await storage.getThreadEmails(existingThread.id, 'outbound');
         
         if (company && user && sentEmails.length > 0) {

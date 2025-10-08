@@ -73,7 +73,7 @@ export class OCRService {
       return result as InsuranceData;
     } catch (error) {
       console.error("OCR extraction failed:", error);
-      throw new Error(`Failed to extract insurance data: ${error.message}`);
+      throw new Error(`Failed to extract insurance data: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -107,7 +107,7 @@ export class OCRService {
       return response.choices[0].message.content || "";
     } catch (error) {
       console.error("Text extraction failed:", error);
-      throw new Error(`Failed to extract text: ${error.message}`);
+      throw new Error(`Failed to extract text: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

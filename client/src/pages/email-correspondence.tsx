@@ -39,7 +39,7 @@ export default function EmailCorrespondence() {
     );
   }
 
-  const { thread, company, emails = [] } = threadData;
+  const { thread, company, emails = [] } = (threadData as any) || {};
 
   const getDirectionBadge = (direction: string) => {
     switch (direction) {

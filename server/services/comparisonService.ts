@@ -84,7 +84,7 @@ Focus on Danish market context and write all text in Danish. Consider user prefe
       return result as ComparisonResult;
     } catch (error) {
       console.error("Comparison failed:", error);
-      throw new Error(`Failed to compare policies: ${error.message}`);
+      throw new Error(`Failed to compare policies: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -137,7 +137,7 @@ Return only the email body text, no subject line.`;
       return response.choices[0].message.content || "";
     } catch (error) {
       console.error("Email generation failed:", error);
-      throw new Error(`Failed to generate email: ${error.message}`);
+      throw new Error(`Failed to generate email: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -186,7 +186,7 @@ Keep it concise and appropriate for email communication.`;
       return response.choices[0].message.content || "";
     } catch (error) {
       console.error("Auto-response generation failed:", error);
-      throw new Error(`Failed to generate auto-response: ${error.message}`);
+      throw new Error(`Failed to generate auto-response: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

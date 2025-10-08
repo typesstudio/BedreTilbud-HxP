@@ -39,7 +39,7 @@ export default function Comparison() {
     );
   }
 
-  const comparisonData = comparison.comparisonData || {};
+  const comparisonData = (comparison as any).comparisonData || {};
   const verdict = comparisonData.verdict || "consider";
   const pros = comparisonData.pros || [];
   const cons = comparisonData.cons || [];
@@ -78,7 +78,7 @@ export default function Comparison() {
                 Tilbage til oversigt
               </Button>
               <h2 className="text-3xl font-bold text-foreground mb-3">
-                Sammenligning: {comparison.company?.name}
+                Sammenligning: {(comparison as any).company?.name}
               </h2>
               <p className="text-lg text-muted-foreground">
                 Se hvordan det nye tilbud matcher med din nuværende forsikring
@@ -115,15 +115,15 @@ export default function Comparison() {
                       }
                     </h3>
                     <p className="text-foreground mb-4" data-testid="ai-recommendation">
-                      {comparison.aiRecommendation || 'Ingen anbefaling tilgængelig.'}
+                      {(comparison as any).aiRecommendation || 'Ingen anbefaling tilgængelig.'}
                     </p>
                     <div className="flex flex-wrap gap-3">
                       <div className="bg-white px-4 py-2 rounded-lg">
                         <span className="text-sm text-muted-foreground">Besparelse:</span>
                         <span className={`ml-2 font-bold ${
-                          comparison.savings > 0 ? 'text-green-600' : 'text-red-600'
+                          (comparison as any).savings > 0 ? 'text-green-600' : 'text-red-600'
                         }`} data-testid="savings-amount">
-                          {comparison.savings > 0 ? '+' : ''}{comparison.savings} kr./år
+                          {(comparison as any).savings > 0 ? '+' : ''}{(comparison as any).savings} kr./år
                         </span>
                       </div>
                       <div className="bg-white px-4 py-2 rounded-lg">
@@ -140,8 +140,8 @@ export default function Comparison() {
 
             {/* Comparison Grid */}
             <ComparisonGrid
-              currentDocument={comparison.currentDocument}
-              offerDocument={comparison.offerDocument}
+              currentDocument={(comparison as any).currentDocument}
+              offerDocument={(comparison as any).offerDocument}
               comparisonData={comparisonData}
             />
 
@@ -193,7 +193,7 @@ export default function Comparison() {
                 data-testid="button-accept-offer"
               >
                 <CheckCircle className="mr-2 w-5 h-5" />
-                Jeg vil skifte til {comparison.company?.name}
+                Jeg vil skifte til {(comparison as any).company?.name}
               </Button>
               <Button 
                 variant="secondary"
