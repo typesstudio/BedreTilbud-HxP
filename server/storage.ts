@@ -285,4 +285,181 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  // Users
+  async getUser(id: string): Promise<User | undefined> {
+    const { db } = await import("./db");
+    const { users } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [user] = await db.select().from(users).where(eq(users.id, id));
+    return user || undefined;
+  }
+
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const { db } = await import("./db");
+    const { users } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
+  async createUser(insertUser: InsertUser): Promise<User> {
+    const { db } = await import("./db");
+    const { users } = await import("@shared/schema");
+    const [user] = await db.insert(users).values(insertUser).returning();
+    return user;
+  }
+
+  async updateUser(id: string, updates: Partial<InsertUser>): Promise<User> {
+    const { db } = await import("./db");
+    const { users } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [user] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
+    return user;
+  }
+
+  // Companies
+  async getCompany(id: string): Promise<Company | undefined> {
+    const { db } = await import("./db");
+    const { companies } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [company] = await db.select().from(companies).where(eq(companies.id, id));
+    return company || undefined;
+  }
+
+  async getActiveCompanies(): Promise<Company[]> {
+    const { db } = await import("./db");
+    const { companies } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    return await db.select().from(companies).where(eq(companies.active, true));
+  }
+
+  async createCompany(insertCompany: InsertCompany): Promise<Company> {
+    const { db } = await import("./db");
+    const { companies } = await import("@shared/schema");
+    const [company] = await db.insert(companies).values(insertCompany).returning();
+    return company;
+  }
+
+  // Documents
+  async getDocument(id: string): Promise<Document | undefined> {
+    const { db } = await import("./db");
+    const { documents } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [doc] = await db.select().from(documents).where(eq(documents.id, id));
+    return doc || undefined;
+  }
+
+  async getUserDocuments(userId: string, documentType?: string): Promise<Document[]> {
+    const { db } = await import("./db");
+    const { documents } = await import("@shared/schema");
+    const { eq, and } = await import("drizzle-orm");
+    
+    if (documentType) {
+      return await db.select().from(documents).where(
+        and(eq(documents.userId, userId), eq(documents.documentType, documentType))
+      );
+    }
+    return await db.select().from(documents).where(eq(documents.userId, userId));
+  }
+
+  async createDocument(insertDocument: InsertDocument): Promise<Document> {
+    const { db } = await import("./db");
+    const { documents } = await import("@shared/schema");
+    const [doc] = await db.insert(documents).values(insertDocument).returning();
+    return doc;
+  }
+
+  // Email Threads
+  async getEmailThread(id: string): Promise<EmailThread | undefined> {
+    const { db } = await import("./db");
+    const { emailThreads } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [thread] = await db.select().from(emailThreads).where(eq(emailThreads.id, id));
+    return thread || undefined;
+  }
+
+  async getEmailThreadByGmailId(gmailThreadId: string): Promise<EmailThread | undefined> {
+    const { db } = await import("./db");
+    const { emailThreads } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [thread] = await db.select().from(emailThreads).where(eq(emailThreads.threadId, gmailThreadId));
+    return thread || undefined;
+  }
+
+  async getUserEmailThreads(userId: string): Promise<EmailThread[]> {
+    const { db } = await import("./db");
+    const { emailThreads } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    return await db.select().from(emailThreads).where(eq(emailThreads.userId, userId));
+  }
+
+  async createEmailThread(insertThread: InsertEmailThread): Promise<EmailThread> {
+    const { db } = await import("./db");
+    const { emailThreads } = await import("@shared/schema");
+    const [thread] = await db.insert(emailThreads).values(insertThread).returning();
+    return thread;
+  }
+
+  async updateEmailThread(id: string, updates: Partial<InsertEmailThread>): Promise<EmailThread> {
+    const { db } = await import("./db");
+    const { emailThreads } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [thread] = await db.update(emailThreads).set(updates).where(eq(emailThreads.id, id)).returning();
+    return thread;
+  }
+
+  // Emails
+  async getEmail(id: string): Promise<Email | undefined> {
+    const { db } = await import("./db");
+    const { emails } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [email] = await db.select().from(emails).where(eq(emails.id, id));
+    return email || undefined;
+  }
+
+  async getThreadEmails(threadId: string, direction?: string): Promise<Email[]> {
+    const { db } = await import("./db");
+    const { emails } = await import("@shared/schema");
+    const { eq, and } = await import("drizzle-orm");
+    
+    if (direction) {
+      return await db.select().from(emails).where(
+        and(eq(emails.threadId, threadId), eq(emails.direction, direction))
+      );
+    }
+    return await db.select().from(emails).where(eq(emails.threadId, threadId));
+  }
+
+  async createEmail(insertEmail: InsertEmail): Promise<Email> {
+    const { db } = await import("./db");
+    const { emails } = await import("@shared/schema");
+    const [email] = await db.insert(emails).values(insertEmail).returning();
+    return email;
+  }
+
+  // Comparisons
+  async getComparison(id: string): Promise<Comparison | undefined> {
+    const { db } = await import("./db");
+    const { comparisons } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [comparison] = await db.select().from(comparisons).where(eq(comparisons.id, id));
+    return comparison || undefined;
+  }
+
+  async getUserComparisons(userId: string): Promise<Comparison[]> {
+    const { db } = await import("./db");
+    const { comparisons } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    return await db.select().from(comparisons).where(eq(comparisons.userId, userId));
+  }
+
+  async createComparison(insertComparison: InsertComparison): Promise<Comparison> {
+    const { db } = await import("./db");
+    const { comparisons } = await import("@shared/schema");
+    const [comparison] = await db.insert(comparisons).values(insertComparison).returning();
+    return comparison;
+  }
+}
+
+export const storage = new DatabaseStorage();
