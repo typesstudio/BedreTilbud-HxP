@@ -4,18 +4,25 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Form, FormField, FormItem, FormLabel, FormControl, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
+import { Button } from "../../../src/ui/components/Button";
+import { IconWithBackground } from "../../../src/ui/components/IconWithBackground";
+import { LinkButton } from "../../../src/ui/components/LinkButton";
+import { TextField } from "../../../src/ui/components/TextField";
+import { DefaultPageLayout } from "../../../src/ui/layouts/DefaultPageLayout";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Shield, ArrowLeft, ArrowRight, Send } from "lucide-react";
-import ProgressSteps from "@/components/progress-steps";
+import { apiRequest } from "@/lib/queryClient";
+import { 
+  FeatherArrowLeft, 
+  FeatherArrowRight, 
+  FeatherUpload,
+  FeatherUser,
+  FeatherCheck,
+  FeatherSend,
+  FeatherBuilding
+} from "@subframe/core";
 import FileUpload from "@/components/file-upload";
-import UserSelector from "@/components/user-selector";
 
 const userInfoSchema = z.object({
   email: z.string().email("Ugyldig email"),
@@ -57,44 +64,6 @@ export default function Onboarding() {
     queryKey: ["/api/companies"],
   });
 
-  // Create user mutation
-  const createUserMutation = useMutation({
-    mutationFn: async (data: UserInfoForm) => {
-      const response = await apiRequest("POST", "/api/users", data);
-      return response.json();
-    },
-    onSuccess: (user) => {
-      setUserId(user.id);
-      localStorage.setItem("userId", user.id);
-      toast({
-        title: "Bruger oprettet",
-        description: "Dine oplysninger er gemt",
-      });
-    },
-  });
-
-  // Upload documents mutation
-  const uploadMutation = useMutation({
-    mutationFn: async (files: FileList) => {
-      const formData = new FormData();
-      Array.from(files).forEach((file) => {
-        formData.append("files", file);
-      });
-      formData.append("userId", userId!);
-      formData.append("documentType", "current");
-
-      const response = await apiRequest("POST", "/api/documents/upload", formData);
-      return response.json();
-    },
-    onSuccess: (documents) => {
-      setUploadedFiles(documents);
-      toast({
-        title: "Filer uploadet",
-        description: `${documents.length} dokumenter er uploadet og behandlet`,
-      });
-    },
-  });
-
   // Send inquiries mutation
   const sendInquiriesMutation = useMutation({
     mutationFn: async (data: { companyIds: string[] }) => {
@@ -109,7 +78,7 @@ export default function Onboarding() {
         title: "Forespørgsler sendt",
         description: "Dine forespørgsler er sendt til de valgte selskaber",
       });
-      setLocation("/offers");
+      setLocation("/offers-overview");
     },
     onError: (error: any) => {
       toast({
@@ -121,7 +90,7 @@ export default function Onboarding() {
   });
 
   const handleNext = useCallback(() => {
-    if (currentStep < 4) {
+    if (currentStep < 3) {
       const nextStep = currentStep + 1;
       setCurrentStep(nextStep);
       setLocation(`/onboarding/${nextStep}`);
@@ -138,7 +107,6 @@ export default function Onboarding() {
 
   const onUserInfoSubmit = async (data: UserInfoForm) => {
     if (userId) {
-      // Try to update existing user
       try {
         await apiRequest("PUT", `/api/users/${userId}`, data);
         toast({
@@ -147,7 +115,6 @@ export default function Onboarding() {
         });
         handleNext();
       } catch (error: any) {
-        // If user not found, create new user
         if (error.message && error.message.includes('404')) {
           try {
             const response = await apiRequest("POST", "/api/users", data);
@@ -155,7 +122,6 @@ export default function Onboarding() {
             setUserId(user.id);
             localStorage.setItem("userId", user.id);
             
-            // Upload files with the new userId
             if (pendingFiles.length > 0) {
               const formData = new FormData();
               pendingFiles.forEach((file) => {
@@ -191,14 +157,12 @@ export default function Onboarding() {
         }
       }
     } else {
-      // Create user and upload files
       try {
         const response = await apiRequest("POST", "/api/users", data);
         const user = await response.json();
         setUserId(user.id);
         localStorage.setItem("userId", user.id);
         
-        // Now upload files with the userId
         if (pendingFiles.length > 0) {
           const formData = new FormData();
           pendingFiles.forEach((file) => {
@@ -235,7 +199,6 @@ export default function Onboarding() {
   };
 
   const handleFilesUploaded = (files: FileList) => {
-    // Store File objects separately and display info
     const fileArray = Array.from(files);
     setPendingFiles(fileArray);
     
@@ -258,407 +221,322 @@ export default function Onboarding() {
     sendInquiriesMutation.mutate({ companyIds: selectedCompanies });
   };
 
+  const getStepIcon = (stepNum: number) => {
+    if (stepNum < currentStep) {
+      return <FeatherCheck />;
+    } else if (stepNum === 1) {
+      return <FeatherUpload />;
+    } else if (stepNum === 2) {
+      return <FeatherUser />;
+    } else {
+      return <FeatherBuilding />;
+    }
+  };
+
+  const getStepVariant = (stepNum: number): "success" | "brand" | "neutral" => {
+    if (stepNum < currentStep) return "success";
+    if (stepNum === currentStep) return "brand";
+    return "neutral";
+  };
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b border-border sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
-                <Shield className="w-7 h-7 text-primary-foreground" strokeWidth={2.5} />
+    <DefaultPageLayout>
+      <div className="container max-w-none flex h-full w-full flex-col items-center gap-8 bg-default-background py-12">
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-8">
+          {/* Step Indicator */}
+          <div className="flex w-full items-center justify-between">
+            <div className="flex items-center gap-2">
+              <IconWithBackground 
+                variant={getStepVariant(1)} 
+                icon={getStepIcon(1)}
+              />
+              <span className={`text-body${currentStep === 1 ? '-bold font-body-bold' : ' font-body'} ${currentStep === 1 ? 'text-brand-600' : currentStep > 1 ? 'text-default-font' : 'text-subtext-color'}`}>
+                Upload dokumenter
+              </span>
+            </div>
+            <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
+            <div className="flex items-center gap-2">
+              <IconWithBackground 
+                variant={getStepVariant(2)} 
+                icon={getStepIcon(2)}
+              />
+              <span className={`text-body${currentStep === 2 ? '-bold font-body-bold' : ' font-body'} ${currentStep === 2 ? 'text-brand-600' : currentStep > 2 ? 'text-default-font' : 'text-subtext-color'}`}>
+                Dine oplysninger
+              </span>
+            </div>
+            <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
+            <div className="flex items-center gap-2">
+              <IconWithBackground 
+                variant={getStepVariant(3)} 
+                icon={getStepIcon(3)}
+              />
+              <span className={`text-body${currentStep === 3 ? '-bold font-body-bold' : ' font-body'} ${currentStep === 3 ? 'text-brand-600' : 'text-subtext-color'}`}>
+                Få bedre tilbud
+              </span>
+            </div>
+          </div>
+
+          {/* Step 1: Upload Documents */}
+          {currentStep === 1 && (
+            <div className="flex w-full flex-col items-start gap-4">
+              <div className="flex flex-col items-start gap-2">
+                <span className="text-heading-1 font-heading-1 text-default-font">
+                  Upload dine nuværende forsikringer
+                </span>
+                <span className="text-body font-body text-subtext-color">
+                  Upload PDF-dokumenter fra dine eksisterende forsikringer
+                </span>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-foreground">BedreTilbud</h1>
-                <p className="text-sm text-muted-foreground">Find bedre forsikringer</p>
+
+              <div className="w-full">
+                <FileUpload
+                  onFilesUploaded={handleFilesUploaded}
+                  uploadedFiles={uploadedFiles}
+                  isUploading={false}
+                />
+              </div>
+
+              <div className="flex w-full items-center justify-between pt-4">
+                <LinkButton
+                  icon={<FeatherArrowLeft />}
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/")}
+                >
+                  Tilbage
+                </LinkButton>
+                <Button
+                  disabled={uploadedFiles.length === 0}
+                  iconRight={<FeatherArrowRight />}
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => handleNext()}
+                  data-testid="button-next-step"
+                >
+                  Næste trin
+                </Button>
               </div>
             </div>
-            <UserSelector />
-          </div>
-        </div>
-      </header>
+          )}
 
-      <main className="flex-1">
-        <section className="py-12 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-4xl mx-auto">
-            <ProgressSteps
-              currentStep={currentStep}
-              steps={[
-                "Upload dokumenter",
-                "Dine oplysninger", 
-                "Vælg selskaber",
-                "Modtag tilbud"
-              ]}
-            />
+          {/* Step 2: User Information */}
+          {currentStep === 2 && (
+            <div className="flex w-full flex-col items-start gap-4">
+              <div className="flex flex-col items-start gap-2">
+                <span className="text-heading-1 font-heading-1 text-default-font">
+                  Fortæl os om dig selv
+                </span>
+                <span className="text-body font-body text-subtext-color">
+                  Vi hjælper dig med at finde de bedste forsikringstilbud
+                </span>
+              </div>
 
-            {/* Step 1: Upload Documents */}
-            {currentStep === 1 && (
-              <Card className="shadow-card-lg">
-                <CardContent className="p-8">
-                  <div className="text-center mb-8">
-                    <h2 className="text-3xl font-bold text-foreground mb-3">
-                      Upload dine nuværende forsikringer
-                    </h2>
-                    <p className="text-lg text-muted-foreground">
-                      Upload PDF-dokumenter fra dine eksisterende forsikringer, så vi kan finde dig bedre tilbud
-                    </p>
-                  </div>
+              <TextField
+                className="h-auto w-full flex-none"
+                label="E-mail"
+                helpText="Din e-mailadresse bruges til at kontakte dig"
+              >
+                <TextField.Input
+                  placeholder="f.eks. din@email.dk"
+                  value={form.watch("email")}
+                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+                    form.setValue("email", event.target.value);
+                  }}
+                  data-testid="input-email"
+                />
+              </TextField>
 
-                  <FileUpload
-                    onFilesUploaded={handleFilesUploaded}
-                    uploadedFiles={uploadedFiles}
-                    isUploading={uploadMutation.isPending}
-                  />
+              <TextField
+                className="h-auto w-full flex-none"
+                label="Fulde navn"
+                helpText="Indtast dit fornavn og efternavn"
+              >
+                <TextField.Input
+                  placeholder="f.eks. indtast dit fulde navn"
+                  value={form.watch("name") || ""}
+                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+                    form.setValue("name", event.target.value);
+                  }}
+                  data-testid="input-name"
+                />
+              </TextField>
 
-                  <div className="flex justify-end mt-8">
-                    <Button
-                      onClick={handleNext}
-                      disabled={uploadedFiles.length === 0}
-                      size="lg"
-                      className="text-lg px-12 py-4"
-                      data-testid="button-next-step"
-                    >
-                      Næste trin
-                      <ArrowRight className="ml-2 w-5 h-5" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+              <div className="w-full">
+                <label className="text-label font-label text-default-font mb-1 block">Boligtype</label>
+                <Select 
+                  onValueChange={(value) => form.setValue("housingType", value)} 
+                  value={form.watch("housingType") || ""}
+                >
+                  <SelectTrigger 
+                    className="w-full"
+                    data-testid="select-housing-type"
+                  >
+                    <SelectValue placeholder="Vælg boligtype" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="villa">Villa</SelectItem>
+                    <SelectItem value="lejlighed">Lejlighed</SelectItem>
+                    <SelectItem value="andelsbolig">Andelsbolig</SelectItem>
+                    <SelectItem value="rækkehus">Rækkehus</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-            {/* Step 2: User Information */}
-            {currentStep === 2 && (
-              <Card className="shadow-card-lg">
-                <CardContent className="p-8">
-                  <div className="text-center mb-8">
-                    <h2 className="text-3xl font-bold text-foreground mb-3">
-                      Fortæl os om dig selv
-                    </h2>
-                    <p className="text-lg text-muted-foreground">
-                      Disse oplysninger hjælper os med at finde de bedste tilbud til dig
-                    </p>
-                  </div>
+              <div className="flex w-full items-center gap-3">
+                <Checkbox
+                  checked={form.watch("hasCar") || false}
+                  onCheckedChange={(checked) => form.setValue("hasCar", !!checked)}
+                  className="w-6 h-6"
+                  data-testid="checkbox-has-car"
+                />
+                <span className="text-body-bold font-body-bold text-default-font">
+                  Har du bil?
+                </span>
+              </div>
 
-                  <Form {...form}>
-                    <form onSubmit={form.handleSubmit(onUserInfoSubmit)} className="space-y-6">
-                      <div className="grid md:grid-cols-2 gap-6">
-                        <FormField
-                          control={form.control}
-                          name="email"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm font-semibold text-foreground">
-                                E-mail *
-                              </FormLabel>
-                              <FormControl>
-                                <input
-                                  {...field}
-                                  type="email"
-                                  className="w-full px-4 py-3 border-2 border-input rounded-lg bg-background text-foreground text-base focus:border-ring focus:outline-none"
-                                  placeholder="din@email.dk"
-                                  data-testid="input-email"
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+              <div className="w-full">
+                <label className="text-label font-label text-default-font mb-1 block">Ønsket selvrisiko</label>
+                <Select 
+                  onValueChange={(value) => form.setValue("deductible", value)} 
+                  value={form.watch("deductible") || ""}
+                >
+                  <SelectTrigger 
+                    className="w-full"
+                    data-testid="select-deductible"
+                  >
+                    <SelectValue placeholder="Vælg selvrisiko" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="2500">2.500 kr.</SelectItem>
+                    <SelectItem value="5000">5.000 kr.</SelectItem>
+                    <SelectItem value="7500">7.500 kr.</SelectItem>
+                    <SelectItem value="10000">10.000 kr.</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                        <FormField
-                          control={form.control}
-                          name="name"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm font-semibold text-foreground">
-                                Navn
-                              </FormLabel>
-                              <FormControl>
-                                <input
-                                  {...field}
-                                  type="text"
-                                  className="w-full px-4 py-3 border-2 border-input rounded-lg bg-background text-foreground text-base focus:border-ring focus:outline-none"
-                                  placeholder="Dit navn"
-                                  data-testid="input-name"
-                                />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
+              <TextField
+                className="h-auto w-full flex-none"
+                label="Yderligere oplysninger"
+                helpText="Fortæl os om eventuelle specielle krav eller behov (valgfrit)"
+              >
+                <TextField.Input
+                  placeholder="Skriv din besked her..."
+                  value={form.watch("additionalInfo") || ""}
+                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+                    form.setValue("additionalInfo", event.target.value);
+                  }}
+                  data-testid="textarea-additional-info"
+                />
+              </TextField>
 
-                      <div className="grid md:grid-cols-2 gap-6">
-                        <FormField
-                          control={form.control}
-                          name="housingType"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm font-semibold text-foreground">
-                                Boligtype
-                              </FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                  <SelectTrigger 
-                                    className="w-full px-4 py-3 border-2 border-input rounded-lg bg-background text-foreground text-base focus:border-ring"
-                                    data-testid="select-housing-type"
-                                  >
-                                    <SelectValue placeholder="Vælg boligtype" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="villa">Villa</SelectItem>
-                                  <SelectItem value="lejlighed">Lejlighed</SelectItem>
-                                  <SelectItem value="andelsbolig">Andelsbolig</SelectItem>
-                                  <SelectItem value="rækkehus">Rækkehus</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+              <div className="flex w-full items-center justify-between pt-4">
+                <LinkButton
+                  icon={<FeatherArrowLeft />}
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => handlePrevious()}
+                  data-testid="button-previous"
+                >
+                  Tilbage
+                </LinkButton>
+                <Button
+                  iconRight={<FeatherArrowRight />}
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                    form.handleSubmit(onUserInfoSubmit)();
+                  }}
+                  data-testid="button-next-user-info"
+                >
+                  Næste trin
+                </Button>
+              </div>
+            </div>
+          )}
 
-                        <FormField
-                          control={form.control}
-                          name="hasCar"
-                          render={({ field }) => (
-                            <FormItem className="flex flex-row items-center space-x-3 space-y-0 pt-8">
-                              <FormControl>
-                                <Checkbox
-                                  checked={field.value}
-                                  onCheckedChange={field.onChange}
-                                  className="w-6 h-6"
-                                  data-testid="checkbox-has-car"
-                                />
-                              </FormControl>
-                              <FormLabel className="text-sm font-semibold text-foreground">
-                                Har du bil?
-                              </FormLabel>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
+          {/* Step 3: Company Selection */}
+          {currentStep === 3 && (
+            <div className="flex w-full flex-col items-start gap-4">
+              <div className="flex flex-col items-start gap-2">
+                <span className="text-heading-1 font-heading-1 text-default-font">
+                  Vælg forsikringsselskaber
+                </span>
+                <span className="text-body font-body text-subtext-color">
+                  Vælg hvilke selskaber du vil anmode om tilbud fra
+                </span>
+              </div>
 
-                      <div className="grid md:grid-cols-2 gap-6">
-                        <FormField
-                          control={form.control}
-                          name="deductible"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm font-semibold text-foreground">
-                                Ønsket selvrisiko
-                              </FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                  <SelectTrigger 
-                                    className="w-full px-4 py-3 border-2 border-input rounded-lg bg-background text-foreground text-base focus:border-ring"
-                                    data-testid="select-deductible"
-                                  >
-                                    <SelectValue placeholder="Vælg selvrisiko" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="2500">2.500 kr.</SelectItem>
-                                  <SelectItem value="5000">5.000 kr.</SelectItem>
-                                  <SelectItem value="7500">7.500 kr.</SelectItem>
-                                  <SelectItem value="10000">10.000 kr.</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-
-                        <FormField
-                          control={form.control}
-                          name="age"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel className="text-sm font-semibold text-foreground">
-                                Alder
-                              </FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                  <SelectTrigger 
-                                    className="w-full px-4 py-3 border-2 border-input rounded-lg bg-background text-foreground text-base focus:border-ring"
-                                    data-testid="select-age"
-                                  >
-                                    <SelectValue placeholder="Vælg aldersgruppe" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="under-30">Under 30</SelectItem>
-                                  <SelectItem value="30-40">30-40</SelectItem>
-                                  <SelectItem value="40-50">40-50</SelectItem>
-                                  <SelectItem value="50-60">50-60</SelectItem>
-                                  <SelectItem value="over-60">Over 60</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-
-                      <FormField
-                        control={form.control}
-                        name="additionalInfo"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="text-sm font-semibold text-foreground">
-                              Yderligere oplysninger (valgfrit)
-                            </FormLabel>
-                            <FormControl>
-                              <Textarea
-                                {...field}
-                                rows={5}
-                                className="w-full px-4 py-3 border-2 border-input rounded-lg bg-background text-foreground text-base focus:border-ring focus:outline-none resize-none"
-                                placeholder="Er der noget særligt, vi skal vide? F.eks. ønsker om specifikke dækninger..."
-                                data-testid="textarea-additional-info"
-                              />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      <div className="bg-muted rounded-lg p-6">
-                        <div className="flex items-start gap-4">
-                          <Shield className="w-6 h-6 text-primary flex-shrink-0 mt-1" />
-                          <div>
-                            <h4 className="font-semibold text-foreground mb-1">
-                              Sådan bruger vi dine oplysninger
-                            </h4>
-                            <p className="text-sm text-muted-foreground">
-                              Vi bruger disse oplysninger til at skabe personlige forespørgsler til 
-                              forsikringsselskaber. Dine data deles kun med de selskaber, du vælger.
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex justify-between">
-                        <Button 
-                          type="button"
-                          onClick={handlePrevious}
-                          variant="outline"
-                          size="lg"
-                          className="px-8 py-4 text-lg"
-                          data-testid="button-previous"
-                        >
-                          <ArrowLeft className="mr-2 w-5 h-5" />
-                          Tilbage
-                        </Button>
-                        <Button
-                          type="submit"
-                          disabled={createUserMutation.isPending}
-                          size="lg"
-                          className="px-12 py-4 text-lg"
-                          data-testid="button-next-user-info"
-                        >
-                          Næste trin
-                          <ArrowRight className="ml-2 w-5 h-5" />
-                        </Button>
-                      </div>
-                    </form>
-                  </Form>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Step 3: Company Selection */}
-            {currentStep === 3 && (
-              <Card className="shadow-card-lg">
-                <CardContent className="p-8">
-                  <div className="text-center mb-8">
-                    <h2 className="text-3xl font-bold text-foreground mb-3">
-                      Vælg forsikringsselskaber
-                    </h2>
-                    <p className="text-lg text-muted-foreground">
-                      Vælg hvilke selskaber du vil anmode om tilbud fra
-                    </p>
-                  </div>
-
-                  <div className="space-y-4 mb-8">
-                    {(companies as any[]).map((company: any) => (
-                      <label
-                        key={company.id}
-                        className="flex items-center gap-4 p-6 border-2 border-border rounded-xl hover:border-primary cursor-pointer transition-colors bg-background"
-                        data-testid={`company-option-${company.id}`}
-                      >
-                        <Checkbox
-                          checked={selectedCompanies.includes(company.id)}
-                          onCheckedChange={(checked) => {
-                            if (checked) {
-                              setSelectedCompanies([...selectedCompanies, company.id]);
-                            } else {
-                              setSelectedCompanies(selectedCompanies.filter(id => id !== company.id));
-                            }
-                          }}
-                          className="w-6 h-6"
-                        />
-                        <div className="flex items-center gap-4 flex-1">
-                          <div className="w-16 h-16 bg-muted rounded-lg flex items-center justify-center">
-                            <span className="text-2xl font-bold text-primary">
-                              {company.name.charAt(0)}
-                            </span>
-                          </div>
-                          <div className="flex-1">
-                            <h3 className="text-xl font-semibold text-foreground">
-                              {company.name}
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                              {company.description}
-                            </p>
-                          </div>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-
-                  <div className="bg-accent/10 border-2 border-accent/30 rounded-lg p-6 mb-8">
-                    <div className="flex items-start gap-4">
-                      <Shield className="w-6 h-6 text-accent flex-shrink-0 mt-1" />
-                      <div>
-                        <h4 className="font-semibold text-foreground mb-1">
-                          Personlig forespørgsel sendes til hver
-                        </h4>
-                        <p className="text-sm text-muted-foreground">
-                          Vores AI genererer en personlig forespørgsel baseret på dine oplysninger og 
-                          nuværende forsikringer til hvert selskab.
-                        </p>
-                      </div>
+              <div className="flex w-full flex-col items-start gap-3">
+                {(companies as any[]).map((company: any) => (
+                  <div 
+                    key={company.id}
+                    className="flex w-full items-center gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 hover:bg-neutral-50 cursor-pointer transition-colors"
+                    onClick={() => {
+                      if (selectedCompanies.includes(company.id)) {
+                        setSelectedCompanies(selectedCompanies.filter(id => id !== company.id));
+                      } else {
+                        setSelectedCompanies([...selectedCompanies, company.id]);
+                      }
+                    }}
+                    data-testid={`company-option-${company.id}`}
+                  >
+                    <Checkbox
+                      checked={selectedCompanies.includes(company.id)}
+                      onCheckedChange={(checked) => {
+                        if (checked) {
+                          setSelectedCompanies([...selectedCompanies, company.id]);
+                        } else {
+                          setSelectedCompanies(selectedCompanies.filter(id => id !== company.id));
+                        }
+                      }}
+                      className="w-6 h-6"
+                    />
+                    <IconWithBackground 
+                      size="large" 
+                      icon={<FeatherBuilding />} 
+                    />
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                      <span className="text-body-bold font-body-bold text-default-font">
+                        {company.name}
+                      </span>
+                      <span className="text-body font-body text-subtext-color">
+                        {company.description}
+                      </span>
                     </div>
                   </div>
+                ))}
+              </div>
 
-                  <div className="flex justify-between">
-                    <Button
-                      onClick={handlePrevious}
-                      variant="outline"
-                      size="lg"
-                      className="px-8 py-4 text-lg"
-                      data-testid="button-previous-companies"
-                    >
-                      <ArrowLeft className="mr-2 w-5 h-5" />
-                      Tilbage
-                    </Button>
-                    <Button
-                      onClick={handleSendInquiries}
-                      disabled={sendInquiriesMutation.isPending || selectedCompanies.length === 0}
-                      size="lg"
-                      className="px-12 py-4 text-lg"
-                      data-testid="button-send-inquiries"
-                    >
-                      <Send className="mr-2 w-5 h-5" />
-                      Send forespørgsler
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </section>
-      </main>
-    </div>
+              <div className="flex w-full items-center gap-4 rounded-md bg-brand-50 px-6 py-4">
+                <IconWithBackground 
+                  size="small" 
+                  icon={<FeatherCheck />} 
+                  variant="brand"
+                />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start">
+                  <span className="text-body-bold font-body-bold text-brand-700">
+                    Personlig forespørgsel til hver
+                  </span>
+                  <span className="text-body font-body text-brand-700">
+                    Vores AI genererer en skræddersyet forespørgsel til hvert selskab baseret på dine oplysninger
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex w-full items-center justify-between pt-4">
+                <LinkButton
+                  icon={<FeatherArrowLeft />}
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => handlePrevious()}
+                  data-testid="button-previous-companies"
+                >
+                  Tilbage
+                </LinkButton>
+                <Button
+                  disabled={sendInquiriesMutation.isPending || selectedCompanies.length === 0}
+                  iconRight={<FeatherSend />}
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => handleSendInquiries()}
+                  data-testid="button-send-inquiries"
+                >
+                  Send forespørgsler
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </DefaultPageLayout>
   );
 }

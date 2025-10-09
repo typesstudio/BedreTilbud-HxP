@@ -1,0 +1,147 @@
+1) Run the following command to sync Subframe components:
+
+```bash
+npx @subframe/cli@latest sync --all
+```
+
+2) Create a new page using the following TSX code. If the page already exists, use it as reference to update the existing code but preserve existing business logic or functionality.
+
+```tsx
+"use client";
+
+import React from "react";
+import { Button } from "@/ui/components/Button";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { LinkButton } from "@/ui/components/LinkButton";
+import { TextField } from "@/ui/components/TextField";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import { FeatherArrowLeft } from "@subframe/core";
+import { FeatherArrowRight } from "@subframe/core";
+import { FeatherMessageCircle } from "@subframe/core";
+import { FeatherUpload } from "@subframe/core";
+import { FeatherUser } from "@subframe/core";
+
+function InsuranceOnboardingFlow() {
+  return (
+    <DefaultPageLayout>
+      <div className="container max-w-none flex h-full w-full flex-col items-center gap-8 bg-default-background py-12">
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-8">
+          <div className="flex w-full items-center justify-between">
+            <div className="flex items-center gap-2">
+              <IconWithBackground variant="success" />
+              <span className="text-body-bold font-body-bold text-default-font">
+                Din Email
+              </span>
+            </div>
+            <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
+            <div className="flex items-center gap-2">
+              <IconWithBackground icon={<FeatherUser />} />
+              <span className="text-body-bold font-body-bold text-brand-600">
+                Dine Preferences
+              </span>
+            </div>
+            <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
+            <div className="flex items-center gap-2">
+              <IconWithBackground variant="neutral" />
+              <span className="text-body font-body text-subtext-color">
+                Få bedre tilbud
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full flex-col items-start gap-4">
+            <div className="flex flex-col items-start gap-2">
+              <span className="text-heading-1 font-heading-1 text-default-font">
+                Let us get to know you
+              </span>
+              <span className="text-body font-body text-subtext-color">
+                We&#39;ll help you find the best insurance offers
+              </span>
+            </div>
+            <TextField
+              className="h-auto w-full flex-none"
+              label="Full Name"
+              helpText="Enter your first and last name"
+            >
+              <TextField.Input
+                placeholder="e.g. enter your full name"
+                value=""
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => {}}
+              />
+            </TextField>
+            <TextField
+              className="h-auto w-full flex-none"
+              error={true}
+              label="Personal ID Number"
+              helpText="Your information is encrypted and secure"
+            >
+              <TextField.Input
+                placeholder="e.g. enter your ID number"
+                value=""
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => {}}
+              />
+            </TextField>
+            <div className="flex w-full flex-col items-start gap-4 pt-4">
+              <span className="text-heading-3 font-heading-3 text-default-font">
+                How would you like to proceed?
+              </span>
+              <div className="flex w-full items-center gap-4 rounded-lg bg-neutral-50 px-6 py-6">
+                <IconWithBackground size="large" icon={<FeatherUpload />} />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <span className="text-body-bold font-body-bold text-default-font">
+                    Upload your insurance policies
+                  </span>
+                  <span className="text-body font-body text-subtext-color">
+                    We&#39;ll scan your current insurance policies
+                  </span>
+                </div>
+              </div>
+              <div className="flex w-full items-center gap-4 rounded-lg bg-neutral-50 px-6 py-6">
+                <IconWithBackground
+                  size="large"
+                  icon={<FeatherMessageCircle />}
+                />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <span className="text-body-bold font-body-bold text-default-font">
+                    Tell us about your needs
+                  </span>
+                  <span className="text-body font-body text-subtext-color">
+                    We&#39;ll find the best offers for you
+                  </span>
+                </div>
+              </div>
+            </div>
+            <TextField
+              className="h-auto w-full flex-none"
+              label="Additional Information"
+              helpText="Tell us about any special requirements or needs (optional)"
+            >
+              <TextField.Input
+                placeholder="Write your message here..."
+                value=""
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => {}}
+              />
+            </TextField>
+          </div>
+          <div className="flex w-full items-center justify-between pt-4">
+            <LinkButton
+              icon={<FeatherArrowLeft />}
+              onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+            >
+              Back
+            </LinkButton>
+            <Button
+              iconRight={<FeatherArrowRight />}
+              onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+            >
+              Next step
+            </Button>
+          </div>
+        </div>
+      </div>
+    </DefaultPageLayout>
+  );
+}
+
+export default InsuranceOnboardingFlow;
+
+```
