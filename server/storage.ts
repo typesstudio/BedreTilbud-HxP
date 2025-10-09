@@ -34,6 +34,7 @@ export interface IStorage {
   // Email Threads
   getEmailThread(id: string): Promise<EmailThread | undefined>;
   getEmailThreadByGmailId(gmailThreadId: string): Promise<EmailThread | undefined>;
+  getEmailThreadByToken(token: string): Promise<EmailThread | undefined>;
   getUserEmailThreads(userId: string): Promise<EmailThread[]>;
   createEmailThread(thread: InsertEmailThread): Promise<EmailThread>;
   updateEmailThread(id: string, updates: Partial<InsertEmailThread>): Promise<EmailThread>;
@@ -199,6 +200,10 @@ export class MemStorage implements IStorage {
 
   async getEmailThreadByGmailId(gmailThreadId: string): Promise<EmailThread | undefined> {
     return Array.from(this.emailThreads.values()).find(t => t.threadId === gmailThreadId);
+  }
+
+  async getEmailThreadByToken(token: string): Promise<EmailThread | undefined> {
+    return Array.from(this.emailThreads.values()).find(t => t.requestToken === token);
   }
 
   async getUserEmailThreads(userId: string): Promise<EmailThread[]> {
@@ -384,6 +389,14 @@ export class DatabaseStorage implements IStorage {
     const { emailThreads } = await import("@shared/schema");
     const { eq } = await import("drizzle-orm");
     const [thread] = await db.select().from(emailThreads).where(eq(emailThreads.threadId, gmailThreadId));
+    return thread || undefined;
+  }
+
+  async getEmailThreadByToken(token: string): Promise<EmailThread | undefined> {
+    const { db } = await import("./db");
+    const { emailThreads } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [thread] = await db.select().from(emailThreads).where(eq(emailThreads.requestToken, token));
     return thread || undefined;
   }
 
