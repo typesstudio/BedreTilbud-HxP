@@ -1,0 +1,222 @@
+1) Run the following command to sync Subframe components:
+
+```bash
+npx @subframe/cli@latest sync --all
+```
+
+2) Create a new page using the following TSX code. If the page already exists, use it as reference to update the existing code but preserve existing business logic or functionality.
+
+```tsx
+"use client";
+
+import React from "react";
+import { Badge } from "@/ui/components/Badge";
+import { Button } from "@/ui/components/Button";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { Progress } from "@/ui/components/Progress";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import { FeatherArrowRight } from "@subframe/core";
+import { FeatherMessageCircle } from "@subframe/core";
+
+function Offers() {
+  return (
+    <DefaultPageLayout>
+      <div className="container max-w-none flex h-full w-full flex-col items-center gap-12 bg-default-background py-12">
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-6">
+          <div className="flex w-full flex-col items-start gap-2">
+            <span className="text-heading-1 font-heading-1 text-default-font">
+              Your Insurance Offers
+            </span>
+            <span className="text-body font-body text-subtext-color">
+              Compare and review insurance offers tailored for you
+            </span>
+          </div>
+          <div className="flex w-full items-center gap-4 rounded-md bg-brand-50 px-6 py-4">
+            <IconWithBackground size="small" icon={<FeatherMessageCircle />} />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start">
+              <span className="text-body-bold font-body-bold text-brand-700">
+                We&#39;re getting more offers for you
+              </span>
+              <span className="text-body font-body text-brand-700">
+                Our AI is negotiating with 3 more insurance
+                companies.We&#39;llnotify you when new offers are available.
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full flex-col items-start gap-4">
+            <div className="flex w-full items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4">
+                <div className="flex w-full items-start justify-between">
+                  <span className="text-heading-3 font-heading-3 text-default-font">
+                    Tryg tilbud
+                  </span>
+                  <Badge variant="neutral">Modtaget den 12.05.25</Badge>
+                </div>
+                <div className="flex w-full flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6">
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body font-body text-subtext-color">
+                      Current premium
+                    </span>
+                    <span className="text-body font-body text-default-font">
+                      $127.50/month
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body-bold font-body-bold text-brand-600">
+                      New offer
+                    </span>
+                    <span className="text-body-bold font-body-bold text-brand-600">
+                      $82.50/month
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body font-body text-brand-600">
+                      Monthly savings
+                    </span>
+                    <span className="text-body font-body text-brand-600">
+                      $45.00
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body font-body text-brand-600">
+                      Yearly savings
+                    </span>
+                    <span className="text-body font-body text-brand-600">
+                      $540.00
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  iconRight={<FeatherArrowRight />}
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                >
+                  View Comparison
+                </Button>
+              </div>
+            </div>
+            <div className="flex w-full items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4">
+                <div className="flex w-full items-start justify-between">
+                  <span className="text-heading-3 font-heading-3 text-default-font">
+                    Codan tilbud
+                  </span>
+                  <Badge variant="neutral">Modtaget den 06.05.25</Badge>
+                </div>
+                <div className="flex w-full flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6">
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body font-body text-subtext-color">
+                      Current premium
+                    </span>
+                    <span className="text-body font-body text-default-font">
+                      $127.50/month
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body-bold font-body-bold text-brand-600">
+                      New offer
+                    </span>
+                    <span className="text-body-bold font-body-bold text-brand-600">
+                      $82.50/month
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body font-body text-brand-600">
+                      Monthly savings
+                    </span>
+                    <span className="text-body font-body text-brand-600">
+                      $45.00
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body font-body text-brand-600">
+                      Yearly savings
+                    </span>
+                    <span className="text-body font-body text-brand-600">
+                      $540.00
+                    </span>
+                  </div>
+                </div>
+                <Button
+                  iconRight={<FeatherArrowRight />}
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                >
+                  View Comparison
+                </Button>
+              </div>
+            </div>
+          </div>
+          <div className="flex w-full flex-col items-start gap-4">
+            <span className="text-heading-2 font-heading-2 text-default-font">
+              Pending Offers
+            </span>
+            <div className="flex w-full flex-col items-start gap-4">
+              <div className="flex w-full items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4">
+                  <div className="flex w-full items-start justify-between">
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-heading-3 font-heading-3 text-default-font">
+                        Protecto Insurance
+                      </span>
+                      <span className="text-body font-body text-subtext-color">
+                        Home Insurance
+                      </span>
+                    </div>
+                    <Badge variant="warning">Negotiating</Badge>
+                  </div>
+                  <div className="flex w-full flex-col items-start gap-2">
+                    <span className="text-body font-body text-default-font">
+                      Known for excellent customer service and quick claims
+                      processing
+                    </span>
+                    <div className="flex w-full flex-col items-start gap-1">
+                      <span className="text-caption font-caption text-subtext-color">
+                        Estimated in
+                      </span>
+                      <Progress value={80} />
+                      <span className="text-caption font-caption text-subtext-color">
+                        2 days
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex w-full items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4">
+                  <div className="flex w-full items-start justify-between">
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-heading-3 font-heading-3 text-default-font">
+                        Guardian Plus
+                      </span>
+                      <span className="text-body font-body text-subtext-color">
+                        Home Insurance
+                      </span>
+                    </div>
+                    <Badge variant="neutral">Processing</Badge>
+                  </div>
+                  <div className="flex w-full flex-col items-start gap-2">
+                    <span className="text-body font-body text-default-font">
+                      Comprehensive coverage with competitive rates
+                    </span>
+                    <div className="flex w-full flex-col items-start gap-1">
+                      <span className="text-caption font-caption text-subtext-color">
+                        Estimated in
+                      </span>
+                      <Progress value={25} />
+                      <span className="text-caption font-caption text-subtext-color">
+                        4 days
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </DefaultPageLayout>
+  );
+}
+
+export default Offers;
+
+```
