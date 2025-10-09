@@ -136,11 +136,33 @@ export class EmailService {
       const headers = message.data.payload?.headers || [];
       const subject = headers.find((h: any) => h.name === 'Subject')?.value || '';
       const from = headers.find((h: any) => h.name === 'From')?.value || '';
+      const to = headers.find((h: any) => h.name === 'To')?.value || '';
       const threadId = message.data.threadId || '';
 
-      // Find existing thread
-      const existingThread = await storage.getEmailThreadByGmailId(threadId);
-      if (!existingThread) return;
+      // Multi-level thread matching strategy
+      let existingThread;
+      
+      // Level 1: Try token-based matching (most reliable)
+      const token = extractTokenFromEmail(to);
+      if (token) {
+        existingThread = await storage.getEmailThreadByToken(token);
+        if (existingThread) {
+          console.log(`✅ Thread matched by token: ${token}`);
+        }
+      }
+      
+      // Level 2: Fallback to Gmail threadId matching
+      if (!existingThread && threadId) {
+        existingThread = await storage.getEmailThreadByGmailId(threadId);
+        if (existingThread) {
+          console.log(`⚠️ Thread matched by Gmail threadId (fallback): ${threadId}`);
+        }
+      }
+      
+      if (!existingThread) {
+        console.log(`❌ No thread found for message. To: ${to}, ThreadId: ${threadId}`);
+        return;
+      }
 
       // Extract email body
       let body = '';
