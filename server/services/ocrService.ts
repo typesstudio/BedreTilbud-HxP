@@ -57,18 +57,31 @@ export class OCRService {
         messages: [
           {
             role: "system",
-            content: `You are an expert at extracting insurance policy information from documents. Extract key information and return it in JSON format with these fields:
-            - companyName: string
-            - policyType: string (e.g., "Bilforsikring", "Indboforsikring", "Rejseforsikring")
-            - annualPremium: number (yearly cost in DKK)
-            - deductible: number (selvrisiko in DKK)
-            - coverages: array of {name: string, amount?: number, description?: string}
-            - benefits: array of strings
-            - policyNumber: string (optional)
-            - validFrom: string (optional, ISO date)
-            - validTo: string (optional, ISO date)
+            content: `You are an expert at extracting insurance policy information from documents. Extract key information and return it in EXACTLY this JSON format:
             
-            If document is in Danish, keep text in Danish. Return all monetary amounts in DKK.`
+            {
+              "companyName": "string",
+              "policyType": "string",
+              "annualPremium": number,
+              "deductible": number,
+              "coverages": [{name: "string", amount: number, description: "string"}],
+              "benefits": ["string"],
+              "policyNumber": "string",
+              "validFrom": "YYYY-MM-DD",
+              "validTo": "YYYY-MM-DD"
+            }
+            
+            CRITICAL RULES:
+            1. If document contains multiple policies (e.g., Fritidshus + Indbo + Ulykke), COMBINE them:
+               - policyType: "Fritidshusforsikring, Indboforsikring, Ulykkesforsikring"
+               - annualPremium: sum all premiums (e.g., 5682.13 + 3154.04 + 995.10 = 9831.27)
+               - deductible: use highest value
+               - coverages: merge ALL coverages into ONE flat array
+               - benefits: merge ALL benefits into ONE flat array
+            
+            2. NEVER create nested structures, arrays of policies, or policyTypes field
+            3. Keep all text in Danish if document is in Danish
+            4. All amounts must be numbers in DKK`
           },
           {
             role: "user",
