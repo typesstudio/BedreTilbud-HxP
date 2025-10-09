@@ -182,114 +182,131 @@ export default function OffersOverview() {
               </div>
             )}
 
-            {/* Offers List */}
-            <div className="space-y-4">
-              {(threads as any[]).length === 0 ? (
-                <Card className="shadow-card text-center p-8">
-                  <CardContent>
-                    <Shield className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-xl font-semibold text-foreground mb-2">
-                      Ingen forespørgsler endnu
+            {/* Offers by Category */}
+            {(threads as any[]).length === 0 && (comparisons as any[]).length === 0 ? (
+              <Card className="shadow-card text-center p-8">
+                <CardContent>
+                  <Shield className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                  <h3 className="text-xl font-semibold text-foreground mb-2">
+                    Ingen forespørgsler endnu
+                  </h3>
+                  <p className="text-muted-foreground mb-6">
+                    Start med at uploade dine forsikringsdokumenter og send forespørgsler til selskaber.
+                  </p>
+                  <Button
+                    onClick={() => setLocation("/onboarding")}
+                    data-testid="button-start-onboarding"
+                  >
+                    Kom i gang
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-8">
+                {/* Modtagne tilbud med sammenligninger */}
+                {(comparisons as any[]).length > 0 && (
+                  <div>
+                    <h3 className="text-2xl font-bold text-foreground mb-4 flex items-center gap-2">
+                      <CheckCircle className="w-6 h-6 text-green-600" />
+                      Modtagne tilbud
                     </h3>
-                    <p className="text-muted-foreground mb-6">
-                      Start med at uploade dine forsikringsdokumenter og send forespørgsler til selskaber.
-                    </p>
-                    <Button
-                      onClick={() => setLocation("/onboarding")}
-                      data-testid="button-start-onboarding"
-                    >
-                      Kom i gang
-                    </Button>
-                  </CardContent>
-                </Card>
-              ) : (
-                (threads as any[]).map((thread: any) => {
-                  const comparison = getComparisonForThread(thread.id);
-                  const hasComparison = comparison && comparison.savings;
-                  
-                  return (
-                    <Card
-                      key={thread.id}
-                      className={`shadow-card p-6 border-2 hover:shadow-card-lg transition-shadow ${
-                        thread.status === 'received' ? 'border-green-200' : 'border-border'
-                      }`}
-                      data-testid={`offer-card-${thread.id}`}
-                    >
-                      <CardContent className="p-0">
-                        <div className="flex items-start justify-between mb-4">
-                          <div className="flex items-center gap-4">
-                            <div className="w-14 h-14 bg-muted rounded-lg flex items-center justify-center">
-                              <span className="text-2xl font-bold text-primary">
-                                {thread.company?.name?.charAt(0) || '?'}
-                              </span>
+                    <div className="space-y-4">
+                      {(comparisons as any[]).map((comparison: any) => (
+                        <Card
+                          key={comparison.id}
+                          className="shadow-card p-6 border-2 border-green-200 hover:shadow-card-lg transition-shadow"
+                          data-testid={`comparison-card-${comparison.id}`}
+                        >
+                          <CardContent className="p-0">
+                            <div className="flex items-start justify-between mb-4">
+                              <div className="flex items-center gap-4">
+                                <div className="w-14 h-14 bg-green-50 rounded-lg flex items-center justify-center">
+                                  <span className="text-2xl font-bold text-green-600">
+                                    {comparison.company?.name?.charAt(0) || '?'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <h4 className="text-xl font-semibold text-foreground">
+                                    {comparison.company?.name || 'Ukendt selskab'}
+                                  </h4>
+                                  <p className="text-sm text-muted-foreground">
+                                    Modtaget {new Date(comparison.createdAt).toLocaleDateString('da-DK')}
+                                  </p>
+                                </div>
+                              </div>
+                              <Badge className="bg-green-600 text-white">Klar til sammenligning</Badge>
                             </div>
-                            <div>
-                              <h3 className="text-xl font-semibold text-foreground">
-                                {thread.company?.name || 'Ukendt selskab'}
-                              </h3>
-                              <p className="text-sm text-muted-foreground">
-                                Sendt {new Date(thread.createdAt).toLocaleDateString('da-DK')}
-                              </p>
-                            </div>
-                          </div>
-                          {getStatusBadge(thread.status)}
-                        </div>
 
-                        {hasComparison && (
-                          <div className="flex flex-wrap gap-3 mb-4">
-                            <Badge variant="secondary" className="bg-green-50 text-green-700">
-                              Spar {comparison.savings} kr./år
-                            </Badge>
-                            {comparison.comparisonData?.pros?.slice(0, 1).map((pro: string, index: number) => (
-                              <Badge key={index} variant="secondary" className="bg-blue-50 text-blue-700">
-                                {pro}
+                            <div className="flex flex-wrap gap-3 mb-4">
+                              <Badge variant="secondary" className="bg-green-50 text-green-700 text-lg px-4 py-2">
+                                Spar {comparison.savings || 0} kr./år
                               </Badge>
-                            ))}
-                          </div>
-                        )}
+                              {comparison.comparisonData?.pros?.slice(0, 2).map((pro: string, index: number) => (
+                                <Badge key={index} variant="secondary" className="bg-blue-50 text-blue-700">
+                                  {pro}
+                                </Badge>
+                              ))}
+                            </div>
 
-                        <div className="flex gap-3">
-                          {hasComparison ? (
                             <Button
-                              className="flex-1"
+                              className="w-full"
+                              size="lg"
                               onClick={() => setLocation(`/comparison/${comparison.id}`)}
-                              data-testid={`button-view-comparison-${thread.id}`}
+                              data-testid={`button-view-comparison-${comparison.id}`}
                             >
-                              <Eye className="mr-2 w-4 h-4" />
-                              Se sammenligning
+                              <Eye className="mr-2 w-5 h-5" />
+                              Se fuld sammenligning
                             </Button>
-                          ) : thread.status === 'received' ? (
-                            <Button
-                              className="flex-1"
-                              disabled
-                              variant="outline"
-                            >
-                              Behandler tilbud...
-                            </Button>
-                          ) : (
-                            <Button
-                              className="flex-1"
-                              disabled
-                              variant="outline"
-                            >
-                              Afventer svar
-                            </Button>
-                          )}
-                          <Button
-                            variant="outline"
-                            onClick={() => setLocation(`/emails/${thread.id}`)}
-                            data-testid={`button-view-emails-${thread.id}`}
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Afventende forespørgsler */}
+                {(threads as any[]).filter((t: any) => t.status !== 'received' && !getComparisonForThread(t.id)).length > 0 && (
+                  <div>
+                    <h3 className="text-2xl font-bold text-foreground mb-4 flex items-center gap-2">
+                      <Clock className="w-6 h-6 text-accent" />
+                      Afventer svar
+                    </h3>
+                    <div className="space-y-4">
+                      {(threads as any[])
+                        .filter((t: any) => t.status !== 'received' && !getComparisonForThread(t.id))
+                        .map((thread: any) => (
+                          <Card
+                            key={thread.id}
+                            className="shadow-card p-6 border-2 border-border hover:shadow-card-lg transition-shadow"
+                            data-testid={`pending-card-${thread.id}`}
                           >
-                            <Mail className="mr-2 w-4 h-4" />
-                            Se besked
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })
-              )}
-            </div>
+                            <CardContent className="p-0">
+                              <div className="flex items-start justify-between">
+                                <div className="flex items-center gap-4">
+                                  <div className="w-14 h-14 bg-muted rounded-lg flex items-center justify-center">
+                                    <span className="text-2xl font-bold text-primary">
+                                      {thread.company?.name?.charAt(0) || '?'}
+                                    </span>
+                                  </div>
+                                  <div>
+                                    <h4 className="text-xl font-semibold text-foreground">
+                                      {thread.company?.name || 'Ukendt selskab'}
+                                    </h4>
+                                    <p className="text-sm text-muted-foreground">
+                                      Sendt {new Date(thread.createdAt).toLocaleDateString('da-DK')}
+                                    </p>
+                                  </div>
+                                </div>
+                                <Badge variant="secondary">Afventer</Badge>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {(threads as any[]).length > 0 && (
               <div className="mt-8 text-center">
