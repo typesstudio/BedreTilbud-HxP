@@ -53,7 +53,7 @@ export class OCRService {
       // Use OpenAI to structure the extracted text
       console.log(`[OCR] Sending to OpenAI GPT-4 for structured extraction...`);
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo",
+        model: "gpt-4-turbo-preview",
         messages: [
           {
             role: "system",

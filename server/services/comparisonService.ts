@@ -64,7 +64,7 @@ Provide analysis in this JSON structure:
 Focus on Danish market context and write all text in Danish. Consider user preferences in your analysis.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo",
+        model: "gpt-4-turbo-preview",
         messages: [
           {
             role: "system",
@@ -119,7 +119,7 @@ Write a professional, friendly email that:
 Return only the email body text, no subject line.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo",
+        model: "gpt-4-turbo-preview",
         messages: [
           {
             role: "system",
@@ -168,7 +168,7 @@ Generate a professional response that:
 Keep it concise and appropriate for email communication.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo",
+        model: "gpt-4-turbo-preview",
         messages: [
           {
             role: "system",
