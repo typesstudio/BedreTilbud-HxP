@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
+import { pdf as pdfParse } from "pdf-parse";
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ 
@@ -26,11 +27,12 @@ export interface InsuranceData {
 export class OCRService {
   async extractInsuranceDataFromPDF(filePath: string): Promise<InsuranceData> {
     try {
-      // Convert PDF to base64 - in production, you'd use a PDF to image conversion library
-      // For now, we'll assume the file is already processed or use OCR directly
+      // Extract text from PDF
       const fileBuffer = fs.readFileSync(filePath);
-      const base64Image = fileBuffer.toString('base64');
+      const pdfData = await pdfParse(fileBuffer);
+      const extractedText = pdfData.text;
 
+      // Use OpenAI to structure the extracted text
       const response = await openai.chat.completions.create({
         model: "gpt-5",
         messages: [
@@ -47,22 +49,11 @@ export class OCRService {
             - validFrom: string (optional, ISO date)
             - validTo: string (optional, ISO date)
             
-            If document is in Danish, translate coverage names to Danish. Return all monetary amounts in DKK.`
+            If document is in Danish, keep text in Danish. Return all monetary amounts in DKK.`
           },
           {
             role: "user",
-            content: [
-              {
-                type: "text",
-                text: "Extract insurance policy information from this document:"
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/jpeg;base64,${base64Image}`
-                }
-              }
-            ],
+            content: `Extract insurance policy information from this text:\n\n${extractedText}`
           },
         ],
         response_format: { type: "json_object" },
@@ -80,31 +71,8 @@ export class OCRService {
   async extractTextFromPDF(filePath: string): Promise<string> {
     try {
       const fileBuffer = fs.readFileSync(filePath);
-      const base64Image = fileBuffer.toString('base64');
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-5",
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: "Extract all text content from this document and return it as plain text:"
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:image/jpeg;base64,${base64Image}`
-                }
-              }
-            ],
-          },
-        ],
-        max_completion_tokens: 4096,
-      });
-
-      return response.choices[0].message.content || "";
+      const pdfData = await pdfParse(fileBuffer);
+      return pdfData.text;
     } catch (error) {
       console.error("Text extraction failed:", error);
       throw new Error(`Failed to extract text: ${error instanceof Error ? error.message : 'Unknown error'}`);
