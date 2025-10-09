@@ -18,7 +18,8 @@ import {
   FeatherClock,
   FeatherZap,
   FeatherCheck,
-  FeatherInfo
+  FeatherInfo,
+  FeatherMessageCircle
 } from "@subframe/core";
 
 const iconMap: { [key: string]: any } = {
@@ -70,7 +71,7 @@ export default function Comparison() {
         <div className="flex w-full h-screen items-center justify-center">
           <div className="text-center">
             <h2 className="text-heading-2 font-heading-2 text-default-font mb-4">Sammenligning ikke fundet</h2>
-            <Button onClick={() => setLocation("/offers-overview")}>
+            <Button onClick={() => setLocation("/offer")}>
               Tilbage til oversigt
             </Button>
           </div>
@@ -90,6 +91,7 @@ export default function Comparison() {
   const detailedComparison = comparisonData.detailedComparison || [];
   const keyMetrics = comparisonData.keyMetrics || [];
   const addedBenefits = comparisonData.addedBenefits || [];
+  const userId = (comparison as any).userId || '';
 
   const barWidth = offerPremium > 0 && currentPremium > 0 
     ? `${Math.min((offerPremium / currentPremium) * 100, 100)}%`
@@ -98,15 +100,25 @@ export default function Comparison() {
   return (
     <DefaultPageLayout>
       <div className="flex w-full flex-col items-start gap-6 bg-default-background px-6 py-6">
-        {/* Back Button */}
-        <Button
-          variant="neutral"
-          iconLeft={<FeatherArrowLeft />}
-          onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/offers-overview")}
-          data-testid="button-back-to-offers"
-        >
-          Tilbage til oversigt
-        </Button>
+        {/* Navigation Buttons */}
+        <div className="flex w-full items-center gap-3">
+          <Button
+            variant="neutral"
+            iconLeft={<FeatherArrowLeft />}
+            onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/offer")}
+            data-testid="button-back-to-offers"
+          >
+            Tilbage til oversigt
+          </Button>
+          <Button
+            variant="neutral-secondary"
+            iconLeft={<FeatherMessageCircle />}
+            onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation(`/email-correspondence/${userId}`)}
+            data-testid="button-view-messages"
+          >
+            Se beskeder
+          </Button>
+        </div>
 
         {/* Savings Banner */}
         <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-success-50 px-6 py-6">
