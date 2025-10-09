@@ -2,6 +2,7 @@ import { getUncachableGmailClient } from "../googleMailClient";
 import { storage } from "../storage";
 import { ocrService } from "./ocrService";
 import { comparisonService } from "./comparisonService";
+import { generateRequestToken, formatReplyToEmail, extractTokenFromEmail } from "../utils/tokenGenerator";
 import fs from "fs";
 import path from "path";
 
@@ -22,12 +23,17 @@ export class EmailService {
 
       const gmail = await getUncachableGmailClient();
       
+      // Generate unique request token
+      const requestToken = generateRequestToken();
+      const replyToEmail = formatReplyToEmail(requestToken);
+      
       // Create email with attachments
       const subject = `Forespørgsel om forsikringstilbud - ${user.name || user.email}`;
       
       let emailContent = [
         `To: ${company.email}`,
-        `From: ${user.email}`,
+        `From: hej@bedretilbud.com`,
+        `Reply-To: ${replyToEmail}`,
         `Subject: ${subject}`,
         'MIME-Version: 1.0',
         'Content-Type: multipart/mixed; boundary="boundary123"',
@@ -74,6 +80,8 @@ export class EmailService {
         companyId,
         subject,
         threadId: result.data.threadId || '',
+        requestToken,
+        replyToEmail,
         status: 'sent'
       });
 
