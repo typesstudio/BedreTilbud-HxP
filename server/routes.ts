@@ -366,6 +366,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Debug endpoint for email tracking
+  app.get("/api/debug/email-tracking", async (req, res) => {
+    try {
+      const threads = await storage.getUserEmailThreads(req.query.userId as string || '');
+      
+      const debugInfo = await Promise.all(
+        threads.map(async (thread) => {
+          const emails = await storage.getThreadEmails(thread.id);
+          const company = thread.companyId ? await storage.getCompany(thread.companyId) : null;
+          
+          return {
+            thread: {
+              id: thread.id,
+              subject: thread.subject,
+              status: thread.status,
+              gmailThreadId: thread.threadId,
+              requestToken: thread.requestToken || 'NOT SET',
+              replyToEmail: thread.replyToEmail || 'NOT SET',
+              createdAt: thread.createdAt
+            },
+            company: company ? { name: company.name, email: company.email } : null,
+            emailCount: {
+              total: emails.length,
+              outbound: emails.filter(e => e.direction === 'outbound').length,
+              inbound: emails.filter(e => e.direction === 'inbound').length,
+              auto: emails.filter(e => e.direction === 'auto').length
+            },
+            emails: emails.map(e => ({
+              id: e.id,
+              direction: e.direction,
+              subject: e.subject,
+              sentAt: e.sentAt,
+              hasAttachments: Array.isArray(e.attachments) && e.attachments.length > 0
+            }))
+          };
+        })
+      );
+      
+      res.json({
+        totalThreads: threads.length,
+        gmailScopes: {
+          hasReadPermission: '❌ MISSING - Need gmail.readonly or gmail.modify scope',
+          currentScopes: 'gmail.send, gmail.labels, gmail.addons.*',
+          requiredAction: 'Reconnect Gmail with read permissions in Replit Integrations'
+        },
+        threads: debugInfo
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message, stack: error.stack });
+    }
+  });
+
   // Comparison routes
   app.get("/api/comparisons/user/:userId", async (req, res) => {
     try {
