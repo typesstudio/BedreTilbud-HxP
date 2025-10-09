@@ -7,7 +7,6 @@ import { createRequire } from "module";
 const require = createRequire(import.meta.url);
 const pdfParse = require("pdf-parse") as (dataBuffer: Buffer) => Promise<{text: string; numpages: number; info: any; metadata: any; version: string}>;
 
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR || "default_key"
 });
@@ -52,9 +51,9 @@ export class OCRService {
       }
 
       // Use OpenAI to structure the extracted text
-      console.log(`[OCR] Sending to OpenAI for structured extraction...`);
+      console.log(`[OCR] Sending to OpenAI GPT-4 for structured extraction...`);
       const response = await openai.chat.completions.create({
-        model: "gpt-5",
+        model: "gpt-4",
         messages: [
           {
             role: "system",

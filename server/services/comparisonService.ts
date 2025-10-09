@@ -1,7 +1,6 @@
 import OpenAI from "openai";
 import { InsuranceData } from "./ocrService";
 
-// the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR || "default_key"
 });
@@ -65,7 +64,7 @@ Provide analysis in this JSON structure:
 Focus on Danish market context and write all text in Danish. Consider user preferences in your analysis.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5",
+        model: "gpt-4",
         messages: [
           {
             role: "system",
@@ -120,7 +119,7 @@ Write a professional, friendly email that:
 Return only the email body text, no subject line.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5",
+        model: "gpt-4",
         messages: [
           {
             role: "system",
@@ -169,7 +168,7 @@ Generate a professional response that:
 Keep it concise and appropriate for email communication.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5",
+        model: "gpt-4",
         messages: [
           {
             role: "system",
