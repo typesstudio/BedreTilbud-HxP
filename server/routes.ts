@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { ocrService } from "./services/ocrService";
 import { comparisonService } from "./services/comparisonService";
 import { emailService } from "./services/emailService";
+import { gmailOAuthService } from "./services/gmailOAuthService";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -416,6 +417,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       res.status(500).json({ message: error.message, stack: error.stack });
     }
+  });
+
+  // Gmail OAuth routes
+  app.get("/auth/gmail", async (req, res) => {
+    try {
+      const authUrl = gmailOAuthService.getAuthUrl();
+      res.redirect(authUrl);
+    } catch (error: any) {
+      res.status(500).json({ 
+        message: "OAuth not configured", 
+        error: error.message,
+        instructions: "Set GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET in Replit Secrets"
+      });
+    }
+  });
+
+  app.get("/auth/gmail/callback", async (req, res) => {
+    try {
+      const code = req.query.code as string;
+      if (!code) {
+        return res.status(400).send("No authorization code received");
+      }
+
+      const tokens = await gmailOAuthService.handleCallback(code);
+      
+      // Return success page with instructions to save tokens
+      res.send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Gmail Connected - BedreTilbud</title>
+            <style>
+              body { font-family: system-ui; max-width: 800px; margin: 50px auto; padding: 20px; }
+              .success { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; padding: 20px; border-radius: 8px; }
+              .code-block { background: #f8f9fa; border: 1px solid #dee2e6; padding: 15px; border-radius: 4px; font-family: monospace; white-space: pre; overflow-x: auto; }
+              .warning { background: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 15px; border-radius: 8px; margin-top: 20px; }
+              h1 { color: #155724; }
+              .btn { background: #28a745; color: white; padding: 10px 20px; border-radius: 4px; text-decoration: none; display: inline-block; margin-top: 20px; }
+            </style>
+          </head>
+          <body>
+            <div class="success">
+              <h1>✅ Gmail Connected Successfully!</h1>
+              <p>Your Gmail account has been authorized with full inbox permissions.</p>
+            </div>
+
+            <div class="warning">
+              <h2>⚠️ Important: Save Your Tokens</h2>
+              <p>Add the following to your Replit Secrets to persist the connection:</p>
+              <p><strong>Secret Name:</strong> GMAIL_TOKENS</p>
+              <p><strong>Secret Value (copy this exactly):</strong></p>
+              <div class="code-block">${JSON.stringify(tokens, null, 2)}</div>
+              
+              <p style="margin-top: 20px;">
+                <strong>Steps:</strong>
+                <ol>
+                  <li>Go to Replit Tools → Secrets</li>
+                  <li>Create a new secret named: <code>GMAIL_TOKENS</code></li>
+                  <li>Paste the JSON above as the value</li>
+                  <li>Save the secret</li>
+                  <li>Restart your app</li>
+                </ol>
+              </p>
+            </div>
+
+            <a href="/" class="btn">Back to Dashboard</a>
+          </body>
+        </html>
+      `);
+    } catch (error: any) {
+      res.status(500).send(`
+        <h1>Error</h1>
+        <p>${error.message}</p>
+        <a href="/auth/gmail">Try Again</a>
+      `);
+    }
+  });
+
+  app.get("/api/gmail/status", async (req, res) => {
+    const status = gmailOAuthService.getConnectionStatus();
+    res.json(status);
   });
 
   // Comparison routes

@@ -1,4 +1,5 @@
 import { getUncachableGmailClient } from "../googleMailClient";
+import { gmailOAuthService } from "./gmailOAuthService";
 import { storage } from "../storage";
 import { ocrService } from "./ocrService";
 import { comparisonService } from "./comparisonService";
@@ -7,6 +8,20 @@ import fs from "fs";
 import path from "path";
 
 export class EmailService {
+  private async getGmailClient() {
+    // Try custom OAuth first, fallback to Replit connector
+    try {
+      if (gmailOAuthService.isConfigured()) {
+        return await gmailOAuthService.getGmailClient();
+      }
+    } catch (error) {
+      console.log('Custom OAuth not available, trying Replit connector...');
+    }
+    
+    // Fallback to Replit connector
+    return await getUncachableGmailClient();
+  }
+
   async sendInsuranceInquiry(
     userId: string,
     companyId: string,
@@ -21,7 +36,7 @@ export class EmailService {
         throw new Error("User or company not found");
       }
 
-      const gmail = await getUncachableGmailClient();
+      const gmail = await this.getGmailClient();
       
       // Generate unique request token
       const requestToken = generateRequestToken();
@@ -105,7 +120,7 @@ export class EmailService {
 
   async checkInbox(): Promise<void> {
     try {
-      const gmail = await getUncachableGmailClient();
+      const gmail = await this.getGmailClient();
       
       // Get recent messages
       const messages = await gmail.users.messages.list({
@@ -126,7 +141,7 @@ export class EmailService {
 
   private async processIncomingMessage(messageId: string): Promise<void> {
     try {
-      const gmail = await getUncachableGmailClient();
+      const gmail = await this.getGmailClient();
       
       const message = await gmail.users.messages.get({
         userId: 'me',
