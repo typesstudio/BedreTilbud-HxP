@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Mail, Edit, Download, Share, Bot } from "lucide-react";
-import EmailThread from "@/components/email-thread";
+import { Button } from "../../../src/ui/components/Button";
+import { TextField } from "../../../src/ui/components/TextField";
+import { DefaultPageLayout } from "../../../src/ui/layouts/DefaultPageLayout";
+import { FeatherBarChart2, FeatherSend, FeatherArrowLeft } from "@subframe/core";
+import { formatDistanceToNow } from "date-fns";
+import { da } from "date-fns/locale";
 
 export default function EmailCorrespondence() {
   const { threadId } = useParams();
@@ -17,145 +18,219 @@ export default function EmailCorrespondence() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 border-4 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-muted-foreground">Indlæser e-mail korrespondance...</p>
+      <DefaultPageLayout>
+        <div className="flex h-screen w-full items-center justify-center">
+          <div className="text-center">
+            <div className="w-16 h-16 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+            <p className="text-subtext-color">Indlæser beskedtråd...</p>
+          </div>
         </div>
-      </div>
+      </DefaultPageLayout>
     );
   }
 
   if (!threadData) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-foreground mb-4">E-mail tråd ikke fundet</h2>
-          <Button onClick={() => setLocation("/offers")}>
-            Tilbage til oversigt
-          </Button>
+      <DefaultPageLayout>
+        <div className="flex h-screen w-full items-center justify-center">
+          <div className="text-center">
+            <h2 className="text-heading-2 font-heading-2 text-default-font mb-4">Tråd ikke fundet</h2>
+            <Button onClick={() => setLocation("/offers-overview")}>
+              Tilbage til oversigt
+            </Button>
+          </div>
         </div>
-      </div>
+      </DefaultPageLayout>
     );
   }
 
   const { thread, company, emails = [] } = (threadData as any) || {};
+  const companyName = company?.name || 'Ukendt selskab';
 
-  const getDirectionBadge = (direction: string) => {
-    switch (direction) {
-      case "outbound":
-        return (
-          <Badge variant="secondary" className="bg-primary/10 text-primary">
-            SENDT
-          </Badge>
-        );
-      case "inbound":
-        return (
-          <Badge variant="secondary" className="bg-green-600 text-white">
-            MODTAGET
-          </Badge>
-        );
-      case "auto":
-        return (
-          <Badge variant="secondary" className="bg-accent text-white">
-            AUTO-SVAR
-          </Badge>
-        );
-      default:
-        return null;
+  const formatTime = (dateString: string) => {
+    try {
+      return formatDistanceToNow(new Date(dateString), { addSuffix: true, locale: da });
+    } catch {
+      return '';
     }
   };
 
+  const getMessageBgClass = (direction: string) => {
+    if (direction === 'auto' || direction === 'outbound') {
+      return 'bg-neutral-50';
+    }
+    return 'bg-brand-50';
+  };
+
+  const getAvatarContent = (direction: string) => {
+    if (direction === 'auto' || direction === 'outbound') {
+      return (
+        <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-brand-100">
+          <span className="text-caption-bold font-caption-bold text-brand-700">
+            AI
+          </span>
+        </div>
+      );
+    }
+    return (
+      <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-neutral-200">
+        <span className="text-caption-bold font-caption-bold text-neutral-700">
+          {companyName.charAt(0)}
+        </span>
+      </div>
+    );
+  };
+
+  const getSenderName = (direction: string) => {
+    if (direction === 'auto' || direction === 'outbound') {
+      return 'BedreTilbud AI';
+    }
+    return companyName;
+  };
+
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b border-border sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
-                <Mail className="w-7 h-7 text-primary-foreground" strokeWidth={2.5} />
+    <DefaultPageLayout>
+      <div className="flex h-full w-full items-center justify-center bg-default-background p-6">
+        <div className="flex w-full max-w-[900px] flex-col items-center justify-center rounded-md border border-solid border-neutral-border bg-white shadow-lg" style={{ height: 'calc(100vh - 100px)' }}>
+          {/* Header */}
+          <div className="flex w-full items-center justify-between border-b border-solid border-neutral-border px-6 py-4">
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+              <span className="text-heading-1 font-heading-1 text-default-font">
+                Din samtale med {companyName}
+              </span>
+              <span className="text-body font-body text-subtext-color">
+                Her kan du følge med i samtalen mellem {companyName} og dig
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="neutral"
+                icon={<FeatherArrowLeft />}
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/offers-overview")}
+                data-testid="button-back"
+              >
+                Tilbage
+              </Button>
+              <Button
+                icon={<FeatherBarChart2 />}
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                  // Find comparison for this thread/company
+                  setLocation("/offers-overview");
+                }}
+                data-testid="button-view-offer"
+              >
+                Se tilbud
+              </Button>
+            </div>
+          </div>
+
+          {/* AI Status Banner (if thread is active) */}
+          {thread?.status === 'sent' && (
+            <div className="flex w-full items-center gap-4 bg-brand-50 px-6 py-3">
+              <div className="flex items-center gap-2">
+                <div className="flex h-2 w-2 flex-none items-start rounded-full bg-brand-500 animate-pulse" />
+                <span className="text-body-bold font-body-bold text-brand-700">
+                  Afventer svar fra {companyName}
+                </span>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-foreground">BedreTilbud</h1>
-                <p className="text-sm text-muted-foreground">Find bedre forsikringer</p>
+            </div>
+          )}
+
+          {/* Messages */}
+          <div className="flex w-full grow shrink-0 basis-0 flex-col items-start gap-6 px-6 py-6 overflow-auto">
+            {emails.length === 0 ? (
+              <div className="flex w-full h-full items-center justify-center">
+                <div className="text-center">
+                  <span className="text-body font-body text-subtext-color">
+                    Ingen beskeder endnu
+                  </span>
+                </div>
               </div>
+            ) : (
+              emails.map((email: any, index: number) => (
+                <div key={email.id || index} className="flex w-full items-start gap-4">
+                  {getAvatarContent(email.direction)}
+                  <div className="flex flex-col items-start gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-body-bold font-body-bold text-default-font">
+                        {getSenderName(email.direction)}
+                      </span>
+                      <span className="text-caption font-caption text-subtext-color">
+                        {formatTime(email.createdAt)}
+                      </span>
+                    </div>
+                    <div className={`flex items-start rounded-lg ${getMessageBgClass(email.direction)} px-4 py-3 max-w-2xl`}>
+                      <span className="text-body font-body text-default-font whitespace-pre-wrap">
+                        {email.content}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Input Area */}
+          <div className="flex w-full flex-col items-start gap-4 border-t border-solid border-neutral-border px-6 py-4">
+            <div className="flex w-full flex-wrap items-start gap-2">
+              <Button
+                variant="neutral-tertiary"
+                size="small"
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                  alert('Funktionalitet kommer snart');
+                }}
+              >
+                Acceptér dette tilbud
+              </Button>
+              <Button
+                variant="neutral-tertiary"
+                size="small"
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                  alert('Funktionalitet kommer snart');
+                }}
+              >
+                Spørg om dækningsdetaljer
+              </Button>
+              <Button
+                variant="neutral-tertiary"
+                size="small"
+                onClick={(event: React.MouseEvent<HTMLButtonButton>) => {
+                  alert('Funktionalitet kommer snart');
+                }}
+              >
+                Bed om bedre pris
+              </Button>
+              <Button
+                variant="neutral-tertiary"
+                size="small"
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                  alert('Funktionalitet kommer snart');
+                }}
+              >
+                Lad AI fortsætte
+              </Button>
+            </div>
+            <div className="flex w-full items-center gap-4">
+              <TextField className="grow" variant="filled" label="" helpText="">
+                <TextField.Input
+                  placeholder="Spring ind i samtalen eller lad AI fortsætte forhandlingen..."
+                  value=""
+                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => {}}
+                />
+              </TextField>
+              <Button
+                icon={<FeatherSend />}
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                  alert('Send besked funktionalitet kommer snart');
+                }}
+                data-testid="button-send-message"
+              >
+                Send
+              </Button>
             </div>
           </div>
         </div>
-      </header>
-
-      <main className="flex-1">
-        <section className="py-12 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-4xl mx-auto">
-            <div className="mb-8">
-              <Button 
-                variant="ghost"
-                onClick={() => setLocation("/offers")}
-                className="flex items-center gap-2 text-muted-foreground hover:text-foreground mb-4"
-                data-testid="button-back-to-offers"
-              >
-                <ArrowLeft className="w-5 h-5" />
-                Tilbage
-              </Button>
-              <h2 className="text-3xl font-bold text-foreground mb-3">
-                E-mail korrespondance: {company?.name || 'Ukendt selskab'}
-              </h2>
-              <p className="text-lg text-muted-foreground">
-                Se hele samtalen med forsikringsselskabet
-              </p>
-            </div>
-
-            {/* Email Thread */}
-            <Card className="shadow-card-lg">
-              <CardContent className="p-8">
-                {emails.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Mail className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
-                    <h3 className="text-xl font-semibold text-foreground mb-2">
-                      Ingen beskeder endnu
-                    </h3>
-                    <p className="text-muted-foreground">
-                      E-mail korrespondance vil blive vist her, når den er tilgængelig.
-                    </p>
-                  </div>
-                ) : (
-                  <EmailThread
-                    emails={emails}
-                    company={company}
-                    getDirectionBadge={getDirectionBadge}
-                  />
-                )}
-
-                {/* Quick Actions */}
-                <div className="mt-8 pt-8 border-t border-border">
-                  <h4 className="font-semibold text-foreground mb-4">Hurtige handlinger</h4>
-                  <div className="flex flex-wrap gap-3">
-                    <Button data-testid="button-reply-manually">
-                      <Edit className="mr-2 w-4 h-4" />
-                      Skriv nyt svar
-                    </Button>
-                    <Button variant="outline" data-testid="button-download-attachments">
-                      <Download className="mr-2 w-4 h-4" />
-                      Download alle vedhæftninger
-                    </Button>
-                    <Button variant="outline" data-testid="button-share-conversation">
-                      <Share className="mr-2 w-4 h-4" />
-                      Del samtale
-                    </Button>
-                    {emails.some((email: any) => email.direction === 'auto') && (
-                      <Button variant="outline" data-testid="button-edit-auto-response">
-                        <Bot className="mr-2 w-4 h-4" />
-                        Rediger AI-svar
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-      </main>
-    </div>
+      </div>
+    </DefaultPageLayout>
   );
 }
