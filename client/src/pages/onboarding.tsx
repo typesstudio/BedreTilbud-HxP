@@ -110,6 +110,13 @@ export default function Onboarding() {
       });
       setLocation("/offers");
     },
+    onError: (error: any) => {
+      toast({
+        title: "Fejl",
+        description: error.message || "Kunne ikke sende forespørgsler",
+        variant: "destructive",
+      });
+    },
   });
 
   const handleNext = useCallback(() => {
@@ -130,7 +137,7 @@ export default function Onboarding() {
 
   const onUserInfoSubmit = async (data: UserInfoForm) => {
     if (userId) {
-      // Update existing user
+      // Try to update existing user
       try {
         await apiRequest("PUT", `/api/users/${userId}`, data);
         toast({
@@ -138,12 +145,49 @@ export default function Onboarding() {
           description: "Dine oplysninger er gemt",
         });
         handleNext();
-      } catch (error) {
-        toast({
-          title: "Fejl",
-          description: "Kunne ikke gemme oplysninger",
-          variant: "destructive",
-        });
+      } catch (error: any) {
+        // If user not found, create new user
+        if (error.message && error.message.includes('404')) {
+          try {
+            const response = await apiRequest("POST", "/api/users", data);
+            const user = await response.json();
+            setUserId(user.id);
+            localStorage.setItem("userId", user.id);
+            
+            // Upload files with the new userId
+            if (pendingFiles.length > 0) {
+              const formData = new FormData();
+              pendingFiles.forEach((file) => {
+                formData.append("files", file);
+              });
+              formData.append("userId", user.id);
+              formData.append("documentType", "current");
+              
+              const uploadResponse = await apiRequest("POST", "/api/documents/upload", formData);
+              const documents = await uploadResponse.json();
+              setUploadedFiles(documents);
+              setPendingFiles([]);
+            }
+            
+            toast({
+              title: "Bruger oprettet",
+              description: "Dine oplysninger er gemt",
+            });
+            handleNext();
+          } catch (createError) {
+            toast({
+              title: "Fejl",
+              description: "Kunne ikke oprette bruger",
+              variant: "destructive",
+            });
+          }
+        } else {
+          toast({
+            title: "Fejl",
+            description: "Kunne ikke gemme oplysninger",
+            variant: "destructive",
+          });
+        }
       }
     } else {
       // Create user and upload files
