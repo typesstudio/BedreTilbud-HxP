@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Shield, Send, Clock, CheckCircle, Eye, Mail, RefreshCw } from "lucide-react";
+import UserSelector from "@/components/user-selector";
 
 export default function OffersOverview() {
   const [, setLocation] = useLocation();
@@ -114,9 +115,7 @@ export default function OffersOverview() {
               <a href="#" className="text-foreground hover:text-primary font-medium">Oversigt</a>
               <a href="#" className="text-muted-foreground hover:text-primary font-medium">Sammenligning</a>
               <a href="#" className="text-muted-foreground hover:text-primary font-medium">Beskeder</a>
-              <button className="w-10 h-10 rounded-full bg-muted flex items-center justify-center hover:bg-primary hover:text-primary-foreground transition-colors">
-                <Shield className="w-5 h-5" />
-              </button>
+              <UserSelector />
             </nav>
           </div>
         </div>

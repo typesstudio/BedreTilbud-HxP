@@ -15,6 +15,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Shield, ArrowLeft, ArrowRight, Send } from "lucide-react";
 import ProgressSteps from "@/components/progress-steps";
 import FileUpload from "@/components/file-upload";
+import UserSelector from "@/components/user-selector";
 
 const userInfoSchema = z.object({
   email: z.string().email("Ugyldig email"),
@@ -272,6 +273,7 @@ export default function Onboarding() {
                 <p className="text-sm text-muted-foreground">Find bedre forsikringer</p>
               </div>
             </div>
+            <UserSelector />
           </div>
         </div>
       </header>

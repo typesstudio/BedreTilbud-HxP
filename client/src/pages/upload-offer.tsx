@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Shield, ArrowLeft, Upload } from "lucide-react";
 import FileUpload from "@/components/file-upload";
+import UserSelector from "@/components/user-selector";
 
 export default function UploadOffer() {
   const [, setLocation] = useLocation();
@@ -111,6 +112,7 @@ export default function UploadOffer() {
                 <p className="text-sm text-muted-foreground">Find bedre forsikringer</p>
               </div>
             </div>
+            <UserSelector />
           </div>
         </div>
       </header>
