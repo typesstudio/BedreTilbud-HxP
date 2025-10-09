@@ -1,0 +1,773 @@
+1) Run the following command to sync Subframe components:
+
+```bash
+npx @subframe/cli@latest sync --all
+```
+
+2) Create a new page using the following TSX code. If the page already exists, use it as reference to update the existing code but preserve existing business logic or functionality.
+
+```tsx
+"use client";
+
+import React from "react";
+import { AreaChart } from "@/ui/components/AreaChart";
+import { Badge } from "@/ui/components/Badge";
+import { Button } from "@/ui/components/Button";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { Table } from "@/ui/components/Table";
+import { TextField } from "@/ui/components/TextField";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import { FeatherArrowRight } from "@subframe/core";
+import { FeatherArrowUp } from "@subframe/core";
+import { FeatherCheck } from "@subframe/core";
+import { FeatherChevronDown } from "@subframe/core";
+import { FeatherClock } from "@subframe/core";
+import { FeatherDroplet } from "@subframe/core";
+import { FeatherHome } from "@subframe/core";
+import { FeatherInfo } from "@subframe/core";
+import { FeatherMessageCircle } from "@subframe/core";
+import { FeatherPiggyBank } from "@subframe/core";
+import { FeatherShield } from "@subframe/core";
+import { FeatherTrendingDown } from "@subframe/core";
+import { FeatherTrendingUp } from "@subframe/core";
+import { FeatherTruck } from "@subframe/core";
+import { FeatherZap } from "@subframe/core";
+import * as SubframeCore from "@subframe/core";
+
+function OfferComparisonTable() {
+  return (
+    <DefaultPageLayout>
+      <div className="flex w-full flex-col items-start gap-6 bg-default-background px-6 py-6">
+        <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-success-50 px-6 py-6">
+          <div className="flex w-full items-center justify-between">
+            <div className="flex flex-col items-start gap-2">
+              <span className="text-heading-1 font-heading-1 text-success-700">
+                Spar 3.589 kr Årligt
+              </span>
+              <span className="text-body font-body text-subtext-color">
+                276 kr månedlig besparelse
+              </span>
+            </div>
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-heading-2 font-heading-2 text-default-font">
+                Tryg Forsikring
+              </span>
+              <span className="text-body font-body text-subtext-color">
+                12.437 kr i alt om året
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
+          <span className="text-heading-2 font-heading-2 text-default-font">
+            Årlig omkostning sammenligning
+          </span>
+          <div className="flex w-full flex-col items-start gap-6">
+            <div className="flex w-full flex-col items-start gap-3">
+              <div className="flex w-full items-center justify-between">
+                <span className="text-body-bold font-body-bold text-default-font">
+                  Nuværende forsikring
+                </span>
+                <span className="text-heading-3 font-heading-3 text-default-font">
+                  15.828 kr/år
+                </span>
+              </div>
+              <div className="flex h-12 w-full flex-none items-start rounded-lg bg-success-100">
+                <div className="flex h-12 items-center justify-center rounded-lg bg-success-500 px-6 py-6 w-4/5">
+                  <div className="flex grow shrink-0 basis-0 items-center justify-between">
+                    <span className="text-body-bold font-body-bold text-white">
+                      Din nye forsikring
+                    </span>
+                    <span className="text-heading-3 font-heading-3 text-white">
+                      12.745 kr/år
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex w-full items-center justify-between rounded-lg border border-solid border-success-200 bg-success-50 px-6 py-4">
+              <div className="flex items-center gap-3">
+                <IconWithBackground
+                  variant="success"
+                  size="medium"
+                  icon={<FeatherPiggyBank />}
+                />
+                <div className="flex flex-col items-start gap-1">
+                  <span className="text-body-bold font-body-bold text-success-700">
+                    Din årlige besparelse
+                  </span>
+                  <span className="text-caption font-caption text-success-600">
+                    20.5% lavere omkostning
+                  </span>
+                </div>
+              </div>
+              <span className="text-heading-1 font-heading-1 text-success-600">
+                3.252 kr
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+          <span className="text-heading-3 font-heading-3 text-default-font">
+            Højdepunkter hvor anbefalingen er bedre
+          </span>
+          <div className="flex w-full items-start gap-4">
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+              <IconWithBackground
+                variant="success"
+                size="medium"
+                icon={<FeatherTrendingUp />}
+                square={true}
+              />
+              <div className="flex flex-col items-start gap-1">
+                <span className="text-body-bold font-body-bold text-default-font">
+                  Højere dækningssum
+                </span>
+                <span className="text-caption font-caption text-subtext-color">
+                  +500k bygning
+                </span>
+              </div>
+            </div>
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+              <IconWithBackground
+                variant="success"
+                size="medium"
+                icon={<FeatherTrendingDown />}
+                square={true}
+              />
+              <div className="flex flex-col items-start gap-1">
+                <span className="text-body-bold font-body-bold text-default-font">
+                  Lavere selvrisiko
+                </span>
+                <span className="text-caption font-caption text-subtext-color">
+                  −1.000 kr pr. skade
+                </span>
+              </div>
+            </div>
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+              <IconWithBackground
+                size="medium"
+                icon={<FeatherTruck />}
+                square={true}
+              />
+              <div className="flex flex-col items-start gap-1">
+                <span className="text-body-bold font-body-bold text-default-font">
+                  Vejhjælp inkluderet
+                </span>
+                <span className="text-caption font-caption text-subtext-color">
+                  24/7 i Norden
+                </span>
+              </div>
+            </div>
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+              <IconWithBackground
+                size="medium"
+                icon={<FeatherDroplet />}
+                square={true}
+              />
+              <div className="flex flex-col items-start gap-1">
+                <span className="text-body-bold font-body-bold text-default-font">
+                  Smart lækagesensor
+                </span>
+                <span className="text-caption font-caption text-subtext-color">
+                  Hardware fra dag ét
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex w-full flex-col items-start gap-2 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
+          <Table
+            header={
+              <Table.HeaderRow>
+                <Table.HeaderCell>Feature</Table.HeaderCell>
+                <Table.HeaderCell>Current</Table.HeaderCell>
+                <Table.HeaderCell>New Offer</Table.HeaderCell>
+                <Table.HeaderCell>Difference</Table.HeaderCell>
+              </Table.HeaderRow>
+            }
+          >
+            <Table.Row>
+              <Table.Cell>
+                <span className="text-body-bold font-body-bold text-default-font">
+                  Price &amp; Fees
+                </span>
+              </Table.Cell>
+              <Table.Cell />
+              <Table.Cell />
+              <Table.Cell />
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Monthly premium
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  1,319 kr
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  1,049 kr
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <div className="flex items-center gap-2">
+                  <Badge variant="success">-271 kr/mo</Badge>
+                </div>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Yearly premium
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  15,828 kr
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  12,576 kr
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <div className="flex items-center gap-2">
+                  <Badge variant="success">-3,252 kr/yr</Badge>
+                </div>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <span className="text-body-bold font-body-bold text-default-font">
+                  Coverage
+                </span>
+              </Table.Cell>
+              <Table.Cell />
+              <Table.Cell />
+              <Table.Cell />
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Contents
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Basic
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Extended
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <Badge variant="success">Better coverage</Badge>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Car
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Standard
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Standard
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <Badge variant="neutral">Same</Badge>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Glass
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Basic
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Premium
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <Badge variant="success">Better coverage</Badge>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <span className="text-body-bold font-body-bold text-default-font">
+                  Deductibles
+                </span>
+              </Table.Cell>
+              <Table.Cell />
+              <Table.Cell />
+              <Table.Cell />
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Contents deductible
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  3,000 kr
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  2,000 kr
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <Badge variant="success">-1,000 kr</Badge>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Car deductible
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  5,000 kr
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  5,000 kr
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <Badge variant="neutral">Same</Badge>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <span className="text-body-bold font-body-bold text-default-font">
+                  Terms
+                </span>
+              </Table.Cell>
+              <Table.Cell />
+              <Table.Cell />
+              <Table.Cell />
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Binding period
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  3 months
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  0 months
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <Badge variant="success">No binding</Badge>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  Notice period
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  30 days
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="text-body font-body text-default-font">
+                  30 days
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <Badge variant="neutral">Same</Badge>
+              </Table.Cell>
+            </Table.Row>
+          </Table>
+        </div>
+        <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
+          <span className="text-heading-3 font-heading-3 text-default-font">
+            Nøgletal sammenligning
+          </span>
+          <div className="flex w-full flex-wrap items-start gap-4">
+            <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-center gap-3 rounded-md border border-solid border-neutral-border bg-default-background px-4 py-4">
+              <IconWithBackground size="large" icon={<FeatherHome />} />
+              <div className="flex w-full flex-col items-center gap-1">
+                <span className="text-caption-bold font-caption-bold text-subtext-color">
+                  Bygningsdækning
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-heading-2 font-heading-2 text-neutral-500">
+                    2.5M
+                  </span>
+                  <FeatherArrowRight className="text-heading-3 font-heading-3 text-success-600" />
+                  <span className="text-heading-2 font-heading-2 text-success-600">
+                    3.0M
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-center gap-3 rounded-md border border-solid border-neutral-border bg-default-background px-4 py-4">
+              <IconWithBackground
+                variant="success"
+                size="large"
+                icon={<FeatherShield />}
+              />
+              <div className="flex w-full flex-col items-center gap-1">
+                <span className="text-caption-bold font-caption-bold text-subtext-color">
+                  Selvrisiko
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-heading-2 font-heading-2 text-neutral-500">
+                    3.000
+                  </span>
+                  <FeatherArrowRight className="text-heading-3 font-heading-3 text-success-600" />
+                  <span className="text-heading-2 font-heading-2 text-success-600">
+                    2.000
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-center gap-3 rounded-md border border-solid border-neutral-border bg-default-background px-4 py-4">
+              <IconWithBackground size="large" icon={<FeatherClock />} />
+              <div className="flex w-full flex-col items-center gap-1">
+                <span className="text-caption-bold font-caption-bold text-subtext-color">
+                  Skadebehandling
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-heading-2 font-heading-2 text-neutral-500">
+                    5-7d
+                  </span>
+                  <FeatherArrowRight className="text-heading-3 font-heading-3 text-success-600" />
+                  <span className="text-heading-2 font-heading-2 text-success-600">
+                    24h
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-center gap-3 rounded-md border border-solid border-neutral-border bg-default-background px-4 py-4">
+              <IconWithBackground
+                variant="neutral"
+                size="large"
+                icon={<FeatherZap />}
+              />
+              <div className="flex w-full flex-col items-center gap-1">
+                <span className="text-caption-bold font-caption-bold text-subtext-color">
+                  Digital godkendelse
+                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-heading-2 font-heading-2 text-neutral-500">
+                    Nej
+                  </span>
+                  <FeatherArrowRight className="text-heading-3 font-heading-3 text-success-600" />
+                  <span className="text-heading-2 font-heading-2 text-success-600">
+                    Ja
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex w-full flex-col items-start gap-3 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+          <span className="text-heading-3 font-heading-3 text-default-font">
+            Tilføjet til din forsikring
+          </span>
+          <div className="flex w-full flex-wrap items-start gap-2">
+            <Badge variant="success" icon={<FeatherCheck />}>
+              Lækagesensor
+            </Badge>
+            <Badge variant="success" icon={<FeatherCheck />}>
+              Retshjælp
+            </Badge>
+            <Badge variant="success" icon={<FeatherCheck />}>
+              Vejhjælp
+            </Badge>
+            <Badge variant="success" icon={<FeatherCheck />}>
+              Højere summer
+            </Badge>
+            <Badge variant="success" icon={<FeatherCheck />}>
+              Lavere selvrisiko
+            </Badge>
+            <Badge variant="neutral" icon={<FeatherInfo />}>
+              Udvidet elektronik (valgfri)
+            </Badge>
+            <Badge variant="neutral" icon={<FeatherInfo />}>
+              Rejseforsikring (valgfri)
+            </Badge>
+          </div>
+        </div>
+        <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
+          <div className="flex w-full items-center justify-between">
+            <div className="flex flex-col items-start gap-2">
+              <span className="text-heading-2 font-heading-2 text-default-font">
+                Kumulativ besparelse
+              </span>
+              <span className="text-body font-body text-subtext-color">
+                Se hvor meget du sparer måned for måned
+              </span>
+            </div>
+            <Badge variant="success" icon={<FeatherArrowUp />}>
+              34.589 kr over 10 år
+            </Badge>
+          </div>
+          <AreaChart
+            stacked={false}
+            categories={["Biology", "Business", "Psychology"]}
+            data={[
+              { Year: "2015", Psychology: 120, Business: 110, Biology: 100 },
+              { Year: "2016", Psychology: 130, Business: 95, Biology: 105 },
+              { Year: "2017", Psychology: 115, Business: 105, Biology: 110 },
+              { Year: "2018", Psychology: 125, Business: 120, Biology: 90 },
+              { Year: "2019", Psychology: 110, Business: 130, Biology: 85 },
+              { Year: "2020", Psychology: 135, Business: 100, Biology: 95 },
+              { Year: "2021", Psychology: 105, Business: 115, Biology: 120 },
+              { Year: "2022", Psychology: 140, Business: 125, Biology: 130 },
+            ]}
+            index={"Year"}
+          />
+          <div className="flex w-full flex-wrap items-start gap-4">
+            <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-default-background px-4 py-4">
+              <span className="text-caption font-caption text-subtext-color">
+                Månedlig besparelse
+              </span>
+              <span className="text-heading-2 font-heading-2 text-success-600">
+                270-300 kr
+              </span>
+            </div>
+            <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-default-background px-4 py-4">
+              <span className="text-caption font-caption text-subtext-color">
+                Total efter 12 måneder
+              </span>
+              <span className="text-heading-2 font-heading-2 text-success-600">
+                3.420 kr spart
+              </span>
+            </div>
+            <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-default-background px-4 py-4">
+              <span className="text-caption font-caption text-subtext-color">
+                Forventet efter 10 år
+              </span>
+              <span className="text-heading-2 font-heading-2 text-success-600">
+                34.400 kr spart
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full items-center gap-2 rounded-md bg-success-50 px-4 py-3">
+            <FeatherPiggyBank className="text-body font-body text-success-700" />
+            <span className="text-body font-body text-default-font">
+              Vi låser ind når priserne dykker og maksimerer din besparelse
+            </span>
+          </div>
+        </div>
+        <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+          <span className="text-heading-3 font-heading-3 text-default-font">
+            Spørgsmål før du skifter
+          </span>
+          <div className="flex w-full flex-col items-start gap-2">
+            <div className="flex w-full flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+              <div className="flex w-full items-center justify-between">
+                <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-default-font">
+                  Hvordan defineres utilsigtet vandskade her?
+                </span>
+                <FeatherChevronDown className="text-body font-body text-default-font" />
+              </div>
+            </div>
+            <div className="flex w-full flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+              <div className="flex w-full items-center justify-between">
+                <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-default-font">
+                  Er elektronik dækket uden for hjemmet og på rejser?
+                </span>
+                <FeatherChevronDown className="text-body font-body text-default-font" />
+              </div>
+            </div>
+            <div className="flex w-full flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+              <div className="flex w-full items-center justify-between">
+                <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-default-font">
+                  Kan jeg vælge selvrisiko? Hvilke pris-trin findes?
+                </span>
+                <FeatherChevronDown className="text-body font-body text-default-font" />
+              </div>
+            </div>
+            <div className="flex w-full flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+              <div className="flex w-full items-center justify-between">
+                <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-default-font">
+                  Er storm og oversvømmelse adskilt? Undergrænser?
+                </span>
+                <FeatherChevronDown className="text-body font-body text-default-font" />
+              </div>
+            </div>
+            <div className="flex w-full flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+              <div className="flex w-full items-center justify-between">
+                <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-default-font">
+                  Hvad er SLA for godkendelse og udbetaling?
+                </span>
+                <FeatherChevronDown className="text-body font-body text-default-font" />
+              </div>
+            </div>
+            <div className="flex w-full flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+              <div className="flex w-full items-center justify-between">
+                <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-default-font">
+                  Hvordan kan prisen ændre sig efter 12 måneder?
+                </span>
+                <FeatherChevronDown className="text-body font-body text-default-font" />
+              </div>
+            </div>
+            <div className="flex w-full flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+              <div className="flex w-full items-center justify-between">
+                <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-default-font">
+                  Hvilke tilvalg kan fjernes uden at miste rabatter?
+                </span>
+                <FeatherChevronDown className="text-body font-body text-default-font" />
+              </div>
+            </div>
+            <div className="flex w-full flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+              <div className="flex w-full items-center justify-between">
+                <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-default-font">
+                  Særlige tillæg for alder eller hustype?
+                </span>
+                <FeatherChevronDown className="text-body font-body text-default-font" />
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-brand-50 px-6 py-6">
+          <span className="text-heading-3 font-heading-3 text-default-font">
+            Our recommendation
+          </span>
+          <span className="text-body font-body text-default-font">
+            Based on your current coverage and needs, we strongly recommend
+            switching to the Tryg offer. You&#39;ll save 3,252 kr annually while
+            getting better coverage for contents and glass. The absence of a
+            binding period also gives you more flexibility. While the car
+            insurance remains the same, the overall benefits and cost savings
+            make this a superior choice.
+          </span>
+        </div>
+        <div className="flex w-full flex-col items-center justify-center gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
+          <span className="text-heading-2 font-heading-2 text-default-font">
+            Ask questions about this offer
+          </span>
+          <div className="flex w-full flex-col items-center justify-center gap-4">
+            <div className="flex w-112 items-center justify-center gap-2">
+              <TextField
+                className="h-8 w-6 flex-none grow"
+                label=""
+                helpText=""
+                icon={<FeatherMessageCircle />}
+              >
+                <TextField.Input
+                  className="w-144 grow shrink-0 basis-0"
+                  placeholder="Type your message..."
+                  value=""
+                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => {}}
+                />
+              </TextField>
+              <Button
+                disabled={false}
+                variant="brand-primary"
+                size="medium"
+                icon={null}
+                iconRight={null}
+                loading={false}
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+              >
+                Send besked
+              </Button>
+            </div>
+            <div className="flex w-full flex-col items-start gap-3">
+              <div className="flex w-full flex-wrap items-center justify-center gap-2">
+                <Button
+                  variant="neutral-tertiary"
+                  size="small"
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                >
+                  What&#39;s covered under extended contents?
+                </Button>
+                <Button
+                  variant="neutral-tertiary"
+                  size="small"
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                >
+                  How do I file a claim?
+                </Button>
+                <Button
+                  variant="neutral-tertiary"
+                  size="small"
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                >
+                  Are there any additional discounts available?
+                </Button>
+                <Button
+                  variant="neutral-tertiary"
+                  size="small"
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                >
+                  What happens if I need to cancel?
+                </Button>
+              </div>
+              <div className="flex w-full flex-wrap items-center justify-center gap-2">
+                <Button
+                  variant="neutral-tertiary"
+                  size="small"
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                >
+                  Can I adjust my deductible later?
+                </Button>
+                <Button
+                  variant="neutral-tertiary"
+                  size="small"
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                >
+                  How long does the switching process take?
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex w-full flex-col items-center gap-4 border-t border-solid border-neutral-border py-6">
+          <Button
+            className="h-10 w-full flex-none"
+            size="large"
+            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+          >
+            Choose and switch to Tryg
+          </Button>
+          <span className="text-body font-body text-subtext-color">
+            Secure data. You can cancel anytime before activation.
+          </span>
+        </div>
+      </div>
+    </DefaultPageLayout>
+  );
+}
+
+export default OfferComparisonTable;
+
+```

@@ -7,10 +7,38 @@ const openai = new OpenAI({
 
 export interface ComparisonResult {
   savings: number;
+  savingsPercentage: number;
   verdict: "recommended" | "consider" | "not_recommended";
   aiRecommendation: string;
   pros: string[];
   cons: string[];
+  highlights: {
+    title: string;
+    description: string;
+    icon: string;
+    variant: "success" | "neutral" | "warning";
+  }[];
+  detailedComparison: {
+    category: string;
+    rows: {
+      feature: string;
+      current: string;
+      offer: string;
+      difference: string;
+      status: "same" | "better" | "worse";
+    }[];
+  }[];
+  keyMetrics: {
+    label: string;
+    current: string;
+    offer: string;
+    icon: string;
+    variant: "success" | "neutral";
+  }[];
+  addedBenefits: {
+    label: string;
+    variant: "success" | "neutral";
+  }[];
   coverageComparison: {
     category: string;
     current: string;
@@ -46,10 +74,71 @@ ${JSON.stringify(userPreferences || {}, null, 2)}
 Provide analysis in this JSON structure:
 {
   "savings": number, // annual savings in DKK (negative if more expensive)
+  "savingsPercentage": number, // percentage saved (e.g., 20.5 for 20.5% savings)
   "verdict": "recommended" | "consider" | "not_recommended",
   "aiRecommendation": "detailed explanation in Danish of why this is/isn't a good deal",
   "pros": ["list", "of", "advantages"],
   "cons": ["list", "of", "disadvantages"],
+  "highlights": [
+    {
+      "title": "Højere dækningssum",
+      "description": "+500k bygning",
+      "icon": "trending-up", // options: trending-up, trending-down, truck, droplet, shield, clock, zap, home
+      "variant": "success" // or "neutral" or "warning"
+    }
+  ],
+  "detailedComparison": [
+    {
+      "category": "Pris og gebyrer",
+      "rows": [
+        {
+          "feature": "Månedlig præmie",
+          "current": "1.319 kr",
+          "offer": "1.049 kr",
+          "difference": "-271 kr/md",
+          "status": "better" // or "same" or "worse"
+        }
+      ]
+    },
+    {
+      "category": "Dækning",
+      "rows": [...]
+    },
+    {
+      "category": "Selvrisiko",
+      "rows": [...]
+    },
+    {
+      "category": "Vilkår",
+      "rows": [...]
+    }
+  ],
+  "keyMetrics": [
+    {
+      "label": "Bygningsdækning",
+      "current": "2.5M",
+      "offer": "3.0M",
+      "icon": "home",
+      "variant": "success"
+    },
+    {
+      "label": "Selvrisiko",
+      "current": "3.000",
+      "offer": "2.000",
+      "icon": "shield",
+      "variant": "success"
+    }
+  ],
+  "addedBenefits": [
+    {
+      "label": "Lækagesensor",
+      "variant": "success"
+    },
+    {
+      "label": "Udvidet elektronik (valgfri)",
+      "variant": "neutral"
+    }
+  ],
   "coverageComparison": [
     {
       "category": "coverage category name",
@@ -61,14 +150,14 @@ Provide analysis in this JSON structure:
   "qualityScore": number // 1-10 score for overall value
 }
 
-Focus on Danish market context and write all text in Danish. Consider user preferences in your analysis.`;
+Focus on Danish market context and write all text in Danish. Consider user preferences in your analysis. Be specific with numbers and data from the policies. Include at least 3-4 highlights showing the key improvements.`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-4-turbo-preview",
         messages: [
           {
             role: "system",
-            content: "You are an expert Danish insurance advisor. Provide thorough, honest comparisons that help users make informed decisions. Always write responses in Danish."
+            content: "You are an expert Danish insurance advisor. Provide thorough, honest comparisons that help users make informed decisions. Always write responses in Danish. Be specific and use actual numbers from the policies."
           },
           {
             role: "user",
@@ -76,7 +165,7 @@ Focus on Danish market context and write all text in Danish. Consider user prefe
           }
         ],
         response_format: { type: "json_object" },
-        max_completion_tokens: 2048,
+        max_completion_tokens: 3000,
       });
 
       const result = JSON.parse(response.choices[0].message.content || "{}");

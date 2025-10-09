@@ -427,6 +427,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Regenerate comparison
+  app.post("/api/comparisons/:id/regenerate", async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { comparisons: comparisonsTable } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      
+      const comparison = await storage.getComparison(req.params.id);
+      if (!comparison) {
+        return res.status(404).json({ message: "Comparison not found" });
+      }
+
+      const currentDoc = await storage.getDocument(comparison.currentDocumentId);
+      const offerDoc = await storage.getDocument(comparison.offerDocumentId);
+      const user = await storage.getUser(comparison.userId);
+
+      if (!currentDoc || !offerDoc || !currentDoc.ocrData || !offerDoc.ocrData) {
+        return res.status(400).json({ message: "Missing OCR data for comparison" });
+      }
+
+      console.log('[Regenerate] Generating new comparison for:', {
+        comparisonId: comparison.id,
+        currentDoc: currentDoc.fileName,
+        offerDoc: offerDoc.fileName
+      });
+
+      const newComparisonData = await comparisonService.compareInsurancePolicies(
+        currentDoc.ocrData as any,
+        offerDoc.ocrData as any,
+        user ? {
+          housingType: user.housingType,
+          hasCar: user.hasCar,
+          deductible: user.deductible,
+          additionalInfo: user.additionalInfo
+        } : undefined
+      );
+
+      const aiRecommendation = newComparisonData.verdict === 'recommended' 
+        ? 'Vi anbefaler dette tilbud - det giver dig bedre dækning til en lavere pris.'
+        : newComparisonData.verdict === 'not_recommended'
+        ? 'Vi anbefaler ikke dette tilbud - dit nuværende forsikring er bedre.'
+        : 'Dette tilbud kan være interessant - gennemgå fordele og ulemper nøje.';
+
+      await db
+        .update(comparisonsTable)
+        .set({
+          comparisonData: newComparisonData,
+          aiRecommendation,
+          savings: Math.round(newComparisonData.savings || 0)
+        })
+        .where(eq(comparisonsTable.id, req.params.id));
+
+      const updatedComparison = await storage.getComparison(req.params.id);
+
+      res.json({
+        ...updatedComparison,
+        currentDocument: currentDoc,
+        offerDocument: offerDoc,
+        company: comparison.companyId ? await storage.getCompany(comparison.companyId) : null
+      });
+    } catch (error: any) {
+      console.error('[Regenerate] Error:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Stats route
   app.get("/api/stats/:userId", async (req, res) => {
     try {
