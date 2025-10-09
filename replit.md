@@ -23,9 +23,17 @@ Preferred communication style: Simple, everyday language.
 
 **Framework:** React with TypeScript, using Vite as the build tool and bundler.
 
-**UI Component Library:** Shadcn/ui (New York style variant) with Radix UI primitives for accessible components. The design system uses:
+**UI Component Libraries:**
+- **Shadcn/ui** (New York style variant) with Radix UI primitives for accessible components - primary UI library for existing components
+- **Subframe** - Design component library initialized for advanced UI components (available at `@/ui/*`)
+  - Installed with auth token and project ID: 34bd735365b5
+  - Components synced to `src/ui/` directory
+  - Tailwind integration configured
+  - Note: Subframe components should not be manually modified (use `// @subframe/sync-disable` comment if necessary)
+
+**Design System:**
 - TailwindCSS for styling with CSS variables for theming
-- Inter and Roboto font families
+- Font families: Inter, Inter Tight, Montserrat, and Roboto
 - Custom color palette optimized for accessibility (high contrast)
 - Mobile-first responsive design approach
 
@@ -60,7 +68,10 @@ Preferred communication style: Simple, everyday language.
 
 **Core Services (Adapter Pattern):**
 
-1. **OCR Service** (`ocrService.ts`): Uses pdf-parse to extract text from PDFs, then OpenAI GPT-5 API to structure the data. Returns normalized JSON with company name, policy type, premiums, deductibles, coverages, and benefits.
+1. **OCR Service** (`ocrService.ts`): Uses pdf-parse (via CommonJS require) to extract text from PDFs, then OpenAI GPT-4 Turbo Preview API to structure the data. Returns normalized JSON with company name, policy type, premiums, deductibles, coverages, and benefits.
+   - Model: `gpt-4-turbo-preview` (supports JSON mode)
+   - Extracts and flattens multi-policy documents into single normalized structure
+   - Sums premiums, combines coverages, and merges benefits from multiple policies
 
 2. **Comparison Service** (`comparisonService.ts`): AI-powered comparison engine that analyzes current vs. offer policies. Provides:
    - Savings calculations
