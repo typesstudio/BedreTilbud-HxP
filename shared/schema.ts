@@ -41,6 +41,8 @@ export const emailThreads = pgTable("email_threads", {
   companyId: varchar("company_id").references(() => companies.id),
   subject: text("subject"),
   threadId: text("thread_id"), // Gmail thread ID
+  requestToken: varchar("request_token", { length: 12 }).unique(), // Unique token for tracking
+  replyToEmail: varchar("reply_to_email", { length: 255 }), // TOKEN@bedretilbud.com
   status: text("status").default("sent"), // "sent", "pending", "received"
   createdAt: timestamp("created_at").defaultNow(),
 });
