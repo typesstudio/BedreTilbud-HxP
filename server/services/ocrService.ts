@@ -1,7 +1,11 @@
 import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
-import { pdf as pdfParse } from "pdf-parse";
+import { createRequire } from "module";
+
+// Load CommonJS module in ESM environment
+const require = createRequire(import.meta.url);
+const pdfParse = require("pdf-parse") as (dataBuffer: Buffer) => Promise<{text: string; numpages: number; info: any; metadata: any; version: string}>;
 
 // the newest OpenAI model is "gpt-5" which was released August 7, 2025. do not change this unless explicitly requested by the user
 const openai = new OpenAI({ 
@@ -27,12 +31,28 @@ export interface InsuranceData {
 export class OCRService {
   async extractInsuranceDataFromPDF(filePath: string): Promise<InsuranceData> {
     try {
+      console.log(`[OCR] Starting extraction for: ${filePath}`);
+      
+      // Check if file exists
+      if (!fs.existsSync(filePath)) {
+        throw new Error(`File not found: ${filePath}`);
+      }
+
       // Extract text from PDF
       const fileBuffer = fs.readFileSync(filePath);
+      console.log(`[OCR] Read file buffer, size: ${fileBuffer.length} bytes`);
+      
       const pdfData = await pdfParse(fileBuffer);
       const extractedText = pdfData.text;
+      console.log(`[OCR] Extracted text length: ${extractedText.length} characters`);
+      console.log(`[OCR] Text preview: ${extractedText.substring(0, 200)}...`);
+
+      if (!extractedText || extractedText.trim().length === 0) {
+        throw new Error("No text could be extracted from PDF");
+      }
 
       // Use OpenAI to structure the extracted text
+      console.log(`[OCR] Sending to OpenAI for structured extraction...`);
       const response = await openai.chat.completions.create({
         model: "gpt-5",
         messages: [
@@ -60,10 +80,15 @@ export class OCRService {
         max_completion_tokens: 2048,
       });
 
-      const result = JSON.parse(response.choices[0].message.content || "{}");
+      const content = response.choices[0].message.content;
+      console.log(`[OCR] OpenAI response: ${content?.substring(0, 200)}...`);
+      
+      const result = JSON.parse(content || "{}");
+      console.log(`[OCR] Successfully extracted data:`, JSON.stringify(result, null, 2));
+      
       return result as InsuranceData;
     } catch (error) {
-      console.error("OCR extraction failed:", error);
+      console.error("[OCR] Extraction failed:", error);
       throw new Error(`Failed to extract insurance data: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
