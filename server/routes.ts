@@ -160,6 +160,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Reprocess documents with empty OCR data
+  app.post("/api/documents/reprocess/:userId", async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { documents: documentsTable, comparisons: comparisonsTable } = await import("@shared/schema");
+      const { eq, and, isNull, or, sql } = await import("drizzle-orm");
+
+      // Find documents with empty or null OCR data
+      const docsToReprocess = await db
+        .select()
+        .from(documentsTable)
+        .where(
+          and(
+            eq(documentsTable.userId, req.params.userId),
+            or(
+              isNull(documentsTable.ocrData),
+              sql`${documentsTable.ocrData}::text = '{}'`
+            )
+          )
+        );
+
+      const reprocessedDocs = [];
+
+      for (const doc of docsToReprocess) {
+        try {
+          console.log(`[Reprocess] Processing document: ${doc.fileName}`);
+          const ocrData = await ocrService.extractInsuranceDataFromPDF(doc.filePath);
+          
+          // Update document with new OCR data
+          await db
+            .update(documentsTable)
+            .set({ ocrData })
+            .where(eq(documentsTable.id, doc.id));
+
+          reprocessedDocs.push({ id: doc.id, fileName: doc.fileName, status: 'success' });
+
+          // If it's an offer document, create/update comparison
+          if (doc.documentType === 'offer' && doc.companyId) {
+            const currentDocs = await storage.getUserDocuments(req.params.userId, 'current');
+            if (currentDocs.length > 0 && currentDocs[0].ocrData) {
+              const comparison = await comparisonService.compareInsurancePolicies(
+                currentDocs[0].ocrData as any,
+                ocrData
+              );
+
+              // Check if comparison exists
+              const existingComparison = await db
+                .select()
+                .from(comparisonsTable)
+                .where(
+                  and(
+                    eq(comparisonsTable.offerDocumentId, doc.id),
+                    eq(comparisonsTable.currentDocumentId, currentDocs[0].id)
+                  )
+                );
+
+              if (existingComparison.length > 0) {
+                // Update existing comparison
+                await db
+                  .update(comparisonsTable)
+                  .set({
+                    comparisonData: comparison,
+                    aiRecommendation: comparison.verdict === 'recommended' 
+                      ? 'Vi anbefaler dette tilbud - det giver dig bedre dækning til en lavere pris.'
+                      : comparison.verdict === 'not_recommended'
+                      ? 'Vi anbefaler ikke dette tilbud - dit nuværende forsikring er bedre.'
+                      : 'Dette tilbud kan være interessant - gennemgå fordele og ulemper nøje.',
+                    savings: comparison.savings || 0
+                  })
+                  .where(eq(comparisonsTable.id, existingComparison[0].id));
+              } else {
+                // Create new comparison
+                await storage.createComparison({
+                  userId: req.params.userId,
+                  currentDocumentId: currentDocs[0].id,
+                  offerDocumentId: doc.id,
+                  companyId: doc.companyId,
+                  comparisonData: comparison,
+                  aiRecommendation: comparison.verdict === 'recommended' 
+                    ? 'Vi anbefaler dette tilbud - det giver dig bedre dækning til en lavere pris.'
+                    : comparison.verdict === 'not_recommended'
+                    ? 'Vi anbefaler ikke dette tilbud - dit nuværende forsikring er bedre.'
+                    : 'Dette tilbud kan være interessant - gennemgå fordele og ulemper nøje.',
+                  savings: comparison.savings || 0
+                });
+              }
+            }
+          }
+        } catch (error: any) {
+          console.error(`[Reprocess] Failed to process ${doc.fileName}:`, error);
+          reprocessedDocs.push({ id: doc.id, fileName: doc.fileName, status: 'failed', error: error.message });
+        }
+      }
+
+      res.json({
+        message: `Reprocessed ${reprocessedDocs.length} documents`,
+        documents: reprocessedDocs
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Email routes
   app.post("/api/emails/send-inquiries", async (req, res) => {
     try {

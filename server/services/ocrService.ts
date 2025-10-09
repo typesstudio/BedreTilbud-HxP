@@ -80,11 +80,26 @@ export class OCRService {
         max_completion_tokens: 2048,
       });
 
-      const content = response.choices[0].message.content;
-      console.log(`[OCR] OpenAI response: ${content?.substring(0, 200)}...`);
+      console.log(`[OCR] Full OpenAI response:`, JSON.stringify(response, null, 2));
+      const choice = response.choices[0];
+      const content = choice?.message?.content;
       
-      const result = JSON.parse(content || "{}");
-      console.log(`[OCR] Successfully extracted data:`, JSON.stringify(result, null, 2));
+      console.log(`[OCR] Choice finish_reason: ${choice?.finish_reason}`);
+      console.log(`[OCR] Response content length: ${content?.length || 0}`);
+      console.log(`[OCR] Response content preview: ${content?.substring(0, 500) || 'NULL'}`);
+      
+      if (choice?.message?.refusal) {
+        console.error(`[OCR] OpenAI refusal: ${choice.message.refusal}`);
+        throw new Error(`OpenAI refused request: ${choice.message.refusal}`);
+      }
+      
+      if (!content || content.trim().length === 0) {
+        console.error(`[OCR] OpenAI returned empty content!`);
+        throw new Error("OpenAI returned empty response");
+      }
+      
+      const result = JSON.parse(content);
+      console.log(`[OCR] Successfully extracted data with ${Object.keys(result).length} fields`);
       
       return result as InsuranceData;
     } catch (error) {
