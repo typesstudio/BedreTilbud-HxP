@@ -10,6 +10,7 @@ import OffersOverview from "@/pages/offers-overview";
 import Comparison from "@/pages/comparison";
 import EmailCorrespondence from "@/pages/email-correspondence";
 import UploadOffer from "@/pages/upload-offer";
+import GmailSetup from "@/pages/gmail-setup";
 
 function Router() {
   return (
@@ -21,6 +22,7 @@ function Router() {
       <Route path="/upload-offer" component={UploadOffer} />
       <Route path="/comparison/:id" component={Comparison} />
       <Route path="/emails/:threadId" component={EmailCorrespondence} />
+      <Route path="/gmail-setup" component={GmailSetup} />
       <Route component={NotFound} />
     </Switch>
   );
