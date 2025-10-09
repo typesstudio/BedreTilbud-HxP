@@ -36,7 +36,10 @@ Preferred communication style: Simple, everyday language.
 **Key Pages:**
 - Home/Landing page
 - Onboarding flow (multi-step with file upload and questionnaire)
-- Offers overview (dashboard showing all insurance company responses)
+- Offers overview (dashboard with categorized view: Modtagne tilbud, Afventer svar)
+  - Modtagne tilbud: Shows comparisons with savings and AI recommendations
+  - Afventer svar: Shows pending inquiries sent to companies
+- Upload offer page (manual offer upload with company selection)
 - Comparison view (side-by-side policy comparison)
 - Email correspondence view (thread-based email history)
 
@@ -57,7 +60,7 @@ Preferred communication style: Simple, everyday language.
 
 **Core Services (Adapter Pattern):**
 
-1. **OCR Service** (`ocrService.ts`): Uses OpenAI GPT-5 API to extract structured insurance data from PDF documents. Returns normalized JSON with company name, policy type, premiums, deductibles, coverages, and benefits.
+1. **OCR Service** (`ocrService.ts`): Uses pdf-parse to extract text from PDFs, then OpenAI GPT-5 API to structure the data. Returns normalized JSON with company name, policy type, premiums, deductibles, coverages, and benefits.
 
 2. **Comparison Service** (`comparisonService.ts`): AI-powered comparison engine that analyzes current vs. offer policies. Provides:
    - Savings calculations
@@ -72,7 +75,8 @@ Preferred communication style: Simple, everyday language.
    - Email thread management
    - Attachment handling
 
-4. **Storage Adapter** (`storage.ts`): Interface-based storage abstraction supporting:
+4. **Storage Adapter** (`storage.ts`): Interface-based storage abstraction with DatabaseStorage implementation using Drizzle ORM:
+   - PostgreSQL persistence via Neon Serverless
    - User management
    - Company directory
    - Document management

@@ -143,8 +143,7 @@ export default function OffersOverview() {
               </Button>
             </div>
 
-            {/* Summary Cards */}
-            {stats && (
+            {stats ? (
               <div className="grid md:grid-cols-3 gap-6 mb-8">
                 <Card className="shadow-card border-2 border-border">
                   <CardContent className="p-6">
@@ -180,7 +179,7 @@ export default function OffersOverview() {
                   </CardContent>
                 </Card>
               </div>
-            )}
+            ) : null}
 
             {/* Offers by Category */}
             {(threads as any[]).length === 0 && (comparisons as any[]).length === 0 ? (
