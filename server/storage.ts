@@ -10,7 +10,9 @@ import {
   type Email,
   type InsertEmail,
   type Comparison,
-  type InsertComparison
+  type InsertComparison,
+  type HouseholdMember,
+  type InsertHouseholdMember
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 
@@ -48,6 +50,13 @@ export interface IStorage {
   getComparison(id: string): Promise<Comparison | undefined>;
   getUserComparisons(userId: string): Promise<Comparison[]>;
   createComparison(comparison: InsertComparison): Promise<Comparison>;
+
+  // Household Members
+  getHouseholdMember(id: string): Promise<HouseholdMember | undefined>;
+  getUserHouseholdMembers(userId: string): Promise<HouseholdMember[]>;
+  createHouseholdMember(member: InsertHouseholdMember): Promise<HouseholdMember>;
+  updateHouseholdMember(id: string, updates: Partial<InsertHouseholdMember>): Promise<HouseholdMember>;
+  deleteHouseholdMember(id: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -57,6 +66,7 @@ export class MemStorage implements IStorage {
   private emailThreads: Map<string, EmailThread> = new Map();
   private emails: Map<string, Email> = new Map();
   private comparisons: Map<string, Comparison> = new Map();
+  private householdMembers: Map<string, HouseholdMember> = new Map();
 
   constructor() {
     // Initialize with default Danish insurance companies
@@ -288,6 +298,42 @@ export class MemStorage implements IStorage {
     this.comparisons.set(id, comparison);
     return comparison;
   }
+
+  // Household Members
+  async getHouseholdMember(id: string): Promise<HouseholdMember | undefined> {
+    return this.householdMembers.get(id);
+  }
+
+  async getUserHouseholdMembers(userId: string): Promise<HouseholdMember[]> {
+    return Array.from(this.householdMembers.values()).filter(m => m.userId === userId);
+  }
+
+  async createHouseholdMember(insertMember: InsertHouseholdMember): Promise<HouseholdMember> {
+    const id = randomUUID();
+    const member: HouseholdMember = {
+      id,
+      userId: insertMember.userId,
+      name: insertMember.name,
+      relationship: insertMember.relationship ?? null,
+      dateOfBirth: insertMember.dateOfBirth ?? null,
+      avatarUrl: insertMember.avatarUrl ?? null,
+      createdAt: new Date()
+    };
+    this.householdMembers.set(id, member);
+    return member;
+  }
+
+  async updateHouseholdMember(id: string, updates: Partial<InsertHouseholdMember>): Promise<HouseholdMember> {
+    const member = await this.getHouseholdMember(id);
+    if (!member) throw new Error('Household member not found');
+    const updated = { ...member, ...updates };
+    this.householdMembers.set(id, updated);
+    return updated;
+  }
+
+  async deleteHouseholdMember(id: string): Promise<void> {
+    this.householdMembers.delete(id);
+  }
 }
 
 export class DatabaseStorage implements IStorage {
@@ -472,6 +518,44 @@ export class DatabaseStorage implements IStorage {
     const { comparisons } = await import("@shared/schema");
     const [comparison] = await db.insert(comparisons).values(insertComparison).returning();
     return comparison;
+  }
+
+  // Household Members
+  async getHouseholdMember(id: string): Promise<HouseholdMember | undefined> {
+    const { db } = await import("./db");
+    const { householdMembers } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [member] = await db.select().from(householdMembers).where(eq(householdMembers.id, id));
+    return member || undefined;
+  }
+
+  async getUserHouseholdMembers(userId: string): Promise<HouseholdMember[]> {
+    const { db } = await import("./db");
+    const { householdMembers } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    return await db.select().from(householdMembers).where(eq(householdMembers.userId, userId));
+  }
+
+  async createHouseholdMember(insertMember: InsertHouseholdMember): Promise<HouseholdMember> {
+    const { db } = await import("./db");
+    const { householdMembers } = await import("@shared/schema");
+    const [member] = await db.insert(householdMembers).values(insertMember).returning();
+    return member;
+  }
+
+  async updateHouseholdMember(id: string, updates: Partial<InsertHouseholdMember>): Promise<HouseholdMember> {
+    const { db } = await import("./db");
+    const { householdMembers } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [member] = await db.update(householdMembers).set(updates).where(eq(householdMembers.id, id)).returning();
+    return member;
+  }
+
+  async deleteHouseholdMember(id: string): Promise<void> {
+    const { db } = await import("./db");
+    const { householdMembers } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    await db.delete(householdMembers).where(eq(householdMembers.id, id));
   }
 }
 
