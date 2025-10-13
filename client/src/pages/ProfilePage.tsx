@@ -37,7 +37,7 @@ export default function ProfilePage() {
   });
 
   const { data: documents = [], isLoading: loadingDocs } = useQuery({
-    queryKey: ["/api/documents", userId],
+    queryKey: ["/api/documents/user", userId],
     enabled: !!userId,
   });
 
@@ -93,7 +93,7 @@ export default function ProfilePage() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/documents", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/user", userId] });
       toast({ title: "Dokument uploadet" });
     },
   });
@@ -479,9 +479,9 @@ export default function ProfilePage() {
       </div>
 
       {/* Add Household Member Dialog */}
-      {showAddMemberDialog && (
-        <Dialog open={showAddMemberDialog} onOpenChange={setShowAddMemberDialog}>
-          <div className="flex flex-col gap-6 p-6 max-w-md">
+      <Dialog open={showAddMemberDialog} onOpenChange={setShowAddMemberDialog}>
+        <Dialog.Content>
+          <div className="flex flex-col gap-6 p-6 w-full max-w-md">
             <div className="flex items-center justify-between">
               <span className="text-heading-3 font-heading-3 text-default-font">Tilføj husstandsmedlem</span>
               <IconButton size="small" icon={<FeatherX />} onClick={() => setShowAddMemberDialog(false)} />
@@ -521,13 +521,13 @@ export default function ProfilePage() {
               </Button>
             </div>
           </div>
-        </Dialog>
-      )}
+        </Dialog.Content>
+      </Dialog>
 
       {/* Edit Preferences Dialog */}
-      {showEditPrefsDialog && (
-        <Dialog open={showEditPrefsDialog} onOpenChange={setShowEditPrefsDialog}>
-          <div className="flex flex-col gap-6 p-6 max-w-2xl">
+      <Dialog open={showEditPrefsDialog} onOpenChange={setShowEditPrefsDialog}>
+        <Dialog.Content>
+          <div className="flex flex-col gap-6 p-6 w-full max-w-2xl">
             <div className="flex items-center justify-between">
               <span className="text-heading-3 font-heading-3 text-default-font">Rediger præferencer</span>
               <IconButton size="small" icon={<FeatherX />} onClick={() => setShowEditPrefsDialog(false)} />
@@ -598,8 +598,8 @@ export default function ProfilePage() {
               </Button>
             </div>
           </div>
-        </Dialog>
-      )}
+        </Dialog.Content>
+      </Dialog>
     </DefaultPageLayout>
   );
 }
