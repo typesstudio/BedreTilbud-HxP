@@ -1,11 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { useEffect } from "react";
-import { Badge } from "../../../src/ui/components/Badge";
-import { Button } from "../../../src/ui/components/Button";
-import { IconWithBackground } from "../../../src/ui/components/IconWithBackground";
-import { Progress } from "../../../src/ui/components/Progress";
-import { DefaultPageLayout } from "../../../src/ui/layouts/DefaultPageLayout";
+import { Badge, Button, IconWithBackground, Progress, DefaultPageLayout } from "@/ui";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { FeatherArrowRight, FeatherMessageCircle, FeatherMail } from "@subframe/core";
