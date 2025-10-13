@@ -122,19 +122,19 @@ export class EmailService {
     try {
       const gmail = await this.getGmailClient();
       
-      // Get recent messages (including read ones from last 7 days)
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      const dateQuery = `after:${Math.floor(sevenDaysAgo.getTime() / 1000)}`;
+      // Get recent messages (only from last 24 hours for faster performance)
+      const oneDayAgo = new Date();
+      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+      const dateQuery = `after:${Math.floor(oneDayAgo.getTime() / 1000)}`;
       
       const messages = await gmail.users.messages.list({
         userId: 'me',
         q: dateQuery,
-        maxResults: 100
+        maxResults: 20  // Reduced from 100 for faster processing
       });
 
       const messagesFound = messages.data.messages?.length || 0;
-      console.log(`📨 Checking inbox: Found ${messagesFound} messages in last 7 days`);
+      console.log(`📨 Checking inbox: Found ${messagesFound} messages in last 24 hours`);
 
       let messagesProcessed = 0;
       let newDocuments = 0;
