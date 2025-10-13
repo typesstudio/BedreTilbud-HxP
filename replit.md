@@ -68,10 +68,14 @@ Preferred communication style: Simple, everyday language.
 
 **Core Services (Adapter Pattern):**
 
-1. **OCR Service** (`ocrService.ts`): Uses pdf-parse (via CommonJS require) to extract text from PDFs, then OpenAI GPT-4 Turbo Preview API to structure the data. Returns normalized JSON with company name, policy type, premiums, deductibles, coverages, and benefits.
-   - Model: `gpt-4-turbo-preview` (supports JSON mode)
+1. **Mistral OCR Service** (`mistralOcrService.ts`): Uses Mistral AI's Document OCR API for direct PDF processing and data structuring. Returns normalized JSON with company name, policy type, premiums, deductibles, coverages, and benefits.
+   - **OCR Model**: `mistral-ocr-latest` - Extracts text and structure from PDFs directly (no pdf-parse needed)
+   - **Chat Model**: `mistral-large-latest` - Structures extracted markdown into JSON format
+   - Base64 PDF encoding for secure API transmission
    - Extracts and flattens multi-policy documents into single normalized structure
    - Sums premiums, combines coverages, and merges benefits from multiple policies
+   - Preserves document hierarchy and formatting during extraction
+   - Average processing time: ~24 seconds for 18-page documents
 
 2. **Comparison Service** (`comparisonService.ts`): AI-powered comparison engine that analyzes current vs. offer policies. Provides:
    - Savings calculations
@@ -174,9 +178,16 @@ Preferred communication style: Simple, everyday language.
 - Read inbox capabilities for incoming offers
 - Send email with attachments
 
+**Mistral AI:**
+- Document OCR API with `mistral-ocr-latest` model for PDF text extraction
+- Chat API with `mistral-large-latest` model for data structuring
+- TypeScript SDK (`@mistralai/mistralai`)
+- Base64 PDF document processing
+- Structured JSON output format
+
 **OpenAI API:**
-- GPT-5 model for OCR extraction
-- GPT-5 model for policy comparison and recommendations
+- GPT-4 model for policy comparison and recommendations
+- Used exclusively by comparison service
 - Structured JSON output format
 - Fallback API key configuration
 
