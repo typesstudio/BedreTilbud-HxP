@@ -156,12 +156,12 @@ export default function EmailCorrespondence() {
                         {getSenderName(email.direction)}
                       </span>
                       <span className="text-caption font-caption text-subtext-color">
-                        {formatTime(email.createdAt)}
+                        {formatTime(email.sentAt)}
                       </span>
                     </div>
                     <div className={`flex items-start rounded-lg ${getMessageBgClass(email.direction)} px-4 py-3 max-w-2xl`}>
                       <span className="text-body font-body text-default-font whitespace-pre-wrap">
-                        {email.content}
+                        {email.body}
                       </span>
                     </div>
                   </div>
