@@ -86,7 +86,7 @@ export default function SendInquiry() {
       return;
     }
 
-    const documentId = documents.length > 0 ? documents[0].id : undefined;
+    const documentId = (documents as any[]).length > 0 ? (documents as any[])[0].id : undefined;
 
     sendInquiriesMutation.mutate({ 
       userId: selectedUserId, 
@@ -95,7 +95,7 @@ export default function SendInquiry() {
     });
   };
 
-  const selectedUser = users.find((u: any) => u.id === selectedUserId);
+  const selectedUser = (users as any[]).find((u: any) => u.id === selectedUserId);
 
   return (
     <DefaultPageLayout>
@@ -138,7 +138,7 @@ export default function SendInquiry() {
                 <SelectContent>
                   {usersLoading ? (
                     <SelectItem value="loading" disabled>Indlæser...</SelectItem>
-                  ) : users.length === 0 ? (
+                  ) : (users as any[]).length === 0 ? (
                     <SelectItem value="empty" disabled>Ingen brugere fundet</SelectItem>
                   ) : (
                     (users as any[]).map((user: any) => (
