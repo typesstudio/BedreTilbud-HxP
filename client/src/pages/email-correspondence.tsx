@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { Button } from "../../../src/ui/components/Button";
-import { TextField } from "../../../src/ui/components/TextField";
-import { DefaultPageLayout } from "../../../src/ui/layouts/DefaultPageLayout";
+import { Button } from "@/ui/components/Button";
+import { TextField } from "@/ui/components/TextField";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
 import { FeatherBarChart2, FeatherSend, FeatherArrowLeft } from "@subframe/core";
 import { formatDistanceToNow } from "date-fns";
 import { da } from "date-fns/locale";
@@ -73,11 +73,11 @@ export default function EmailCorrespondence() {
       );
     }
     return (
-      <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-neutral-200">
-        <span className="text-caption-bold font-caption-bold text-neutral-700">
-          {companyName.charAt(0)}
-        </span>
-      </div>
+      <img
+        className="h-8 w-8 flex-none rounded-full object-cover bg-neutral-200"
+        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(companyName)}&background=e5e5e5&color=737373`}
+        alt={companyName}
+      />
     );
   };
 
@@ -90,8 +90,8 @@ export default function EmailCorrespondence() {
 
   return (
     <DefaultPageLayout>
-      <div className="flex h-full w-full items-center justify-center bg-default-background p-6">
-        <div className="flex w-full max-w-[900px] flex-col items-center justify-center rounded-md border border-solid border-neutral-border bg-white shadow-lg" style={{ height: 'calc(100vh - 100px)' }}>
+      <div className="flex h-full w-full items-center justify-center bg-default-background">
+        <div className="flex w-full max-w-[900px] flex-none flex-col items-center justify-center rounded-md bg-white" style={{ height: 'calc(100vh - 100px)' }}>
           {/* Header */}
           <div className="flex w-full items-center justify-between border-b border-solid border-neutral-border px-6 py-4">
             <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
@@ -102,36 +102,39 @@ export default function EmailCorrespondence() {
                 Her kan du følge med i samtalen mellem {companyName} og dig
               </span>
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant="neutral-primary"
-                icon={<FeatherArrowLeft />}
-                onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/offers-overview")}
-                data-testid="button-back"
-              >
-                Tilbage
-              </Button>
-              <Button
-                icon={<FeatherBarChart2 />}
-                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                  // Find comparison for this thread/company
-                  setLocation("/offers-overview");
-                }}
-                data-testid="button-view-offer"
-              >
-                Se tilbud
-              </Button>
-            </div>
+            <Button
+              icon={<FeatherBarChart2 />}
+              onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                setLocation("/offers-overview");
+              }}
+              data-testid="button-view-offer"
+            >
+              Se tilbudet
+            </Button>
           </div>
 
-          {/* AI Status Banner (if thread is active) */}
+          {/* AI Status Banner */}
           {thread?.status === 'sent' && (
             <div className="flex w-full items-center gap-4 bg-brand-50 px-6 py-3">
               <div className="flex items-center gap-2">
                 <div className="flex h-2 w-2 flex-none items-start rounded-full bg-brand-500 animate-pulse" />
                 <span className="text-body-bold font-body-bold text-brand-700">
+                  BedreTilbud AI forhandler på dine vegne
+                </span>
+              </div>
+              <div className="flex items-center gap-2 ml-auto">
+                <span className="text-caption font-caption text-brand-600">
                   Afventer svar fra {companyName}
                 </span>
+                <Button
+                  variant="brand-tertiary"
+                  size="small"
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                    alert('Pause AI funktionalitet kommer snart');
+                  }}
+                >
+                  Pause AI
+                </Button>
               </div>
             </div>
           )}
