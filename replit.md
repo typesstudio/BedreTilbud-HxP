@@ -98,7 +98,16 @@ Preferred communication style: Simple, everyday language.
    - **Thread matching**: Token-based (primary) → Gmail threadId (fallback)
    - **Duplicate prevention**: Tracks Gmail messageId to prevent reprocessing
 
-4. **Storage Adapter** (`storage.ts`): Interface-based storage abstraction with DatabaseStorage implementation using Drizzle ORM:
+4. **AI Response Service** (`aiResponseService.ts`): Intelligent email auto-response system using OpenAI GPT-4:
+   - **Auto-responds** to text-only company replies (no attachments)
+   - Uses conversation context and user preferences for personalized responses
+   - **System prompt** stored in `ai-prompts/email-auto-response.md` for easy editing
+   - Sends responses via Resend for professional delivery
+   - Flags complex scenarios for human review (pricing questions, policy changes)
+   - User-controlled via `aiAutoResponseEnabled` flag (default: enabled)
+   - Handles common follow-ups: additional info requests, clarifications, confirmations
+
+5. **Storage Adapter** (`storage.ts`): Interface-based storage abstraction with DatabaseStorage implementation using Drizzle ORM:
    - PostgreSQL persistence via Neon Serverless
    - User management
    - Company directory
@@ -112,11 +121,13 @@ Preferred communication style: Simple, everyday language.
 - Local filesystem storage in `/uploads` directory
 
 **Data Flow:**
-1. User uploads PDFs → Multer stores files → OCR extraction
+1. User uploads PDFs → Multer stores files → Mistral OCR extraction
 2. User completes questionnaire → Creates user profile
-3. System sends emails to companies → Tracks threads
-4. Incoming responses → OCR processing → Comparison generation
-5. Results displayed in UI → User makes decision
+3. System sends emails to companies via Resend → Tracks threads with tokens
+4. Auto-polling checks Gmail inbox every 2 minutes
+5. Incoming text responses → AI auto-response sent via Resend (if enabled)
+6. Incoming PDFs → Mistral OCR processing → Comparison generation
+7. Results displayed in UI → User makes decision
 
 ### Database Schema
 
@@ -129,6 +140,7 @@ Preferred communication style: Simple, everyday language.
    - Housing type, car ownership
    - Deductible preferences
    - Additional requirements
+   - AI auto-response setting (`aiAutoResponseEnabled`)
 
 2. **companies** - Insurance company directory
    - Company name and contact email
@@ -186,10 +198,17 @@ Preferred communication style: Simple, everyday language.
 - Structured JSON output format
 
 **OpenAI API:**
-- GPT-4 model for policy comparison and recommendations
-- Used exclusively by comparison service
+- GPT-4 model for policy comparison and AI auto-responses
+- Used by comparison service and AI response service
 - Structured JSON output format
 - Fallback API key configuration
+
+**Resend Email Service:**
+- Professional email delivery with authentication (SPF/DKIM/DMARC)
+- Sends initial inquiries and AI auto-responses
+- Connected email: hej@bedretilbud.com
+- Prevents spam flags and improves deliverability
+- Reply-to token routing for thread tracking
 
 **Database:**
 - Neon Serverless PostgreSQL (`@neondatabase/serverless`)
