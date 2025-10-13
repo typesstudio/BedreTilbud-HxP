@@ -1,10 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { Badge } from "../../../src/ui/components/Badge";
-import { Button } from "../../../src/ui/components/Button";
-import { IconWithBackground } from "../../../src/ui/components/IconWithBackground";
-import { Table } from "../../../src/ui/components/Table";
-import { DefaultPageLayout } from "../../../src/ui/layouts/DefaultPageLayout";
+import { Badge } from "@/ui";
+import { Button } from "@/ui";
+import { IconWithBackground } from "@/ui";
+import { Table } from "@/ui";
+import { DefaultPageLayout } from "@/ui";
 import { 
   FeatherArrowLeft,
   FeatherArrowRight,
@@ -80,7 +80,7 @@ export default function Comparison() {
         <div className="flex w-full h-screen items-center justify-center">
           <div className="text-center">
             <h2 className="text-heading-2 font-heading-2 text-default-font mb-4">Sammenligning ikke fundet</h2>
-            <Button onClick={() => setLocation("/offer")}>
+            <Button onClick={() => setLocation("/offers-overview")}>
               Tilbage til oversigt
             </Button>
           </div>
@@ -105,67 +105,49 @@ export default function Comparison() {
   const thread = (threads as any[]).find((t: any) => t.companyId === companyId);
   const threadId = thread?.id;
 
-  const barWidth = offerPremium > 0 && currentPremium > 0 
-    ? `${Math.min((offerPremium / currentPremium) * 100, 100)}%`
-    : '50%';
+  const barWidthPercentage = offerPremium > 0 && currentPremium > 0 
+    ? Math.min((offerPremium / currentPremium) * 100, 100)
+    : 80;
 
   return (
     <DefaultPageLayout>
-      <div className="flex w-full flex-col items-start gap-6 bg-default-background px-6 py-6">
-        {/* Navigation Buttons */}
-        <div className="flex w-full items-center gap-3">
-          <Button
-            variant="neutral-primary"
-            icon={<FeatherArrowLeft />}
-            onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/offer")}
-            data-testid="button-back-to-offers"
-          >
-            Tilbage til oversigt
-          </Button>
-          <Button
-            variant="neutral-secondary"
-            icon={<FeatherMessageCircle />}
-            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-              if (threadId) {
-                setLocation(`/emails/${threadId}`);
-              }
-            }}
-            disabled={!threadId}
-            data-testid="button-view-messages"
-          >
-            Se beskeder
-          </Button>
-        </div>
-
-        {/* Savings Banner */}
-        <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-success-50 px-6 py-6">
-          <div className="flex w-full items-center justify-between">
-            <div className="flex flex-col items-start gap-2">
-              <span className="text-heading-1 font-heading-1 text-success-700">
-                Spar {formatCurrency(savings)} årligt
-              </span>
-              <span className="text-body font-body text-subtext-color">
-                {formatCurrency(monthlySavings)} månedlig besparelse
-              </span>
-            </div>
-            <div className="flex flex-col items-end gap-1">
-              <span className="text-heading-2 font-heading-2 text-default-font">
-                {companyName}
-              </span>
-              <span className="text-body font-body text-subtext-color">
-                {formatCurrency(offerPremium)} i alt om året
-              </span>
-            </div>
+      <div className="flex w-full items-center justify-center bg-default-background px-6 py-6">
+        <div className="flex w-full max-w-[1024px] flex-none flex-col items-start gap-6 px-2 py-2">
+          <div className="flex w-full flex-col items-start gap-2">
+            <span className="text-heading-1 font-heading-1 text-default-font">
+              Sammenlign forsikrings tilbud
+            </span>
+            <span className="text-body font-body text-subtext-color">
+              Sammenlign dit nuværende tilbud med {companyName}
+            </span>
           </div>
-        </div>
-
-        {/* Annual Cost Comparison */}
-        <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
-          <span className="text-heading-2 font-heading-2 text-default-font">
-            Årlig omkostning sammenligning
-          </span>
-          <div className="flex w-full flex-col items-start gap-6">
+          
+          {/* Annual Cost Comparison */}
+          <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+            <span className="text-heading-2 font-heading-2 text-default-font">
+              Årlig omkostning sammenligning
+            </span>
             <div className="flex w-full flex-col items-start gap-3">
+              <div className="flex w-full items-center justify-between rounded-lg border border-solid border-success-200 bg-success-50 px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <IconWithBackground
+                    variant="success"
+                    size="medium"
+                    icon={<FeatherPiggyBank />}
+                  />
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-body-bold font-body-bold text-success-700">
+                      Din årlige besparelse
+                    </span>
+                    <span className="text-caption font-caption text-success-600">
+                      {savingsPercentage.toFixed(1)}% lavere omkostning
+                    </span>
+                  </div>
+                </div>
+                <span className="text-heading-1 font-heading-1 text-success-600">
+                  {formatCurrency(savings)}
+                </span>
+              </div>
               <div className="flex w-full items-center justify-between">
                 <span className="text-body-bold font-body-bold text-default-font">
                   Nuværende forsikring
@@ -175,10 +157,7 @@ export default function Comparison() {
                 </span>
               </div>
               <div className="flex h-12 w-full flex-none items-start rounded-lg bg-success-100">
-                <div 
-                  className="flex h-12 items-center justify-center rounded-lg bg-success-500 px-6 py-6" 
-                  style={{ width: barWidth }}
-                >
+                <div className="flex h-12 items-center justify-center rounded-lg bg-success-500 px-6 py-6" style={{ width: `${barWidthPercentage}%` }}>
                   <div className="flex grow shrink-0 basis-0 items-center justify-between">
                     <span className="text-body-bold font-body-bold text-white">
                       Din nye forsikring
@@ -190,207 +169,160 @@ export default function Comparison() {
                 </div>
               </div>
             </div>
-            <div className="flex w-full items-center justify-between rounded-lg border border-solid border-success-200 bg-success-50 px-6 py-4">
-              <div className="flex items-center gap-3">
-                <IconWithBackground
-                  variant="success"
-                  size="medium"
-                  icon={<FeatherPiggyBank />}
-                />
-                <div className="flex flex-col items-start gap-1">
-                  <span className="text-body-bold font-body-bold text-success-700">
-                    Din årlige besparelse
-                  </span>
-                  <span className="text-caption font-caption text-success-600">
-                    {savingsPercentage.toFixed(1)}% lavere omkostning
-                  </span>
-                </div>
-              </div>
-              <span className="text-heading-1 font-heading-1 text-success-600">
-                {formatCurrency(savings)}
+          </div>
+
+          {/* Highlights Section */}
+          {highlights.length > 0 && (
+            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+              <span className="text-heading-3 font-heading-3 text-default-font">
+                Højdepunkter hvor anbefalingen er bedre
               </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Highlights */}
-        {highlights.length > 0 && (
-          <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
-            <span className="text-heading-3 font-heading-3 text-default-font">
-              Højdepunkter hvor tilbuddet er bedre
-            </span>
-            <div className="flex w-full items-start gap-4 flex-wrap">
-              {highlights.map((highlight: any, index: number) => {
-                const IconComponent = iconMap[highlight.icon] || FeatherCheck;
-                return (
-                  <div 
-                    key={index}
-                    className="flex grow shrink-0 basis-0 min-w-[200px] flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4"
-                  >
-                    <IconWithBackground
-                      variant={highlight.variant || "success"}
-                      size="medium"
-                      icon={<IconComponent />}
-                      square={true}
-                    />
-                    <div className="flex flex-col items-start gap-1">
-                      <span className="text-body-bold font-body-bold text-default-font">
-                        {highlight.title}
-                      </span>
-                      <span className="text-caption font-caption text-subtext-color">
-                        {highlight.description}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* Detailed Comparison Table */}
-        {detailedComparison.length > 0 && (
-          <div className="flex w-full flex-col items-start gap-2 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
-            <Table
-              header={
-                <Table.HeaderRow>
-                  <Table.HeaderCell>Funktion</Table.HeaderCell>
-                  <Table.HeaderCell>Nuværende</Table.HeaderCell>
-                  <Table.HeaderCell>Nyt tilbud</Table.HeaderCell>
-                  <Table.HeaderCell>Forskel</Table.HeaderCell>
-                </Table.HeaderRow>
-              }
-            >
-              {detailedComparison.map((category: any, categoryIndex: number) => (
-                <>
-                  <Table.Row key={`category-${categoryIndex}`}>
-                    <Table.Cell>
-                      <span className="text-body-bold font-body-bold text-default-font">
-                        {category.category}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell />
-                    <Table.Cell />
-                    <Table.Cell />
-                  </Table.Row>
-                  {category.rows?.map((row: any, rowIndex: number) => (
-                    <Table.Row key={`row-${categoryIndex}-${rowIndex}`}>
-                      <Table.Cell>
-                        <span className="text-body font-body text-default-font">
-                          {row.feature}
+              <div className="flex w-full items-start gap-4">
+                {highlights.slice(0, 4).map((highlight: any, index: number) => {
+                  const IconComponent = iconMap[highlight.icon] || FeatherCheck;
+                  return (
+                    <div key={index} className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+                      <IconWithBackground
+                        variant={highlight.variant || "success"}
+                        size="medium"
+                        icon={<IconComponent />}
+                        square={true}
+                      />
+                      <div className="flex flex-col items-start gap-1">
+                        <span className="text-body-bold font-body-bold text-default-font">
+                          {highlight.title}
                         </span>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <span className="text-body font-body text-default-font">
-                          {row.current}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <span className="text-body font-body text-default-font">
-                          {row.offer}
-                        </span>
-                      </Table.Cell>
-                      <Table.Cell>
-                        <Badge 
-                          variant={
-                            row.status === "better" ? "success" : 
-                            row.status === "worse" ? "error" : 
-                            "neutral"
-                          }
-                        >
-                          {row.difference}
-                        </Badge>
-                      </Table.Cell>
-                    </Table.Row>
-                  ))}
-                </>
-              ))}
-            </Table>
-          </div>
-        )}
-
-        {/* Key Metrics */}
-        {keyMetrics.length > 0 && (
-          <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
-            <span className="text-heading-3 font-heading-3 text-default-font">
-              Nøgletal sammenligning
-            </span>
-            <div className="flex w-full flex-wrap items-start gap-4">
-              {keyMetrics.map((metric: any, index: number) => {
-                const IconComponent = iconMap[metric.icon] || FeatherShield;
-                return (
-                  <div 
-                    key={index}
-                    className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-center gap-3 rounded-md border border-solid border-neutral-border bg-default-background px-4 py-4"
-                  >
-                    <IconWithBackground 
-                      variant={metric.variant || "neutral"}
-                      size="large" 
-                      icon={<IconComponent />} 
-                    />
-                    <div className="flex w-full flex-col items-center gap-1">
-                      <span className="text-caption-bold font-caption-bold text-subtext-color">
-                        {metric.label}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-heading-2 font-heading-2 text-neutral-500">
-                          {metric.current}
-                        </span>
-                        <FeatherArrowRight className="text-heading-3 font-heading-3 text-success-600" />
-                        <span className="text-heading-2 font-heading-2 text-success-600">
-                          {metric.offer}
+                        <span className="text-caption font-caption text-subtext-color">
+                          {highlight.description}
                         </span>
                       </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Added Benefits */}
-        {addedBenefits.length > 0 && (
-          <div className="flex w-full flex-col items-start gap-3 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
-            <span className="text-heading-3 font-heading-3 text-default-font">
-              Tilføjet til din forsikring
+          {/* Detailed Comparison Table */}
+          {detailedComparison.length > 0 && (
+            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
+              <span className="text-heading-3 font-heading-3 text-default-font">
+                Detaljeret sammenligning
+              </span>
+              <Table
+                header={
+                  <Table.HeaderRow>
+                    <Table.HeaderCell>Kategori</Table.HeaderCell>
+                    <Table.HeaderCell>Nuværende</Table.HeaderCell>
+                    <Table.HeaderCell>Nyt tilbud</Table.HeaderCell>
+                    <Table.HeaderCell>Forskel</Table.HeaderCell>
+                  </Table.HeaderRow>
+                }
+              >
+                {detailedComparison.map((item: any, index: number) => (
+                  <Table.Row key={index}>
+                    <Table.Cell>
+                      <span className={item.isCategory ? "text-body-bold font-body-bold text-default-font" : "text-body font-body text-default-font"}>
+                        {item.feature}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="text-body font-body text-default-font">
+                        {item.current || ""}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="text-body font-body text-default-font">
+                        {item.offer || ""}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      {item.difference && (
+                        <Badge variant={item.differenceVariant || "neutral"}>
+                          {item.difference}
+                        </Badge>
+                      )}
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table>
+            </div>
+          )}
+
+          {/* Key Metrics */}
+          {keyMetrics.length > 0 && (
+            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+              <span className="text-heading-3 font-heading-3 text-default-font">
+                Nøgletal sammenligning
+              </span>
+              <div className="flex w-full flex-wrap items-start gap-4">
+                {keyMetrics.map((metric: any, index: number) => {
+                  const IconComponent = iconMap[metric.icon] || FeatherHome;
+                  return (
+                    <div key={index} className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-center gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+                      <IconWithBackground 
+                        size="large" 
+                        icon={<IconComponent />}
+                        variant={metric.variant}
+                      />
+                      <div className="flex w-full flex-col items-center gap-1">
+                        <span className="text-caption-bold font-caption-bold text-subtext-color">
+                          {metric.label}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-heading-2 font-heading-2 text-neutral-500">
+                            {metric.currentValue}
+                          </span>
+                          <FeatherArrowRight className="text-heading-3 font-heading-3 text-success-600" />
+                          <span className="text-heading-2 font-heading-2 text-success-600">
+                            {metric.newValue}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Added Benefits */}
+          {addedBenefits.length > 0 && (
+            <div className="flex w-full flex-col items-start gap-3 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+              <span className="text-heading-3 font-heading-3 text-default-font">
+                Tilføjet til din forsikring
+              </span>
+              <div className="flex w-full flex-wrap items-start gap-2">
+                {addedBenefits.map((benefit: any, index: number) => (
+                  <Badge 
+                    key={index}
+                    variant={benefit.variant || "success"} 
+                    icon={benefit.variant === "neutral" ? <FeatherInfo /> : <FeatherCheck />}
+                  >
+                    {benefit.name}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Action Button */}
+          <div className="flex w-full flex-col items-center gap-4 border-t border-solid border-neutral-border py-6">
+            <Button
+              className="h-10 w-full flex-none"
+              size="large"
+              onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                if (threadId) {
+                  setLocation(`/emails/${threadId}`);
+                }
+              }}
+            >
+              Vælg og skift til {companyName}
+            </Button>
+            <span className="text-body font-body text-subtext-color">
+              Sikker data. Du kan til enhver tid annullere før aktivering.
             </span>
-            <div className="flex w-full flex-wrap items-start gap-2">
-              {addedBenefits.map((benefit: any, index: number) => (
-                <Badge 
-                  key={index}
-                  variant={benefit.variant || "success"} 
-                  icon={benefit.variant === "neutral" ? <FeatherInfo /> : <FeatherCheck />}
-                >
-                  {benefit.label}
-                </Badge>
-              ))}
-            </div>
           </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex w-full flex-col sm:flex-row gap-4">
-          <Button
-            className="flex-1"
-            iconRight={<FeatherArrowRight />}
-            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-              alert(`Skift til ${companyName} funktionalitet kommer snart!`);
-            }}
-            data-testid="button-accept-offer"
-          >
-            Jeg vil skifte til {companyName}
-          </Button>
-          <Button
-            variant="neutral-primary"
-            className="flex-1"
-            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-              alert('Kontakt funktionalitet kommer snart!');
-            }}
-            data-testid="button-contact-me"
-          >
-            Kontakt mig for mere info
-          </Button>
         </div>
       </div>
     </DefaultPageLayout>

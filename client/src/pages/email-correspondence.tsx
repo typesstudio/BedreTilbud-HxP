@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { Button } from "@/ui/components/Button";
-import { TextField } from "@/ui/components/TextField";
-import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import { Button } from "@/ui";
+import { TextField } from "@/ui";
+import { DefaultPageLayout } from "@/ui";
 import { FeatherBarChart2, FeatherSend, FeatherArrowLeft } from "@subframe/core";
 import { formatDistanceToNow } from "date-fns";
 import { da } from "date-fns/locale";
