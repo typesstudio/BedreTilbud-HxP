@@ -269,7 +269,7 @@ export class EmailService {
                     companyId: existingThread.companyId,
                     comparisonData: comparison,
                     aiRecommendation: comparison.aiRecommendation,
-                    savings: comparison.savings
+                    savings: Math.round(comparison.savings || 0)
                   });
                 }
               }
