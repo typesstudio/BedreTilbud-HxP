@@ -3,6 +3,8 @@ import { gmailOAuthService } from "./gmailOAuthService";
 import { storage } from "../storage";
 import { mistralOcrService as ocrService } from "./mistralOcrService";
 import { comparisonService } from "./comparisonService";
+import { aiResponseService } from "./aiResponseService";
+import { getUncachableResendClient } from "../resendClient";
 import { generateRequestToken, formatReplyToEmail, extractTokenFromEmail } from "../utils/tokenGenerator";
 import fs from "fs";
 import path from "path";
@@ -343,29 +345,78 @@ export class EmailService {
       // Update thread status
       await storage.updateEmailThread(existingThread.id, { status: 'received' });
 
-      // Generate auto-response
+      // Generate and send AI auto-response (for text-only replies)
       if (body && existingThread.companyId) {
-        const company = await storage.getCompany(existingThread.companyId);
-        const user = await storage.getUser(existingThread.userId ?? '');
-        const sentEmails = await storage.getThreadEmails(existingThread.id, 'outbound');
+        const hasAttachments = attachments.length > 0;
         
-        if (company && user && sentEmails.length > 0) {
-          const autoResponse = await comparisonService.generateAutoResponse(body, {
-            companyName: company.name,
-            userInfo: user,
-            sentEmail: sentEmails[0].body || ''
-          });
-          
-          // Store auto-response (but don't send automatically)
-          await storage.createEmail({
-            threadId: existingThread.id,
-            messageId: '',
-            direction: 'auto',
-            subject: `Re: ${subject}`,
-            body: autoResponse,
-            attachments: [],
-            sentAt: new Date()
-          });
+        // Check if we should auto-respond
+        if (aiResponseService.shouldAutoRespond(body, hasAttachments)) {
+          try {
+            const company = await storage.getCompany(existingThread.companyId);
+            const conversationHistory = await storage.getThreadEmails(existingThread.id);
+            
+            if (company) {
+              console.log(`[AI Auto-Response] Generating response for thread ${existingThread.id}`);
+              
+              // Generate AI response
+              const aiResponse = await aiResponseService.generateResponse({
+                userId: existingThread.userId ?? '',
+                companyName: company.name,
+                threadId: existingThread.id,
+                incomingMessage: body,
+                conversationHistory: conversationHistory.map(e => ({
+                  direction: e.direction,
+                  body: e.body || '',
+                  sentAt: e.sentAt || new Date()
+                }))
+              });
+
+              // Check if AI flagged for human review
+              if (aiResponse.includes('DO NOT RESPOND - FLAG FOR HUMAN REVIEW')) {
+                console.log(`[AI Auto-Response] Flagged for human review, not sending`);
+                
+                // Store as draft for human review
+                await storage.createEmail({
+                  threadId: existingThread.id,
+                  messageId: '',
+                  direction: 'auto',
+                  subject: `[NEEDS REVIEW] Re: ${subject}`,
+                  body: aiResponse,
+                  attachments: [],
+                  sentAt: new Date()
+                });
+              } else {
+                // Send via Resend
+                const { client: resend, fromEmail } = await getUncachableResendClient();
+                
+                const emailResult = await resend.emails.send({
+                  from: fromEmail,
+                  to: company.email,
+                  subject: `Re: ${subject}`,
+                  text: aiResponse,
+                  reply_to: formatReplyToEmail(existingThread.requestToken || '')
+                });
+
+                console.log(`[AI Auto-Response] Email sent via Resend: ${emailResult.data?.id}`);
+
+                // Store sent auto-response
+                await storage.createEmail({
+                  threadId: existingThread.id,
+                  messageId: emailResult.data?.id || '',
+                  direction: 'auto',
+                  subject: `Re: ${subject}`,
+                  body: aiResponse,
+                  attachments: [],
+                  sentAt: new Date()
+                });
+
+                console.log(`[AI Auto-Response] Successfully responded to ${company.name}`);
+              }
+            }
+          } catch (error) {
+            console.error('[AI Auto-Response] Failed to generate/send response:', error);
+            // Continue processing - don't fail the whole inbox check
+          }
         }
       }
 
