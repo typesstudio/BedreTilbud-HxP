@@ -85,6 +85,14 @@ Preferred communication style: Simple, everyday language.
    - Gmail API integration for inbox monitoring
    - Email thread management
    - Attachment handling
+   - **Auto-polling**: Checks inbox every 2 minutes via setInterval
+   - **Performance optimizations**: 
+     - 24-hour email window (reduced from 7 days)
+     - Max 20 emails per check
+     - Database indexes for fast lookups
+   - **Email body extraction**: Supports multipart/alternative format (Gmail payload.parts[])
+   - **Thread matching**: Token-based (primary) → Gmail threadId (fallback)
+   - **Duplicate prevention**: Tracks Gmail messageId to prevent reprocessing
 
 4. **Storage Adapter** (`storage.ts`): Interface-based storage abstraction with DatabaseStorage implementation using Drizzle ORM:
    - PostgreSQL persistence via Neon Serverless
@@ -150,6 +158,11 @@ Preferred communication style: Simple, everyday language.
 - JSON columns for flexible OCR and comparison data
 - Referential integrity with foreign keys
 - Timestamps for audit trails
+
+**Performance Indexes:**
+- `idx_emails_message_id`: Fast duplicate detection for Gmail messages
+- `idx_email_threads_token`: Quick token-based thread lookup for incoming emails
+- `idx_email_threads_gmail_id`: Gmail threadId fallback matching
 
 ### External Dependencies
 
