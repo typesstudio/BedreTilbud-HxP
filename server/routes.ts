@@ -657,6 +657,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Household Members routes
+  app.get("/api/household-members/:userId", async (req, res) => {
+    try {
+      const members = await storage.getUserHouseholdMembers(req.params.userId);
+      res.json(members);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/household-members", async (req, res) => {
+    try {
+      const { insertHouseholdMemberSchema } = await import("@shared/schema");
+      const memberData = insertHouseholdMemberSchema.parse(req.body);
+      const member = await storage.createHouseholdMember(memberData);
+      res.json(member);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/household-members/:id", async (req, res) => {
+    try {
+      const { insertHouseholdMemberSchema } = await import("@shared/schema");
+      const updates = insertHouseholdMemberSchema.partial().parse(req.body);
+      const member = await storage.updateHouseholdMember(req.params.id, updates);
+      res.json(member);
+    } catch (error: any) {
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/household-members/:id", async (req, res) => {
+    try {
+      await storage.deleteHouseholdMember(req.params.id);
+      res.status(204).send();
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
