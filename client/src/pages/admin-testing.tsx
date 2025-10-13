@@ -43,21 +43,26 @@ export default function AdminTesting() {
   // Manual inbox check mutation
   const checkInboxMutation = useMutation({
     mutationFn: async () => {
+      toast({
+        title: "⏳ Tjekker indbakke...",
+        description: "Henter emails, processer PDFs og laver sammenligninger. Dette kan tage 30-60 sekunder.",
+      });
       const response = await apiRequest("POST", "/api/emails/check-inbox");
       return response.json();
     },
     onSuccess: (data) => {
       toast({
-        title: "Indbakke tjekket",
-        description: data.message || "Indbakke er blevet tjekket for nye emails",
+        title: "✅ Indbakke tjekket!",
+        description: data.message || "Alle nye emails er blevet processeret og sammenligninger er lavet",
       });
       refetchTracking();
       queryClient.invalidateQueries({ queryKey: ["/api/emails/threads"] });
       queryClient.invalidateQueries({ queryKey: ["/api/comparisons"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats"] });
     },
     onError: (error: any) => {
       toast({
-        title: "Fejl",
+        title: "❌ Fejl",
         description: error.message || "Kunne ikke tjekke indbakke",
         variant: "destructive",
       });

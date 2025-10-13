@@ -118,7 +118,7 @@ export class EmailService {
     }
   }
 
-  async checkInbox(): Promise<void> {
+  async checkInbox(): Promise<{ messagesFound: number; messagesProcessed: number; newDocuments: number }> {
     try {
       const gmail = await this.getGmailClient();
       
@@ -133,19 +133,33 @@ export class EmailService {
         maxResults: 100
       });
 
-      console.log(`📨 Checking inbox: Found ${messages.data.messages?.length || 0} messages in last 7 days`);
+      const messagesFound = messages.data.messages?.length || 0;
+      console.log(`📨 Checking inbox: Found ${messagesFound} messages in last 7 days`);
 
-      if (!messages.data.messages) return;
+      let messagesProcessed = 0;
+      let newDocuments = 0;
+
+      if (!messages.data.messages) {
+        return { messagesFound: 0, messagesProcessed: 0, newDocuments: 0 };
+      }
 
       for (const message of messages.data.messages) {
-        await this.processIncomingMessage(message.id!);
+        const result = await this.processIncomingMessage(message.id!);
+        if (result.processed) {
+          messagesProcessed++;
+          newDocuments += result.documentsCreated;
+        }
       }
+
+      console.log(`✅ Inbox check complete: ${messagesProcessed} processed, ${newDocuments} new documents`);
+      return { messagesFound, messagesProcessed, newDocuments };
     } catch (error) {
       console.error("Failed to check inbox:", error);
+      throw error;
     }
   }
 
-  private async processIncomingMessage(messageId: string): Promise<void> {
+  private async processIncomingMessage(messageId: string): Promise<{ processed: boolean; documentsCreated: number }> {
     try {
       const gmail = await this.getGmailClient();
       
@@ -202,7 +216,7 @@ export class EmailService {
         console.log(`❌ No thread found for message.`);
         console.log(`   Checked emails: ${emailsToCheck.join(', ')}`);
         console.log(`   Gmail ThreadId: ${threadId}`);
-        return;
+        return { processed: false, documentsCreated: 0 };
       }
 
       // Check if we already processed this message
@@ -211,7 +225,7 @@ export class EmailService {
       
       if (alreadyProcessed) {
         console.log(`⏭️ Message ${messageId} already processed, skipping`);
-        return;
+        return { processed: false, documentsCreated: 0 };
       }
 
       // Extract email body
@@ -222,6 +236,7 @@ export class EmailService {
 
       // Process attachments
       const attachments: any[] = [];
+      let documentsCreated = 0;
       if (message.data.payload?.parts) {
         for (const part of message.data.payload.parts) {
           if (part.filename && part.body?.attachmentId) {
@@ -251,6 +266,7 @@ export class EmailService {
                 documentType: 'offer',
                 companyId: existingThread.companyId
               });
+              documentsCreated++;
 
               // Create comparison if we have a current policy
               const currentDocuments = await storage.getUserDocuments(existingThread.userId ?? '', 'current');
@@ -329,8 +345,11 @@ export class EmailService {
         }
       });
 
+      return { processed: true, documentsCreated };
+
     } catch (error) {
       console.error("Failed to process incoming message:", error);
+      return { processed: false, documentsCreated: 0 };
     }
   }
 }

@@ -360,8 +360,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Check for new emails
   app.post("/api/emails/check-inbox", async (req, res) => {
     try {
-      await emailService.checkInbox();
-      res.json({ message: "Inbox checked successfully" });
+      const stats = await emailService.checkInbox();
+      res.json({ 
+        message: `Fandt ${stats.messagesFound} emails, processerede ${stats.messagesProcessed}, oprettede ${stats.newDocuments} nye dokumenter`,
+        stats 
+      });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
