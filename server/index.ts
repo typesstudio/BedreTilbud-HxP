@@ -78,5 +78,21 @@ app.use((req, res, next) => {
     reusePort: true,
   }, () => {
     log(`serving on port ${port}`);
+    
+    // Auto-polling: Check inbox every 2 minutes
+    const POLLING_INTERVAL = 2 * 60 * 1000; // 2 minutes
+    setInterval(async () => {
+      try {
+        console.log('🔄 Auto-checking inbox...');
+        const result = await emailService.checkInbox();
+        if (result.messagesProcessed > 0) {
+          console.log(`✅ Auto-check: Processed ${result.messagesProcessed} messages, created ${result.newDocuments} documents`);
+        }
+      } catch (error) {
+        console.error('❌ Auto-check failed:', error);
+      }
+    }, POLLING_INTERVAL);
+    
+    log(`📧 Auto-polling enabled: checking inbox every 2 minutes`);
   });
 })();
