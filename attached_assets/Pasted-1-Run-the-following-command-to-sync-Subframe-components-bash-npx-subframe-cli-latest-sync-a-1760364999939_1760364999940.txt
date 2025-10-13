@@ -1,0 +1,420 @@
+1) Run the following command to sync Subframe components:
+
+```bash
+npx @subframe/cli@latest sync --all -p 34bd735365b5
+```
+
+2) Create a new page using the following TSX code. If the page already exists, use it as reference to update the existing code but preserve existing business logic or functionality.
+
+```tsx
+"use client";
+
+import React from "react";
+import { Avatar } from "@/ui/components/Avatar";
+import { Badge } from "@/ui/components/Badge";
+import { Button } from "@/ui/components/Button";
+import { IconButton } from "@/ui/components/IconButton";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { Tabs } from "@/ui/components/Tabs";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import { FeatherDownload } from "@subframe/core";
+import { FeatherEdit } from "@subframe/core";
+import { FeatherFileText } from "@subframe/core";
+import { FeatherPlus } from "@subframe/core";
+import { FeatherUpload } from "@subframe/core";
+
+function ProfileManagementHub() {
+  return (
+    <DefaultPageLayout>
+      <div className="flex h-full w-full flex-col items-start">
+        <div className="flex w-full grow shrink-0 basis-0 flex-col items-center gap-8 bg-default-background px-12 py-12 overflow-auto">
+          <div className="flex w-full max-w-[768px] flex-col items-start gap-8">
+            <div className="flex w-full flex-col items-start gap-6">
+              <div className="flex w-full items-center gap-4">
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <span className="text-heading-1 font-heading-1 text-default-font">
+                    John Smith
+                  </span>
+                  <span className="text-body font-body text-subtext-color">
+                    john.smith@email.com
+                  </span>
+                </div>
+              </div>
+            </div>
+            <Tabs>
+              <Tabs.Item active={true}>Personal Info</Tabs.Item>
+              <Tabs.Item>Household Members</Tabs.Item>
+              <Tabs.Item>Preferences</Tabs.Item>
+              <Tabs.Item>Insurance Documents</Tabs.Item>
+            </Tabs>
+            <div className="flex w-full flex-col items-start gap-12 rounded-md border border-solid border-neutral-border bg-default-background px-6 py-6">
+              <div className="flex w-full flex-col items-start gap-4">
+                <div className="flex w-full flex-wrap items-center gap-2">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    Personal Information
+                  </span>
+                  <Button
+                    className="mobile:h-8 mobile:grow mobile:shrink-0 mobile:basis-0"
+                    variant="neutral-secondary"
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                  >
+                    Edit information
+                  </Button>
+                </div>
+                <div className="flex w-full flex-col items-start">
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6">
+                    <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
+                      Full name
+                    </span>
+                    <span className="grow shrink-0 basis-0 text-body font-body text-default-font">
+                      John Smith
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6">
+                    <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
+                      Email
+                    </span>
+                    <span className="grow shrink-0 basis-0 text-body font-body text-default-font">
+                      john.smith@email.com
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6">
+                    <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
+                      Phone number
+                    </span>
+                    <span className="grow shrink-0 basis-0 text-body font-body text-default-font">
+                      +45 12 34 56 78
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6">
+                    <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
+                      Date of birth
+                    </span>
+                    <span className="grow shrink-0 basis-0 text-body font-body text-default-font">
+                      15/03/1985
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6">
+                    <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
+                      Address
+                    </span>
+                    <span className="grow shrink-0 basis-0 text-body font-body text-default-font">
+                      Vesterbrogade 123, 1620 Copenhagen
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6">
+                    <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
+                      Personal ID Number
+                    </span>
+                    <span className="grow shrink-0 basis-0 text-body font-body text-default-font">
+                      ************
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex w-full flex-col items-start gap-4">
+                <div className="flex w-full flex-wrap items-center gap-2">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    Uploaded Insurance Documents
+                  </span>
+                  <Button
+                    className="mobile:h-8 mobile:grow mobile:shrink-0 mobile:basis-0"
+                    variant="neutral-secondary"
+                    icon={<FeatherUpload />}
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                  >
+                    Upload policy
+                  </Button>
+                </div>
+                <div className="flex w-full flex-col items-start">
+                  <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-6">
+                    <IconWithBackground
+                      size="large"
+                      icon={<FeatherFileText />}
+                    />
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start justify-center gap-1">
+                      <span className="w-full text-body-bold font-body-bold text-default-font">
+                        Home Insurance Policy
+                      </span>
+                      <span className="w-full text-body font-body text-subtext-color">
+                        Uploaded January 15, 2025 • PDF • 2.4 MB
+                      </span>
+                    </div>
+                    <Button
+                      variant="neutral-secondary"
+                      size="small"
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    >
+                      View
+                    </Button>
+                    <IconButton
+                      size="small"
+                      icon={<FeatherDownload />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                  <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-6">
+                    <IconWithBackground
+                      size="large"
+                      icon={<FeatherFileText />}
+                    />
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start justify-center gap-1">
+                      <span className="w-full text-body-bold font-body-bold text-default-font">
+                        Car Insurance Policy
+                      </span>
+                      <span className="w-full text-body font-body text-subtext-color">
+                        Uploaded January 12, 2025 • PDF • 1.8 MB
+                      </span>
+                    </div>
+                    <Button
+                      variant="neutral-secondary"
+                      size="small"
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    >
+                      View
+                    </Button>
+                    <IconButton
+                      size="small"
+                      icon={<FeatherDownload />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                  <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-6">
+                    <IconWithBackground
+                      size="large"
+                      icon={<FeatherFileText />}
+                    />
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start justify-center gap-1">
+                      <span className="w-full text-body-bold font-body-bold text-default-font">
+                        Health Insurance Policy
+                      </span>
+                      <span className="w-full text-body font-body text-subtext-color">
+                        Uploaded December 28, 2024 • PDF • 3.1 MB
+                      </span>
+                    </div>
+                    <Button
+                      variant="neutral-secondary"
+                      size="small"
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    >
+                      View
+                    </Button>
+                    <IconButton
+                      size="small"
+                      icon={<FeatherDownload />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                  <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-6">
+                    <IconWithBackground
+                      size="large"
+                      icon={<FeatherFileText />}
+                    />
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start justify-center gap-1">
+                      <span className="w-full text-body-bold font-body-bold text-default-font">
+                        Travel Insurance Policy
+                      </span>
+                      <span className="w-full text-body font-body text-subtext-color">
+                        Uploaded December 20, 2024 • PDF • 1.2 MB
+                      </span>
+                    </div>
+                    <Button
+                      variant="neutral-secondary"
+                      size="small"
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    >
+                      View
+                    </Button>
+                    <IconButton
+                      size="small"
+                      icon={<FeatherDownload />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="flex w-full flex-col items-start gap-4">
+                <div className="flex w-full flex-wrap items-center gap-2">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    Household Members
+                  </span>
+                  <Button
+                    className="mobile:h-8 mobile:grow mobile:shrink-0 mobile:basis-0"
+                    variant="neutral-secondary"
+                    icon={<FeatherPlus />}
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                  >
+                    Add member
+                  </Button>
+                </div>
+                <div className="flex w-full flex-col items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background px-4 py-4">
+                  <div className="flex w-full items-center gap-4">
+                    <Avatar image="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop">
+                      MS
+                    </Avatar>
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                      <span className="text-body-bold font-body-bold text-default-font">
+                        Maria Smith
+                      </span>
+                      <span className="text-caption font-caption text-subtext-color">
+                        Spouse • Born 22/08/1987
+                      </span>
+                    </div>
+                    <IconButton
+                      size="small"
+                      icon={<FeatherEdit />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                  <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
+                  <div className="flex w-full items-center gap-4">
+                    <Avatar image="">ES</Avatar>
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                      <span className="text-body-bold font-body-bold text-default-font">
+                        Emma Smith
+                      </span>
+                      <span className="text-caption font-caption text-subtext-color">
+                        Child • Born 14/05/2015
+                      </span>
+                    </div>
+                    <IconButton
+                      size="small"
+                      icon={<FeatherEdit />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                  <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
+                  <div className="flex w-full items-center gap-4">
+                    <Avatar image="">LS</Avatar>
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                      <span className="text-body-bold font-body-bold text-default-font">
+                        Lucas Smith
+                      </span>
+                      <span className="text-caption font-caption text-subtext-color">
+                        Child • Born 09/11/2018
+                      </span>
+                    </div>
+                    <IconButton
+                      size="small"
+                      icon={<FeatherEdit />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="flex w-full flex-col items-start gap-4">
+                <div className="flex w-full flex-wrap items-center gap-2">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    Insurance Preferences
+                  </span>
+                  <Button
+                    className="mobile:h-8 mobile:grow mobile:shrink-0 mobile:basis-0"
+                    variant="neutral-secondary"
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                  >
+                    Edit preferences
+                  </Button>
+                </div>
+                <div className="flex w-full flex-col items-start gap-6 rounded-md border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
+                  <div className="flex w-full flex-col items-start gap-3">
+                    <span className="text-body-bold font-body-bold text-default-font">
+                      Insurance Types I Need
+                    </span>
+                    <div className="flex w-full flex-wrap items-start gap-2">
+                      <Badge>Rejseforsikring</Badge>
+                      <Badge>Bilforsikring</Badge>
+                      <Badge>Husforsikring</Badge>
+                      <Badge variant="neutral" icon={<FeatherPlus />}>
+                        Add insurance type
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
+                  <div className="flex w-full flex-col items-start gap-3">
+                    <span className="text-body-bold font-body-bold text-default-font">
+                      What&#39;s Most Important to Me
+                    </span>
+                    <div className="flex w-full flex-col items-start">
+                      <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-4">
+                        <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
+                          Priority #1
+                        </span>
+                        <span className="grow shrink-0 basis-0 text-body font-body text-default-font">
+                          Lowest price
+                        </span>
+                      </div>
+                      <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-4">
+                        <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
+                          Priority #2
+                        </span>
+                        <span className="grow shrink-0 basis-0 text-body font-body text-default-font">
+                          Good customer service
+                        </span>
+                      </div>
+                      <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-4">
+                        <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
+                          Priority #3
+                        </span>
+                        <span className="grow shrink-0 basis-0 text-body font-body text-default-font">
+                          Comprehensive coverage
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
+                  <div className="flex w-full flex-col items-start gap-3">
+                    <span className="text-body-bold font-body-bold text-default-font">
+                      Additional Requirements
+                    </span>
+                    <div className="flex w-full flex-col items-start gap-2">
+                      <span className="text-body font-body text-default-font">
+                        • Coverage needed worldwide for travel insurance
+                      </span>
+                      <span className="text-body font-body text-default-font">
+                        • Prefer Danish insurance companies
+                      </span>
+                      <span className="text-body font-body text-default-font">
+                        • Need family coverage for all policies
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex w-full flex-col items-center justify-center gap-2">
+              <span className="text-caption font-caption text-subtext-color">
+                © Copyright 2025, BedreTilbud.com. All rights reserved.
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </DefaultPageLayout>
+  );
+}
+
+export default ProfileManagementHub;
+
+```
