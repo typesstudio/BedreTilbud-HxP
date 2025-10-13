@@ -104,7 +104,7 @@ export default function EmailCorrespondence() {
             </div>
             <div className="flex gap-2">
               <Button
-                variant="neutral"
+                variant="neutral-primary"
                 icon={<FeatherArrowLeft />}
                 onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/offers-overview")}
                 data-testid="button-back"
@@ -194,7 +194,7 @@ export default function EmailCorrespondence() {
               <Button
                 variant="neutral-tertiary"
                 size="small"
-                onClick={(event: React.MouseEvent<HTMLButtonButton>) => {
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
                   alert('Funktionalitet kommer snart');
                 }}
               >

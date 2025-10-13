@@ -43,6 +43,15 @@ export default function Comparison() {
     enabled: !!id,
   });
 
+  // Get threads to find the thread ID for this comparison
+  const userId = (comparison as any)?.userId;
+  const companyId = (comparison as any)?.companyId;
+  
+  const { data: threads = [] } = useQuery({
+    queryKey: ["/api/emails/threads", userId],
+    enabled: !!userId,
+  });
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('da-DK', {
       style: 'currency',
@@ -91,7 +100,10 @@ export default function Comparison() {
   const detailedComparison = comparisonData.detailedComparison || [];
   const keyMetrics = comparisonData.keyMetrics || [];
   const addedBenefits = comparisonData.addedBenefits || [];
-  const userId = (comparison as any).userId || '';
+
+  // Find the thread for this comparison
+  const thread = (threads as any[]).find((t: any) => t.companyId === companyId);
+  const threadId = thread?.id;
 
   const barWidth = offerPremium > 0 && currentPremium > 0 
     ? `${Math.min((offerPremium / currentPremium) * 100, 100)}%`
@@ -103,8 +115,8 @@ export default function Comparison() {
         {/* Navigation Buttons */}
         <div className="flex w-full items-center gap-3">
           <Button
-            variant="neutral"
-            iconLeft={<FeatherArrowLeft />}
+            variant="neutral-primary"
+            icon={<FeatherArrowLeft />}
             onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/offer")}
             data-testid="button-back-to-offers"
           >
@@ -112,8 +124,13 @@ export default function Comparison() {
           </Button>
           <Button
             variant="neutral-secondary"
-            iconLeft={<FeatherMessageCircle />}
-            onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation(`/email-correspondence/${userId}`)}
+            icon={<FeatherMessageCircle />}
+            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+              if (threadId) {
+                setLocation(`/emails/${threadId}`);
+              }
+            }}
+            disabled={!threadId}
             data-testid="button-view-messages"
           >
             Se beskeder
@@ -365,7 +382,7 @@ export default function Comparison() {
             Jeg vil skifte til {companyName}
           </Button>
           <Button
-            variant="neutral"
+            variant="neutral-primary"
             className="flex-1"
             onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
               alert('Kontakt funktionalitet kommer snart!');

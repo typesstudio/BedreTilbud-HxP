@@ -257,7 +257,7 @@ export default function OffersOverview() {
           {/* Upload Offer Button */}
           {(hasOffers || hasPending) && (
             <Button
-              variant="neutral"
+              variant="neutral-primary"
               iconRight={<FeatherMail />}
               onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/upload-offer")}
               data-testid="button-upload-offer"
