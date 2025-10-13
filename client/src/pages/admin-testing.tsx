@@ -26,7 +26,7 @@ export default function AdminTesting() {
   });
 
   // Get Gmail status
-  const { data: gmailStatus, isLoading: statusLoading, refetch: refetchStatus } = useQuery({
+  const { data: gmailStatus, isLoading: statusLoading, refetch: refetchStatus } = useQuery<any>({
     queryKey: ["/api/gmail/status"],
   });
 
@@ -188,7 +188,7 @@ export default function AdminTesting() {
             </div>
 
             <Button
-              variant="brand"
+              variant="brand-primary"
               size="large"
               onClick={() => checkInboxMutation.mutate()}
               disabled={checkInboxMutation.isPending || !gmailStatus?.authorized}
