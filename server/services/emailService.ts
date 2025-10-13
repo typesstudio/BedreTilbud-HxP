@@ -349,8 +349,12 @@ export class EmailService {
       if (body && existingThread.companyId) {
         const hasAttachments = attachments.length > 0;
         
+        // Check user's AI auto-response preference
+        const user = await storage.getUser(existingThread.userId ?? '');
+        const aiEnabled = user?.aiAutoResponseEnabled !== false; // Default to true if not set
+        
         // Check if we should auto-respond
-        if (aiResponseService.shouldAutoRespond(body, hasAttachments)) {
+        if (aiEnabled && aiResponseService.shouldAutoRespond(body, hasAttachments)) {
           try {
             const company = await storage.getCompany(existingThread.companyId);
             const conversationHistory = await storage.getThreadEmails(existingThread.id);

@@ -12,6 +12,7 @@ export const users = pgTable("users", {
   deductible: text("deductible"),
   age: text("age"),
   additionalInfo: text("additional_info"),
+  aiAutoResponseEnabled: boolean("ai_auto_response_enabled").default(true), // Enable AI auto-responses by default
   createdAt: timestamp("created_at").defaultNow(),
 });
 
