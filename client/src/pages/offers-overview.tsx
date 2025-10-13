@@ -1,5 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useLocation } from "wouter";
+import { useEffect } from "react";
 import { Badge } from "../../../src/ui/components/Badge";
 import { Button } from "../../../src/ui/components/Button";
 import { IconWithBackground } from "../../../src/ui/components/IconWithBackground";
@@ -58,6 +59,19 @@ export default function OffersOverview() {
       });
     },
   });
+
+  // Auto-refresh data every 30 seconds
+  useEffect(() => {
+    const AUTO_REFRESH_INTERVAL = 30 * 1000; // 30 seconds
+    
+    const intervalId = setInterval(() => {
+      queryClient.invalidateQueries({ queryKey: ["/api/emails/threads", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/comparisons/user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/stats", userId] });
+    }, AUTO_REFRESH_INTERVAL);
+
+    return () => clearInterval(intervalId);
+  }, [userId]);
 
   const getComparisonForThread = (threadId: string) => {
     return (comparisons as any[]).find((comp: any) => 
