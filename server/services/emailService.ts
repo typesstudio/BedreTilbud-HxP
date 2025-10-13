@@ -1,7 +1,7 @@
 import { getUncachableGmailClient } from "../googleMailClient";
 import { gmailOAuthService } from "./gmailOAuthService";
 import { storage } from "../storage";
-import { ocrService } from "./ocrService";
+import { mistralOcrService as ocrService } from "./mistralOcrService";
 import { comparisonService } from "./comparisonService";
 import { generateRequestToken, formatReplyToEmail, extractTokenFromEmail } from "../utils/tokenGenerator";
 import fs from "fs";

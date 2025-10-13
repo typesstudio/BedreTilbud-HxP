@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { InsuranceData } from "./ocrService";
+import { InsuranceData } from "./mistralOcrService";
 
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR || "default_key"

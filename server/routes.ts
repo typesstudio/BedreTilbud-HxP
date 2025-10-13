@@ -1,7 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { ocrService } from "./services/ocrService";
+import { mistralOcrService as ocrService } from "./services/mistralOcrService";
 import { comparisonService } from "./services/comparisonService";
 import { emailService } from "./services/emailService";
 import { gmailOAuthService } from "./services/gmailOAuthService";
