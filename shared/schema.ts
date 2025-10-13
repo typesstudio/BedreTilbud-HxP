@@ -7,12 +7,20 @@ export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull().unique(),
   name: text("name"),
+  phone: text("phone"),
+  dateOfBirth: text("date_of_birth"),
+  address: text("address"),
+  personalIdNumber: text("personal_id_number"),
   housingType: text("housing_type"),
   hasCar: boolean("has_car"),
   deductible: text("deductible"),
   age: text("age"),
   additionalInfo: text("additional_info"),
-  aiAutoResponseEnabled: boolean("ai_auto_response_enabled").default(true), // Enable AI auto-responses by default
+  insuranceTypes: text("insurance_types").array(),
+  priorityOne: text("priority_one"),
+  priorityTwo: text("priority_two"),
+  priorityThree: text("priority_three"),
+  aiAutoResponseEnabled: boolean("ai_auto_response_enabled").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -72,6 +80,16 @@ export const comparisons = pgTable("comparisons", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const householdMembers = pgTable("household_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  name: text("name").notNull(),
+  relationship: text("relationship"), // "spouse", "child", etc.
+  dateOfBirth: text("date_of_birth"),
+  avatarUrl: text("avatar_url"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -102,6 +120,11 @@ export const insertComparisonSchema = createInsertSchema(comparisons).omit({
   createdAt: true,
 });
 
+export const insertHouseholdMemberSchema = createInsertSchema(householdMembers).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -115,3 +138,5 @@ export type Email = typeof emails.$inferSelect;
 export type InsertEmail = z.infer<typeof insertEmailSchema>;
 export type Comparison = typeof comparisons.$inferSelect;
 export type InsertComparison = z.infer<typeof insertComparisonSchema>;
+export type HouseholdMember = typeof householdMembers.$inferSelect;
+export type InsertHouseholdMember = z.infer<typeof insertHouseholdMemberSchema>;
