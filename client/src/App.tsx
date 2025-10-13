@@ -13,6 +13,7 @@ import UploadOffer from "@/pages/upload-offer";
 import GmailSetup from "@/pages/gmail-setup";
 import SendInquiry from "@/pages/send-inquiry";
 import AdminTesting from "@/pages/admin-testing";
+import ProfilePage from "@/pages/ProfilePage";
 
 function Router() {
   return (
@@ -25,6 +26,7 @@ function Router() {
       <Route path="/send-inquiry" component={SendInquiry} />
       <Route path="/comparison/:id" component={Comparison} />
       <Route path="/emails/:threadId" component={EmailCorrespondence} />
+      <Route path="/profile/:userId" component={ProfilePage} />
       <Route path="/gmail-setup" component={GmailSetup} />
       <Route path="/admin" component={AdminTesting} />
       <Route component={NotFound} />
