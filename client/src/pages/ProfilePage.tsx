@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useRef } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
 import { 
   Avatar, 
@@ -9,16 +9,27 @@ import {
   IconButton, 
   IconWithBackground, 
   Tabs, 
-  DefaultPageLayout 
+  DefaultPageLayout,
+  Dialog,
+  TextField
 } from "@/ui";
-import { FeatherChevronDown, FeatherDownload, FeatherEdit, FeatherFileText, FeatherPlus, FeatherUpload } from "@subframe/core";
+import { FeatherChevronDown, FeatherDownload, FeatherEdit, FeatherFileText, FeatherPlus, FeatherUpload, FeatherX } from "@subframe/core";
 import * as SubframeCore from "@subframe/core";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ProfilePage() {
   const { userId } = useParams<{ userId: string }>();
   const [activeTab, setActiveTab] = useState("personal");
+  const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
+  const [showEditPrefsDialog, setShowEditPrefsDialog] = useState(false);
+  const [newMember, setNewMember] = useState({ name: "", relationship: "", dateOfBirth: "" });
+  const [prefs, setPrefs] = useState({ priorityOne: "", priorityTwo: "", priorityThree: "", additionalInfo: "", insuranceTypes: [] as string[] });
+  const [newInsuranceType, setNewInsuranceType] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const { data: user, isLoading: loadingUser } = useQuery({
     queryKey: ["/api/users", userId],
@@ -35,6 +46,67 @@ export default function ProfilePage() {
     enabled: !!userId,
   });
 
+  const addMemberMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest("/api/household-members", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...data, userId }),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/household-members", userId] });
+      setShowAddMemberDialog(false);
+      setNewMember({ name: "", relationship: "", dateOfBirth: "" });
+      toast({ title: "Husstandsmedlem tilføjet" });
+    },
+  });
+
+  const updatePrefsMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest(`/api/users/${userId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users", userId] });
+      setShowEditPrefsDialog(false);
+      toast({ title: "Præferencer opdateret" });
+    },
+  });
+
+  const uploadDocumentMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const formData = new FormData();
+      formData.append("files", file);
+      formData.append("userId", userId!);
+      formData.append("documentType", "current");
+      
+      const response = await fetch("/api/documents/upload", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!response.ok) throw new Error("Upload failed");
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents", userId] });
+      toast({ title: "Dokument uploadet" });
+    },
+  });
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && file.type === "application/pdf") {
+      uploadDocumentMutation.mutate(file);
+    } else if (file) {
+      toast({ title: "Kun PDF-filer er tilladt", variant: "destructive" });
+    }
+  };
+
   if (loadingUser) {
     return <div className="flex h-screen items-center justify-center">Indlæser...</div>;
   }
@@ -44,6 +116,28 @@ export default function ProfilePage() {
   }
 
   const insuranceTypes = user.insuranceTypes || [];
+
+  const openEditPrefs = () => {
+    setPrefs({
+      priorityOne: user.priorityOne || "",
+      priorityTwo: user.priorityTwo || "",
+      priorityThree: user.priorityThree || "",
+      additionalInfo: user.additionalInfo || "",
+      insuranceTypes: user.insuranceTypes || []
+    });
+    setShowEditPrefsDialog(true);
+  };
+
+  const handleAddInsuranceType = () => {
+    if (newInsuranceType && !prefs.insuranceTypes.includes(newInsuranceType)) {
+      setPrefs({ ...prefs, insuranceTypes: [...prefs.insuranceTypes, newInsuranceType] });
+      setNewInsuranceType("");
+    }
+  };
+
+  const handleRemoveInsuranceType = (type: string) => {
+    setPrefs({ ...prefs, insuranceTypes: prefs.insuranceTypes.filter(t => t !== type) });
+  };
 
   return (
     <DefaultPageLayout>
@@ -157,54 +251,23 @@ export default function ProfilePage() {
                     </Button>
                   </div>
                   <div className="flex w-full flex-col items-start">
-                    <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6">
-                      <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
-                        Fulde navn
-                      </span>
-                      <span className="grow shrink-0 basis-0 text-body font-body text-default-font" data-testid="text-full-name">
-                        {user.name || "Ikke oplyst"}
-                      </span>
-                    </div>
-                    <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6">
-                      <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
-                        Email
-                      </span>
-                      <span className="grow shrink-0 basis-0 text-body font-body text-default-font" data-testid="text-email">
-                        {user.email}
-                      </span>
-                    </div>
-                    <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6">
-                      <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
-                        Telefonnummer
-                      </span>
-                      <span className="grow shrink-0 basis-0 text-body font-body text-default-font" data-testid="text-phone">
-                        {user.phone || "Ikke oplyst"}
-                      </span>
-                    </div>
-                    <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6">
-                      <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
-                        Fødselsdato
-                      </span>
-                      <span className="grow shrink-0 basis-0 text-body font-body text-default-font" data-testid="text-dob">
-                        {user.dateOfBirth || "Ikke oplyst"}
-                      </span>
-                    </div>
-                    <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6">
-                      <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
-                        Adresse
-                      </span>
-                      <span className="grow shrink-0 basis-0 text-body font-body text-default-font" data-testid="text-address">
-                        {user.address || "Ikke oplyst"}
-                      </span>
-                    </div>
-                    <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6">
-                      <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
-                        CPR-nummer
-                      </span>
-                      <span className="grow shrink-0 basis-0 text-body font-body text-default-font" data-testid="text-cpr">
-                        {user.personalIdNumber ? "************" : "Ikke oplyst"}
-                      </span>
-                    </div>
+                    {[
+                      { label: "Fulde navn", value: user.name || "Ikke oplyst", testid: "text-full-name" },
+                      { label: "Email", value: user.email, testid: "text-email" },
+                      { label: "Telefonnummer", value: user.phone || "Ikke oplyst", testid: "text-phone" },
+                      { label: "Fødselsdato", value: user.dateOfBirth || "Ikke oplyst", testid: "text-dob" },
+                      { label: "Adresse", value: user.address || "Ikke oplyst", testid: "text-address" },
+                      { label: "CPR-nummer", value: user.personalIdNumber ? "************" : "Ikke oplyst", testid: "text-cpr" },
+                    ].map((item) => (
+                      <div key={item.label} className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6">
+                        <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
+                          {item.label}
+                        </span>
+                        <span className="grow shrink-0 basis-0 text-body font-body text-default-font" data-testid={item.testid}>
+                          {item.value}
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -221,6 +284,7 @@ export default function ProfilePage() {
                       className="mobile:h-8 mobile:grow mobile:shrink-0 mobile:basis-0"
                       variant="neutral-secondary"
                       icon={<FeatherPlus />}
+                      onClick={() => setShowAddMemberDialog(true)}
                       data-testid="button-add-member"
                     >
                       Tilføj medlem
@@ -275,6 +339,7 @@ export default function ProfilePage() {
                     <Button
                       className="mobile:h-8 mobile:grow mobile:shrink-0 mobile:basis-0"
                       variant="neutral-secondary"
+                      onClick={openEditPrefs}
                       data-testid="button-edit-preferences"
                     >
                       Rediger præferencer
@@ -293,9 +358,6 @@ export default function ProfilePage() {
                         ) : (
                           <span className="text-body text-subtext-color">Ingen forsikringstyper valgt</span>
                         )}
-                        <Badge variant="neutral" icon={<FeatherPlus />} data-testid="badge-add-insurance">
-                          Tilføj forsikringstype
-                        </Badge>
                       </div>
                     </div>
                     <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
@@ -304,30 +366,20 @@ export default function ProfilePage() {
                         Hvad er vigtigst for mig
                       </span>
                       <div className="flex w-full flex-col items-start">
-                        <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-4">
-                          <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
-                            Prioritet #1
-                          </span>
-                          <span className="grow shrink-0 basis-0 text-body font-body text-default-font" data-testid="text-priority-1">
-                            {user.priorityOne || "Ikke valgt"}
-                          </span>
-                        </div>
-                        <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-4">
-                          <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
-                            Prioritet #2
-                          </span>
-                          <span className="grow shrink-0 basis-0 text-body font-body text-default-font" data-testid="text-priority-2">
-                            {user.priorityTwo || "Ikke valgt"}
-                          </span>
-                        </div>
-                        <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-4">
-                          <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
-                            Prioritet #3
-                          </span>
-                          <span className="grow shrink-0 basis-0 text-body font-body text-default-font" data-testid="text-priority-3">
-                            {user.priorityThree || "Ikke valgt"}
-                          </span>
-                        </div>
+                        {[
+                          { label: "Prioritet #1", value: user.priorityOne || "Ikke valgt", testid: "text-priority-1" },
+                          { label: "Prioritet #2", value: user.priorityTwo || "Ikke valgt", testid: "text-priority-2" },
+                          { label: "Prioritet #3", value: user.priorityThree || "Ikke valgt", testid: "text-priority-3" },
+                        ].map((item) => (
+                          <div key={item.label} className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-4">
+                            <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
+                              {item.label}
+                            </span>
+                            <span className="grow shrink-0 basis-0 text-body font-body text-default-font" data-testid={item.testid}>
+                              {item.value}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                     <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
@@ -357,16 +409,23 @@ export default function ProfilePage() {
                     <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
                       Uploadede forsikringsdokumenter
                     </span>
-                    <Link href={`/onboarding/${userId}`}>
-                      <Button
-                        className="mobile:h-8 mobile:grow mobile:shrink-0 mobile:basis-0"
-                        variant="neutral-secondary"
-                        icon={<FeatherUpload />}
-                        data-testid="button-upload-policy"
-                      >
-                        Upload police
-                      </Button>
-                    </Link>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="application/pdf"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
+                    <Button
+                      className="mobile:h-8 mobile:grow mobile:shrink-0 mobile:basis-0"
+                      variant="neutral-secondary"
+                      icon={<FeatherUpload />}
+                      onClick={() => fileInputRef.current?.click()}
+                      data-testid="button-upload-policy"
+                      disabled={uploadDocumentMutation.isPending}
+                    >
+                      {uploadDocumentMutation.isPending ? "Uploader..." : "Upload police"}
+                    </Button>
                   </div>
                   {loadingDocs ? (
                     <div className="w-full text-center py-8 text-subtext-color">Indlæser...</div>
@@ -418,6 +477,129 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>
+
+      {/* Add Household Member Dialog */}
+      {showAddMemberDialog && (
+        <Dialog open={showAddMemberDialog} onOpenChange={setShowAddMemberDialog}>
+          <div className="flex flex-col gap-6 p-6 max-w-md">
+            <div className="flex items-center justify-between">
+              <span className="text-heading-3 font-heading-3 text-default-font">Tilføj husstandsmedlem</span>
+              <IconButton size="small" icon={<FeatherX />} onClick={() => setShowAddMemberDialog(false)} />
+            </div>
+            
+            <div className="flex flex-col gap-4">
+              <TextField
+                label="Navn"
+                value={newMember.name}
+                onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+                data-testid="input-member-name"
+              />
+              <TextField
+                label="Relation (f.eks. Ægtefælle, Barn)"
+                value={newMember.relationship}
+                onChange={(e) => setNewMember({ ...newMember, relationship: e.target.value })}
+                data-testid="input-member-relationship"
+              />
+              <TextField
+                label="Fødselsdato (DD/MM/ÅÅÅÅ)"
+                value={newMember.dateOfBirth}
+                onChange={(e) => setNewMember({ ...newMember, dateOfBirth: e.target.value })}
+                data-testid="input-member-dob"
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <Button variant="neutral-secondary" onClick={() => setShowAddMemberDialog(false)}>
+                Annuller
+              </Button>
+              <Button 
+                onClick={() => addMemberMutation.mutate(newMember)}
+                disabled={!newMember.name || addMemberMutation.isPending}
+                data-testid="button-save-member"
+              >
+                {addMemberMutation.isPending ? "Gemmer..." : "Gem"}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
+
+      {/* Edit Preferences Dialog */}
+      {showEditPrefsDialog && (
+        <Dialog open={showEditPrefsDialog} onOpenChange={setShowEditPrefsDialog}>
+          <div className="flex flex-col gap-6 p-6 max-w-2xl">
+            <div className="flex items-center justify-between">
+              <span className="text-heading-3 font-heading-3 text-default-font">Rediger præferencer</span>
+              <IconButton size="small" icon={<FeatherX />} onClick={() => setShowEditPrefsDialog(false)} />
+            </div>
+            
+            <div className="flex flex-col gap-6">
+              <div className="flex flex-col gap-3">
+                <span className="text-body-bold font-body-bold text-default-font">Forsikringstyper</span>
+                <div className="flex gap-2">
+                  <TextField
+                    placeholder="Tilføj forsikringstype"
+                    value={newInsuranceType}
+                    onChange={(e) => setNewInsuranceType(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleAddInsuranceType()}
+                  />
+                  <Button onClick={handleAddInsuranceType} icon={<FeatherPlus />}>Tilføj</Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {prefs.insuranceTypes.map((type) => (
+                    <Badge key={type} variant="brand">
+                      {type}
+                      <button onClick={() => handleRemoveInsuranceType(type)} className="ml-2">×</button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-3">
+                <span className="text-body-bold font-body-bold text-default-font">Prioriteter</span>
+                <TextField
+                  label="Prioritet #1"
+                  value={prefs.priorityOne}
+                  onChange={(e) => setPrefs({ ...prefs, priorityOne: e.target.value })}
+                  placeholder="F.eks. Laveste pris"
+                />
+                <TextField
+                  label="Prioritet #2"
+                  value={prefs.priorityTwo}
+                  onChange={(e) => setPrefs({ ...prefs, priorityTwo: e.target.value })}
+                  placeholder="F.eks. God kundeservice"
+                />
+                <TextField
+                  label="Prioritet #3"
+                  value={prefs.priorityThree}
+                  onChange={(e) => setPrefs({ ...prefs, priorityThree: e.target.value })}
+                  placeholder="F.eks. Omfattende dækning"
+                />
+              </div>
+
+              <TextField
+                label="Yderligere krav"
+                value={prefs.additionalInfo}
+                onChange={(e) => setPrefs({ ...prefs, additionalInfo: e.target.value })}
+                placeholder="Beskriv eventuelle særlige krav eller præferencer"
+              />
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <Button variant="neutral-secondary" onClick={() => setShowEditPrefsDialog(false)}>
+                Annuller
+              </Button>
+              <Button 
+                onClick={() => updatePrefsMutation.mutate(prefs)}
+                disabled={updatePrefsMutation.isPending}
+                data-testid="button-save-prefs"
+              >
+                {updatePrefsMutation.isPending ? "Gemmer..." : "Gem"}
+              </Button>
+            </div>
+          </div>
+        </Dialog>
+      )}
     </DefaultPageLayout>
   );
 }
