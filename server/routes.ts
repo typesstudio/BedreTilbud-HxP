@@ -404,13 +404,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         })
       );
+
+      // Get real Gmail scope info
+      const gmailStatus = gmailOAuthService.getConnectionStatus();
+      const tokens = gmailOAuthService.getTokens();
+      const scopeString = tokens && typeof tokens === 'object' && 'scope' in tokens 
+        ? (tokens as any).scope 
+        : 'Unknown';
+      
+      const hasReadPermission = scopeString.includes('gmail.readonly') || scopeString.includes('gmail.modify');
       
       res.json({
         totalThreads: threads.length,
         gmailScopes: {
-          hasReadPermission: '❌ MISSING - Need gmail.readonly or gmail.modify scope',
-          currentScopes: 'gmail.send, gmail.labels, gmail.addons.*',
-          requiredAction: 'Reconnect Gmail with read permissions in Replit Integrations'
+          hasReadPermission: hasReadPermission ? '✅ Granted' : '❌ MISSING - Need gmail.readonly or gmail.modify scope',
+          currentScopes: scopeString,
+          configured: gmailStatus.configured,
+          authorized: gmailStatus.authorized
         },
         threads: debugInfo
       });
