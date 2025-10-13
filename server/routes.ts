@@ -583,9 +583,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Comparison not found" });
       }
 
-      const currentDoc = await storage.getDocument(comparison.currentDocumentId);
-      const offerDoc = await storage.getDocument(comparison.offerDocumentId);
-      const user = await storage.getUser(comparison.userId);
+      const currentDoc = await storage.getDocument(comparison.currentDocumentId ?? '');
+      const offerDoc = await storage.getDocument(comparison.offerDocumentId ?? '');
+      const user = await storage.getUser(comparison.userId ?? '');
 
       if (!currentDoc || !offerDoc || !currentDoc.ocrData || !offerDoc.ocrData) {
         return res.status(400).json({ message: "Missing OCR data for comparison" });
@@ -601,10 +601,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currentDoc.ocrData as any,
         offerDoc.ocrData as any,
         user ? {
-          housingType: user.housingType,
-          hasCar: user.hasCar,
-          deductible: user.deductible,
-          additionalInfo: user.additionalInfo
+          housingType: user.housingType ?? undefined,
+          hasCar: user.hasCar ?? undefined,
+          deductible: user.deductible ?? undefined,
+          additionalInfo: user.additionalInfo ?? undefined
         } : undefined
       );
 

@@ -122,12 +122,18 @@ export class EmailService {
     try {
       const gmail = await this.getGmailClient();
       
-      // Get recent messages
+      // Get recent messages (including read ones from last 7 days)
+      const sevenDaysAgo = new Date();
+      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+      const dateQuery = `after:${Math.floor(sevenDaysAgo.getTime() / 1000)}`;
+      
       const messages = await gmail.users.messages.list({
         userId: 'me',
-        q: 'is:unread',
-        maxResults: 50
+        q: dateQuery,
+        maxResults: 100
       });
+
+      console.log(`📨 Checking inbox: Found ${messages.data.messages?.length || 0} messages in last 7 days`);
 
       if (!messages.data.messages) return;
 
@@ -152,17 +158,35 @@ export class EmailService {
       const subject = headers.find((h: any) => h.name === 'Subject')?.value || '';
       const from = headers.find((h: any) => h.name === 'From')?.value || '';
       const to = headers.find((h: any) => h.name === 'To')?.value || '';
+      const deliveredTo = headers.find((h: any) => h.name === 'Delivered-To')?.value || '';
+      const xForwardedTo = headers.find((h: any) => h.name === 'X-Forwarded-To')?.value || '';
+      const xOriginalTo = headers.find((h: any) => h.name === 'X-Original-To')?.value || '';
       const threadId = message.data.threadId || '';
+
+      console.log(`📧 Processing message ${messageId}`);
+      console.log(`   To: ${to}`);
+      console.log(`   Delivered-To: ${deliveredTo}`);
+      console.log(`   X-Forwarded-To: ${xForwardedTo}`);
+      console.log(`   X-Original-To: ${xOriginalTo}`);
+      console.log(`   Subject: ${subject}`);
+      console.log(`   ThreadId: ${threadId}`);
 
       // Multi-level thread matching strategy
       let existingThread;
+      let matchedToken: string | null = null;
       
-      // Level 1: Try token-based matching (most reliable)
-      const token = extractTokenFromEmail(to);
-      if (token) {
-        existingThread = await storage.getEmailThreadByToken(token);
-        if (existingThread) {
-          console.log(`✅ Thread matched by token: ${token}`);
+      // Level 1: Try token-based matching (check all forwarding headers)
+      const emailsToCheck = [to, deliveredTo, xForwardedTo, xOriginalTo].filter(Boolean);
+      
+      for (const email of emailsToCheck) {
+        const token = extractTokenFromEmail(email);
+        if (token) {
+          existingThread = await storage.getEmailThreadByToken(token);
+          if (existingThread) {
+            matchedToken = token;
+            console.log(`✅ Thread matched by token: ${token} (from header: ${email})`);
+            break;
+          }
         }
       }
       
@@ -175,7 +199,18 @@ export class EmailService {
       }
       
       if (!existingThread) {
-        console.log(`❌ No thread found for message. To: ${to}, ThreadId: ${threadId}`);
+        console.log(`❌ No thread found for message.`);
+        console.log(`   Checked emails: ${emailsToCheck.join(', ')}`);
+        console.log(`   Gmail ThreadId: ${threadId}`);
+        return;
+      }
+
+      // Check if we already processed this message
+      const existingEmails = await storage.getThreadEmails(existingThread.id);
+      const alreadyProcessed = existingEmails.some(e => e.messageId === messageId);
+      
+      if (alreadyProcessed) {
+        console.log(`⏭️ Message ${messageId} already processed, skipping`);
         return;
       }
 
