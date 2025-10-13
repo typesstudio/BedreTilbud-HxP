@@ -228,11 +228,44 @@ export class EmailService {
         return { processed: false, documentsCreated: 0 };
       }
 
-      // Extract email body
+      // Extract email body (support both simple and multipart messages)
       let body = '';
-      if (message.data.payload?.body?.data) {
-        body = Buffer.from(message.data.payload.body.data, 'base64').toString();
-      }
+      
+      const extractBody = (payload: any): string => {
+        // Direct body data (simple messages)
+        if (payload.body?.data) {
+          return Buffer.from(payload.body.data, 'base64').toString();
+        }
+        
+        // Multipart message - look for text/plain or text/html
+        if (payload.parts) {
+          for (const part of payload.parts) {
+            const mimeType = part.mimeType || '';
+            
+            // Prefer text/plain
+            if (mimeType === 'text/plain' && part.body?.data) {
+              return Buffer.from(part.body.data, 'base64').toString();
+            }
+            
+            // Fallback to text/html
+            if (mimeType === 'text/html' && part.body?.data) {
+              const htmlBody = Buffer.from(part.body.data, 'base64').toString();
+              // Strip HTML tags for plain text
+              return htmlBody.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+            }
+            
+            // Recursive check for nested multipart
+            if (mimeType.includes('multipart') && part.parts) {
+              const nestedBody = extractBody(part);
+              if (nestedBody) return nestedBody;
+            }
+          }
+        }
+        
+        return '';
+      };
+      
+      body = extractBody(message.data.payload);
 
       // Process attachments
       const attachments: any[] = [];
