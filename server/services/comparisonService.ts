@@ -363,7 +363,25 @@ Med venlig hilsen`;
       sentEmail: string;
     }
   ): Promise<string> {
+    // Strategy: Try Mistral first (cheapest), then OpenAI, then template fallback
+    
+    // Try 1: Mistral (most cost-effective)
     try {
+      console.log("[Auto Response] Attempting Mistral first (most cost-effective)...");
+      const response = await mistralTextService.generateAutoResponse(
+        incomingEmailBody,
+        context
+      );
+      logAIUsage('Mistral-large', 'auto-response', true);
+      return response;
+    } catch (mistralError) {
+      console.error("[Auto Response] Mistral failed, trying OpenAI fallback:", mistralError);
+      logAIUsage('Mistral-large', 'auto-response', false);
+    }
+
+    // Try 2: OpenAI gpt-4o-mini (cheaper than GPT-4)
+    try {
+      console.log("[Auto Response] Attempting OpenAI gpt-4o-mini fallback...");
       const prompt = `Generate an appropriate auto-response to this incoming email in Danish.
 
 Incoming Email:
@@ -383,7 +401,7 @@ Generate a professional response that:
 Keep it concise and appropriate for email communication.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -397,17 +415,21 @@ Keep it concise and appropriate for email communication.`;
         max_completion_tokens: 1024,
       });
 
+      logAIUsage('OpenAI-gpt-4o-mini', 'auto-response', true);
       return response.choices[0].message.content || "";
-    } catch (error) {
-      console.error("Auto-response generation failed:", error);
-      
-      // Fallback to simple template response if OpenAI fails
-      return `Tak for din henvendelse, ${context.companyName}.
+    } catch (openaiError) {
+      console.error("[Auto Response] OpenAI also failed, using template fallback:", openaiError);
+      logAIUsage('OpenAI-gpt-4o-mini', 'auto-response', false);
+    }
+
+    // Try 3: Template fallback (always works)
+    console.log("[Auto Response] Using template fallback (no AI cost)");
+    logAIUsage('Template', 'auto-response', true);
+    return `Tak for din henvendelse, ${context.companyName}.
 
 Jeg vil gerne høre mere om jeres tilbud og vil vende tilbage med eventuelle spørgsmål.
 
 Med venlig hilsen`;
-    }
   }
 
   async generateMissingInfoEmail(
