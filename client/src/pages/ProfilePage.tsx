@@ -145,6 +145,7 @@ export default function ProfilePage() {
       breadcrumbs={[{ label: "Profil", path: location }]}
       onNavigate={(path) => setLocation(path)}
       onProfileClick={() => userId && setLocation(`/profile/${userId}`)}
+      onSendInquiryClick={() => setLocation("/send-inquiry")}
     >
       <div className="flex h-full w-full flex-col items-start">
         <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border px-12 py-4">

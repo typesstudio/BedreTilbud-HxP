@@ -93,6 +93,7 @@ export default function OffersOverview() {
       breadcrumbs={[{ label: "Dine bedre tilbud", path: "/offers" }]}
       onNavigate={(path) => setLocation(path)}
       onProfileClick={() => setLocation(`/profile/${userId}`)}
+      onSendInquiryClick={() => setLocation("/send-inquiry")}
     >
       <div className="container max-w-none flex h-full w-full flex-col items-center gap-12 bg-default-background py-12">
         <div className="flex w-full max-w-[768px] flex-col items-start gap-6">

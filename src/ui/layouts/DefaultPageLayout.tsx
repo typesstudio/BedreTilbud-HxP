@@ -21,6 +21,7 @@ interface DefaultPageLayoutRootProps
   breadcrumbs?: { label: string; path: string; active?: boolean }[];
   onNavigate?: (path: string) => void;
   onProfileClick?: () => void;
+  onSendInquiryClick?: () => void;
   className?: string;
 }
 
@@ -28,7 +29,7 @@ const DefaultPageLayoutRoot = React.forwardRef<
   HTMLDivElement,
   DefaultPageLayoutRootProps
 >(function DefaultPageLayoutRoot(
-  { children, breadcrumbs = [], onNavigate, onProfileClick, className }: DefaultPageLayoutRootProps,
+  { children, breadcrumbs = [], onNavigate, onProfileClick, onSendInquiryClick, className }: DefaultPageLayoutRootProps,
   ref
 ) {
   return (
@@ -66,7 +67,10 @@ const DefaultPageLayoutRoot = React.forwardRef<
           bedre tilbud
         </Button>
         <div className="flex grow shrink-0 basis-0 items-center justify-end gap-2">
-          <span className="text-caption-bold font-caption-bold text-default-font">
+          <span 
+            className="text-caption-bold font-caption-bold text-default-font cursor-pointer hover:text-brand-700 transition-colors"
+            onClick={onSendInquiryClick}
+          >
             Få flere tilbud
           </span>
           <IconButton

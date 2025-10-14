@@ -26,6 +26,7 @@ export default function EmailCorrespondence() {
         ]}
         onNavigate={(path) => setLocation(path)}
         onProfileClick={() => userId && setLocation(`/profile/${userId}`)}
+        onSendInquiryClick={() => setLocation("/send-inquiry")}
       >
         <div className="flex h-screen w-full items-center justify-center">
           <div className="text-center">
@@ -46,6 +47,7 @@ export default function EmailCorrespondence() {
         ]}
         onNavigate={(path) => setLocation(path)}
         onProfileClick={() => userId && setLocation(`/profile/${userId}`)}
+        onSendInquiryClick={() => setLocation("/send-inquiry")}
       >
         <div className="flex h-screen w-full items-center justify-center">
           <div className="text-center">
@@ -114,6 +116,7 @@ export default function EmailCorrespondence() {
       ]}
       onNavigate={(path) => setLocation(path)}
       onProfileClick={() => userId && setLocation(`/profile/${userId}`)}
+      onSendInquiryClick={() => setLocation("/send-inquiry")}
     >
       <div className="flex h-full w-full items-center justify-center bg-default-background">
         <div className="flex w-full max-w-[900px] flex-none flex-col items-center justify-center rounded-md bg-white" style={{ height: 'calc(100vh - 100px)' }}>

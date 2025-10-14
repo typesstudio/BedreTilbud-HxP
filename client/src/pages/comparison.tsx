@@ -118,7 +118,12 @@ export default function Comparison() {
 
   if (isLoading) {
     return (
-      <DefaultPageLayout>
+      <DefaultPageLayout
+        breadcrumbs={[{ label: "Dine bedre tilbud", path: "/offers" }]}
+        onNavigate={(path) => setLocation(path)}
+        onProfileClick={() => setLocation(`/profile/${userId}`)}
+        onSendInquiryClick={() => setLocation("/send-inquiry")}
+      >
         <div className="flex w-full h-screen items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
@@ -131,7 +136,12 @@ export default function Comparison() {
 
   if (!comparison) {
     return (
-      <DefaultPageLayout>
+      <DefaultPageLayout
+        breadcrumbs={[{ label: "Dine bedre tilbud", path: "/offers" }]}
+        onNavigate={(path) => setLocation(path)}
+        onProfileClick={() => setLocation(`/profile/${userId}`)}
+        onSendInquiryClick={() => setLocation("/send-inquiry")}
+      >
         <div className="flex w-full h-screen items-center justify-center">
           <div className="text-center">
             <h2 className="text-heading-2 font-heading-2 text-default-font mb-4">Sammenligning ikke fundet</h2>
@@ -182,6 +192,7 @@ export default function Comparison() {
       ]}
       onNavigate={(path) => setLocation(path)}
       onProfileClick={() => setLocation(`/profile/${userId}`)}
+      onSendInquiryClick={() => setLocation("/send-inquiry")}
     >
       <div className="flex w-full flex-col items-center justify-center bg-default-background px-6 py-6">
         <div className="flex w-full max-w-[768px] flex-col items-start gap-6">
