@@ -282,8 +282,44 @@ Return only the email body text, no subject line.`;
       return response.choices[0].message.content || "";
     } catch (error) {
       console.error("Email generation failed:", error);
-      throw new Error(`Failed to generate email: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // Fallback to template-based email if OpenAI fails
+      return this.generateTemplateEmail(companyName, userInfo, currentPolicies);
     }
+  }
+
+  private generateTemplateEmail(
+    companyName: string,
+    userInfo: {
+      housingType?: string;
+      hasCar?: boolean;
+      deductible?: string;
+      additionalInfo?: string;
+    },
+    currentPolicies: InsuranceData[]
+  ): string {
+    const policySummary = currentPolicies.map(p => 
+      `- ${p.policyType}: ${p.annualPremium} kr./år (${p.companyName})`
+    ).join('\n');
+
+    return `Hej ${companyName},
+
+Jeg søger et konkurrencedygtigt forsikringstilbud og vil gerne høre, hvad I kan tilbyde.
+
+Mine oplysninger:
+- Boligtype: ${userInfo.housingType || 'Ikke angivet'}
+- Har bil: ${userInfo.hasCar ? 'Ja' : 'Nej'}
+- Ønsket selvrisiko: ${userInfo.deductible || 'Ikke angivet'}
+${userInfo.additionalInfo ? `- Yderligere oplysninger: ${userInfo.additionalInfo}` : ''}
+
+Mine nuværende forsikringer:
+${policySummary}
+
+Jeg har vedhæftet mine nuværende policer som reference. Vil I venligst komme med et tilbud, der matcher eller forbedrer min nuværende dækning?
+
+Jeg ser frem til at høre fra jer.
+
+Med venlig hilsen`;
   }
 
   async generateAutoResponse(
@@ -331,7 +367,13 @@ Keep it concise and appropriate for email communication.`;
       return response.choices[0].message.content || "";
     } catch (error) {
       console.error("Auto-response generation failed:", error);
-      throw new Error(`Failed to generate auto-response: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+      // Fallback to simple template response if OpenAI fails
+      return `Tak for din henvendelse, ${context.companyName}.
+
+Jeg vil gerne høre mere om jeres tilbud og vil vende tilbage med eventuelle spørgsmål.
+
+Med venlig hilsen`;
     }
   }
 
