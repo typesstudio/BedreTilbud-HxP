@@ -166,6 +166,11 @@ export default function Comparison() {
   const addedBenefits = comparisonData.addedBenefits || [];
   const missingInfo = comparisonData.missingInfo || null;
   const cumulativeSavings = comparisonData.cumulativeSavings || null;
+  
+  // Determine if this is a worse offer (more expensive)
+  const isWorseOffer = savings < 0;
+  const absoluteSavings = Math.abs(savings);
+  const absoluteSavingsPercentage = Math.abs(savingsPercentage);
 
   // Find the thread for this comparison
   const thread = (threads as any[]).find((t: any) => t.companyId === companyId);
@@ -225,24 +230,24 @@ export default function Comparison() {
               Årlig omkostning sammenligning
             </span>
             <div className="flex w-full flex-col items-start gap-3">
-              <div className="flex w-full items-center justify-between rounded-lg border border-solid border-success-200 bg-success-50 px-6 py-4">
+              <div className={`flex w-full items-center justify-between rounded-lg border border-solid ${isWorseOffer ? 'border-error-200 bg-error-50' : 'border-success-200 bg-success-50'} px-6 py-4`}>
                 <div className="flex items-center gap-3">
                   <IconWithBackground
-                    variant="success"
+                    variant={isWorseOffer ? "error" : "success"}
                     size="medium"
-                    icon={<FeatherPiggyBank />}
+                    icon={isWorseOffer ? <FeatherTrendingUp /> : <FeatherPiggyBank />}
                   />
                   <div className="flex flex-col items-start gap-1">
-                    <span className="text-body-bold font-body-bold text-success-700">
-                      Din årlige besparelse
+                    <span className={`text-body-bold font-body-bold ${isWorseOffer ? 'text-error-700' : 'text-success-700'}`}>
+                      {isWorseOffer ? 'Din årlige meromkostning' : 'Din årlige besparelse'}
                     </span>
-                    <span className="text-caption font-caption text-success-600">
-                      {savingsPercentage.toFixed(1)}% lavere omkostning
+                    <span className={`text-caption font-caption ${isWorseOffer ? 'text-error-600' : 'text-success-600'}`}>
+                      {absoluteSavingsPercentage.toFixed(1)}% {isWorseOffer ? 'højere' : 'lavere'} omkostning
                     </span>
                   </div>
                 </div>
-                <span className="text-heading-1 font-heading-1 text-success-600">
-                  {formatCurrency(savings)}
+                <span className={`text-heading-1 font-heading-1 ${isWorseOffer ? 'text-error-600' : 'text-success-600'}`}>
+                  {formatCurrency(absoluteSavings)}
                 </span>
               </div>
               <div className="flex w-full items-center justify-between">
@@ -253,11 +258,11 @@ export default function Comparison() {
                   {formatCurrency(currentPremium)}/år
                 </span>
               </div>
-              <div className="flex h-12 w-full flex-none items-start rounded-lg bg-success-100">
-                <div className="flex h-12 items-center justify-center rounded-lg bg-success-500 px-6 py-6" style={{ width: `${barWidthPercentage}%` }}>
+              <div className={`flex h-12 w-full flex-none items-start rounded-lg ${isWorseOffer ? 'bg-error-100' : 'bg-success-100'}`}>
+                <div className={`flex h-12 items-center justify-center rounded-lg ${isWorseOffer ? 'bg-error-500' : 'bg-success-500'} px-6 py-6`} style={{ width: `${barWidthPercentage}%` }}>
                   <div className="flex grow shrink-0 basis-0 items-center justify-between">
                     <span className="text-body-bold font-body-bold text-white">
-                      Din nye forsikring
+                      {isWorseOffer ? 'Det nye tilbud' : 'Din nye forsikring'}
                     </span>
                     <span className="text-heading-3 font-heading-3 text-white">
                       {formatCurrency(offerPremium)}/år
