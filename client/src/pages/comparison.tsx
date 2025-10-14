@@ -277,7 +277,7 @@ export default function Comparison() {
           {highlights.length > 0 && (
             <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
               <span className="text-heading-3 font-heading-3 text-default-font">
-                Højdepunkter hvor anbefalingen er bedre
+                {isWorseOffer ? 'Højdepunkter hvor tilbuddet er dårligere' : 'Højdepunkter hvor anbefalingen er bedre'}
               </span>
               <div className="flex w-full items-start gap-4">
                 {highlights.slice(0, 4).map((highlight: any, index: number) => {
@@ -375,8 +375,8 @@ export default function Comparison() {
                           <span className="text-heading-2 font-heading-2 text-neutral-500">
                             {metric.current}
                           </span>
-                          <FeatherArrowRight className="text-heading-3 font-heading-3 text-success-600" />
-                          <span className="text-heading-2 font-heading-2 text-success-600">
+                          <FeatherArrowRight className={`text-heading-3 font-heading-3 ${metric.variant === 'error' || isWorseOffer ? 'text-error-600' : 'text-success-600'}`} />
+                          <span className={`text-heading-2 font-heading-2 ${metric.variant === 'error' || isWorseOffer ? 'text-error-600' : 'text-success-600'}`}>
                             {metric.offer}
                           </span>
                         </div>
@@ -392,7 +392,7 @@ export default function Comparison() {
           {addedBenefits.length > 0 && (
             <div className="flex w-full flex-col items-start gap-3 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
               <span className="text-heading-3 font-heading-3 text-default-font">
-                Tilføjet til din forsikring
+                {isWorseOffer ? 'Fjernet fra din forsikring' : 'Tilføjet til din forsikring'}
               </span>
               <div className="flex w-full flex-wrap items-start gap-2">
                 {addedBenefits.map((benefit: any, index: number) => (
@@ -531,8 +531,8 @@ export default function Comparison() {
             </div>
           )}
 
-          {/* Cumulative Savings Chart */}
-          {cumulativeSavings && cumulativeSavings.chartData && (
+          {/* Cumulative Savings Chart - Only show for better offers */}
+          {!isWorseOffer && cumulativeSavings && cumulativeSavings.chartData && (
             <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
               <div className="flex w-full items-center justify-between">
                 <div className="flex flex-col items-start gap-2">
