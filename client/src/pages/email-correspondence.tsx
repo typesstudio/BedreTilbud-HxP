@@ -6,10 +6,12 @@ import { DefaultPageLayout } from "@/ui";
 import { FeatherBarChart2, FeatherSend, FeatherArrowLeft } from "@subframe/core";
 import { formatDistanceToNow } from "date-fns";
 import { da } from "date-fns/locale";
+import { Navigation } from "@/components/Navigation";
 
 export default function EmailCorrespondence() {
   const { threadId } = useParams();
   const [, setLocation] = useLocation();
+  const userId = localStorage.getItem("userId");
 
   const { data: threadData, isLoading } = useQuery({
     queryKey: ["/api/emails/thread", threadId],
@@ -90,6 +92,7 @@ export default function EmailCorrespondence() {
 
   return (
     <DefaultPageLayout>
+      <Navigation userId={userId || undefined} />
       <div className="flex h-full w-full items-center justify-center bg-default-background">
         <div className="flex w-full max-w-[900px] flex-none flex-col items-center justify-center rounded-md bg-white" style={{ height: 'calc(100vh - 100px)' }}>
           {/* Header */}

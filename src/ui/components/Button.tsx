@@ -21,7 +21,8 @@ interface ButtonRootProps
     | "destructive-primary"
     | "destructive-secondary"
     | "destructive-tertiary"
-    | "inverse";
+    | "inverse"
+    | "variation";
   size?: "large" | "medium" | "small";
   children?: React.ReactNode;
   icon?: React.ReactNode;
@@ -54,6 +55,8 @@ const ButtonRoot = React.forwardRef<HTMLButtonElement, ButtonRootProps>(
           {
             "h-6 w-auto flex-row flex-nowrap gap-1 px-2 py-0": size === "small",
             "h-10 w-auto px-4 py-0": size === "large",
+            "border-none bg-brand-primary hover:bg-brand-primary active:bg-brand-primary":
+              variant === "variation",
             "bg-transparent hover:bg-[#ffffff29] active:bg-[#ffffff3d]":
               variant === "inverse",
             "bg-transparent hover:bg-error-50 active:bg-error-100":

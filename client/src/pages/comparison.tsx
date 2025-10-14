@@ -12,6 +12,7 @@ import {
 } from "@/ui";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { Navigation } from "@/components/Navigation";
 import { 
   FeatherArrowLeft,
   FeatherArrowRight,
@@ -176,6 +177,7 @@ export default function Comparison() {
 
   return (
     <DefaultPageLayout>
+      <Navigation userId={userId} />
       <div className="flex w-full flex-col items-center justify-center bg-default-background px-6 py-6">
         <div className="flex w-full max-w-[768px] flex-col items-start gap-6">
           <div className="flex w-full items-start gap-2 px-2 py-2">
