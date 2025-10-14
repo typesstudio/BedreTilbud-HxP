@@ -6,6 +6,7 @@ import { comparisonService } from "./comparisonService";
 import { aiResponseService } from "./aiResponseService";
 import { getUncachableResendClient } from "../resendClient";
 import { generateRequestToken, formatReplyToEmail, extractTokenFromEmail } from "../utils/tokenGenerator";
+import type { Email } from "@shared/schema";
 import fs from "fs";
 import path from "path";
 
@@ -117,6 +118,49 @@ export class EmailService {
     } catch (error) {
       console.error("Failed to send email:", error);
       throw new Error(`Failed to send insurance inquiry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async sendFollowUpEmail(threadId: string, emailBody: string, questionIds?: string[]): Promise<Email> {
+    try {
+      const thread = await storage.getEmailThread(threadId);
+      
+      if (!thread) {
+        throw new Error("Email thread not found");
+      }
+
+      const company = await storage.getCompany(thread.companyId ?? '');
+      
+      if (!company) {
+        throw new Error("Company not found");
+      }
+
+      const { client: resend, fromEmail } = await getUncachableResendClient();
+      
+      const emailResult = await resend.emails.send({
+        from: fromEmail,
+        to: company.email,
+        subject: thread.subject ? `Re: ${thread.subject}` : 'Follow-up',
+        text: emailBody,
+        replyTo: thread.replyToEmail || undefined
+      });
+
+      const email = await storage.createEmail({
+        threadId: thread.id,
+        messageId: emailResult.data?.id || '',
+        direction: 'outbound',
+        subject: thread.subject ? `Re: ${thread.subject}` : 'Follow-up',
+        body: emailBody,
+        metadata: questionIds ? { questionIds } : null,
+        sentAt: new Date()
+      });
+
+      await storage.updateEmailThread(thread.id, { status: 'sent' });
+
+      return email;
+    } catch (error) {
+      console.error("Failed to send follow-up email:", error);
+      throw new Error(`Failed to send follow-up email: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -331,6 +375,66 @@ export class EmailService {
         }
       }
 
+      // Check if this is a reply to missing info questions
+      const previousEmails = await storage.getThreadEmails(existingThread.id, 'outbound');
+      const lastOutboundEmail = previousEmails.length > 0 ? previousEmails[previousEmails.length - 1] : null;
+      
+      if (lastOutboundEmail && lastOutboundEmail.metadata && (lastOutboundEmail.metadata as any).questionIds) {
+        const questionIds = (lastOutboundEmail.metadata as any).questionIds as string[];
+        
+        // Get the comparison for this thread
+        const comparisons = await storage.getUserComparisons(existingThread.userId ?? '');
+        const comparison = comparisons.find(c => c.companyId === existingThread.companyId);
+        
+        if (comparison && comparison.comparisonData) {
+          const comparisonData = comparison.comparisonData as any;
+          
+          // Extract all questions from comparison
+          const allQuestions: any[] = [];
+          if (comparisonData.missingInfo?.categories) {
+            comparisonData.missingInfo.categories.forEach((cat: any) => {
+              cat.questions.forEach((q: any) => {
+                if (questionIds.includes(q.id)) {
+                  allQuestions.push(q);
+                }
+              });
+            });
+          }
+          
+          if (allQuestions.length > 0) {
+            console.log(`[Missing Info] Extracting answers for ${allQuestions.length} questions from company reply`);
+            
+            // Extract answers using AI
+            const extractedAnswers = await comparisonService.extractAnswersFromReply(body, allQuestions);
+            
+            // Update questions with answers in comparison data
+            if (extractedAnswers.length > 0) {
+              comparisonData.missingInfo.categories.forEach((cat: any) => {
+                cat.questions.forEach((q: any) => {
+                  const answer = extractedAnswers.find(a => a.questionId === q.id);
+                  if (answer) {
+                    q.answer = answer.answer;
+                    console.log(`[Missing Info] Matched answer for question ${q.id}`);
+                  }
+                });
+              });
+              
+              // Update comparison in database
+              const { db } = await import("../db");
+              const { comparisons: comparisonsTable } = await import("@shared/schema");
+              const { eq } = await import("drizzle-orm");
+              
+              await db
+                .update(comparisonsTable)
+                .set({ comparisonData })
+                .where(eq(comparisonsTable.id, comparison.id));
+              
+              console.log(`[Missing Info] Updated comparison ${comparison.id} with ${extractedAnswers.length} answers`);
+            }
+          }
+        }
+      }
+
       // Record incoming email
       await storage.createEmail({
         threadId: existingThread.id,
@@ -369,7 +473,7 @@ export class EmailService {
                 threadId: existingThread.id,
                 incomingMessage: body,
                 conversationHistory: conversationHistory.map(e => ({
-                  direction: e.direction,
+                  direction: e.direction || '',
                   body: e.body || '',
                   sentAt: e.sentAt || new Date()
                 }))
@@ -398,7 +502,7 @@ export class EmailService {
                   to: company.email,
                   subject: `Re: ${subject}`,
                   text: aiResponse,
-                  reply_to: formatReplyToEmail(existingThread.requestToken || '')
+                  replyTo: formatReplyToEmail(existingThread.requestToken || '')
                 });
 
                 console.log(`[AI Auto-Response] Email sent via Resend: ${emailResult.data?.id}`);

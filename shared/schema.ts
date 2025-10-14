@@ -64,6 +64,7 @@ export const emails = pgTable("emails", {
   subject: text("subject"),
   body: text("body"),
   attachments: json("attachments"),
+  metadata: json("metadata"),
   sentAt: timestamp("sent_at"),
   createdAt: timestamp("created_at").defaultNow(),
 });

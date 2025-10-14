@@ -1,13 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { Badge } from "@/ui";
-import { Button } from "@/ui";
-import { IconWithBackground } from "@/ui";
-import { Table } from "@/ui";
-import { DefaultPageLayout } from "@/ui";
+import { useState } from "react";
+import React from "react";
+import { 
+  Badge, 
+  Button, 
+  IconWithBackground, 
+  Table, 
+  DefaultPageLayout,
+  AreaChart
+} from "@/ui";
+import { useToast } from "@/hooks/use-toast";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
   FeatherArrowLeft,
   FeatherArrowRight,
+  FeatherArrowUp,
   FeatherPiggyBank,
   FeatherTrendingUp,
   FeatherTrendingDown,
@@ -19,7 +27,12 @@ import {
   FeatherZap,
   FeatherCheck,
   FeatherInfo,
-  FeatherMessageCircle
+  FeatherMessageCircle,
+  FeatherSend,
+  FeatherDollarSign,
+  FeatherHelpCircle,
+  FeatherSquare,
+  FeatherAlertCircle
 } from "@subframe/core";
 
 const iconMap: { [key: string]: any } = {
@@ -32,11 +45,21 @@ const iconMap: { [key: string]: any } = {
   "clock": FeatherClock,
   "zap": FeatherZap,
   "piggy-bank": FeatherPiggyBank,
+  "dollar-sign": FeatherDollarSign,
+  "help-circle": FeatherHelpCircle,
+};
+
+const severityColorMap: { [key: string]: string } = {
+  "critical": "error",
+  "important": "warning",
+  "question": "neutral"
 };
 
 export default function Comparison() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
+  const { toast } = useToast();
+  const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
 
   const { data: comparison, isLoading } = useQuery({
     queryKey: ["/api/comparisons", id],
@@ -52,6 +75,30 @@ export default function Comparison() {
     enabled: !!userId,
   });
 
+  // Send questions mutation
+  const sendQuestionsMutation = useMutation({
+    mutationFn: async (questionIds: string[]) => {
+      const response = await apiRequest("POST", `/api/comparisons/${id}/send-questions`, { questionIds });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/comparisons", id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/emails/threads", userId] });
+      toast({
+        title: "Spørgsmål sendt",
+        description: `${selectedQuestionIds.length} spørgsmål er sendt til forsikringsselskabet`,
+      });
+      setSelectedQuestionIds([]);
+    },
+    onError: () => {
+      toast({
+        title: "Fejl",
+        description: "Kunne ikke sende spørgsmål",
+        variant: "destructive",
+      });
+    },
+  });
+
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('da-DK', {
       style: 'currency',
@@ -59,6 +106,14 @@ export default function Comparison() {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount);
+  };
+
+  const toggleQuestionSelection = (questionId: string) => {
+    setSelectedQuestionIds(prev => 
+      prev.includes(questionId) 
+        ? prev.filter(id => id !== questionId)
+        : [...prev, questionId]
+    );
   };
 
   if (isLoading) {
@@ -94,12 +149,13 @@ export default function Comparison() {
   const offerPremium = (comparison as any).offerDocument?.ocrData?.annualPremium || 0;
   const savings = (comparison as any).savings || 0;
   const savingsPercentage = comparisonData.savingsPercentage || 0;
-  const monthlySavings = savings / 12;
   const companyName = (comparison as any).company?.name || 'Ukendt selskab';
   const highlights = comparisonData.highlights || [];
   const detailedComparison = comparisonData.detailedComparison || [];
   const keyMetrics = comparisonData.keyMetrics || [];
   const addedBenefits = comparisonData.addedBenefits || [];
+  const missingInfo = comparisonData.missingInfo || null;
+  const cumulativeSavings = comparisonData.cumulativeSavings || null;
 
   // Find the thread for this comparison
   const thread = (threads as any[]).find((t: any) => t.companyId === companyId);
@@ -109,17 +165,40 @@ export default function Comparison() {
     ? Math.min((offerPremium / currentPremium) * 100, 100)
     : 80;
 
+  // Flatten detailed comparison for table display
+  const tableRows: any[] = [];
+  detailedComparison.forEach((category: any) => {
+    tableRows.push({ isCategory: true, feature: category.category });
+    category.rows?.forEach((row: any) => {
+      tableRows.push({ ...row, isCategory: false });
+    });
+  });
+
   return (
     <DefaultPageLayout>
-      <div className="flex w-full items-center justify-center bg-default-background px-6 py-6">
-        <div className="flex w-full max-w-[1024px] flex-none flex-col items-start gap-6 px-2 py-2">
-          <div className="flex w-full flex-col items-start gap-2">
-            <span className="text-heading-1 font-heading-1 text-default-font">
-              Sammenlign forsikrings tilbud
-            </span>
-            <span className="text-body font-body text-subtext-color">
-              Sammenlign dit nuværende tilbud med {companyName}
-            </span>
+      <div className="flex w-full flex-col items-center justify-center bg-default-background px-6 py-6">
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-6">
+          <div className="flex w-full items-start gap-2 px-2 py-2">
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 px-2 py-2">
+              <span className="text-heading-1 font-heading-1 text-default-font">
+                Sammenlign forsikrings tilbud
+              </span>
+              <span className="text-body font-body text-subtext-color">
+                Sammenlign dit nuværende tilbud med {companyName}
+              </span>
+            </div>
+            <Button
+              variant="brand-secondary"
+              onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                if (threadId) {
+                  setLocation(`/emails/${threadId}`);
+                }
+              }}
+              disabled={!threadId}
+              data-testid="button-view-messages"
+            >
+              Se beskeder
+            </Button>
           </div>
           
           {/* Annual Cost Comparison */}
@@ -204,7 +283,7 @@ export default function Comparison() {
           )}
 
           {/* Detailed Comparison Table */}
-          {detailedComparison.length > 0 && (
+          {tableRows.length > 0 && (
             <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
               <span className="text-heading-3 font-heading-3 text-default-font">
                 Detaljeret sammenligning
@@ -219,7 +298,7 @@ export default function Comparison() {
                   </Table.HeaderRow>
                 }
               >
-                {detailedComparison.map((item: any, index: number) => (
+                {tableRows.map((item: any, index: number) => (
                   <Table.Row key={index}>
                     <Table.Cell>
                       <span className={item.isCategory ? "text-body-bold font-body-bold text-default-font" : "text-body font-body text-default-font"}>
@@ -237,8 +316,8 @@ export default function Comparison() {
                       </span>
                     </Table.Cell>
                     <Table.Cell>
-                      {item.difference && (
-                        <Badge variant={item.differenceVariant || "neutral"}>
+                      {item.difference && !item.isCategory && (
+                        <Badge variant={item.status === 'better' ? 'success' : item.status === 'worse' ? 'error' : 'neutral'}>
                           {item.difference}
                         </Badge>
                       )}
@@ -271,11 +350,11 @@ export default function Comparison() {
                         </span>
                         <div className="flex items-center gap-2">
                           <span className="text-heading-2 font-heading-2 text-neutral-500">
-                            {metric.currentValue}
+                            {metric.current}
                           </span>
                           <FeatherArrowRight className="text-heading-3 font-heading-3 text-success-600" />
                           <span className="text-heading-2 font-heading-2 text-success-600">
-                            {metric.newValue}
+                            {metric.offer}
                           </span>
                         </div>
                       </div>
@@ -299,9 +378,191 @@ export default function Comparison() {
                     variant={benefit.variant || "success"} 
                     icon={benefit.variant === "neutral" ? <FeatherInfo /> : <FeatherCheck />}
                   >
-                    {benefit.name}
+                    {benefit.label}
                   </Badge>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Missing Information Section */}
+          {missingInfo && missingInfo.categories && missingInfo.categories.length > 0 && (
+            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+              <div className="flex w-full flex-col items-start gap-2">
+                <div className="flex w-full items-center justify-between">
+                  <span className="text-heading-3 font-heading-3 text-default-font">
+                    Manglende information
+                  </span>
+                  <Badge variant="warning">
+                    {missingInfo.totalCritical + missingInfo.totalImportant + missingInfo.totalQuestions} punkter
+                  </Badge>
+                </div>
+                <span className="text-body font-body text-subtext-color">
+                  Vi har fundet punkter der mangler tydelig dokumentation
+                </span>
+              </div>
+              <div className="flex w-full flex-col items-start gap-4">
+                {missingInfo.categories.map((category: any, catIndex: number) => (
+                  <div key={catIndex} className="flex w-full flex-col items-start gap-3">
+                    <div className="flex w-full items-center gap-2">
+                      <IconWithBackground
+                        variant={category.iconVariant}
+                        size="small"
+                        icon={iconMap[category.icon] ? React.createElement(iconMap[category.icon]) : <FeatherHelpCircle />}
+                      />
+                      <span className="text-body-bold font-body-bold text-default-font">
+                        {category.name}
+                      </span>
+                      {category.criticalCount > 0 && (
+                        <Badge variant="error">{category.criticalCount} Kritiske</Badge>
+                      )}
+                      {category.importantCount > 0 && (
+                        <Badge variant="warning">{category.importantCount} Vigtige</Badge>
+                      )}
+                      {category.questionCount > 0 && (
+                        <Badge variant="neutral">{category.questionCount} Spørgsmål</Badge>
+                      )}
+                    </div>
+                    {category.questions.map((question: any, qIndex: number) => {
+                      const borderClass = question.severity === 'critical' 
+                        ? 'border-2 border-solid border-error-600 bg-error-50' 
+                        : question.severity === 'important'
+                        ? 'border border-solid border-warning-200 bg-warning-50'
+                        : 'border border-solid border-neutral-border bg-neutral-50';
+                      
+                      const iconColor = question.severity === 'critical'
+                        ? 'text-error-600'
+                        : question.severity === 'important'
+                        ? 'text-warning-600'
+                        : 'text-neutral-400';
+
+                      const isSelected = selectedQuestionIds.includes(question.id);
+
+                      return (
+                        <div 
+                          key={qIndex} 
+                          className={`flex w-full items-start gap-3 rounded-md px-4 py-4 cursor-pointer ${borderClass}`}
+                          onClick={() => toggleQuestionSelection(question.id)}
+                          data-testid={`question-${question.id}`}
+                        >
+                          <FeatherSquare className={`text-body font-body ${iconColor} mt-0.5 ${isSelected ? 'fill-current' : ''}`} />
+                          <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                            {question.severity !== 'question' ? (
+                              <>
+                                <div className="flex w-full flex-col items-start gap-1 px-2 py-2">
+                                  <span className="text-body-bold font-body-bold text-default-font">
+                                    {question.question}
+                                  </span>
+                                  <span className="text-caption font-caption text-subtext-color">
+                                    {question.explanation}
+                                  </span>
+                                </div>
+                                {question.answer && (
+                                  <div className="flex w-full flex-col items-start gap-1 rounded-md border border-solid border-success-300 bg-white px-3 py-2">
+                                    <span className="text-caption-bold font-caption-bold text-success-700">
+                                      Svar fra {companyName}
+                                    </span>
+                                    <span className="text-body font-body text-default-font">
+                                      {question.answer}
+                                    </span>
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-body font-body text-default-font">
+                                {question.question}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {catIndex < missingInfo.categories.length - 1 && (
+                      <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-200" />
+                    )}
+                  </div>
+                ))}
+              </div>
+              {missingInfo.totalCritical > 0 && (
+                <div className="flex w-full items-center gap-2 rounded-md bg-error-50 px-4 py-3">
+                  <FeatherAlertCircle className="text-body font-body text-error-600" />
+                  <span className="text-caption font-caption text-error-700">
+                    {missingInfo.totalCritical} kritiske punkter kræver øjeblikkelig afklaring
+                  </span>
+                </div>
+              )}
+              <Button
+                className="h-10 w-full flex-none"
+                size="large"
+                icon={<FeatherSend />}
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                  sendQuestionsMutation.mutate(selectedQuestionIds);
+                }}
+                disabled={selectedQuestionIds.length === 0 || sendQuestionsMutation.isPending}
+                data-testid="button-send-questions"
+              >
+                {sendQuestionsMutation.isPending 
+                  ? 'Sender...' 
+                  : `Send til selskabet (${selectedQuestionIds.length} valgt)`}
+              </Button>
+            </div>
+          )}
+
+          {/* Cumulative Savings Chart */}
+          {cumulativeSavings && cumulativeSavings.chartData && (
+            <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+              <div className="flex w-full items-center justify-between">
+                <div className="flex flex-col items-start gap-2">
+                  <span className="text-heading-2 font-heading-2 text-default-font">
+                    Kumulativ besparelse
+                  </span>
+                  <span className="text-body font-body text-subtext-color">
+                    Se hvor meget du sparer måned for måned
+                  </span>
+                </div>
+                <Badge variant="success" icon={<FeatherArrowUp />}>
+                  {formatCurrency(cumulativeSavings.tenYear)} over 10 år
+                </Badge>
+              </div>
+              <AreaChart
+                categories={["Besparelse"]}
+                data={cumulativeSavings.chartData.map((item: any) => ({
+                  year: item.year,
+                  Besparelse: item.savings
+                }))}
+                index="year"
+              />
+              <div className="flex w-full flex-wrap items-start gap-4">
+                <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                  <span className="text-caption font-caption text-subtext-color">
+                    Månedlig besparelse
+                  </span>
+                  <span className="text-heading-2 font-heading-2 text-success-600">
+                    {formatCurrency(cumulativeSavings.monthly)}/md
+                  </span>
+                </div>
+                <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                  <span className="text-caption font-caption text-subtext-color">
+                    Total efter 12 måneder
+                  </span>
+                  <span className="text-heading-2 font-heading-2 text-success-600">
+                    {formatCurrency(cumulativeSavings.yearly)} spart
+                  </span>
+                </div>
+                <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                  <span className="text-caption font-caption text-subtext-color">
+                    Forventet efter 10 år
+                  </span>
+                  <span className="text-heading-2 font-heading-2 text-success-600">
+                    {formatCurrency(cumulativeSavings.tenYear)} spart
+                  </span>
+                </div>
+              </div>
+              <div className="flex w-full items-center gap-2 rounded-md bg-success-50 px-4 py-3">
+                <FeatherPiggyBank className="text-body font-body text-success-700" />
+                <span className="text-body font-body text-default-font">
+                  Vi låser ind når priserne dykker og maksimerer din besparelse
+                </span>
               </div>
             </div>
           )}
@@ -316,6 +577,7 @@ export default function Comparison() {
                   setLocation(`/emails/${threadId}`);
                 }
               }}
+              data-testid="button-choose-company"
             >
               Vælg og skift til {companyName}
             </Button>

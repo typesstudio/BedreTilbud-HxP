@@ -37,6 +37,7 @@ export interface IStorage {
   getEmailThread(id: string): Promise<EmailThread | undefined>;
   getEmailThreadByGmailId(gmailThreadId: string): Promise<EmailThread | undefined>;
   getEmailThreadByToken(token: string): Promise<EmailThread | undefined>;
+  getEmailThreadByCompany(userId: string, companyId: string): Promise<EmailThread | undefined>;
   getUserEmailThreads(userId: string): Promise<EmailThread[]>;
   createEmailThread(thread: InsertEmailThread): Promise<EmailThread>;
   updateEmailThread(id: string, updates: Partial<InsertEmailThread>): Promise<EmailThread>;
@@ -132,11 +133,20 @@ export class MemStorage implements IStorage {
       id,
       email: insertUser.email,
       name: insertUser.name ?? null,
+      phone: insertUser.phone ?? null,
+      dateOfBirth: insertUser.dateOfBirth ?? null,
+      address: insertUser.address ?? null,
+      personalIdNumber: insertUser.personalIdNumber ?? null,
       housingType: insertUser.housingType ?? null,
       hasCar: insertUser.hasCar ?? null,
       deductible: insertUser.deductible ?? null,
       age: insertUser.age ?? null,
       additionalInfo: insertUser.additionalInfo ?? null,
+      insuranceTypes: insertUser.insuranceTypes ?? null,
+      priorityOne: insertUser.priorityOne ?? null,
+      priorityTwo: insertUser.priorityTwo ?? null,
+      priorityThree: insertUser.priorityThree ?? null,
+      aiAutoResponseEnabled: insertUser.aiAutoResponseEnabled ?? null,
       createdAt: new Date() 
     };
     this.users.set(id, user);
@@ -216,6 +226,10 @@ export class MemStorage implements IStorage {
     return Array.from(this.emailThreads.values()).find(t => t.requestToken === token);
   }
 
+  async getEmailThreadByCompany(userId: string, companyId: string): Promise<EmailThread | undefined> {
+    return Array.from(this.emailThreads.values()).find(t => t.userId === userId && t.companyId === companyId);
+  }
+
   async getUserEmailThreads(userId: string): Promise<EmailThread[]> {
     return Array.from(this.emailThreads.values()).filter(t => t.userId === userId);
   }
@@ -228,6 +242,8 @@ export class MemStorage implements IStorage {
       companyId: insertThread.companyId ?? null,
       subject: insertThread.subject ?? null,
       threadId: insertThread.threadId ?? null,
+      requestToken: insertThread.requestToken ?? null,
+      replyToEmail: insertThread.replyToEmail ?? null,
       status: insertThread.status ?? null,
       createdAt: new Date() 
     };
@@ -266,6 +282,7 @@ export class MemStorage implements IStorage {
       subject: insertEmail.subject ?? null,
       body: insertEmail.body ?? null,
       attachments: insertEmail.attachments ?? null,
+      metadata: insertEmail.metadata ?? null,
       sentAt: insertEmail.sentAt ?? null,
       createdAt: new Date() 
     };
@@ -443,6 +460,16 @@ export class DatabaseStorage implements IStorage {
     const { emailThreads } = await import("@shared/schema");
     const { eq } = await import("drizzle-orm");
     const [thread] = await db.select().from(emailThreads).where(eq(emailThreads.requestToken, token));
+    return thread || undefined;
+  }
+
+  async getEmailThreadByCompany(userId: string, companyId: string): Promise<EmailThread | undefined> {
+    const { db } = await import("./db");
+    const { emailThreads } = await import("@shared/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const [thread] = await db.select().from(emailThreads).where(
+      and(eq(emailThreads.userId, userId), eq(emailThreads.companyId, companyId))
+    );
     return thread || undefined;
   }
 

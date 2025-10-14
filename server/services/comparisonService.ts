@@ -5,6 +5,26 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR || "default_key"
 });
 
+export interface MissingInfoQuestion {
+  id: string;
+  question: string;
+  explanation: string;
+  severity: "critical" | "important" | "question";
+  category: string;
+  categoryIcon: string;
+  answer?: string;
+}
+
+export interface MissingInfoCategory {
+  name: string;
+  icon: string;
+  iconVariant: "error" | "warning" | "neutral";
+  criticalCount: number;
+  importantCount: number;
+  questionCount: number;
+  questions: MissingInfoQuestion[];
+}
+
 export interface ComparisonResult {
   savings: number;
   savingsPercentage: number;
@@ -46,6 +66,18 @@ export interface ComparisonResult {
     status: "same" | "improved" | "reduced";
   }[];
   qualityScore: number;
+  missingInfo?: {
+    totalCritical: number;
+    totalImportant: number;
+    totalQuestions: number;
+    categories: MissingInfoCategory[];
+  };
+  cumulativeSavings?: {
+    monthly: number;
+    yearly: number;
+    tenYear: number;
+    chartData: { year: string; savings: number }[];
+  };
 }
 
 export class ComparisonService {
@@ -60,7 +92,7 @@ export class ComparisonService {
     }
   ): Promise<ComparisonResult> {
     try {
-      const prompt = `Compare these two insurance policies and provide a detailed analysis in JSON format.
+      const prompt = `You are an expert Danish insurance advisor analyzing insurance policies. Compare these two policies and identify ALL missing or unclear information that could affect the customer.
 
 Current Policy:
 ${JSON.stringify(currentPolicy, null, 2)}
@@ -71,20 +103,32 @@ ${JSON.stringify(offerPolicy, null, 2)}
 User Preferences:
 ${JSON.stringify(userPreferences || {}, null, 2)}
 
-Provide analysis in this JSON structure:
+As an insurance expert, scrutinize the offer for:
+- Hidden costs, fee structures, price increases after binding period
+- Unclear coverage definitions, loopholes, exclusions
+- Missing policy details, terms, or conditions
+- Ambiguous claims handling procedures
+- Undisclosed limitations or restrictions
+
+Categorize findings by severity:
+- CRITICAL: Major issues that could lead to claim rejection or unexpected costs
+- IMPORTANT: Significant gaps that should be clarified before purchase
+- QUESTION: General clarifications that would be helpful to know
+
+Provide comprehensive analysis in this JSON structure:
 {
-  "savings": number, // annual savings in DKK (negative if more expensive)
-  "savingsPercentage": number, // percentage saved (e.g., 20.5 for 20.5% savings)
+  "savings": number,
+  "savingsPercentage": number,
   "verdict": "recommended" | "consider" | "not_recommended",
-  "aiRecommendation": "detailed explanation in Danish of why this is/isn't a good deal",
+  "aiRecommendation": "detailed explanation in Danish",
   "pros": ["list", "of", "advantages"],
   "cons": ["list", "of", "disadvantages"],
   "highlights": [
     {
       "title": "Højere dækningssum",
       "description": "+500k bygning",
-      "icon": "trending-up", // options: trending-up, trending-down, truck, droplet, shield, clock, zap, home
-      "variant": "success" // or "neutral" or "warning"
+      "icon": "trending-up",
+      "variant": "success"
     }
   ],
   "detailedComparison": [
@@ -96,21 +140,9 @@ Provide analysis in this JSON structure:
           "current": "1.319 kr",
           "offer": "1.049 kr",
           "difference": "-271 kr/md",
-          "status": "better" // or "same" or "worse"
+          "status": "better"
         }
       ]
-    },
-    {
-      "category": "Dækning",
-      "rows": [...]
-    },
-    {
-      "category": "Selvrisiko",
-      "rows": [...]
-    },
-    {
-      "category": "Vilkår",
-      "rows": [...]
     }
   ],
   "keyMetrics": [
@@ -120,37 +152,62 @@ Provide analysis in this JSON structure:
       "offer": "3.0M",
       "icon": "home",
       "variant": "success"
-    },
-    {
-      "label": "Selvrisiko",
-      "current": "3.000",
-      "offer": "2.000",
-      "icon": "shield",
-      "variant": "success"
     }
   ],
   "addedBenefits": [
     {
       "label": "Lækagesensor",
       "variant": "success"
-    },
-    {
-      "label": "Udvidet elektronik (valgfri)",
-      "variant": "neutral"
     }
   ],
   "coverageComparison": [
     {
-      "category": "coverage category name",
-      "current": "current coverage details", 
-      "offer": "new offer coverage details",
+      "category": "coverage category",
+      "current": "current details", 
+      "offer": "offer details",
       "status": "same" | "improved" | "reduced"
     }
   ],
-  "qualityScore": number // 1-10 score for overall value
+  "qualityScore": number,
+  "missingInfo": {
+    "totalCritical": number,
+    "totalImportant": number,
+    "totalQuestions": number,
+    "categories": [
+      {
+        "name": "Pris og Økonomi",
+        "icon": "dollar-sign",
+        "iconVariant": "error",
+        "criticalCount": number,
+        "importantCount": number,
+        "questionCount": number,
+        "questions": [
+          {
+            "id": "unique-id",
+            "question": "Prisændringer efter bindingsperiode",
+            "explanation": "Ingen faktorer eller maksimal stigningsprocent angivet",
+            "severity": "critical",
+            "category": "Pris og Økonomi",
+            "categoryIcon": "dollar-sign"
+          }
+        ]
+      }
+    ]
+  },
+  "cumulativeSavings": {
+    "monthly": number,
+    "yearly": number,
+    "tenYear": number,
+    "chartData": [
+      { "year": "År 1", "savings": number },
+      { "year": "År 2", "savings": number }
+    ]
+  }
 }
 
-Focus on Danish market context and write all text in Danish. Consider user preferences in your analysis. Be specific with numbers and data from the policies. Include at least 3-4 highlights showing the key improvements.`;
+Categories to check: "Pris og Økonomi" (dollar-sign icon), "Dækning" (shield icon), "Skadebehandling" (clock icon), "Øvrige spørgsmål" (help-circle icon).
+
+Write ALL text in Danish. Be thorough in identifying missing information - this is critical for customer protection.`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-4-turbo-preview",
@@ -275,6 +332,96 @@ Keep it concise and appropriate for email communication.`;
     } catch (error) {
       console.error("Auto-response generation failed:", error);
       throw new Error(`Failed to generate auto-response: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async generateMissingInfoEmail(
+    companyName: string,
+    selectedQuestions: MissingInfoQuestion[]
+  ): Promise<string> {
+    try {
+      const prompt = `Generate a professional email in Danish to ${companyName} asking for clarification on these insurance policy points:
+
+${selectedQuestions.map((q, i) => `${i + 1}. ${q.question}${q.explanation ? ` - ${q.explanation}` : ''}`).join('\n')}
+
+Create a polite, professional email that:
+1. References the insurance offer they provided
+2. Expresses interest in the policy
+3. Lists the questions clearly and concisely
+4. Asks for written clarification
+5. Maintains a professional, respectful tone
+6. Is written in Danish
+
+Return only the email body text, no subject line.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4-turbo-preview",
+        messages: [
+          {
+            role: "system",
+            content: "You are a professional insurance advisor writing on behalf of clients. Write clear, polite emails in Danish that help customers understand their insurance policies better."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        max_completion_tokens: 1500,
+      });
+
+      return response.choices[0].message.content || "";
+    } catch (error) {
+      console.error("Missing info email generation failed:", error);
+      throw new Error(`Failed to generate missing info email: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  async extractAnswersFromReply(
+    emailBody: string,
+    questions: MissingInfoQuestion[]
+  ): Promise<{ questionId: string; answer: string }[]> {
+    try {
+      const prompt = `Extract and match answers from this insurance company reply to the original questions.
+
+Company Reply:
+${emailBody}
+
+Original Questions:
+${questions.map(q => `ID: ${q.id} - ${q.question}`).join('\n')}
+
+Analyze the reply and extract answers for each question. Match answers to questions using semantic understanding, even if the reply doesn't follow the same order.
+
+Return JSON array:
+[
+  {
+    "questionId": "question-id",
+    "answer": "extracted answer text in Danish"
+  }
+]
+
+If a question isn't answered, omit it from the array. Be thorough in extracting relevant information.`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-4-turbo-preview",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert at analyzing insurance company responses and matching them to customer questions. Extract accurate, relevant answers."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
+        ],
+        response_format: { type: "json_object" },
+        max_completion_tokens: 2000,
+      });
+
+      const result = JSON.parse(response.choices[0].message.content || "{}");
+      return result.answers || [];
+    } catch (error) {
+      console.error("Answer extraction failed:", error);
+      throw new Error(`Failed to extract answers: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 }

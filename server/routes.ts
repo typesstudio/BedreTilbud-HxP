@@ -640,6 +640,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Send missing info questions to company
+  app.post("/api/comparisons/:id/send-questions", async (req, res) => {
+    try {
+      const { questionIds } = req.body;
+      
+      if (!Array.isArray(questionIds) || questionIds.length === 0) {
+        return res.status(400).json({ message: "No questions selected" });
+      }
+
+      const comparison = await storage.getComparison(req.params.id);
+      if (!comparison) {
+        return res.status(404).json({ message: "Comparison not found" });
+      }
+
+      const comparisonData = comparison.comparisonData as any;
+      if (!comparisonData?.missingInfo?.categories) {
+        return res.status(400).json({ message: "No missing info available" });
+      }
+
+      // Extract selected questions
+      const allQuestions: any[] = [];
+      comparisonData.missingInfo.categories.forEach((cat: any) => {
+        cat.questions.forEach((q: any) => {
+          if (questionIds.includes(q.id)) {
+            allQuestions.push(q);
+          }
+        });
+      });
+
+      if (allQuestions.length === 0) {
+        return res.status(400).json({ message: "Selected questions not found" });
+      }
+
+      const company = comparison.companyId ? await storage.getCompany(comparison.companyId) : null;
+      if (!company) {
+        return res.status(400).json({ message: "Company not found" });
+      }
+
+      // Generate email
+      const emailBody = await comparisonService.generateMissingInfoEmail(
+        company.name,
+        allQuestions
+      );
+
+      // Send email through thread
+      const thread = await storage.getEmailThreadByCompany(comparison.userId!, comparison.companyId!);
+      if (!thread) {
+        return res.status(400).json({ message: "Email thread not found" });
+      }
+
+      const email = await emailService.sendFollowUpEmail(
+        thread.id,
+        emailBody,
+        questionIds // Store question IDs with the email
+      );
+
+      res.json({ 
+        success: true, 
+        message: `Sendte ${allQuestions.length} spørgsmål til ${company.name}`,
+        emailId: email.id
+      });
+    } catch (error: any) {
+      console.error('[Missing Info] Error sending questions:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Stats route
   app.get("/api/stats/:userId", async (req, res) => {
     try {
