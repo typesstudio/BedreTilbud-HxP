@@ -436,7 +436,27 @@ Med venlig hilsen`;
     companyName: string,
     selectedQuestions: MissingInfoQuestion[]
   ): Promise<string> {
+    // Strategy: Try Mistral first (cheapest), then OpenAI, then template fallback
+    
+    const questionTexts = selectedQuestions.map(q => q.question);
+    
+    // Try 1: Mistral (most cost-effective)
     try {
+      console.log("[Missing Info] Attempting Mistral first (most cost-effective)...");
+      const email = await mistralTextService.generateMissingInfoEmail(
+        companyName,
+        questionTexts
+      );
+      logAIUsage('Mistral-large', 'missing-info-email', true);
+      return email;
+    } catch (mistralError) {
+      console.error("[Missing Info] Mistral failed, trying OpenAI fallback:", mistralError);
+      logAIUsage('Mistral-large', 'missing-info-email', false);
+    }
+
+    // Try 2: OpenAI gpt-4o-mini (cheaper than GPT-4)
+    try {
+      console.log("[Missing Info] Attempting OpenAI gpt-4o-mini fallback...");
       const prompt = `Generate a professional email in Danish to ${companyName} asking for clarification on these insurance policy points:
 
 ${selectedQuestions.map((q, i) => `${i + 1}. ${q.question}${q.explanation ? ` - ${q.explanation}` : ''}`).join('\n')}
@@ -452,7 +472,7 @@ Create a polite, professional email that:
 Return only the email body text, no subject line.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -466,11 +486,25 @@ Return only the email body text, no subject line.`;
         max_completion_tokens: 1500,
       });
 
+      logAIUsage('OpenAI-gpt-4o-mini', 'missing-info-email', true);
       return response.choices[0].message.content || "";
-    } catch (error) {
-      console.error("Missing info email generation failed:", error);
-      throw new Error(`Failed to generate missing info email: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (openaiError) {
+      console.error("[Missing Info] OpenAI also failed, using template fallback:", openaiError);
+      logAIUsage('OpenAI-gpt-4o-mini', 'missing-info-email', false);
     }
+
+    // Try 3: Template fallback (always works)
+    console.log("[Missing Info] Using template fallback (no AI cost)");
+    logAIUsage('Template', 'missing-info-email', true);
+    return `Hej ${companyName},
+
+Tak for jeres tilbud. Jeg er interesseret, men har brug for afklaring på følgende punkter:
+
+${selectedQuestions.map((q, i) => `${i + 1}. ${q.question}${q.explanation ? `\n   ${q.explanation}` : ''}`).join('\n\n')}
+
+Jeg vil sætte stor pris på skriftlig afklaring af disse punkter, så jeg kan træffe en informeret beslutning.
+
+Med venlig hilsen`;
   }
 
   async extractAnswersFromReply(
@@ -499,7 +533,7 @@ Return JSON array:
 If a question isn't answered, omit it from the array. Be thorough in extracting relevant information.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -514,10 +548,12 @@ If a question isn't answered, omit it from the array. Be thorough in extracting 
         max_completion_tokens: 2000,
       });
 
+      logAIUsage('OpenAI-gpt-4o-mini', 'answer-extraction', true);
       const result = JSON.parse(response.choices[0].message.content || "{}");
       return result.answers || [];
     } catch (error) {
       console.error("Answer extraction failed:", error);
+      logAIUsage('OpenAI-gpt-4o-mini', 'answer-extraction', false);
       throw new Error(`Failed to extract answers: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
