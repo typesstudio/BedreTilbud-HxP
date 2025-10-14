@@ -57,7 +57,7 @@ const severityColorMap: { [key: string]: string } = {
 
 export default function Comparison() {
   const { id } = useParams();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
 
@@ -416,9 +416,17 @@ export default function Comparison() {
                   <span className="text-heading-3 font-heading-3 text-default-font">
                     Manglende information
                   </span>
-                  <Badge variant="warning">
-                    {missingInfo.totalCritical + missingInfo.totalImportant + missingInfo.totalQuestions} punkter
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    {missingInfo.totalCritical > 0 && (
+                      <Badge variant="error">{missingInfo.totalCritical} Kritiske</Badge>
+                    )}
+                    {missingInfo.totalImportant > 0 && (
+                      <Badge variant="warning">{missingInfo.totalImportant} Vigtige</Badge>
+                    )}
+                    {missingInfo.totalQuestions > 0 && (
+                      <Badge variant="neutral">{missingInfo.totalQuestions} Spørgsmål</Badge>
+                    )}
+                  </div>
                 </div>
                 <span className="text-body font-body text-subtext-color">
                   Vi har fundet punkter der mangler tydelig dokumentation
