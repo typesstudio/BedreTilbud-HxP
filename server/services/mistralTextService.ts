@@ -32,9 +32,10 @@ export class MistralTextService {
         temperature: options.temperature || 0.7
       });
 
-      const content = response.choices?.[0]?.message?.content || "";
-      console.log(`[Mistral Text] Successfully generated ${content.length} characters`);
-      return content;
+      const content = response.choices?.[0]?.message?.content;
+      const textContent = typeof content === 'string' ? content : '';
+      console.log(`[Mistral Text] Successfully generated ${textContent.length} characters`);
+      return textContent;
     } catch (error) {
       console.error("[Mistral Text] Generation failed:", error);
       throw new Error(`Mistral text generation failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
