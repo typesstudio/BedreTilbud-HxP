@@ -1,6 +1,6 @@
 import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useParams, Link } from "wouter";
+import { useParams, Link, useLocation } from "wouter";
 import { 
   Avatar, 
   Badge, 
@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 
 export default function ProfilePage() {
   const { userId } = useParams<{ userId: string }>();
+  const [location, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState("personal");
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showEditPrefsDialog, setShowEditPrefsDialog] = useState(false);
@@ -140,7 +141,11 @@ export default function ProfilePage() {
   };
 
   return (
-    <DefaultPageLayout>
+    <DefaultPageLayout
+      breadcrumbs={[{ label: "Profil", path: location }]}
+      onNavigate={(path) => setLocation(path)}
+      onProfileClick={() => userId && setLocation(`/profile/${userId}`)}
+    >
       <div className="flex h-full w-full flex-col items-start">
         <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border px-12 py-4">
           <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-default-font">

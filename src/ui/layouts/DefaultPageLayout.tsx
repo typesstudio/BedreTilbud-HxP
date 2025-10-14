@@ -1,3 +1,4 @@
+// @subframe/sync-disable
 "use client";
 /*
  * Documentation:
@@ -17,6 +18,9 @@ import * as SubframeUtils from "../utils";
 interface DefaultPageLayoutRootProps
   extends React.HTMLAttributes<HTMLDivElement> {
   children?: React.ReactNode;
+  breadcrumbs?: { label: string; path: string; active?: boolean }[];
+  onNavigate?: (path: string) => void;
+  onProfileClick?: () => void;
   className?: string;
 }
 
@@ -24,7 +28,7 @@ const DefaultPageLayoutRoot = React.forwardRef<
   HTMLDivElement,
   DefaultPageLayoutRootProps
 >(function DefaultPageLayoutRoot(
-  { children, className, ...otherProps }: DefaultPageLayoutRootProps,
+  { children, breadcrumbs = [], onNavigate, onProfileClick, className }: DefaultPageLayoutRootProps,
   ref
 ) {
   return (
@@ -34,8 +38,45 @@ const DefaultPageLayoutRoot = React.forwardRef<
         className
       )}
       ref={ref}
-      {...otherProps}
     >
+      <div className="flex w-full items-center justify-center gap-2 px-4 py-4">
+        <div className="flex grow shrink-0 basis-0 items-center gap-2">
+          <Breadcrumbs>
+            {breadcrumbs.map((item, index) => (
+              <React.Fragment key={`breadcrumb-${index}`}>
+                <Breadcrumbs.Item
+                  active={item.active || index === breadcrumbs.length - 1}
+                  onClick={() => onNavigate && onNavigate(item.path)}
+                >
+                  {item.label}
+                </Breadcrumbs.Item>
+                {index < breadcrumbs.length - 1 && <Breadcrumbs.Divider />}
+              </React.Fragment>
+            ))}
+          </Breadcrumbs>
+        </div>
+        <Button
+          disabled={false}
+          variant="variation"
+          size="medium"
+          icon={null}
+          iconRight={null}
+          loading={false}
+        >
+          bedre tilbud
+        </Button>
+        <div className="flex grow shrink-0 basis-0 items-center justify-end gap-2">
+          <span className="text-caption-bold font-caption-bold text-default-font">
+            Få flere tilbud
+          </span>
+          <IconButton
+            variant="brand-secondary"
+            size="small"
+            icon={<FeatherUser />}
+            onClick={onProfileClick}
+          />
+        </div>
+      </div>
       {children ? (
         <div className="flex w-full grow shrink-0 basis-0 flex-col items-start gap-4 overflow-y-auto bg-default-background">
           {children}
