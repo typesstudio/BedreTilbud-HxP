@@ -48,7 +48,10 @@ Preferred communication style: Simple, everyday language.
   - Modtagne tilbud: Shows comparisons with savings and AI recommendations
   - Afventer svar: Shows pending inquiries sent to companies
 - Upload offer page (manual offer upload with company selection)
-- Comparison view (side-by-side policy comparison)
+- Comparison view (adaptive side-by-side policy comparison)
+  - **Better offers**: Green/success styling with cumulative savings chart
+  - **Worse offers**: Red/error styling, shows "meromkostning" (extra cost), no chart
+  - Automatically detects offer quality based on savings/cost difference
 - Email correspondence view (thread-based email history)
 
 **Design Principles:**
