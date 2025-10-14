@@ -1,9 +1,16 @@
 import OpenAI from "openai";
 import { InsuranceData } from "./mistralOcrService";
+import { mistralTextService } from "./mistralTextService";
 
 const openai = new OpenAI({ 
   apiKey: process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY_ENV_VAR || "default_key"
 });
+
+// Cost-effective AI usage logger
+function logAIUsage(provider: string, operation: string, success: boolean) {
+  const timestamp = new Date().toISOString();
+  console.log(`[AI Usage] ${timestamp} | ${provider} | ${operation} | ${success ? 'SUCCESS' : 'FAILED'}`);
+}
 
 export interface MissingInfoQuestion {
   id: string;
@@ -209,8 +216,9 @@ Categories to check: "Pris og Økonomi" (dollar-sign icon), "Dækning" (shield i
 
 Write ALL text in Danish. Be thorough in identifying missing information - this is critical for customer protection.`;
 
+      // Use cost-effective gpt-4o-mini for comparisons (much cheaper than gpt-4-turbo)
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -225,10 +233,12 @@ Write ALL text in Danish. Be thorough in identifying missing information - this 
         max_completion_tokens: 3000,
       });
 
+      logAIUsage('OpenAI-gpt-4o-mini', 'policy-comparison', true);
       const result = JSON.parse(response.choices[0].message.content || "{}");
       return result as ComparisonResult;
     } catch (error) {
       console.error("Comparison failed:", error);
+      logAIUsage('OpenAI-gpt-4o-mini', 'policy-comparison', false);
       throw new Error(`Failed to compare policies: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
