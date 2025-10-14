@@ -1,3 +1,4 @@
+import React from "react";
 import { useLocation } from "wouter";
 import { TopbarWithCenterNav } from "../../../src/ui/components/TopbarWithCenterNav";
 import { Breadcrumbs } from "../../../src/ui/components/Breadcrumbs";
@@ -13,30 +14,36 @@ export function Navigation({ userId }: NavigationProps) {
 
   const getBreadcrumbs = () => {
     const path = location;
-    const segments = path.split("/").filter(Boolean);
-
-    const breadcrumbMap: Record<string, string> = {
-      "": "Hjem",
-      "offers": "Mine Tilbud",
-      "comparison": "Sammenligning",
-      "emails": "Korrespondance",
-      "profile": "Profil",
-      "onboarding": "Opstart",
-      "upload-offer": "Upload Tilbud",
-      "send-inquiry": "Send Forespørgsel",
-    };
-
-    const items = [
-      { label: "Hjem", path: "/" },
-    ];
-
-    segments.forEach((segment, index) => {
-      const label = breadcrumbMap[segment] || segment;
-      const path = "/" + segments.slice(0, index + 1).join("/");
-      items.push({ label, path });
-    });
-
-    return items;
+    
+    // Profile page - just show "Profil"
+    if (path.startsWith("/profile")) {
+      return [{ label: "Profil", path }];
+    }
+    
+    // Emails/Messages page - show: Dine bedre tilbud > Sammenligning > Beskeder
+    if (path.startsWith("/emails")) {
+      return [
+        { label: "Dine bedre tilbud", path: "/offers" },
+        { label: "Sammenligning", path: "/offers" },
+        { label: "Beskeder", path }
+      ];
+    }
+    
+    // Comparison page - show: Dine bedre tilbud > Sammenligning
+    if (path.startsWith("/comparison")) {
+      return [
+        { label: "Dine bedre tilbud", path: "/offers" },
+        { label: "Sammenligning", path }
+      ];
+    }
+    
+    // Offers page - show: Dine bedre tilbud
+    if (path.startsWith("/offers")) {
+      return [{ label: "Dine bedre tilbud", path: "/offers" }];
+    }
+    
+    // Default for other pages (home, onboarding, etc.)
+    return [{ label: "Hjem", path: "/" }];
   };
 
   const breadcrumbs = getBreadcrumbs();
@@ -46,17 +53,16 @@ export function Navigation({ userId }: NavigationProps) {
       leftSlot={
         <Breadcrumbs>
           {breadcrumbs.map((item, index) => (
-            <>
+            <React.Fragment key={`breadcrumb-${index}`}>
               <Breadcrumbs.Item
-                key={item.path}
                 active={index === breadcrumbs.length - 1}
                 onClick={() => setLocation(item.path)}
-                data-testid={`breadcrumb-${item.label.toLowerCase()}`}
+                data-testid={`breadcrumb-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
               >
                 {item.label}
               </Breadcrumbs.Item>
-              {index < breadcrumbs.length - 1 && <Breadcrumbs.Divider key={`divider-${index}`} />}
-            </>
+              {index < breadcrumbs.length - 1 && <Breadcrumbs.Divider />}
+            </React.Fragment>
           ))}
         </Breadcrumbs>
       }

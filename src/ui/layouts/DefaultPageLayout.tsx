@@ -36,35 +36,6 @@ const DefaultPageLayoutRoot = React.forwardRef<
       ref={ref}
       {...otherProps}
     >
-      <div className="flex w-full items-center justify-center gap-2 px-4 py-4">
-        <div className="flex grow shrink-0 basis-0 items-center gap-2">
-          <Breadcrumbs>
-            <Breadcrumbs.Item>Dine bedre tilbud</Breadcrumbs.Item>
-            <Breadcrumbs.Divider />
-            <Breadcrumbs.Item active={true}>Sammenligning</Breadcrumbs.Item>
-          </Breadcrumbs>
-        </div>
-        <Button
-          disabled={false}
-          variant="variation"
-          size="medium"
-          icon={null}
-          iconRight={null}
-          loading={false}
-        >
-          bedre tilbud
-        </Button>
-        <div className="flex grow shrink-0 basis-0 items-center justify-end gap-2">
-          <span className="text-caption-bold font-caption-bold text-default-font">
-            Få flere tilbud
-          </span>
-          <IconButton
-            variant="brand-secondary"
-            size="small"
-            icon={<FeatherUser />}
-          />
-        </div>
-      </div>
       {children ? (
         <div className="flex w-full grow shrink-0 basis-0 flex-col items-start gap-4 overflow-y-auto bg-default-background">
           {children}
