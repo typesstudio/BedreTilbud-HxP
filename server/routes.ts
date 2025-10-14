@@ -346,11 +346,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const emails = await storage.getThreadEmails(req.params.threadId);
       const company = thread.companyId ? await storage.getCompany(thread.companyId) : null;
+      
+      // Find the comparison for this thread
+      const comparison = thread.userId && thread.companyId 
+        ? await storage.getComparisonByUserAndCompany(thread.userId, thread.companyId)
+        : null;
 
       res.json({
         thread,
         company,
-        emails
+        emails,
+        comparisonId: comparison?.id || null
       });
     } catch (error: any) {
       res.status(500).json({ message: error.message });

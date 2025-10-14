@@ -50,6 +50,7 @@ export interface IStorage {
   // Comparisons
   getComparison(id: string): Promise<Comparison | undefined>;
   getUserComparisons(userId: string): Promise<Comparison[]>;
+  getComparisonByUserAndCompany(userId: string, companyId: string): Promise<Comparison | undefined>;
   createComparison(comparison: InsertComparison): Promise<Comparison>;
 
   // Household Members
@@ -299,6 +300,10 @@ export class MemStorage implements IStorage {
     return Array.from(this.comparisons.values()).filter(c => c.userId === userId);
   }
 
+  async getComparisonByUserAndCompany(userId: string, companyId: string): Promise<Comparison | undefined> {
+    return Array.from(this.comparisons.values()).find(c => c.userId === userId && c.companyId === companyId);
+  }
+
   async createComparison(insertComparison: InsertComparison): Promise<Comparison> {
     const id = randomUUID();
     const comparison: Comparison = { 
@@ -538,6 +543,16 @@ export class DatabaseStorage implements IStorage {
     const { comparisons } = await import("@shared/schema");
     const { eq } = await import("drizzle-orm");
     return await db.select().from(comparisons).where(eq(comparisons.userId, userId));
+  }
+
+  async getComparisonByUserAndCompany(userId: string, companyId: string): Promise<Comparison | undefined> {
+    const { db } = await import("./db");
+    const { comparisons } = await import("@shared/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const [comparison] = await db.select().from(comparisons).where(
+      and(eq(comparisons.userId, userId), eq(comparisons.companyId, companyId))
+    );
+    return comparison || undefined;
   }
 
   async createComparison(insertComparison: InsertComparison): Promise<Comparison> {

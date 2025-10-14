@@ -9,7 +9,7 @@ import { da } from "date-fns/locale";
 
 export default function EmailCorrespondence() {
   const { threadId } = useParams();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const userId = localStorage.getItem("userId");
 
   const { data: threadData, isLoading } = useQuery({
@@ -19,7 +19,14 @@ export default function EmailCorrespondence() {
 
   if (isLoading) {
     return (
-      <DefaultPageLayout>
+      <DefaultPageLayout
+        breadcrumbs={[
+          { label: "Dine bedre tilbud", path: "/offers" },
+          { label: "Beskeder", path: location }
+        ]}
+        onNavigate={(path) => setLocation(path)}
+        onProfileClick={() => userId && setLocation(`/profile/${userId}`)}
+      >
         <div className="flex h-screen w-full items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
@@ -32,7 +39,14 @@ export default function EmailCorrespondence() {
 
   if (!threadData) {
     return (
-      <DefaultPageLayout>
+      <DefaultPageLayout
+        breadcrumbs={[
+          { label: "Dine bedre tilbud", path: "/offers" },
+          { label: "Beskeder", path: location }
+        ]}
+        onNavigate={(path) => setLocation(path)}
+        onProfileClick={() => userId && setLocation(`/profile/${userId}`)}
+      >
         <div className="flex h-screen w-full items-center justify-center">
           <div className="text-center">
             <h2 className="text-heading-2 font-heading-2 text-default-font mb-4">Tråd ikke fundet</h2>
@@ -45,7 +59,7 @@ export default function EmailCorrespondence() {
     );
   }
 
-  const { thread, company, emails = [] } = (threadData as any) || {};
+  const { thread, company, emails = [], comparisonId } = (threadData as any) || {};
   const companyName = company?.name || 'Ukendt selskab';
 
   const formatTime = (dateString: string) => {
@@ -89,11 +103,13 @@ export default function EmailCorrespondence() {
     return companyName;
   };
 
+  const comparisonPath = comparisonId ? `/comparison/${comparisonId}` : "/offers";
+
   return (
     <DefaultPageLayout
       breadcrumbs={[
         { label: "Dine bedre tilbud", path: "/offers" },
-        { label: "Sammenligning", path: "/offers" },
+        { label: "Sammenligning", path: comparisonPath },
         { label: "Beskeder", path: location }
       ]}
       onNavigate={(path) => setLocation(path)}
@@ -114,7 +130,7 @@ export default function EmailCorrespondence() {
             <Button
               icon={<FeatherBarChart2 />}
               onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                setLocation("/offers-overview");
+                setLocation(comparisonPath);
               }}
               data-testid="button-view-offer"
             >
