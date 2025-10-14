@@ -253,7 +253,26 @@ Write ALL text in Danish. Be thorough in identifying missing information - this 
     },
     currentPolicies: InsuranceData[]
   ): Promise<string> {
+    // Strategy: Try Mistral first (cheapest), then OpenAI, then template fallback
+    
+    // Try 1: Mistral (most cost-effective)
     try {
+      console.log("[Email Gen] Attempting Mistral first (most cost-effective)...");
+      const email = await mistralTextService.generatePersonalizedEmail(
+        companyName,
+        userInfo,
+        currentPolicies
+      );
+      logAIUsage('Mistral-large', 'personalized-email', true);
+      return email;
+    } catch (mistralError) {
+      console.error("[Email Gen] Mistral failed, trying OpenAI fallback:", mistralError);
+      logAIUsage('Mistral-large', 'personalized-email', false);
+    }
+
+    // Try 2: OpenAI gpt-4o-mini (cheaper than GPT-4)
+    try {
+      console.log("[Email Gen] Attempting OpenAI gpt-4o-mini fallback...");
       const prompt = `Generate a personalized insurance inquiry email in Danish to ${companyName}.
 
 User Information:
@@ -275,7 +294,7 @@ Write a professional, friendly email that:
 Return only the email body text, no subject line.`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo-preview",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
@@ -289,13 +308,17 @@ Return only the email body text, no subject line.`;
         max_completion_tokens: 1024,
       });
 
+      logAIUsage('OpenAI-gpt-4o-mini', 'personalized-email', true);
       return response.choices[0].message.content || "";
-    } catch (error) {
-      console.error("Email generation failed:", error);
-      
-      // Fallback to template-based email if OpenAI fails
-      return this.generateTemplateEmail(companyName, userInfo, currentPolicies);
+    } catch (openaiError) {
+      console.error("[Email Gen] OpenAI also failed, using template fallback:", openaiError);
+      logAIUsage('OpenAI-gpt-4o-mini', 'personalized-email', false);
     }
+
+    // Try 3: Template fallback (always works)
+    console.log("[Email Gen] Using template fallback (no AI cost)");
+    logAIUsage('Template', 'personalized-email', true);
+    return this.generateTemplateEmail(companyName, userInfo, currentPolicies);
   }
 
   private generateTemplateEmail(
