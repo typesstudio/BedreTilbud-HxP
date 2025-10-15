@@ -52,6 +52,19 @@ Preferred communication style: Simple, everyday language.
   - **Better offers**: Green/success styling with cumulative savings chart
   - **Worse offers**: Red/error styling, shows "meromkostning" (extra cost), no chart
   - Automatically detects offer quality based on savings/cost difference
+  - **Missing Information Section**: Interactive question management system with:
+    - **Visual Status System**: 
+      - Green checkmark (FeatherCheckSquare) = Selected for sending to company
+      - Grey checkmark (FeatherCheckSquare) = Answered by company (with timestamp)
+      - Red checkmark (FeatherSquare) = Needs addressing (critical/important without answer)
+    - **Four-Category Organization**:
+      - Pris & Økonomi (dollar-sign icon) - Price, fees, discounts, deductible options
+      - Dækning (shield icon) - Coverage definitions, limitations, exclusions
+      - Skadebehandling (clock icon) - Claims handling, response times, procedures
+      - Andet (help-circle icon) - All other questions
+    - **Smart Badge Logic**: Dynamically shows "X valgt" (selected), "X Kritiske" (critical), "X besvaret" (answered) - only when count > 0
+    - **Severity Levels**: Critical (error variant), Important (warning variant), Question (neutral variant)
+    - User can click to select/deselect questions and send batch to insurance company
 - Email correspondence view (thread-based email history)
 
 **Design Principles:**
