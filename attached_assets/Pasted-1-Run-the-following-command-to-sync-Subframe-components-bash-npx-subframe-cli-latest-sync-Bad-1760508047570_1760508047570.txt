@@ -1,0 +1,185 @@
+1) Run the following command to sync Subframe components:
+
+```bash
+npx @subframe/cli@latest sync Badge IconWithBackground -p 34bd735365b5
+```
+
+2) Add the following code to the page. If the code already exists, update the existing code but preserve existing business logic or functionality.
+
+```tsx
+<div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+  <div className="flex w-full flex-col items-start gap-2">
+    <div className="flex w-full items-center justify-between">
+      <span className="text-heading-3 font-heading-3 text-default-font">
+        Manglende Information
+      </span>
+      <Badge variant="warning">6 punkter tilbage</Badge>
+    </div>
+    <span className="text-body font-body text-subtext-color">
+      Nogle punkter er afklaret, andre afventer stadig svar
+    </span>
+  </div>
+  <div className="flex w-full flex-col items-start gap-4">
+    <div className="flex w-full flex-col items-start gap-3">
+      <div className="flex w-full items-center gap-2">
+        <IconWithBackground
+          variant="neutral"
+          size="small"
+          icon={<FeatherDollarSign />}
+        />
+        <span className="text-body-bold font-body-bold text-default-font">
+          Pris og Økonomi
+        </span>
+        <Badge variant="success">2 valgt</Badge>
+        <Badge variant="error">1 Kritisk</Badge>
+        <Badge variant="neutral">1 besvaret</Badge>
+      </div>
+      <div className="flex w-full items-start gap-3 rounded-md border border-solid border-neutral-200 bg-neutral-100 px-4 py-4">
+        <FeatherCheckSquare className="text-body font-body text-neutral-600 mt-0.5" />
+        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+          <div className="flex flex-col items-start gap-1">
+            <span className="text-body-bold font-body-bold text-default-font">
+              Prisændringer efter bindingsperiode
+            </span>
+            <span className="text-caption font-caption text-subtext-color">
+              Ingen faktorer eller maksimal stigningsprocent angivet
+            </span>
+          </div>
+          <div className="flex w-full flex-col items-start gap-1 rounded-md border border-solid border-neutral-200 bg-white px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="text-caption-bold font-caption-bold text-neutral-700">
+                Tryg svarede
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                15. maj 2025 kl. 14:32
+              </span>
+            </div>
+            <span className="text-body font-body text-default-font">
+              Prisen er garanteret i de første 12 måneder. Derefter kan den
+              maksimalt stige med 3% årligt, justeret efter
+              forbrugerprisindekset.
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="flex w-full items-start gap-3 rounded-md border-2 border-solid border-success-400 bg-neutral-50 px-4 py-4">
+        <FeatherCheckSquare className="text-body font-body text-success-600 mt-0.5" />
+        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Rabatstruktur ved flere forsikringer
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Ingen information om tilvalg og bundtrabatter
+          </span>
+        </div>
+      </div>
+      <div className="flex w-full items-start gap-3 rounded-md border border-solid border-neutral-200 bg-neutral-100 px-4 py-4">
+        <FeatherCheckSquare className="text-body font-body text-neutral-600 mt-0.5" />
+        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+          <span className="text-body font-body text-default-font">
+            Kan jeg vælge selvrisiko? Hvilke pris-trin findes?
+          </span>
+          <div className="flex w-full flex-col items-start gap-1 rounded-md border border-solid border-neutral-200 bg-white px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="text-caption-bold font-caption-bold text-neutral-700">
+                Tryg svarede
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                15. maj 2025 kl. 16:05
+              </span>
+            </div>
+            <span className="text-body font-body text-default-font">
+              Ja, du kan vælge mellem 2.000 kr, 3.000 kr, 5.000 kr og 10.000 kr
+              i selvrisiko. Hver stigning giver ca. 8-12% rabat på præmien.
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-200" />
+    <div className="flex w-full flex-col items-start gap-3">
+      <div className="flex w-full items-center gap-2">
+        <IconWithBackground
+          variant="neutral"
+          size="small"
+          icon={<FeatherShield />}
+        />
+        <span className="text-body-bold font-body-bold text-default-font">
+          Dækning
+        </span>
+        <Badge variant="success">1 Besvaret</Badge>
+        <Badge variant="error">2 Kritiske</Badge>
+      </div>
+      <div className="flex w-full items-start gap-3 rounded-md border border-solid border-neutral-200 bg-neutral-100 px-4 py-4">
+        <FeatherCheckSquare className="text-body font-body text-neutral-600 mt-0.5" />
+        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+          <div className="flex flex-col items-start gap-1">
+            <span className="text-body-bold font-body-bold text-default-font">
+              Definition af utilsigtet vandskade
+            </span>
+            <span className="text-caption font-caption text-subtext-color">
+              Uklar formulering kan føre til afvisning
+            </span>
+          </div>
+          <div className="flex w-full flex-col items-start gap-1 rounded-md border border-solid border-neutral-200 bg-white px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="text-caption-bold font-caption-bold text-neutral-700">
+                Tryg svarede
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                16. maj 2025 kl. 09:15
+              </span>
+            </div>
+            <span className="text-body font-body text-default-font">
+              Vandskade dækkes når den opstår pludseligt og uforudset fra rør,
+              varmesystem eller husholdningsmaskiner.
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="flex w-full items-start gap-3 rounded-md border border-solid border-neutral-200 bg-neutral-50 px-4 py-4">
+        <FeatherSquare className="text-body font-body text-error-600 mt-0.5" />
+        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Udbetalingsgrænser for naturskader
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Storm og oversvømmelse undergrænser uklare
+          </span>
+        </div>
+      </div>
+      <div className="flex w-full items-start gap-3 rounded-md border border-solid border-neutral-200 bg-neutral-50 px-4 py-4">
+        <FeatherSquare className="text-body font-body text-error-600 mt-0.5" />
+        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Elektronik dækning uden for hjemmet
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Geografiske begrænsninger ikke specificeret
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div className="flex w-full items-center gap-2 rounded-md bg-neutral-100 px-4 py-3">
+    <FeatherAlertCircle className="text-body font-body text-neutral-600" />
+    <span className="text-caption font-caption text-neutral-700">
+      3 kritiske punkter kræver stadig afklaring
+    </span>
+  </div>
+</div>
+
+```
+
+3) Be sure to import the components used in the code as well.
+
+```tsx
+import React from "react";
+import { Badge } from "@/ui/components/Badge";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { FeatherAlertCircle } from "@subframe/core";
+import { FeatherCheckSquare } from "@subframe/core";
+import { FeatherDollarSign } from "@subframe/core";
+import { FeatherShield } from "@subframe/core";
+import { FeatherSquare } from "@subframe/core";
+```
