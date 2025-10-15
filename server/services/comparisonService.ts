@@ -182,7 +182,7 @@ Provide comprehensive analysis in this JSON structure:
     "totalQuestions": number,
     "categories": [
       {
-        "name": "Pris og Økonomi",
+        "name": "Pris & Økonomi",
         "icon": "dollar-sign",
         "iconVariant": "error",
         "criticalCount": number,
@@ -194,7 +194,7 @@ Provide comprehensive analysis in this JSON structure:
             "question": "Prisændringer efter bindingsperiode",
             "explanation": "Ingen faktorer eller maksimal stigningsprocent angivet",
             "severity": "critical",
-            "category": "Pris og Økonomi",
+            "category": "Pris & Økonomi",
             "categoryIcon": "dollar-sign"
           }
         ]
@@ -213,7 +213,7 @@ Provide comprehensive analysis in this JSON structure:
 }
 
 IMPORTANT: Categorize ALL missing information into exactly these 4 categories:
-1. "Pris og Økonomi" (dollar-sign icon) - Price changes, fees, discounts, bundle pricing, deductible options
+1. "Pris & Økonomi" (dollar-sign icon) - Price changes, fees, discounts, bundle pricing, deductible options
 2. "Dækning" (shield icon) - Coverage definitions, limitations, exclusions, geographical restrictions
 3. "Skadebehandling" (clock icon) - Claims handling, response times, payout procedures, documentation requirements
 4. "Andet" (help-circle icon) - All other questions that don't fit the above categories
