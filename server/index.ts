@@ -50,12 +50,16 @@ app.use((req, res, next) => {
 (async () => {
   const server = await registerRoutes(app);
 
-  app.use((err: any, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
 
+    // Log error details for debugging
+    console.error(`[Error Handler] ${req.method} ${req.path} - Status: ${status}`);
+    console.error('[Error Handler] Error:', err);
+    
+    // Send error response without crashing the server
     res.status(status).json({ message });
-    throw err;
   });
 
   // importantly only setup vite in development and after
