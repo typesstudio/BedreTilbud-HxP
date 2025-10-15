@@ -67,9 +67,10 @@ This strategy applies to personalized emails, auto-responses, and missing info e
 - Ensures proper email thread continuity so insurance companies see replies in the same conversation
 - New database field `email_message_id` in emails table tracks Message-IDs
 
-**3. Custom Question Feature**
-- Users can add their own questions to comparisons via dialog UI
-- Questions automatically added to "Andet" (Other) category
-- Auto-selected after creation for easy sending to insurance companies
-- API endpoint: POST `/api/comparisons/:id/add-custom-question`
-- Full integration with existing question selection and sending workflow
+**3. Custom Message Feature**
+- Users can send custom messages to insurance companies from the beskeder (email correspondence) page
+- Input field at the bottom of the thread allows free-form messaging
+- Messages sent as follow-up emails using the existing `sendFollowUpEmail` method
+- Supports Enter key to send and disables button while sending
+- API endpoint: POST `/api/emails/thread/:threadId/send-message`
+- Full integration with email threading for proper conversation continuity
