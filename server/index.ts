@@ -2,6 +2,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { emailService } from "./services/emailService";
+import { createEmailPollingLock } from "./utils/distributedLock";
 
 const app = express();
 
@@ -83,20 +84,28 @@ app.use((req, res, next) => {
   }, () => {
     log(`serving on port ${port}`);
     
-    // Auto-polling: Check inbox every 2 minutes
+    // Auto-polling: Check inbox every 2 minutes with distributed lock
     const POLLING_INTERVAL = 2 * 60 * 1000; // 2 minutes
+    const pollingLock = createEmailPollingLock();
+    
     setInterval(async () => {
       try {
-        console.log('🔄 Auto-checking inbox...');
-        const result = await emailService.checkInbox();
-        if (result.messagesProcessed > 0) {
+        // Use distributed lock to prevent duplicate polling across multiple instances
+        const result = await pollingLock.executeWithLock(async () => {
+          console.log('🔄 Auto-checking inbox...');
+          return await emailService.checkInbox();
+        });
+        
+        if (result && result.messagesProcessed > 0) {
           console.log(`✅ Auto-check: Processed ${result.messagesProcessed} messages, created ${result.newDocuments} documents`);
+        } else if (result === null) {
+          console.log('⏭️  Skipping inbox check (another instance is processing)');
         }
       } catch (error) {
         console.error('❌ Auto-check failed:', error);
       }
     }, POLLING_INTERVAL);
     
-    log(`📧 Auto-polling enabled: checking inbox every 2 minutes`);
+    log(`📧 Auto-polling enabled: checking inbox every 2 minutes with distributed lock`);
   });
 })();
