@@ -358,7 +358,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/emails/threads/:userId", requireAuth, async (req, res) => {
     try {
-      const threads = await storage.getUserEmailThreads(req.params.userId);
+      // Pagination support
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = (page - 1) * limit;
+
+      const allThreads = await storage.getUserEmailThreads(req.params.userId);
+      const totalCount = allThreads.length;
+      const threads = allThreads.slice(offset, offset + limit);
       
       // Enrich with company and email data
       const enrichedThreads = await Promise.all(
@@ -375,7 +382,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
-      res.json(enrichedThreads);
+      res.json({
+        data: enrichedThreads,
+        pagination: {
+          page,
+          limit,
+          totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+          hasMore: offset + limit < totalCount
+        }
+      });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -607,7 +623,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Comparison routes
   app.get("/api/comparisons/user/:userId", requireAuth, async (req, res) => {
     try {
-      const comparisons = await storage.getUserComparisons(req.params.userId);
+      // Pagination support
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = (page - 1) * limit;
+
+      const allComparisons = await storage.getUserComparisons(req.params.userId);
+      const totalCount = allComparisons.length;
+      const comparisons = allComparisons.slice(offset, offset + limit);
       
       // Enrich with document and company data
       const enrichedComparisons = await Promise.all(
@@ -631,7 +654,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         })
       );
 
-      res.json(enrichedComparisons);
+      res.json({
+        data: enrichedComparisons,
+        pagination: {
+          page,
+          limit,
+          totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+          hasMore: offset + limit < totalCount
+        }
+      });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }

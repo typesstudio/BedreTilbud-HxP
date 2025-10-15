@@ -23,14 +23,16 @@ export default function OffersOverview() {
   });
 
   // Get email threads
-  const { data: threads = [] } = useQuery({
+  const { data: threadsResponse } = useQuery<{ data: any[]; pagination: any }>({
     queryKey: ["/api/emails/threads", userId],
   });
+  const threads = threadsResponse?.data || [];
 
   // Get comparisons
-  const { data: comparisons = [] } = useQuery({
+  const { data: comparisonsResponse } = useQuery<{ data: any[]; pagination: any }>({
     queryKey: ["/api/comparisons/user", userId],
   });
+  const comparisons = comparisonsResponse?.data || [];
 
   // Check inbox mutation
   const checkInboxMutation = useMutation({
