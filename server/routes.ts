@@ -5,6 +5,7 @@ import { mistralOcrService as ocrService } from "./services/mistralOcrService";
 import { comparisonService } from "./services/comparisonService";
 import { emailService } from "./services/emailService";
 import { gmailOAuthService } from "./services/gmailOAuthService";
+import { requireAuth, requireOwnership } from "./middleware/auth";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -98,7 +99,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users/:id", async (req, res) => {
+  app.get("/api/users/:id", requireAuth, requireOwnership, async (req, res) => {
     try {
       const user = await storage.getUser(req.params.id);
       if (!user) {
@@ -110,7 +111,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/users/:id", async (req, res) => {
+  app.put("/api/users/:id", requireAuth, requireOwnership, async (req, res) => {
     try {
       const updates = insertUserSchema.partial().parse(req.body);
       const user = await storage.updateUser(req.params.id, updates);
@@ -131,7 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Document upload routes
-  app.post("/api/documents/upload", upload.array('files'), async (req, res) => {
+  app.post("/api/documents/upload", requireAuth, upload.array('files'), async (req, res) => {
     try {
       const { userId, documentType = 'current' } = req.body;
       const files = req.files as Express.Multer.File[];
@@ -190,7 +191,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/documents/user/:userId", async (req, res) => {
+  app.get("/api/documents/user/:userId", requireAuth, async (req, res) => {
     try {
       const { documentType } = req.query;
       const documents = await storage.getUserDocuments(
@@ -204,7 +205,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Reprocess documents with empty OCR data
-  app.post("/api/documents/reprocess/:userId", async (req, res) => {
+  app.post("/api/documents/reprocess/:userId", requireAuth, async (req, res) => {
     try {
       const { db } = await import("./db");
       const { documents: documentsTable, comparisons: comparisonsTable } = await import("@shared/schema");
@@ -307,7 +308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Email routes
-  app.post("/api/emails/send-inquiries", async (req, res) => {
+  app.post("/api/emails/send-inquiries", requireAuth, async (req, res) => {
     try {
       const { userId, companyIds, customMessage } = req.body;
       
@@ -354,7 +355,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/emails/threads/:userId", async (req, res) => {
+  app.get("/api/emails/threads/:userId", requireAuth, async (req, res) => {
     try {
       const threads = await storage.getUserEmailThreads(req.params.userId);
       
@@ -379,7 +380,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/emails/thread/:threadId", async (req, res) => {
+  app.get("/api/emails/thread/:threadId", requireAuth, async (req, res) => {
     try {
       const thread = await storage.getEmailThread(req.params.threadId);
       if (!thread) {
@@ -603,7 +604,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Comparison routes
-  app.get("/api/comparisons/user/:userId", async (req, res) => {
+  app.get("/api/comparisons/user/:userId", requireAuth, async (req, res) => {
     try {
       const comparisons = await storage.getUserComparisons(req.params.userId);
       
@@ -635,7 +636,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/comparisons/:id", async (req, res) => {
+  app.get("/api/comparisons/:id", requireAuth, async (req, res) => {
     try {
       const comparison = await storage.getComparison(req.params.id);
       if (!comparison) {
