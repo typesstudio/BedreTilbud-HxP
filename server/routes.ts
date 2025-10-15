@@ -363,6 +363,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Send custom message in thread
+  app.post("/api/emails/thread/:threadId/send-message", async (req, res) => {
+    try {
+      const { message } = req.body;
+      
+      if (!message || typeof message !== 'string' || message.trim().length === 0) {
+        return res.status(400).json({ message: "Besked skal udfyldes" });
+      }
+
+      const thread = await storage.getEmailThread(req.params.threadId);
+      if (!thread) {
+        return res.status(404).json({ message: "Email thread not found" });
+      }
+
+      const email = await emailService.sendFollowUpEmail(req.params.threadId, message);
+      
+      res.json({ 
+        success: true,
+        email,
+        message: "Besked sendt succesfuldt" 
+      });
+    } catch (error: any) {
+      console.error("Failed to send custom message:", error);
+      res.status(500).json({ message: error.message || "Kunne ikke sende besked" });
+    }
+  });
+
   // Check for new emails
   app.post("/api/emails/check-inbox", async (req, res) => {
     try {

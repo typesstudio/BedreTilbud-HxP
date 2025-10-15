@@ -1,20 +1,49 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
+import { useState } from "react";
 import { Button } from "@/ui";
 import { TextField } from "@/ui";
 import { DefaultPageLayout } from "@/ui";
 import { FeatherBarChart2, FeatherSend, FeatherArrowLeft } from "@subframe/core";
 import { formatDistanceToNow } from "date-fns";
 import { da } from "date-fns/locale";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 export default function EmailCorrespondence() {
   const { threadId } = useParams();
   const [location, setLocation] = useLocation();
   const userId = localStorage.getItem("userId");
+  const [messageText, setMessageText] = useState("");
+  const { toast } = useToast();
 
   const { data: threadData, isLoading } = useQuery({
     queryKey: ["/api/emails/thread", threadId],
     enabled: !!threadId,
+  });
+
+  // Send custom message mutation
+  const sendMessageMutation = useMutation({
+    mutationFn: async (message: string) => {
+      const response = await apiRequest("POST", `/api/emails/thread/${threadId}/send-message`, { message });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/emails/thread", threadId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/emails/threads", userId] });
+      toast({
+        title: "Besked sendt",
+        description: "Din besked er sendt til forsikringsselskabet",
+      });
+      setMessageText("");
+    },
+    onError: () => {
+      toast({
+        title: "Fejl",
+        description: "Kunne ikke sende besked",
+        variant: "destructive",
+      });
+    },
   });
 
   if (isLoading) {
@@ -245,18 +274,29 @@ export default function EmailCorrespondence() {
               <TextField className="grow" variant="filled" label="" helpText="">
                 <TextField.Input
                   placeholder="Spring ind i samtalen eller lad AI fortsætte forhandlingen..."
-                  value=""
-                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => {}}
+                  value={messageText}
+                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
+                    setMessageText(event.target.value);
+                  }}
+                  onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => {
+                    if (event.key === 'Enter' && messageText.trim() && !sendMessageMutation.isPending) {
+                      sendMessageMutation.mutate(messageText);
+                    }
+                  }}
+                  data-testid="input-message"
                 />
               </TextField>
               <Button
                 icon={<FeatherSend />}
                 onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                  alert('Send besked funktionalitet kommer snart');
+                  if (messageText.trim()) {
+                    sendMessageMutation.mutate(messageText);
+                  }
                 }}
+                disabled={!messageText.trim() || sendMessageMutation.isPending}
                 data-testid="button-send-message"
               >
-                Send
+                {sendMessageMutation.isPending ? 'Sender...' : 'Send'}
               </Button>
             </div>
           </div>
