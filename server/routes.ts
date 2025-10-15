@@ -32,6 +32,48 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check endpoints
+  app.get("/health", async (req, res) => {
+    res.status(200).json({ 
+      status: "ok", 
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime()
+    });
+  });
+
+  app.get("/ready", async (req, res) => {
+    try {
+      // Check database connection
+      const { db } = await import("./db");
+      await db.execute({ sql: "SELECT 1", params: [] });
+      
+      // Check required environment variables
+      const requiredEnvVars = ['OPENAI_API_KEY', 'MISTRAL_API_KEY', 'DATABASE_URL'];
+      const missingVars = requiredEnvVars.filter(v => !process.env[v]);
+      
+      if (missingVars.length > 0) {
+        return res.status(503).json({ 
+          status: "not_ready", 
+          error: `Missing environment variables: ${missingVars.join(', ')}`
+        });
+      }
+      
+      res.status(200).json({ 
+        status: "ready",
+        timestamp: new Date().toISOString(),
+        checks: {
+          database: "ok",
+          environment: "ok"
+        }
+      });
+    } catch (error: any) {
+      res.status(503).json({ 
+        status: "not_ready", 
+        error: error.message 
+      });
+    }
+  });
+
   // User routes
   app.post("/api/users", async (req, res) => {
     try {
