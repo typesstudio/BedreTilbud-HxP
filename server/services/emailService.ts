@@ -6,6 +6,7 @@ import { comparisonService } from "./comparisonService";
 import { aiResponseService } from "./aiResponseService";
 import { getUncachableResendClient } from "../resendClient";
 import { generateRequestToken, formatReplyToEmail, extractTokenFromEmail } from "../utils/tokenGenerator";
+import { parseEmailReply } from "../utils/emailReplyParser";
 import type { Email } from "@shared/schema";
 import fs from "fs";
 import path from "path";
@@ -135,14 +136,27 @@ export class EmailService {
         throw new Error("Company not found");
       }
 
+      // Get the last email in the thread to extract Message-ID for proper threading
+      const threadEmails = await storage.getThreadEmails(thread.id);
+      const lastEmail = threadEmails.length > 0 ? threadEmails[threadEmails.length - 1] : null;
+      const lastEmailMessageId = lastEmail?.emailMessageId;
+
       const { client: resend, fromEmail } = await getUncachableResendClient();
+      
+      // Prepare email headers with threading support
+      const emailHeaders: Record<string, string> = {};
+      if (lastEmailMessageId) {
+        emailHeaders['In-Reply-To'] = lastEmailMessageId;
+        emailHeaders['References'] = lastEmailMessageId;
+      }
       
       const emailResult = await resend.emails.send({
         from: fromEmail,
         to: company.email,
         subject: thread.subject ? `Re: ${thread.subject}` : 'Follow-up',
         text: emailBody,
-        replyTo: thread.replyToEmail || undefined
+        replyTo: thread.replyToEmail || undefined,
+        headers: Object.keys(emailHeaders).length > 0 ? emailHeaders : undefined
       });
 
       const email = await storage.createEmail({
@@ -221,6 +235,7 @@ export class EmailService {
       const deliveredTo = headers.find((h: any) => h.name === 'Delivered-To')?.value || '';
       const xForwardedTo = headers.find((h: any) => h.name === 'X-Forwarded-To')?.value || '';
       const xOriginalTo = headers.find((h: any) => h.name === 'X-Original-To')?.value || '';
+      const emailMessageId = headers.find((h: any) => h.name === 'Message-ID' || h.name === 'Message-Id')?.value || '';
       const threadId = message.data.threadId || '';
 
       console.log(`📧 Processing message ${messageId}`);
@@ -312,6 +327,9 @@ export class EmailService {
       };
       
       body = extractBody(message.data.payload);
+      
+      // Parse reply to remove quoted conversation history
+      body = parseEmailReply(body);
 
       // Process attachments
       const attachments: any[] = [];
@@ -439,6 +457,7 @@ export class EmailService {
       await storage.createEmail({
         threadId: existingThread.id,
         messageId: messageId,
+        emailMessageId: emailMessageId,
         direction: 'inbound',
         subject,
         body,

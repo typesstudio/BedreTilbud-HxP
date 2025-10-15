@@ -60,6 +60,7 @@ export const emails = pgTable("emails", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   threadId: varchar("thread_id").references(() => emailThreads.id),
   messageId: text("message_id"), // Gmail message ID
+  emailMessageId: text("email_message_id"), // RFC Message-ID header for email threading
   direction: text("direction"), // "outbound", "inbound", "auto"
   subject: text("subject"),
   body: text("body"),
