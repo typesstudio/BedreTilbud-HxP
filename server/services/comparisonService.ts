@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { InsuranceData } from "./mistralOcrService";
 import { mistralTextService } from "./mistralTextService";
+import { retryAICall } from "../utils/retry";
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
@@ -227,21 +228,24 @@ Every question MUST be assigned to one of these categories. Be thorough in ident
 Write ALL text in Danish. Be thorough in identifying missing information - this is critical for customer protection.`;
 
       // Use cost-effective gpt-4o-mini for comparisons (much cheaper than gpt-4-turbo)
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          {
-            role: "system",
-            content: "You are an expert Danish insurance advisor. Provide thorough, honest comparisons that help users make informed decisions. Always write responses in Danish. Be specific and use actual numbers from the policies."
-          },
-          {
-            role: "user",
-            content: prompt
-          }
-        ],
-        response_format: { type: "json_object" },
-        max_completion_tokens: 3000,
-      });
+      // Wrap in retry logic for resilience
+      const response = await retryAICall(async () => {
+        return await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: "You are an expert Danish insurance advisor. Provide thorough, honest comparisons that help users make informed decisions. Always write responses in Danish. Be specific and use actual numbers from the policies."
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ],
+          response_format: { type: "json_object" },
+          max_completion_tokens: 3000,
+        });
+      }, 'policy-comparison');
 
       logAIUsage('OpenAI-gpt-4o-mini', 'policy-comparison', true);
       const result = JSON.parse(response.choices[0].message.content || "{}");
