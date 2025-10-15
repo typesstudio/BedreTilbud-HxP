@@ -212,7 +212,13 @@ Provide comprehensive analysis in this JSON structure:
   }
 }
 
-Categories to check: "Pris og Økonomi" (dollar-sign icon), "Dækning" (shield icon), "Skadebehandling" (clock icon), "Øvrige spørgsmål" (help-circle icon).
+IMPORTANT: Categorize ALL missing information into exactly these 4 categories:
+1. "Pris og Økonomi" (dollar-sign icon) - Price changes, fees, discounts, bundle pricing, deductible options
+2. "Dækning" (shield icon) - Coverage definitions, limitations, exclusions, geographical restrictions
+3. "Skadebehandling" (clock icon) - Claims handling, response times, payout procedures, documentation requirements
+4. "Andet" (help-circle icon) - All other questions that don't fit the above categories
+
+Every question MUST be assigned to one of these categories. Be thorough in identifying missing information - this is critical for customer protection.
 
 Write ALL text in Danish. Be thorough in identifying missing information - this is critical for customer protection.`;
 
