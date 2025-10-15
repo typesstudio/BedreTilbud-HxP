@@ -10,6 +10,17 @@ import {
   DefaultPageLayout,
   AreaChart
 } from "@/ui";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
@@ -61,6 +72,8 @@ export default function Comparison() {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
+  const [customQuestionDialogOpen, setCustomQuestionDialogOpen] = useState(false);
+  const [customQuestionText, setCustomQuestionText] = useState("");
 
   const { data: comparison, isLoading } = useQuery({
     queryKey: ["/api/comparisons", id],
@@ -95,6 +108,35 @@ export default function Comparison() {
       toast({
         title: "Fejl",
         description: "Kunne ikke sende spørgsmål",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Add custom question mutation
+  const addCustomQuestionMutation = useMutation({
+    mutationFn: async (question: string) => {
+      const response = await apiRequest("POST", `/api/comparisons/${id}/add-custom-question`, { question });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/comparisons", id] });
+      toast({
+        title: "Spørgsmål tilføjet",
+        description: "Dit eget spørgsmål er tilføjet til listen",
+      });
+      setCustomQuestionText("");
+      setCustomQuestionDialogOpen(false);
+      
+      // Auto-select the new question
+      if (data.questionId) {
+        setSelectedQuestionIds(prev => [...prev, data.questionId]);
+      }
+    },
+    onError: () => {
+      toast({
+        title: "Fejl",
+        description: "Kunne ikke tilføje spørgsmål",
         variant: "destructive",
       });
     },
@@ -564,20 +606,85 @@ export default function Comparison() {
                   </div>
                 ) : null;
               })()}
-              <Button
-                className="h-10 w-full flex-none"
-                size="large"
-                icon={<FeatherSend />}
-                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                  sendQuestionsMutation.mutate(selectedQuestionIds);
-                }}
-                disabled={selectedQuestionIds.length === 0 || sendQuestionsMutation.isPending}
-                data-testid="button-send-questions"
-              >
-                {sendQuestionsMutation.isPending 
-                  ? 'Sender...' 
-                  : `Send til selskabet (${selectedQuestionIds.length} valgt)`}
-              </Button>
+              <div className="flex w-full gap-3">
+                <Dialog open={customQuestionDialogOpen} onOpenChange={setCustomQuestionDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button
+                      className="h-10 flex-none"
+                      variant="neutral-secondary"
+                      size="large"
+                      icon={<FeatherHelpCircle />}
+                      data-testid="button-add-custom-question"
+                    >
+                      Tilføj eget spørgsmål
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Tilføj dit eget spørgsmål</DialogTitle>
+                      <DialogDescription>
+                        Skriv dit spørgsmål, og det vil blive tilføjet til listen over manglende information.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                      <div className="grid gap-2">
+                        <Label htmlFor="custom-question">Spørgsmål</Label>
+                        <Input
+                          id="custom-question"
+                          placeholder="F.eks. Hvad er ventetiden ved tandskader?"
+                          value={customQuestionText}
+                          onChange={(e) => setCustomQuestionText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && customQuestionText.trim()) {
+                              e.preventDefault();
+                              addCustomQuestionMutation.mutate(customQuestionText);
+                            }
+                          }}
+                          data-testid="input-custom-question"
+                        />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button
+                        variant="neutral-secondary"
+                        onClick={() => {
+                          setCustomQuestionDialogOpen(false);
+                          setCustomQuestionText("");
+                        }}
+                        data-testid="button-cancel-custom-question"
+                      >
+                        Annuller
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          if (customQuestionText.trim()) {
+                            addCustomQuestionMutation.mutate(customQuestionText);
+                          }
+                        }}
+                        disabled={!customQuestionText.trim() || addCustomQuestionMutation.isPending}
+                        data-testid="button-submit-custom-question"
+                      >
+                        {addCustomQuestionMutation.isPending ? 'Tilføjer...' : 'Tilføj spørgsmål'}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+                
+                <Button
+                  className="h-10 flex-1"
+                  size="large"
+                  icon={<FeatherSend />}
+                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                    sendQuestionsMutation.mutate(selectedQuestionIds);
+                  }}
+                  disabled={selectedQuestionIds.length === 0 || sendQuestionsMutation.isPending}
+                  data-testid="button-send-questions"
+                >
+                  {sendQuestionsMutation.isPending 
+                    ? 'Sender...' 
+                    : `Send til selskabet (${selectedQuestionIds.length} valgt)`}
+                </Button>
+              </div>
             </div>
           )}
 
