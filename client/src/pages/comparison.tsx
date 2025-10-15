@@ -156,8 +156,10 @@ export default function Comparison() {
   }
 
   const comparisonData = (comparison as any).comparisonData || {};
-  const currentPremium = (comparison as any).currentDocument?.ocrData?.annualPremium || 0;
-  const offerPremium = (comparison as any).offerDocument?.ocrData?.annualPremium || 0;
+  const currentOcrData = (comparison as any).currentDocument?.ocrData || {};
+  const offerOcrData = (comparison as any).offerDocument?.ocrData || {};
+  const currentPremium = currentOcrData.annualPremium || 0;
+  const offerPremium = offerOcrData.annualPremium || 0;
   const savings = (comparison as any).savings || 0;
   const savingsPercentage = comparisonData.savingsPercentage || 0;
   const companyName = (comparison as any).company?.name || 'Ukendt selskab';
@@ -172,6 +174,42 @@ export default function Comparison() {
   const isWorseOffer = savings < 0;
   const absoluteSavings = Math.abs(savings);
   const absoluteSavingsPercentage = Math.abs(savingsPercentage);
+
+  // Get all coverages and benefits for comprehensive comparison
+  const currentCoverages = currentOcrData.coverages || [];
+  const offerCoverages = offerOcrData.coverages || [];
+  const currentBenefits = currentOcrData.benefits || [];
+  const offerBenefits = offerOcrData.benefits || [];
+  
+  // Create comprehensive coverage comparison
+  const allCoverageNames = new Set([
+    ...currentCoverages.map((c: any) => c.name),
+    ...offerCoverages.map((c: any) => c.name)
+  ]);
+  
+  const coverageComparison = Array.from(allCoverageNames).map(name => {
+    const current = currentCoverages.find((c: any) => c.name === name);
+    const offer = offerCoverages.find((c: any) => c.name === name);
+    return {
+      name,
+      current,
+      offer,
+      inBoth: !!current && !!offer,
+      onlyInCurrent: !!current && !offer,
+      onlyInOffer: !current && !!offer
+    };
+  });
+  
+  // Create comprehensive benefits comparison
+  const allBenefits = new Set([...currentBenefits, ...offerBenefits]);
+  const benefitsComparison = Array.from(allBenefits).map(benefit => ({
+    name: benefit,
+    inCurrent: currentBenefits.includes(benefit),
+    inOffer: offerBenefits.includes(benefit),
+    inBoth: currentBenefits.includes(benefit) && offerBenefits.includes(benefit),
+    onlyInCurrent: currentBenefits.includes(benefit) && !offerBenefits.includes(benefit),
+    onlyInOffer: !currentBenefits.includes(benefit) && offerBenefits.includes(benefit)
+  }));
 
   // Find the thread for this comparison
   const thread = (threads as any[]).find((t: any) => t.companyId === companyId);
@@ -349,6 +387,119 @@ export default function Comparison() {
                   </Table.Row>
                 ))}
               </Table>
+            </div>
+          )}
+
+          {/* Comprehensive Coverage Comparison */}
+          {coverageComparison.length > 0 && (
+            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+              <div className="flex w-full flex-col items-start gap-2">
+                <span className="text-heading-2 font-heading-2 text-default-font">
+                  Komplet Dækningsoversigt
+                </span>
+                <span className="text-body font-body text-subtext-color">
+                  Alt fra begge policer sammenlignet side om side
+                </span>
+              </div>
+
+              {/* Basic Policy Info */}
+              <div className="flex w-full flex-col items-start gap-3 rounded-lg border border-solid border-neutral-200 bg-neutral-50 px-4 py-4">
+                <span className="text-body-bold font-body-bold text-default-font">Grundlæggende Information</span>
+                <div className="flex w-full flex-col items-start gap-2">
+                  <div className="flex w-full items-center justify-between py-2 border-b border-neutral-200">
+                    <span className="text-body font-body text-subtext-color">Forsikringstype</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-body font-body text-default-font">{currentOcrData.policyType || 'N/A'}</span>
+                      <FeatherArrowRight className="text-neutral-400" />
+                      <span className="text-body font-body text-default-font">{offerOcrData.policyType || 'N/A'}</span>
+                    </div>
+                  </div>
+                  <div className="flex w-full items-center justify-between py-2 border-b border-neutral-200">
+                    <span className="text-body font-body text-subtext-color">Selvrisiko</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-body font-body text-default-font">{formatCurrency(currentOcrData.deductible || 0)}</span>
+                      <FeatherArrowRight className="text-neutral-400" />
+                      <span className="text-body font-body text-default-font">{formatCurrency(offerOcrData.deductible || 0)}</span>
+                    </div>
+                  </div>
+                  <div className="flex w-full items-center justify-between py-2">
+                    <span className="text-body font-body text-subtext-color">Årlig præmie</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-body font-body text-default-font">{formatCurrency(currentPremium)}</span>
+                      <FeatherArrowRight className={isWorseOffer ? "text-error-600" : "text-success-600"} />
+                      <span className={`text-body-bold font-body-bold ${isWorseOffer ? 'text-error-600' : 'text-success-600'}`}>{formatCurrency(offerPremium)}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* All Coverages */}
+              <div className="flex w-full flex-col items-start gap-3 rounded-lg border border-solid border-neutral-200 bg-neutral-50 px-4 py-4">
+                <span className="text-body-bold font-body-bold text-default-font">Alle Dækninger</span>
+                <div className="flex w-full flex-col items-start gap-2">
+                  {coverageComparison.map((coverage: any, index: number) => (
+                    <div key={index} className="flex w-full items-start gap-3 py-3 border-b border-neutral-200 last:border-0">
+                      <div className="flex flex-col items-start gap-2 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-body-bold font-body-bold text-default-font">{coverage.name}</span>
+                          {coverage.onlyInCurrent && <Badge variant="error">Kun i nuværende</Badge>}
+                          {coverage.onlyInOffer && <Badge variant="success">Kun i nyt tilbud</Badge>}
+                          {coverage.inBoth && <Badge variant="neutral">I begge</Badge>}
+                        </div>
+                        {(coverage.current?.description || coverage.offer?.description) && (
+                          <span className="text-caption font-caption text-subtext-color">
+                            {coverage.current?.description || coverage.offer?.description}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {coverage.current ? (
+                          <span className="text-body font-body text-default-font min-w-[100px] text-right">
+                            {coverage.current.amount ? formatCurrency(coverage.current.amount) : 'Inkluderet'}
+                          </span>
+                        ) : (
+                          <span className="text-body font-body text-neutral-400 min-w-[100px] text-right">Ikke inkluderet</span>
+                        )}
+                        <FeatherArrowRight className="text-neutral-400" />
+                        {coverage.offer ? (
+                          <span className={`text-body font-body ${coverage.onlyInOffer ? 'text-success-600 font-bold' : 'text-default-font'} min-w-[100px]`}>
+                            {coverage.offer.amount ? formatCurrency(coverage.offer.amount) : 'Inkluderet'}
+                          </span>
+                        ) : (
+                          <span className="text-body font-body text-error-600 min-w-[100px]">Ikke inkluderet</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* All Benefits */}
+              {benefitsComparison.length > 0 && (
+                <div className="flex w-full flex-col items-start gap-3 rounded-lg border border-solid border-neutral-200 bg-neutral-50 px-4 py-4">
+                  <span className="text-body-bold font-body-bold text-default-font">Alle Fordele & Tilvalg</span>
+                  <div className="flex w-full flex-wrap items-start gap-2">
+                    {benefitsComparison.map((benefit: any, index: number) => (
+                      <Badge 
+                        key={index}
+                        variant={
+                          benefit.inBoth ? 'neutral' : 
+                          benefit.onlyInOffer ? 'success' : 
+                          'error'
+                        }
+                        icon={
+                          benefit.inBoth ? <FeatherCheck /> : 
+                          benefit.onlyInOffer ? <FeatherCheck /> : 
+                          <FeatherAlertCircle />
+                        }
+                        data-testid={`benefit-${index}`}
+                      >
+                        {benefit.name} {benefit.inBoth ? '(Begge)' : benefit.onlyInOffer ? '(Nyt)' : '(Kun nuværende)'}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
