@@ -713,6 +713,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Add custom question to comparison
+  app.post("/api/comparisons/:id/add-custom-question", async (req, res) => {
+    try {
+      const { question } = req.body;
+      
+      if (!question || typeof question !== 'string' || question.trim().length === 0) {
+        return res.status(400).json({ message: "Spørgsmål skal udfyldes" });
+      }
+
+      const comparison = await storage.getComparison(req.params.id);
+      if (!comparison) {
+        return res.status(404).json({ message: "Comparison not found" });
+      }
+
+      const comparisonData = comparison.comparisonData as any;
+      if (!comparisonData?.missingInfo) {
+        comparisonData.missingInfo = {
+          totalCritical: 0,
+          totalImportant: 0,
+          totalQuestions: 0,
+          categories: []
+        };
+      }
+
+      // Find or create "Andet" category
+      let andetCategory = comparisonData.missingInfo.categories.find((cat: any) => cat.name === "Andet");
+      
+      if (!andetCategory) {
+        andetCategory = {
+          name: "Andet",
+          icon: "help-circle",
+          iconVariant: "neutral",
+          criticalCount: 0,
+          importantCount: 0,
+          questionCount: 0,
+          questions: []
+        };
+        comparisonData.missingInfo.categories.push(andetCategory);
+      }
+
+      // Generate unique ID for the custom question
+      const customQuestionId = `custom-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // Add custom question to Andet category
+      const customQuestion = {
+        id: customQuestionId,
+        question: question.trim(),
+        explanation: "Brugerdefineret spørgsmål",
+        severity: "question",
+        category: "Andet",
+        categoryIcon: "help-circle"
+      };
+
+      andetCategory.questions.push(customQuestion);
+      andetCategory.questionCount++;
+      comparisonData.missingInfo.totalQuestions++;
+
+      // Update comparison in database
+      const { db } = await import("./db");
+      const { comparisons: comparisonsTable } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      
+      await db
+        .update(comparisonsTable)
+        .set({ comparisonData })
+        .where(eq(comparisonsTable.id, req.params.id));
+
+      const updatedComparison = await storage.getComparison(req.params.id);
+
+      res.json({ 
+        success: true, 
+        message: "Spørgsmål tilføjet",
+        questionId: customQuestionId,
+        comparison: updatedComparison
+      });
+    } catch (error: any) {
+      console.error('[Custom Question] Error adding question:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Stats route
   app.get("/api/stats/:userId", async (req, res) => {
     try {
