@@ -32,6 +32,7 @@ import {
   FeatherDollarSign,
   FeatherHelpCircle,
   FeatherSquare,
+  FeatherCheckSquare,
   FeatherAlertCircle
 } from "@subframe/core";
 
@@ -414,22 +415,23 @@ export default function Comparison() {
               <div className="flex w-full flex-col items-start gap-2">
                 <div className="flex w-full items-center justify-between">
                   <span className="text-heading-3 font-heading-3 text-default-font">
-                    Manglende information
+                    Manglende Information
                   </span>
-                  <div className="flex items-center gap-2">
-                    {missingInfo.totalCritical > 0 && (
-                      <Badge variant="error">{missingInfo.totalCritical} Kritiske</Badge>
-                    )}
-                    {missingInfo.totalImportant > 0 && (
-                      <Badge variant="warning">{missingInfo.totalImportant} Vigtige</Badge>
-                    )}
-                    {missingInfo.totalQuestions > 0 && (
-                      <Badge variant="neutral">{missingInfo.totalQuestions} Spørgsmål</Badge>
-                    )}
-                  </div>
+                  {(() => {
+                    const totalAnswered = missingInfo.categories.reduce((sum: number, cat: any) => 
+                      sum + cat.questions.filter((q: any) => q.answer).length, 0);
+                    const unansweredCritical = missingInfo.categories.reduce((sum: number, cat: any) => 
+                      sum + cat.questions.filter((q: any) => q.severity === 'critical' && !q.answer).length, 0);
+                    
+                    return (
+                      <Badge variant="warning">
+                        {unansweredCritical + missingInfo.totalImportant + missingInfo.totalQuestions - totalAnswered} punkter tilbage
+                      </Badge>
+                    );
+                  })()}
                 </div>
                 <span className="text-body font-body text-subtext-color">
-                  Vi har fundet punkter der mangler tydelig dokumentation
+                  Nogle punkter er afklaret, andre afventer stadig svar
                 </span>
               </div>
               <div className="flex w-full flex-col items-start gap-4">
@@ -437,37 +439,56 @@ export default function Comparison() {
                   <div key={catIndex} className="flex w-full flex-col items-start gap-3">
                     <div className="flex w-full items-center gap-2">
                       <IconWithBackground
-                        variant={category.iconVariant}
+                        variant="neutral"
                         size="small"
                         icon={iconMap[category.icon] ? React.createElement(iconMap[category.icon]) : <FeatherHelpCircle />}
                       />
                       <span className="text-body-bold font-body-bold text-default-font">
                         {category.name}
                       </span>
-                      {category.criticalCount > 0 && (
-                        <Badge variant="error">{category.criticalCount} Kritiske</Badge>
-                      )}
-                      {category.importantCount > 0 && (
-                        <Badge variant="warning">{category.importantCount} Vigtige</Badge>
-                      )}
-                      {category.questionCount > 0 && (
-                        <Badge variant="neutral">{category.questionCount} Spørgsmål</Badge>
-                      )}
+                      {(() => {
+                        const selectedCount = category.questions.filter((q: any) => selectedQuestionIds.includes(q.id)).length;
+                        const answeredCount = category.questions.filter((q: any) => q.answer).length;
+                        const criticalUnanswered = category.questions.filter((q: any) => q.severity === 'critical' && !q.answer).length;
+                        
+                        return (
+                          <>
+                            {selectedCount > 0 && (
+                              <Badge variant="success">{selectedCount} valgt</Badge>
+                            )}
+                            {criticalUnanswered > 0 && (
+                              <Badge variant="error">{criticalUnanswered} Kritisk</Badge>
+                            )}
+                            {answeredCount > 0 && (
+                              <Badge variant="neutral">{answeredCount} besvaret</Badge>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                     {category.questions.map((question: any, qIndex: number) => {
-                      const borderClass = question.severity === 'critical' 
-                        ? 'border-2 border-solid border-error-600 bg-error-50' 
-                        : question.severity === 'important'
-                        ? 'border border-solid border-warning-200 bg-warning-50'
-                        : 'border border-solid border-neutral-border bg-neutral-50';
-                      
-                      const iconColor = question.severity === 'critical'
-                        ? 'text-error-600'
-                        : question.severity === 'important'
-                        ? 'text-warning-600'
-                        : 'text-neutral-400';
-
                       const isSelected = selectedQuestionIds.includes(question.id);
+                      const hasAnswer = !!question.answer;
+                      const needsAddressing = (question.severity === 'critical' || question.severity === 'important') && !hasAnswer;
+                      
+                      // Determine visual status
+                      let borderClass = 'border border-solid border-neutral-200 bg-neutral-50';
+                      let iconColor = 'text-neutral-600';
+                      let IconComponent = FeatherCheckSquare;
+                      
+                      if (isSelected) {
+                        borderClass = 'border-2 border-solid border-success-400 bg-neutral-50';
+                        iconColor = 'text-success-600';
+                        IconComponent = FeatherCheckSquare;
+                      } else if (hasAnswer) {
+                        borderClass = 'border border-solid border-neutral-200 bg-neutral-100';
+                        iconColor = 'text-neutral-600';
+                        IconComponent = FeatherCheckSquare;
+                      } else if (needsAddressing) {
+                        borderClass = 'border border-solid border-neutral-200 bg-neutral-50';
+                        iconColor = 'text-error-600';
+                        IconComponent = FeatherSquare;
+                      }
 
                       return (
                         <div 
@@ -476,29 +497,45 @@ export default function Comparison() {
                           onClick={() => toggleQuestionSelection(question.id)}
                           data-testid={`question-${question.id}`}
                         >
-                          <FeatherSquare className={`text-body font-body ${iconColor} mt-0.5 ${isSelected ? 'fill-current' : ''}`} />
-                          <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
-                            {question.severity !== 'question' ? (
+                          <IconComponent className={`text-body font-body ${iconColor} mt-0.5`} />
+                          <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+                            {hasAnswer ? (
                               <>
-                                <div className="flex w-full flex-col items-start gap-1 px-2 py-2">
+                                <div className="flex flex-col items-start gap-1">
                                   <span className="text-body-bold font-body-bold text-default-font">
                                     {question.question}
                                   </span>
+                                  {question.explanation && (
+                                    <span className="text-caption font-caption text-subtext-color">
+                                      {question.explanation}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex w-full flex-col items-start gap-1 rounded-md border border-solid border-neutral-200 bg-white px-3 py-2">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-caption-bold font-caption-bold text-neutral-700">
+                                      {companyName} svarede
+                                    </span>
+                                    <span className="text-caption font-caption text-subtext-color">
+                                      {new Date().toLocaleDateString('da-DK', { day: 'numeric', month: 'long', year: 'numeric' })} kl. {new Date().toLocaleTimeString('da-DK', { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
+                                  <span className="text-body font-body text-default-font">
+                                    {question.answer}
+                                  </span>
+                                </div>
+                              </>
+                            ) : question.severity !== 'question' ? (
+                              <div className="flex flex-col items-start gap-1">
+                                <span className="text-body-bold font-body-bold text-default-font">
+                                  {question.question}
+                                </span>
+                                {question.explanation && (
                                   <span className="text-caption font-caption text-subtext-color">
                                     {question.explanation}
                                   </span>
-                                </div>
-                                {question.answer && (
-                                  <div className="flex w-full flex-col items-start gap-1 rounded-md border border-solid border-success-300 bg-white px-3 py-2">
-                                    <span className="text-caption-bold font-caption-bold text-success-700">
-                                      Svar fra {companyName}
-                                    </span>
-                                    <span className="text-body font-body text-default-font">
-                                      {question.answer}
-                                    </span>
-                                  </div>
                                 )}
-                              </>
+                              </div>
                             ) : (
                               <span className="text-body font-body text-default-font">
                                 {question.question}
@@ -514,14 +551,19 @@ export default function Comparison() {
                   </div>
                 ))}
               </div>
-              {missingInfo.totalCritical > 0 && (
-                <div className="flex w-full items-center gap-2 rounded-md bg-error-50 px-4 py-3">
-                  <FeatherAlertCircle className="text-body font-body text-error-600" />
-                  <span className="text-caption font-caption text-error-700">
-                    {missingInfo.totalCritical} kritiske punkter kræver øjeblikkelig afklaring
-                  </span>
-                </div>
-              )}
+              {(() => {
+                const unansweredCritical = missingInfo.categories.reduce((sum: number, cat: any) => 
+                  sum + cat.questions.filter((q: any) => q.severity === 'critical' && !q.answer).length, 0);
+                
+                return unansweredCritical > 0 ? (
+                  <div className="flex w-full items-center gap-2 rounded-md bg-neutral-100 px-4 py-3">
+                    <FeatherAlertCircle className="text-body font-body text-neutral-600" />
+                    <span className="text-caption font-caption text-neutral-700">
+                      {unansweredCritical} kritiske punkter kræver stadig afklaring
+                    </span>
+                  </div>
+                ) : null;
+              })()}
               <Button
                 className="h-10 w-full flex-none"
                 size="large"
