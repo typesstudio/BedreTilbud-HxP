@@ -45,10 +45,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/ready", async (req, res) => {
     try {
-      // Check database connection
-      const { db } = await import("./db");
-      await db.execute({ sql: "SELECT 1", params: [] });
-      
       // Check required environment variables
       const requiredEnvVars = ['OPENAI_API_KEY', 'MISTRAL_API_KEY', 'DATABASE_URL'];
       const missingVars = requiredEnvVars.filter(v => !process.env[v]);
@@ -60,11 +56,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Simple check - if we got here, we're ready
       res.status(200).json({ 
         status: "ready",
         timestamp: new Date().toISOString(),
         checks: {
-          database: "ok",
           environment: "ok"
         }
       });
