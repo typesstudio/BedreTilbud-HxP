@@ -1,8 +1,12 @@
 import { Mistral } from '@mistralai/mistralai';
 import fs from 'fs';
 
+if (!process.env.MISTRAL_API_KEY) {
+  throw new Error("MISTRAL_API_KEY environment variable is required");
+}
+
 const mistral = new Mistral({ 
-  apiKey: process.env.MISTRAL_API_KEY || ""
+  apiKey: process.env.MISTRAL_API_KEY
 });
 
 export interface InsuranceData {
