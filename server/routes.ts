@@ -6,6 +6,7 @@ import { comparisonService } from "./services/comparisonService";
 import { emailService } from "./services/emailService";
 import { gmailOAuthService } from "./services/gmailOAuthService";
 import { requireAuth, requireOwnership } from "./middleware/auth";
+import { validateFileUpload } from "./middleware/uploadValidation";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -132,7 +133,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Document upload routes
-  app.post("/api/documents/upload", requireAuth, upload.array('files'), async (req, res) => {
+  app.post("/api/documents/upload", requireAuth, upload.array('files'), validateFileUpload, async (req, res) => {
     try {
       const { userId, documentType = 'current' } = req.body;
       const files = req.files as Express.Multer.File[];
