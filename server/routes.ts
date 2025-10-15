@@ -366,18 +366,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Send custom message in thread
   app.post("/api/emails/thread/:threadId/send-message", async (req, res) => {
     try {
+      console.log("📤 Sending custom message for thread:", req.params.threadId);
       const { message } = req.body;
       
       if (!message || typeof message !== 'string' || message.trim().length === 0) {
+        console.log("❌ Validation failed: empty message");
         return res.status(400).json({ message: "Besked skal udfyldes" });
       }
 
+      console.log("✅ Message validation passed:", message.substring(0, 50));
+
       const thread = await storage.getEmailThread(req.params.threadId);
       if (!thread) {
+        console.log("❌ Thread not found:", req.params.threadId);
         return res.status(404).json({ message: "Email thread not found" });
       }
 
+      console.log("✅ Thread found:", thread.subject);
+      console.log("📧 Calling emailService.sendFollowUpEmail...");
+      
       const email = await emailService.sendFollowUpEmail(req.params.threadId, message);
+      
+      console.log("✅ Email sent successfully, ID:", email.id);
       
       res.json({ 
         success: true,
@@ -385,7 +395,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Besked sendt succesfuldt" 
       });
     } catch (error: any) {
-      console.error("Failed to send custom message:", error);
+      console.error("❌ Failed to send custom message:", error);
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack?.substring(0, 500)
+      });
       res.status(500).json({ message: error.message || "Kunne ikke sende besked" });
     }
   });
