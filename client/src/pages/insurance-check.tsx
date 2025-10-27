@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { 
   Badge, 
   Button, 
@@ -21,7 +21,8 @@ import {
   FeatherHome,
   FeatherClock,
   FeatherTrendingUp,
-  FeatherInfo
+  FeatherInfo,
+  FeatherFileText
 } from "@subframe/core";
 import FileUpload from "@/components/file-upload";
 import React from "react";
@@ -53,6 +54,21 @@ export default function InsuranceCheck() {
     setLocation("/onboarding");
     return null;
   }
+
+  // Fetch user's current insurance documents
+  const { data: userDocuments = [] } = useQuery({
+    queryKey: ["/api/documents/user", userId, "current"],
+    queryFn: async () => {
+      const response = await fetch(`/api/documents/user/${userId}?documentType=current`, {
+        headers: {
+          "X-User-ID": userId,
+        },
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Failed to fetch documents");
+      return response.json();
+    },
+  });
 
   // Upload document mutation
   const uploadMutation = useMutation({
@@ -104,11 +120,12 @@ export default function InsuranceCheck() {
         description: "Din forsikring er blevet analyseret",
       });
     },
-    onError: () => {
+    onError: (error: any) => {
       setIsAnalyzing(false);
+      console.error("Analysis error:", error);
       toast({
         title: "Fejl",
-        description: "Kunne ikke analysere forsikring",
+        description: error.message || "Kunne ikke analysere forsikring",
         variant: "destructive",
       });
     },
@@ -168,7 +185,51 @@ export default function InsuranceCheck() {
               </div>
             </div>
 
+            {/* Show existing documents */}
+            {userDocuments.length > 0 && (
+              <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+                <span className="text-heading-3 font-heading-3 text-default-font">
+                  Dine uploadede forsikringer
+                </span>
+                <div className="flex w-full flex-col items-start gap-3">
+                  {userDocuments.map((doc: any) => (
+                    <div key={doc.id} className="flex w-full items-center justify-between gap-4 rounded-md bg-neutral-50 px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <IconWithBackground
+                          variant="neutral"
+                          size="small"
+                          icon={<FeatherFileText />}
+                        />
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="text-body-bold font-body-bold text-default-font">
+                            {doc.fileName}
+                          </span>
+                          <span className="text-caption font-caption text-subtext-color">
+                            Uploadet {new Date(doc.createdAt).toLocaleDateString('da-DK')}
+                          </span>
+                        </div>
+                      </div>
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          setUploadedDocument(doc);
+                          analyzeMutation.mutate(doc.id);
+                        }}
+                        disabled={isAnalyzing}
+                        data-testid={`button-analyze-${doc.id}`}
+                      >
+                        {isAnalyzing ? "Analyserer..." : "Analyser nu"}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+              <span className="text-body-bold font-body-bold text-default-font">
+                Upload ny forsikring
+              </span>
               <FileUpload
                 onFilesUploaded={handleFilesUploaded}
                 uploadedFiles={[]}
