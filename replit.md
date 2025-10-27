@@ -99,3 +99,32 @@ This strategy applies to personalized emails, auto-responses, and missing info e
 - Resilience: `server/utils/retry.ts`, `server/utils/distributedLock.ts`
 - Database: `server/db.ts` (connection pooling)
 - Routes: Updated `server/routes.ts` with auth middleware and pagination
+
+### Insurance Health Check Feature (October 2025)
+
+**Single-Policy Analysis Tool**
+- Allows users to analyze their current insurance without requesting quotes from companies
+- Upload insurance PDF → AI analyzes policy → Displays comprehensive health report
+- **API Endpoint**: POST `/api/insurance-check/analyze` - Accepts `documentId` and returns full health analysis
+- **Service**: `server/services/insuranceCheckService.ts` - Powered by GPT-4o-mini for cost-effective analysis
+- **Frontend Route**: `/check` - `client/src/pages/insurance-check.tsx`
+
+**Analysis Components** (Reuses comparison page components for consistency):
+1. **Overall Health Score** (0-10): AI-calculated metric based on coverage quality, pricing, and market comparison
+2. **Potential Savings**: Three-tier projection (conservative, realistic, optimistic) with detailed explanation
+3. **Strengths & Weaknesses**: Categorized lists with severity badges (critical/important/info)
+4. **Market Comparison Table**: Current policy vs industry averages across key categories
+5. **Coverage Gaps**: Organized by category (Manglende Dækning, Overpris Elementer, Anbefalede Forbedringer)
+6. **Actionable Recommendations**: Priority-ranked steps with estimated impact
+
+**User Journey Integration**:
+- Prominent CTA banner on `/offers` page: "Tjek din nuværende forsikring"
+- Results page includes "Find bedre tilbud nu" button to funnel users into full inquiry flow
+- Supports iterative checking: users can analyze multiple policies
+
+**Component Reuse Strategy**:
+- Health score banner → reused savings banner layout
+- Strengths/weaknesses → reused comparison highlights components
+- Market comparison → reused detailed comparison table
+- Coverage gaps → reused missing information section structure
+- All styling consistent with Subframe design system

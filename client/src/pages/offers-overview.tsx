@@ -126,7 +126,6 @@ export default function OffersOverview() {
                 </span>
               </div>
               <Button
-                variant="default"
                 size="small"
                 iconRight={<FeatherArrowRight />}
                 onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/check")}
