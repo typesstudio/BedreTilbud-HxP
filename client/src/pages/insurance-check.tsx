@@ -155,7 +155,7 @@ export default function InsuranceCheck() {
             <div className="flex flex-col items-center gap-4 text-center">
               <IconWithBackground
                 variant="brand"
-                size="xlarge"
+                size="x-large"
                 icon={<FeatherShield />}
               />
               <div className="flex flex-col items-center gap-2">
@@ -170,10 +170,9 @@ export default function InsuranceCheck() {
 
             <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
               <FileUpload
-                onFilesSelected={handleFilesUploaded}
-                acceptedFileTypes=".pdf"
-                maxFiles={1}
-                disabled={isUploading || isAnalyzing}
+                onFilesUploaded={handleFilesUploaded}
+                uploadedFiles={[]}
+                isUploading={isUploading || isAnalyzing}
               />
 
               {(isUploading || isAnalyzing) && (
@@ -250,7 +249,7 @@ export default function InsuranceCheck() {
               <div className="flex items-center gap-4">
                 <IconWithBackground
                   variant={getScoreVariant(overallScore)}
-                  size="xlarge"
+                  size="x-large"
                   icon={<FeatherShield />}
                 />
                 <div className="flex flex-col items-start gap-1">
@@ -364,7 +363,7 @@ export default function InsuranceCheck() {
                           <span className="text-body-bold font-body-bold text-default-font">
                             {weakness.title}
                           </span>
-                          <Badge variant={variantColor as any} size="small">
+                          <Badge variant={variantColor as any}>
                             {weakness.severity === 'critical' ? 'Kritisk' : 'Vigtig'}
                           </Badge>
                         </div>
@@ -459,7 +458,7 @@ export default function InsuranceCheck() {
                                   {item.title}
                                 </span>
                                 {item.severity && (
-                                  <Badge variant={item.severity === 'critical' ? 'error' : item.severity === 'important' ? 'warning' : 'neutral'} size="small">
+                                  <Badge variant={item.severity === 'critical' ? 'error' : item.severity === 'important' ? 'warning' : 'neutral'}>
                                     {item.severity === 'critical' ? 'Kritisk' : item.severity === 'important' ? 'Vigtig' : 'Info'}
                                   </Badge>
                                 )}
@@ -535,7 +534,7 @@ export default function InsuranceCheck() {
               Vi sender din police til 3-5 forsikringsselskaber og finder det bedste tilbud
             </span>
             <Button
-              variant="ghost"
+              variant="neutral-tertiary"
               onClick={() => {
                 setHealthCheckResult(null);
                 setUploadedDocument(null);
