@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import { Badge, Button, IconWithBackground, Progress, DefaultPageLayout } from "@/ui";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { FeatherArrowRight, FeatherMessageCircle, FeatherMail } from "@subframe/core";
+import { FeatherArrowRight, FeatherMessageCircle, FeatherMail, FeatherShield } from "@subframe/core";
 import UserSelector from "@/components/user-selector";
 
 export default function OffersOverview() {
@@ -107,6 +107,34 @@ export default function OffersOverview() {
             <span className="text-body font-body text-subtext-color">
               Sammenlign og gennemgå forsikringstilbud skræddersyet til dig
             </span>
+          </div>
+
+          {/* Insurance Health Check Banner */}
+          <div className="flex w-full items-start gap-4 rounded-lg border border-solid border-success-200 bg-success-50 px-6 py-4">
+            <IconWithBackground 
+              variant="success" 
+              size="medium" 
+              icon={<FeatherShield />}
+            />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3">
+              <div className="flex flex-col items-start gap-1">
+                <span className="text-body-bold font-body-bold text-success-800">
+                  Tjek din nuværende forsikring
+                </span>
+                <span className="text-caption font-caption text-success-700">
+                  Få en gratis AI-analyse af din forsikring og se hvor du kan spare penge - uden at indhente tilbud
+                </span>
+              </div>
+              <Button
+                variant="default"
+                size="small"
+                iconRight={<FeatherArrowRight />}
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/check")}
+                data-testid="button-insurance-check"
+              >
+                Tjek min forsikring
+              </Button>
+            </div>
           </div>
 
           {/* AI Negotiating Banner */}
