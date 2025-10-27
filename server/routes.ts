@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { mistralOcrService as ocrService } from "./services/mistralOcrService";
 import { comparisonService } from "./services/comparisonService";
+import { insuranceCheckService } from "./services/insuranceCheckService";
 import { emailService } from "./services/emailService";
 import { gmailOAuthService } from "./services/gmailOAuthService";
 import { requireAuth, requireOwnership } from "./middleware/auth";
@@ -920,6 +921,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json(stats);
     } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Insurance Health Check routes
+  app.post("/api/insurance-check/analyze", requireAuth, async (req, res) => {
+    try {
+      const { documentId } = req.body;
+      
+      if (!documentId) {
+        return res.status(400).json({ message: "documentId is required" });
+      }
+
+      // Get the document with OCR data
+      const document = await storage.getDocument(documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      if (!document.ocrData) {
+        return res.status(400).json({ message: "Document has no OCR data. Please process the document first." });
+      }
+
+      console.log('[Insurance Check] Analyzing document:', {
+        documentId,
+        fileName: document.fileName,
+        policyType: (document.ocrData as any).policyType
+      });
+
+      // Perform health check analysis
+      const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(document.ocrData as any);
+
+      console.log('[Insurance Check] Analysis complete:', {
+        score: healthCheckResult.overallScore,
+        potentialSavings: healthCheckResult.potentialSavings.realistic
+      });
+
+      res.json({
+        success: true,
+        documentId,
+        document: {
+          id: document.id,
+          fileName: document.fileName,
+          policyType: (document.ocrData as any).policyType
+        },
+        healthCheck: healthCheckResult
+      });
+    } catch (error: any) {
+      console.error('[Insurance Check] Error:', error);
       res.status(500).json({ message: error.message });
     }
   });
