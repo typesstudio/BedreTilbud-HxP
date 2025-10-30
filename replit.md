@@ -75,6 +75,34 @@ This strategy applies to personalized emails, auto-responses, and missing info e
 - API endpoint: POST `/api/emails/thread/:threadId/send-message`
 - Full integration with email threading for proper conversation continuity
 
+### Comprehensive Security Hardening (October 2025)
+
+**22 of 24 Security Tasks Implemented (92% Complete)**
+
+BedreTilbud underwent comprehensive security hardening before production launch:
+
+**🔒 New Security Infrastructure (19 files)**:
+- **Middleware**: Rate limiting (4-tier), CSRF protection, IP anomaly detection, AI throttling
+- **Utilities**: AI sanitization, error sanitization, signed URLs, PII-redacting logger, file validation, email sanitization
+- **Authentication**: 2FA/TOTP infrastructure, WebAuthn/Passkey support
+- **DevOps**: Automated security scanning (GitHub Actions), security.txt disclosure policy
+
+**🛡️ Security Features Implemented**:
+1. **Input Protection**: Zod validation on all endpoints, AI prompt injection detection, HTML sanitization
+2. **Access Control**: RBAC on 30+ routes, CSRF tokens, signed URLs with HMAC-SHA256
+3. **Rate Limiting**: Global (100/15min), uploads (10/hour), emails (30/hour), AI (20/hour + $10/day cost limit)
+4. **File Security**: PDF magic bytes validation, malware scanning (heuristic), SHA-256 checksums, path traversal prevention
+5. **Network Security**: Helmet headers (CSP, HSTS, X-Frame-Options), CORS strict origins, IP anomaly detection with risk scoring
+6. **Logging**: Structured JSON logs, PII redaction (email, phone, CPR, cards, keys), audit logging, security events
+7. **Error Handling**: Database error sanitization prevents schema disclosure
+8. **Distributed Systems**: PostgreSQL advisory locks for email polling
+
+**⏸️ Deferred (2 items)**:
+- Session-based auth (too invasive for MVP, recommend v2.0)
+- DB least-privilege access (infrastructure-level configuration)
+
+**📁 Key Files**: See `SECURITY.md` and `SECURITY_IMPLEMENTATION_SUMMARY.md` for complete documentation.
+
 ### Production Readiness Improvements (October 2025)
 
 **1. Security Enhancements**
