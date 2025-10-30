@@ -12,6 +12,7 @@ import {
 } from "@/ui";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { MobileComparisonCard } from "@/components/mobile-comparison-card";
 import { 
   FeatherArrowLeft,
   FeatherArrowRight,
@@ -314,15 +315,15 @@ export default function Comparison() {
 
           {/* Highlights Section */}
           {highlights.length > 0 && (
-            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background mobile-padding shadow-sm">
               <span className="text-heading-3 font-heading-3 text-default-font">
                 {isWorseOffer ? 'Højdepunkter hvor tilbuddet er dårligere' : 'Højdepunkter hvor anbefalingen er bedre'}
               </span>
-              <div className="flex w-full items-start gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full">
                 {highlights.slice(0, 4).map((highlight: any, index: number) => {
                   const IconComponent = iconMap[highlight.icon] || FeatherCheck;
                   return (
-                    <div key={index} className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+                    <div key={index} className="flex flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
                       <IconWithBackground
                         variant={highlight.variant || "success"}
                         size="medium"
@@ -346,47 +347,54 @@ export default function Comparison() {
 
           {/* Detailed Comparison Table */}
           {tableRows.length > 0 && (
-            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
+            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 mobile-padding">
               <span className="text-heading-3 font-heading-3 text-default-font">
                 Detaljeret sammenligning
               </span>
-              <Table
-                header={
-                  <Table.HeaderRow>
-                    <Table.HeaderCell>Kategori</Table.HeaderCell>
-                    <Table.HeaderCell>Nuværende</Table.HeaderCell>
-                    <Table.HeaderCell>Nyt tilbud</Table.HeaderCell>
-                    <Table.HeaderCell>Forskel</Table.HeaderCell>
-                  </Table.HeaderRow>
-                }
-              >
-                {tableRows.map((item: any, index: number) => (
-                  <Table.Row key={index}>
-                    <Table.Cell>
-                      <span className={item.isCategory ? "text-body-bold font-body-bold text-default-font" : "text-body font-body text-default-font"}>
-                        {item.feature}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <span className="text-body font-body text-default-font">
-                        {item.current || ""}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <span className="text-body font-body text-default-font">
-                        {item.offer || ""}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      {item.difference && !item.isCategory && (
-                        <Badge variant={item.status === 'better' ? 'success' : item.status === 'worse' ? 'error' : 'neutral'}>
-                          {item.difference}
-                        </Badge>
-                      )}
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table>
+              
+              {/* Desktop Table View */}
+              <div className="desktop-only w-full">
+                <Table
+                  header={
+                    <Table.HeaderRow>
+                      <Table.HeaderCell>Kategori</Table.HeaderCell>
+                      <Table.HeaderCell>Nuværende</Table.HeaderCell>
+                      <Table.HeaderCell>Nyt tilbud</Table.HeaderCell>
+                      <Table.HeaderCell>Forskel</Table.HeaderCell>
+                    </Table.HeaderRow>
+                  }
+                >
+                  {tableRows.map((item: any, index: number) => (
+                    <Table.Row key={index}>
+                      <Table.Cell>
+                        <span className={item.isCategory ? "text-body-bold font-body-bold text-default-font" : "text-body font-body text-default-font"}>
+                          {item.feature}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <span className="text-body font-body text-default-font">
+                          {item.current || ""}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <span className="text-body font-body text-default-font">
+                          {item.offer || ""}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        {item.difference && !item.isCategory && (
+                          <Badge variant={item.status === 'better' ? 'success' : item.status === 'worse' ? 'error' : 'neutral'}>
+                            {item.difference}
+                          </Badge>
+                        )}
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table>
+              </div>
+
+              {/* Mobile Card View */}
+              <MobileComparisonCard rows={tableRows} />
             </div>
           )}
 
@@ -716,7 +724,7 @@ export default function Comparison() {
                 ) : null;
               })()}
               <Button
-                className="h-10 w-full flex-none"
+                className="h-14 md:h-12 w-full touch-target"
                 size="large"
                 icon={<FeatherSend />}
                 onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
@@ -734,57 +742,59 @@ export default function Comparison() {
 
           {/* Cumulative Savings Chart - Only show for better offers */}
           {!isWorseOffer && cumulativeSavings && cumulativeSavings.chartData && (
-            <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
-              <div className="flex w-full items-center justify-between">
+            <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background mobile-padding">
+              <div className="flex w-full flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div className="flex flex-col items-start gap-2">
-                  <span className="text-heading-2 font-heading-2 text-default-font">
+                  <span className="text-xl md:text-heading-2 font-semibold md:font-heading-2 text-default-font">
                     Kumulativ besparelse
                   </span>
-                  <span className="text-body font-body text-subtext-color">
+                  <span className="text-base md:text-body font-body text-subtext-color">
                     Se hvor meget du sparer måned for måned
                   </span>
                 </div>
-                <Badge variant="success" icon={<FeatherArrowUp />}>
+                <Badge variant="success" icon={<FeatherArrowUp />} className="self-start md:self-auto">
                   {formatCurrency(cumulativeSavings.tenYear)} over 10 år
                 </Badge>
               </div>
-              <AreaChart
-                categories={["Besparelse"]}
-                data={cumulativeSavings.chartData.map((item: any) => ({
-                  year: item.year,
-                  Besparelse: item.savings
-                }))}
-                index="year"
-              />
-              <div className="flex w-full flex-wrap items-start gap-4">
-                <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
-                  <span className="text-caption font-caption text-subtext-color">
+              <div className="chart-mobile w-full">
+                <AreaChart
+                  categories={["Besparelse"]}
+                  data={cumulativeSavings.chartData.map((item: any) => ({
+                    year: item.year,
+                    Besparelse: item.savings
+                  }))}
+                  index="year"
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+                <div className="flex flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                  <span className="text-sm md:text-caption font-caption text-subtext-color">
                     Månedlig besparelse
                   </span>
-                  <span className="text-heading-2 font-heading-2 text-success-600">
+                  <span className="text-xl md:text-heading-2 font-heading-2 text-success-600">
                     {formatCurrency(cumulativeSavings.monthly)}/md
                   </span>
                 </div>
-                <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
-                  <span className="text-caption font-caption text-subtext-color">
+                <div className="flex flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                  <span className="text-sm md:text-caption font-caption text-subtext-color">
                     Total efter 12 måneder
                   </span>
-                  <span className="text-heading-2 font-heading-2 text-success-600">
+                  <span className="text-xl md:text-heading-2 font-heading-2 text-success-600">
                     {formatCurrency(cumulativeSavings.yearly)} spart
                   </span>
                 </div>
-                <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
-                  <span className="text-caption font-caption text-subtext-color">
+                <div className="flex flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                  <span className="text-sm md:text-caption font-caption text-subtext-color">
                     Forventet efter 10 år
                   </span>
-                  <span className="text-heading-2 font-heading-2 text-success-600">
+                  <span className="text-xl md:text-heading-2 font-heading-2 text-success-600">
                     {formatCurrency(cumulativeSavings.tenYear)} spart
                   </span>
                 </div>
               </div>
               <div className="flex w-full items-center gap-2 rounded-md bg-success-50 px-4 py-3">
-                <FeatherPiggyBank className="text-body font-body text-success-700" />
-                <span className="text-body font-body text-default-font">
+                <FeatherPiggyBank className="text-body font-body text-success-700 flex-shrink-0" />
+                <span className="text-sm md:text-body font-body text-default-font">
                   Vi låser ind når priserne dykker og maksimerer din besparelse
                 </span>
               </div>
@@ -792,9 +802,9 @@ export default function Comparison() {
           )}
 
           {/* Action Button */}
-          <div className="flex w-full flex-col items-center gap-4 border-t border-solid border-neutral-border py-6">
+          <div className="flex w-full flex-col items-center gap-4 border-t border-solid border-neutral-border py-6 px-4 md:px-0">
             <Button
-              className="h-10 w-full flex-none"
+              className="h-14 md:h-12 w-full touch-target"
               size="large"
               onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
                 if (threadId) {
@@ -805,7 +815,7 @@ export default function Comparison() {
             >
               Vælg og skift til {companyName}
             </Button>
-            <span className="text-body font-body text-subtext-color">
+            <span className="text-sm md:text-body font-body text-subtext-color text-center">
               Sikker data. Du kan til enhver tid annullere før aktivering.
             </span>
           </div>
