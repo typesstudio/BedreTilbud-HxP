@@ -697,7 +697,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Regenerate comparison
-  app.post("/api/comparisons/:id/regenerate", async (req, res) => {
+  app.post("/api/comparisons/:id/regenerate", requireAuth, async (req, res) => {
     try {
       const { db } = await import("./db");
       const { comparisons: comparisonsTable } = await import("@shared/schema");
@@ -763,7 +763,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Send missing info questions to company
-  app.post("/api/comparisons/:id/send-questions", async (req, res) => {
+  app.post("/api/comparisons/:id/send-questions", emailLimiter, requireAuth, async (req, res) => {
     try {
       const { questionIds } = req.body;
       
@@ -912,7 +912,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Stats route
-  app.get("/api/stats/:userId", async (req, res) => {
+  app.get("/api/stats/:userId", requireAuth, async (req, res) => {
     try {
       const threads = await storage.getUserEmailThreads(req.params.userId);
       
@@ -975,7 +975,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Household Members routes
-  app.get("/api/household-members/:userId", async (req, res) => {
+  app.get("/api/household-members/:userId", requireAuth, async (req, res) => {
     try {
       const members = await storage.getUserHouseholdMembers(req.params.userId);
       res.json(members);
@@ -984,7 +984,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/household-members", async (req, res) => {
+  app.post("/api/household-members", requireAuth, async (req, res) => {
     try {
       const { insertHouseholdMemberSchema } = await import("@shared/schema");
       const memberData = insertHouseholdMemberSchema.parse(req.body);
@@ -995,7 +995,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/household-members/:id", async (req, res) => {
+  app.put("/api/household-members/:id", requireAuth, async (req, res) => {
     try {
       const { insertHouseholdMemberSchema } = await import("@shared/schema");
       const updates = insertHouseholdMemberSchema.partial().parse(req.body);
@@ -1006,7 +1006,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/household-members/:id", async (req, res) => {
+  app.delete("/api/household-members/:id", requireAuth, async (req, res) => {
     try {
       await storage.deleteHouseholdMember(req.params.id);
       res.status(204).send();
