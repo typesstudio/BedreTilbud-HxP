@@ -3,6 +3,10 @@ import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { emailService } from "./services/emailService";
 import { createEmailPollingLock } from "./utils/distributedLock";
+import { validateSecrets } from "./config/secrets";
+
+// Validate all required environment variables before starting the server
+validateSecrets();
 
 const app = express();
 
