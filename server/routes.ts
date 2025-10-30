@@ -119,6 +119,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/metrics", requireAuth, noCache, async (req, res) => {
+    try {
+      const { performanceMonitor } = await import("./utils/performanceMonitor");
+      const { apiCache } = await import("./utils/cache");
+      
+      const metrics = performanceMonitor.getMetrics();
+      const cacheSize = apiCache.size();
+      
+      res.json({
+        ...metrics,
+        cacheSize,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // User routes
   app.post("/api/users", async (req, res) => {
     try {

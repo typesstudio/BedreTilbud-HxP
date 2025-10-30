@@ -8,6 +8,7 @@ import { validateSecrets } from "./config/secrets";
 import { globalLimiter } from "./middleware/rateLimiting";
 import { corsConfig, securityHeaders } from "./middleware/security";
 import { sanitizeDatabaseError, logSensitiveError } from "./utils/errorSanitization";
+import { performanceMonitor } from "./utils/performanceMonitor";
 
 // Validate all required environment variables before starting the server
 validateSecrets();
@@ -71,6 +72,8 @@ app.use((req, res, next) => {
       }
 
       log(logLine);
+      
+      performanceMonitor.trackApiRequest(path, duration);
     }
   });
 

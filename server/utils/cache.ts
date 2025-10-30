@@ -5,6 +5,29 @@ interface CacheEntry<T> {
 
 class SimpleCache {
   private cache = new Map<string, CacheEntry<any>>();
+  private performanceMonitor: any = null;
+
+  constructor() {
+    import("./performanceMonitor").then(({ performanceMonitor }) => {
+      this.performanceMonitor = performanceMonitor;
+    }).catch(() => {});
+  }
+
+  private trackHit(): void {
+    try {
+      if (this.performanceMonitor) {
+        this.performanceMonitor.trackCacheHit();
+      }
+    } catch (e) {}
+  }
+
+  private trackMiss(): void {
+    try {
+      if (this.performanceMonitor) {
+        this.performanceMonitor.trackCacheMiss();
+      }
+    } catch (e) {}
+  }
 
   set<T>(key: string, data: T, ttlSeconds: number): void {
     this.cache.set(key, {
@@ -17,14 +40,17 @@ class SimpleCache {
     const entry = this.cache.get(key);
     
     if (!entry) {
+      this.trackMiss();
       return null;
     }
     
     if (Date.now() > entry.expiresAt) {
       this.cache.delete(key);
+      this.trackMiss();
       return null;
     }
     
+    this.trackHit();
     return entry.data as T;
   }
 
