@@ -171,7 +171,7 @@ export default function OffersOverview() {
 
           {/* Received Offers Section */}
           {hasOffers && (
-            <div className="flex w-full flex-col items-start gap-4">
+            <div className="flex w-full flex-col items-start gap-4 md:gap-6">
               {(comparisons as any[]).map((comparison: any) => {
                 const currentPremium = comparison.currentDocument?.ocrData?.annualPremium || 0;
                 const offerPremium = comparison.offerDocument?.ocrData?.annualPremium || 0;
@@ -183,7 +183,7 @@ export default function OffersOverview() {
                 return (
                   <div 
                     key={comparison.id}
-                    className="flex w-full items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm"
+                    className="flex w-full flex-col md:flex-row items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background mobile-padding shadow-sm"
                     data-testid={`comparison-card-${comparison.id}`}
                   >
                     <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4">
@@ -230,6 +230,7 @@ export default function OffersOverview() {
                         </div>
                       </div>
                       <Button
+                        className="h-12 md:h-10 w-full md:w-auto touch-target"
                         iconRight={<FeatherArrowRight />}
                         onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation(`/comparison/${comparison.id}`)}
                         data-testid={`button-view-comparison-${comparison.id}`}

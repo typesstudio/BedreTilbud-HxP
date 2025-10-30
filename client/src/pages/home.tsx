@@ -20,7 +20,7 @@ export default function Home() {
       {/* Header */}
       <header className="bg-card border-b border-border sticky top-0 z-50 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
+          <div className="flex justify-between items-center h-16 md:h-20">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
                 <Shield className="w-7 h-7 text-primary-foreground" strokeWidth={2.5} />
@@ -36,19 +36,19 @@ export default function Home() {
 
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="py-16 px-4 sm:px-6 lg:px-8">
+        <section className="py-12 md:py-16 px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-4xl sm:text-5xl font-bold text-foreground mb-6">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-4 md:mb-6">
               Find bedre forsikringstilbud
             </h2>
-            <p className="text-xl text-muted-foreground mb-8 max-w-2xl mx-auto">
+            <p className="text-lg md:text-xl text-muted-foreground mb-6 md:mb-8 max-w-2xl mx-auto">
               Upload dine nuværende forsikringer, og vi hjælper dig med at finde bedre tilbud 
               fra Danmarks største forsikringsselskaber.
             </p>
             <Button 
               size="lg" 
               onClick={() => setLocation("/onboarding")}
-              className="text-lg px-12 py-6"
+              className="text-base md:text-lg px-8 md:px-12 h-14 md:h-auto md:py-6 touch-target w-full sm:w-auto"
               data-testid="button-start-process"
             >
               Kom i gang
@@ -126,7 +126,7 @@ export default function Home() {
             <Button 
               size="lg" 
               onClick={() => setLocation("/onboarding")}
-              className="text-lg px-12 py-6"
+              className="text-base md:text-lg px-8 md:px-12 h-14 md:h-auto md:py-6 touch-target w-full sm:w-auto"
               data-testid="button-start-cta"
             >
               Start nu - det er gratis

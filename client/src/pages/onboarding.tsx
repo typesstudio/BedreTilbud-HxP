@@ -241,8 +241,8 @@ export default function Onboarding() {
 
   return (
     <DefaultPageLayout>
-      <div className="container max-w-none flex h-full w-full flex-col items-center gap-8 bg-default-background py-12">
-        <div className="flex w-full max-w-[768px] flex-col items-start gap-8">
+      <div className="container max-w-none flex h-full w-full flex-col items-center gap-6 md:gap-8 bg-default-background px-4 md:px-6 py-8 md:py-12">
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-6 md:gap-8">
           {/* Step Indicator */}
           <div className="flex w-full items-center justify-between">
             <div className="flex items-center gap-2">
@@ -304,6 +304,7 @@ export default function Onboarding() {
                   Tilbage
                 </LinkButton>
                 <Button
+                  className="h-12 md:h-10 touch-target"
                   disabled={uploadedFiles.length === 0}
                   iconRight={<FeatherArrowRight />}
                   onClick={(event: React.MouseEvent<HTMLButtonElement>) => handleNext()}
@@ -435,6 +436,7 @@ export default function Onboarding() {
                   Tilbage
                 </LinkButton>
                 <Button
+                  className="h-12 md:h-10 touch-target"
                   iconRight={<FeatherArrowRight />}
                   onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
                     form.handleSubmit(onUserInfoSubmit)();
@@ -525,6 +527,7 @@ export default function Onboarding() {
                   Tilbage
                 </LinkButton>
                 <Button
+                  className="h-12 md:h-10 touch-target"
                   disabled={sendInquiriesMutation.isPending || selectedCompanies.length === 0}
                   iconRight={<FeatherSend />}
                   onClick={(event: React.MouseEvent<HTMLButtonElement>) => handleSendInquiries()}

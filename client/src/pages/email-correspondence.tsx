@@ -231,9 +231,10 @@ export default function EmailCorrespondence() {
           </div>
 
           {/* Input Area */}
-          <div className="flex w-full flex-col items-start gap-4 border-t border-solid border-neutral-border px-6 py-4">
+          <div className="flex w-full flex-col items-start gap-3 md:gap-4 border-t border-solid border-neutral-border px-4 md:px-6 py-4">
             <div className="flex w-full flex-wrap items-start gap-2">
               <Button
+                className="touch-target h-12 md:h-10"
                 variant="neutral-tertiary"
                 size="small"
                 onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
@@ -243,6 +244,7 @@ export default function EmailCorrespondence() {
                 Acceptér dette tilbud
               </Button>
               <Button
+                className="touch-target h-12 md:h-10"
                 variant="neutral-tertiary"
                 size="small"
                 onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
@@ -252,6 +254,7 @@ export default function EmailCorrespondence() {
                 Spørg om dækningsdetaljer
               </Button>
               <Button
+                className="touch-target h-12 md:h-10"
                 variant="neutral-tertiary"
                 size="small"
                 onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
@@ -261,6 +264,7 @@ export default function EmailCorrespondence() {
                 Bed om bedre pris
               </Button>
               <Button
+                className="touch-target h-12 md:h-10"
                 variant="neutral-tertiary"
                 size="small"
                 onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
@@ -270,9 +274,10 @@ export default function EmailCorrespondence() {
                 Lad AI fortsætte
               </Button>
             </div>
-            <div className="flex w-full items-center gap-4">
-              <TextField className="grow" variant="filled" label="" helpText="">
+            <div className="flex w-full flex-col md:flex-row md:items-center gap-3 md:gap-4">
+              <TextField className="grow w-full" variant="filled" label="" helpText="">
                 <TextField.Input
+                  className="h-12 md:h-10"
                   placeholder="Spring ind i samtalen eller lad AI fortsætte forhandlingen..."
                   value={messageText}
                   onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
@@ -287,6 +292,7 @@ export default function EmailCorrespondence() {
                 />
               </TextField>
               <Button
+                className="h-12 md:h-10 w-full md:w-auto touch-target"
                 icon={<FeatherSend />}
                 onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
                   if (messageText.trim()) {

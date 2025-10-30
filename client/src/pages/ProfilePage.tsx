@@ -196,8 +196,8 @@ export default function ProfilePage() {
             </SubframeCore.DropdownMenu.Root>
           </div>
         </div>
-        <div className="flex w-full grow shrink-0 basis-0 flex-col items-center gap-8 bg-default-background px-12 py-12 overflow-auto">
-          <div className="flex w-full max-w-[768px] flex-col items-start gap-8">
+        <div className="flex w-full grow shrink-0 basis-0 flex-col items-center gap-8 bg-default-background px-4 md:px-12 py-6 md:py-12 overflow-auto">
+          <div className="flex w-full max-w-[768px] flex-col items-start gap-6 md:gap-8">
             <div className="flex w-full flex-col items-start gap-6">
               <div className="flex w-full items-center gap-4">
                 <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
@@ -249,7 +249,7 @@ export default function ProfilePage() {
                       Personlige oplysninger
                     </span>
                     <Button
-                      className="mobile:h-8 mobile:grow mobile:shrink-0 mobile:basis-0"
+                      className="h-12 md:h-10 w-full md:w-auto touch-target"
                       variant="neutral-secondary"
                       data-testid="button-edit-info"
                     >
@@ -265,11 +265,11 @@ export default function ProfilePage() {
                       { label: "Adresse", value: user.address || "Ikke oplyst", testid: "text-address" },
                       { label: "CPR-nummer", value: user.personalIdNumber ? "************" : "Ikke oplyst", testid: "text-cpr" },
                     ].map((item) => (
-                      <div key={item.label} className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6">
-                        <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color">
+                      <div key={item.label} className="flex w-full flex-col md:flex-row md:items-center gap-1 md:gap-2 border-b border-solid border-neutral-border py-4 md:py-6">
+                        <span className="text-lg md:text-body font-medium md:font-body text-subtext-color md:grow md:shrink-0 md:basis-0">
                           {item.label}
                         </span>
-                        <span className="grow shrink-0 basis-0 text-body font-body text-default-font" data-testid={item.testid}>
+                        <span className="text-lg md:text-body font-body text-default-font md:grow md:shrink-0 md:basis-0" data-testid={item.testid}>
                           {item.value}
                         </span>
                       </div>
@@ -287,7 +287,7 @@ export default function ProfilePage() {
                       Husstandsmedlemmer
                     </span>
                     <Button
-                      className="mobile:h-8 mobile:grow mobile:shrink-0 mobile:basis-0"
+                      className="h-12 md:h-10 w-full md:w-auto touch-target"
                       variant="neutral-secondary"
                       icon={<FeatherPlus />}
                       onClick={() => setShowAddMemberDialog(true)}

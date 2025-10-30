@@ -10,6 +10,7 @@ import {
 } from "@/ui";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
+import { MobileComparisonCard } from "@/components/mobile-comparison-card";
 import { 
   FeatherArrowRight,
   FeatherPiggyBank,
@@ -445,41 +446,56 @@ export default function InsuranceCheck() {
               <span className="text-heading-3 font-heading-3 text-default-font">
                 Sammenligning med markedet
               </span>
-              <Table
-                header={
-                  <Table.HeaderRow>
-                    <Table.HeaderCell>Kategori</Table.HeaderCell>
-                    <Table.HeaderCell>Dit tilbud</Table.HeaderCell>
-                    <Table.HeaderCell>Markedsgennemsnit</Table.HeaderCell>
-                    <Table.HeaderCell>Forskel</Table.HeaderCell>
-                  </Table.HeaderRow>
-                }
-              >
-                {marketComparison.map((item: any, index: number) => (
-                  <Table.Row key={index}>
-                    <Table.Cell>
-                      <span className="text-body-bold font-body-bold text-default-font">
-                        {item.category}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <span className="text-body font-body text-default-font">
-                        {item.current}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <span className="text-body font-body text-default-font">
-                        {item.marketAverage}
-                      </span>
-                    </Table.Cell>
-                    <Table.Cell>
-                      <Badge variant={item.status === 'better' ? 'success' : item.status === 'worse' ? 'error' : 'neutral'}>
-                        {item.difference}
-                      </Badge>
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
-              </Table>
+              {/* Desktop Table View */}
+              <div className="desktop-only w-full">
+                <Table
+                  header={
+                    <Table.HeaderRow>
+                      <Table.HeaderCell>Kategori</Table.HeaderCell>
+                      <Table.HeaderCell>Dit tilbud</Table.HeaderCell>
+                      <Table.HeaderCell>Markedsgennemsnit</Table.HeaderCell>
+                      <Table.HeaderCell>Forskel</Table.HeaderCell>
+                    </Table.HeaderRow>
+                  }
+                >
+                  {marketComparison.map((item: any, index: number) => (
+                    <Table.Row key={index}>
+                      <Table.Cell>
+                        <span className="text-body-bold font-body-bold text-default-font">
+                          {item.category}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <span className="text-body font-body text-default-font">
+                          {item.current}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <span className="text-body font-body text-default-font">
+                          {item.marketAverage}
+                        </span>
+                      </Table.Cell>
+                      <Table.Cell>
+                        <Badge variant={item.status === 'better' ? 'success' : item.status === 'worse' ? 'error' : 'neutral'}>
+                          {item.difference}
+                        </Badge>
+                      </Table.Cell>
+                    </Table.Row>
+                  ))}
+                </Table>
+              </div>
+
+              {/* Mobile Card View */}
+              <MobileComparisonCard 
+                rows={marketComparison.map((item: any) => ({
+                  feature: item.category,
+                  current: item.current,
+                  offer: item.marketAverage,
+                  difference: item.difference,
+                  status: item.status,
+                  isCategory: false
+                }))}
+              />
             </div>
           )}
 
