@@ -121,7 +121,7 @@ export default function Comparison() {
         <div className="flex w-full h-screen items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-lg text-subtext-color">Indlæser sammenligning...</p>
+            <p className="text-body font-body text-subtext-color">Indlæser sammenligning...</p>
           </div>
         </div>
       </DefaultPageLayout>
@@ -194,7 +194,7 @@ export default function Comparison() {
               <span className="text-heading-1 font-heading-1 text-default-font mobile:text-heading-2 mobile:font-heading-2" data-testid="text-comparison-title">
                 Sammenlign forsikrings tilbud
               </span>
-              <span className="text-lg font-body text-subtext-color mobile:text-caption mobile:font-caption">
+              <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
                 Sammenlign dit nuværende tilbud med {companyName}
               </span>
             </div>
@@ -223,10 +223,10 @@ export default function Comparison() {
                     icon={<FeatherPiggyBank />}
                   />
                   <div className="flex flex-col items-start gap-1">
-                    <span className={`text-lg font-semibold ${isWorseOffer ? 'text-error-700' : 'text-success-700'} mobile:text-body-bold mobile:font-body-bold`}>
+                    <span className={`text-body-bold font-body-bold ${isWorseOffer ? 'text-error-700' : 'text-success-700'} mobile:text-body-bold mobile:font-body-bold`}>
                       {isWorseOffer ? 'Dyrere tilbud' : 'Din årlige besparelse'}
                     </span>
-                    <span className={`text-lg font-caption ${isWorseOffer ? 'text-error-600' : 'text-success-600'} mobile:text-caption mobile:font-caption`}>
+                    <span className={`text-body font-body ${isWorseOffer ? 'text-error-600' : 'text-success-600'} mobile:text-caption mobile:font-caption`}>
                       {absoluteSavingsPercentage.toFixed(1)}% {isWorseOffer ? 'dyrere' : 'billigere'}
                     </span>
                   </div>
@@ -236,7 +236,7 @@ export default function Comparison() {
                 </span>
               </div>
               <div className="flex w-full items-center justify-between">
-                <span className="text-lg font-semibold text-default-font mobile:text-body mobile:font-body">
+                <span className="text-body-bold font-body-bold text-default-font mobile:text-body mobile:font-body">
                   Nuværende forsikring
                 </span>
                 <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid="text-current-premium">
@@ -249,7 +249,7 @@ export default function Comparison() {
                   style={{ width: `${barWidthPercentage}%` }}
                 >
                   <div className="flex grow shrink-0 basis-0 items-center justify-between mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1">
-                    <span className="text-lg font-semibold text-white mobile:text-body mobile:font-body">
+                    <span className="text-body-bold font-body-bold text-white mobile:text-body mobile:font-body">
                       Din nye forsikring
                     </span>
                     <span className="text-heading-3 font-heading-3 text-white mobile:text-body-bold mobile:font-body-bold" data-testid="text-offer-premium">
@@ -279,10 +279,10 @@ export default function Comparison() {
                         square={true}
                       />
                       <div className="flex flex-col items-start gap-1">
-                        <span className="text-lg font-semibold text-default-font mobile:text-body-bold mobile:font-body-bold">
+                        <span className="text-body-bold font-body-bold text-default-font mobile:text-body-bold mobile:font-body-bold">
                           {highlight.title}
                         </span>
-                        <span className="text-lg font-caption text-subtext-color mobile:text-caption mobile:font-caption">
+                        <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
                           {highlight.description}
                         </span>
                       </div>
@@ -308,18 +308,18 @@ export default function Comparison() {
                       </span>
                     </div>
                     <div className="flex grow shrink-0 basis-0 flex-col items-center">
-                      <span className="text-lg font-semibold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                      <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
                         Nuværende
                       </span>
-                      <span className="text-lg font-caption text-subtext-color mobile:text-caption mobile:font-caption">
+                      <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
                         {currentCompanyName}
                       </span>
                     </div>
                     <div className="flex grow shrink-0 basis-0 flex-col items-center">
-                      <span className="text-lg font-semibold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                      <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
                         Nyt tilbud
                       </span>
-                      <span className="text-lg font-caption text-subtext-color mobile:text-caption mobile:font-caption">
+                      <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
                         {companyName}
                       </span>
                     </div>
@@ -330,11 +330,11 @@ export default function Comparison() {
                       {category.rows && category.rows.map((row: any, rowIndex: number) => (
                         <div key={`${catIndex}-${rowIndex}`} className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-4">
                           <div className="flex w-48 flex-none flex-col items-start gap-1 mobile:w-32">
-                            <span className="text-lg font-semibold text-default-font mobile:text-body-bold mobile:font-body-bold">
+                            <span className="text-body-bold font-body-bold text-default-font mobile:text-body-bold mobile:font-body-bold">
                               {row.feature}
                             </span>
                             {row.description && (
-                              <span className="text-lg font-caption text-subtext-color mobile:text-caption mobile:font-caption">
+                              <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
                                 {row.description}
                               </span>
                             )}
@@ -436,7 +436,7 @@ export default function Comparison() {
                     {missingInfo.totalCritical + missingInfo.totalImportant + missingInfo.totalQuestions} punkter
                   </Badge>
                 </div>
-                <span className="text-lg font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
                   Vi har fundet punkter der mangler tydelig dokumentation
                 </span>
               </div>
@@ -450,7 +450,7 @@ export default function Comparison() {
                         size="small"
                         icon={iconMap[category.icon] ? <category.icon.type /> : <FeatherDollarSign />}
                       />
-                      <span className="text-lg font-semibold text-default-font mobile:text-body-bold mobile:font-body-bold">
+                      <span className="text-body-bold font-body-bold text-default-font mobile:text-body-bold mobile:font-body-bold">
                         {category.name}
                       </span>
                       {category.criticalCount > 0 && (
@@ -485,29 +485,29 @@ export default function Comparison() {
                           data-testid={`question-${question.id}`}
                         >
                           {isSelected ? (
-                            <FeatherCheckSquare className={`text-lg font-body ${iconColor} mt-0.5`} />
+                            <FeatherCheckSquare className={`text-body font-body ${iconColor} mt-0.5`} />
                           ) : (
-                            <FeatherSquare className={`text-lg font-body ${iconColor} mt-0.5`} />
+                            <FeatherSquare className={`text-body font-body ${iconColor} mt-0.5`} />
                           )}
                           <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
                             {question.answer ? (
                               <div className="flex w-full flex-col items-start gap-1 px-2 py-2">
-                                <span className="text-lg font-semibold text-default-font mobile:text-body-bold mobile:font-body-bold">
+                                <span className="text-body-bold font-body-bold text-default-font mobile:text-body-bold mobile:font-body-bold">
                                   {question.question}
                                 </span>
                                 {question.details && (
-                                  <span className="text-lg font-caption text-subtext-color mobile:text-caption mobile:font-caption">
+                                  <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
                                     {question.details}
                                   </span>
                                 )}
                               </div>
                             ) : (
                               <>
-                                <span className="text-lg font-semibold text-default-font mobile:text-body-bold mobile:font-body-bold">
+                                <span className="text-body-bold font-body-bold text-default-font mobile:text-body-bold mobile:font-body-bold">
                                   {question.question}
                                 </span>
                                 {question.details && (
-                                  <span className="text-lg font-caption text-subtext-color mobile:text-caption mobile:font-caption">
+                                  <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
                                     {question.details}
                                   </span>
                                 )}
@@ -518,7 +518,7 @@ export default function Comparison() {
                                 <span className="text-caption-bold font-caption-bold text-success-700">
                                   Svar fra {companyName}
                                 </span>
-                                <span className="text-lg font-body text-default-font mobile:text-body mobile:font-body">
+                                <span className="text-body font-body text-default-font mobile:text-body mobile:font-body">
                                   {question.answer}
                                 </span>
                               </div>
@@ -533,8 +533,8 @@ export default function Comparison() {
               
               {missingInfo.totalCritical > 0 && (
                 <div className="flex w-full items-center gap-2 rounded-md bg-error-50 px-4 py-3">
-                  <FeatherAlertCircle className="text-lg font-body text-error-600" />
-                  <span className="text-lg font-caption text-error-700 mobile:text-caption mobile:font-caption">
+                  <FeatherAlertCircle className="text-body font-body text-error-600" />
+                  <span className="text-body font-body text-error-700 mobile:text-caption mobile:font-caption">
                     {missingInfo.totalCritical} kritiske punkter kræver øjeblikkelig afklaring
                   </span>
                 </div>
@@ -563,7 +563,7 @@ export default function Comparison() {
                   <span className="text-heading-2 font-heading-2 text-default-font mobile:text-heading-3 mobile:font-heading-3">
                     Kumulativ besparelse
                   </span>
-                  <span className="text-lg font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                  <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
                     Se hvor meget du sparer måned for måned
                   </span>
                 </div>
@@ -583,7 +583,7 @@ export default function Comparison() {
               />
               <div className="flex w-full items-start gap-4 flex-wrap mobile:flex-row mobile:flex-wrap mobile:gap-3">
                 <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
-                  <span className="text-lg font-caption text-subtext-color mobile:text-caption mobile:font-caption">
+                  <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
                     Månedlig besparelse
                   </span>
                   <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
@@ -591,7 +591,7 @@ export default function Comparison() {
                   </span>
                 </div>
                 <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
-                  <span className="text-lg font-caption text-subtext-color mobile:text-caption mobile:font-caption">
+                  <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
                     Total efter 12 måneder
                   </span>
                   <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
@@ -599,7 +599,7 @@ export default function Comparison() {
                   </span>
                 </div>
                 <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
-                  <span className="text-lg font-caption text-subtext-color mobile:text-caption mobile:font-caption">
+                  <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
                     Forventet efter 10 år
                   </span>
                   <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
@@ -608,8 +608,8 @@ export default function Comparison() {
                 </div>
               </div>
               <div className="flex w-full items-center gap-2 rounded-md bg-success-50 px-4 py-3 mobile:items-start mobile:justify-start">
-                <FeatherPiggyBank className="text-lg font-body text-success-700 mobile:mt-0.5" />
-                <span className="text-lg font-body text-default-font mobile:text-caption mobile:font-caption">
+                <FeatherPiggyBank className="text-body font-body text-success-700 mobile:mt-0.5" />
+                <span className="text-body font-body text-default-font mobile:text-caption mobile:font-caption">
                   Vi låser ind når priserne dykker og maksimerer din besparelse
                 </span>
               </div>
@@ -625,7 +625,7 @@ export default function Comparison() {
             >
               {isWorseOffer ? 'Behold nuværende forsikring' : `Skift til ${companyName}`}
             </Button>
-            <span className="text-lg font-body text-subtext-color mobile:text-caption mobile:font-caption mobile:text-center">
+            <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption mobile:text-center">
               Sikker data. Du kan annullere når som helst før aktivering.
             </span>
           </div>

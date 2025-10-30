@@ -181,10 +181,10 @@ export default function ProfilePage() {
                     { label: "CPR-nummer", value: user.personalIdNumber ? "************" : "Ikke oplyst", testid: "text-cpr" },
                   ].map((item) => (
                     <div key={item.label} className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
-                      <span className="grow shrink-0 basis-0 text-lg font-medium text-subtext-color mobile:text-caption mobile:font-caption">
+                      <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-subtext-color mobile:text-caption mobile:font-caption">
                         {item.label}
                       </span>
-                      <span className="grow shrink-0 basis-0 text-lg font-body text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid={item.testid}>
+                      <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid={item.testid}>
                         {item.value}
                       </span>
                     </div>
@@ -218,9 +218,9 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex w-full flex-col items-start">
                   {loadingDocs ? (
-                    <div className="w-full text-center py-8 text-lg text-subtext-color">Indlæser...</div>
+                    <div className="w-full text-center py-8 text-body font-body text-subtext-color">Indlæser...</div>
                   ) : documents.length === 0 ? (
-                    <div className="w-full text-center py-8 text-lg text-subtext-color">
+                    <div className="w-full text-center py-8 text-body font-body text-subtext-color">
                       Ingen dokumenter uploadet endnu
                     </div>
                   ) : (
@@ -237,10 +237,10 @@ export default function ProfilePage() {
                           icon={<FeatherFileText />}
                         />
                         <div className="flex grow shrink-0 basis-0 flex-col items-start justify-center gap-1">
-                          <span className="w-full text-lg font-semibold text-default-font mobile:text-caption-bold mobile:font-caption-bold" data-testid={`text-doc-name-${doc.id}`}>
+                          <span className="w-full text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold" data-testid={`text-doc-name-${doc.id}`}>
                             {doc.fileName}
                           </span>
-                          <span className="w-full text-lg font-body text-subtext-color mobile:text-caption mobile:font-caption" data-testid={`text-doc-info-${doc.id}`}>
+                          <span className="w-full text-body font-body text-subtext-color mobile:text-caption mobile:font-caption" data-testid={`text-doc-info-${doc.id}`}>
                             Uploadet {doc.createdAt ? format(new Date(doc.createdAt), "d. MMMM yyyy", { locale: da }) : "ukendt"} • PDF • {doc.fileSize ? `${(doc.fileSize / 1024 / 1024).toFixed(1)} MB` : "ukendt"}
                           </span>
                         </div>
@@ -287,9 +287,9 @@ export default function ProfilePage() {
                   </Button>
                 </div>
                 {loadingMembers ? (
-                  <div className="w-full text-center py-8 text-lg text-subtext-color">Indlæser...</div>
+                  <div className="w-full text-center py-8 text-body font-body text-subtext-color">Indlæser...</div>
                 ) : householdMembers.length === 0 ? (
-                  <div className="w-full text-center py-8 text-lg text-subtext-color">
+                  <div className="w-full text-center py-8 text-body font-body text-subtext-color">
                     Ingen husstandsmedlemmer tilføjet endnu
                   </div>
                 ) : (
@@ -311,10 +311,10 @@ export default function ProfilePage() {
                             {member.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)}
                           </Avatar>
                           <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
-                            <span className="text-lg font-semibold text-default-font mobile:text-caption-bold mobile:font-caption-bold" data-testid={`text-member-name-${member.id}`}>
+                            <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold" data-testid={`text-member-name-${member.id}`}>
                               {member.name}
                             </span>
-                            <span className="text-lg font-caption text-subtext-color mobile:text-caption mobile:font-caption" data-testid={`text-member-info-${member.id}`}>
+                            <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption" data-testid={`text-member-info-${member.id}`}>
                               {member.relationship ? `${member.relationship} • ` : ""}Født {member.dateOfBirth || "ukendt"}
                             </span>
                           </div>
@@ -351,7 +351,7 @@ export default function ProfilePage() {
                 </div>
                 <div className="flex w-full flex-col items-start gap-6 rounded-md border border-solid border-neutral-border bg-neutral-50 px-6 py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4 mobile:px-4 mobile:py-4">
                   <div className="flex w-full flex-col items-start gap-3 mobile:flex-col mobile:flex-nowrap mobile:gap-2">
-                    <span className="text-lg font-semibold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                    <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
                       Forsikringstyper jeg har brug for
                     </span>
                     <div className="flex w-full items-start gap-2 flex-wrap">
@@ -370,7 +370,7 @@ export default function ProfilePage() {
                   </div>
                   <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
                   <div className="flex w-full flex-col items-start gap-3 mobile:flex-col mobile:flex-nowrap mobile:gap-2">
-                    <span className="text-lg font-semibold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                    <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
                       Hvad er vigtigst for mig
                     </span>
                     <div className="flex w-full flex-col items-start">
@@ -380,10 +380,10 @@ export default function ProfilePage() {
                         { label: "Prioritet #3", value: user.priorityThree || "God kundeservice", testid: "text-priority-3" },
                       ].map((item) => (
                         <div key={item.label} className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-4 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-3">
-                          <span className="grow shrink-0 basis-0 text-lg font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                          <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
                             {item.label}
                           </span>
-                          <span className="grow shrink-0 basis-0 text-lg font-body text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid={item.testid}>
+                          <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid={item.testid}>
                             {item.value}
                           </span>
                         </div>
@@ -392,16 +392,16 @@ export default function ProfilePage() {
                   </div>
                   <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
                   <div className="flex w-full flex-col items-start gap-3 mobile:flex-col mobile:flex-nowrap mobile:gap-2">
-                    <span className="text-lg font-semibold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                    <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
                       Yderligere krav
                     </span>
                     <div className="flex w-full flex-col items-start gap-2">
                       {user.additionalInfo ? (
-                        <span className="text-lg font-body text-default-font mobile:text-caption mobile:font-caption" data-testid="text-additional-info">
+                        <span className="text-body font-body text-default-font mobile:text-caption mobile:font-caption" data-testid="text-additional-info">
                           {user.additionalInfo}
                         </span>
                       ) : (
-                        <span className="text-lg font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                        <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
                           Ingen yderligere krav angivet
                         </span>
                       )}
