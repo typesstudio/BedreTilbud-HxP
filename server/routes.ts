@@ -13,6 +13,7 @@ import path from "path";
 import fs from "fs";
 import { insertUserSchema, insertDocumentSchema } from "@shared/schema";
 import { z } from "zod";
+import * as validationSchemas from "./validation/schemas";
 
 // Setup file upload
 const uploadDir = 'uploads';
@@ -421,15 +422,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Send custom message in thread
-  app.post("/api/emails/thread/:threadId/send-message", async (req, res) => {
+  app.post("/api/emails/thread/:threadId/send-message", requireAuth, async (req, res) => {
     try {
       console.log("📤 Sending custom message for thread:", req.params.threadId);
-      const { message } = req.body;
       
-      if (!message || typeof message !== 'string' || message.trim().length === 0) {
-        console.log("❌ Validation failed: empty message");
-        return res.status(400).json({ message: "Besked skal udfyldes" });
-      }
+      // Validate request body
+      const { message } = validationSchemas.validateBody(validationSchemas.sendMessageSchema)(req.body);
+      
+      // Validate thread ID parameter
+      validationSchemas.validateParams(validationSchemas.threadIdParamSchema)(req.params);
 
       console.log("✅ Message validation passed:", message.substring(0, 50));
 
@@ -828,13 +829,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add custom question to comparison
-  app.post("/api/comparisons/:id/add-custom-question", async (req, res) => {
+  app.post("/api/comparisons/:id/add-custom-question", requireAuth, async (req, res) => {
     try {
-      const { question } = req.body;
-      
-      if (!question || typeof question !== 'string' || question.trim().length === 0) {
-        return res.status(400).json({ message: "Spørgsmål skal udfyldes" });
-      }
+      // Validate request body and parameters
+      const validatedBody = validationSchemas.validateBody(z.object({
+        question: z.string().min(1, 'Question required').max(500, 'Question too long'),
+      }))(req.body);
+      const { question } = validatedBody;
+      validationSchemas.validateParams(validationSchemas.uuidParamSchema)(req.params);
 
       const comparison = await storage.getComparison(req.params.id);
       if (!comparison) {
@@ -928,11 +930,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Insurance Health Check routes
   app.post("/api/insurance-check/analyze", requireAuth, async (req, res) => {
     try {
-      const { documentId } = req.body;
-      
-      if (!documentId) {
-        return res.status(400).json({ message: "documentId is required" });
-      }
+      // Validate request body
+      const { documentId } = validationSchemas.validateBody(validationSchemas.insuranceCheckAnalyzeSchema)(req.body);
 
       // Get the document with OCR data
       const document = await storage.getDocument(documentId);
