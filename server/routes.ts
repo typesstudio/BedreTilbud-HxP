@@ -9,6 +9,7 @@ import { gmailOAuthService } from "./services/gmailOAuthService";
 import { requireAuth, requireOwnership } from "./middleware/auth";
 import { validateFileUpload } from "./middleware/uploadValidation";
 import { uploadLimiter, emailLimiter, aiLimiter } from "./middleware/rateLimiting";
+import { generateCSRFToken, requireCSRFToken } from "./middleware/csrf";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -38,6 +39,17 @@ const upload = multer({
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoints
+  // CSRF token endpoint
+  app.get("/api/csrf-token", requireAuth, async (req, res) => {
+    try {
+      const userId = req.headers['x-user-id'] as string;
+      const token = generateCSRFToken(userId);
+      res.json({ csrfToken: token });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.get("/health", async (req, res) => {
     res.status(200).json({ 
       status: "ok", 
@@ -132,7 +144,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Document upload routes
-  app.post("/api/documents/upload", uploadLimiter, requireAuth, upload.array('files'), validateFileUpload, async (req, res) => {
+  app.post("/api/documents/upload", uploadLimiter, requireAuth, requireCSRFToken, upload.array('files'), validateFileUpload, async (req, res) => {
     try {
       const { userId, documentType = 'current' } = req.body;
       const files = req.files as Express.Multer.File[];
@@ -308,7 +320,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Email routes
-  app.post("/api/emails/send-inquiries", emailLimiter, requireAuth, async (req, res) => {
+  app.post("/api/emails/send-inquiries", emailLimiter, requireAuth, requireCSRFToken, async (req, res) => {
     try {
       const { userId, companyIds, customMessage } = req.body;
       

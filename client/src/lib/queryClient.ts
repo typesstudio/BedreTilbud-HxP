@@ -7,6 +7,41 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+// CSRF token management
+let csrfToken: string | null = null;
+let csrfTokenExpiry: number = 0;
+
+async function getCSRFToken(): Promise<string | null> {
+  // Return cached token if still valid
+  if (csrfToken && Date.now() < csrfTokenExpiry) {
+    return csrfToken;
+  }
+  
+  const userId = localStorage.getItem("userId");
+  if (!userId) {
+    return null;
+  }
+  
+  try {
+    const response = await fetch('/api/csrf-token', {
+      headers: { 'X-User-ID': userId },
+      credentials: 'include',
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      csrfToken = data.csrfToken;
+      // Tokens are valid for 1 hour, refresh after 50 minutes
+      csrfTokenExpiry = Date.now() + (50 * 60 * 1000);
+      return csrfToken;
+    }
+  } catch (error) {
+    console.error('Failed to fetch CSRF token:', error);
+  }
+  
+  return null;
+}
+
 export async function apiRequest(
   method: string,
   url: string,
@@ -23,6 +58,14 @@ export async function apiRequest(
   // Add X-User-ID header for authentication if userId exists
   if (userId) {
     (headers as Record<string, string>)["X-User-ID"] = userId;
+  }
+  
+  // Add CSRF token for state-changing requests
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())) {
+    const token = await getCSRFToken();
+    if (token) {
+      (headers as Record<string, string>)["X-CSRF-Token"] = token;
+    }
   }
   
   const res = await fetch(url, {
