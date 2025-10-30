@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { InsuranceData } from "./mistralOcrService";
 import { mistralTextService } from "./mistralTextService";
 import { retryAICall } from "../utils/retry";
+import { sanitizePrompt, detectInjection, validateAIOutput } from "../utils/aiSanitization";
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
@@ -267,6 +268,16 @@ Write ALL text in Danish. Be thorough in identifying missing information - this 
     },
     currentPolicies: InsuranceData[]
   ): Promise<string> {
+    // Sanitize user input to prevent prompt injection
+    if (userInfo.additionalInfo) {
+      const sanitized = sanitizePrompt(userInfo.additionalInfo);
+      const injectionCheck = detectInjection(sanitized);
+      if (!injectionCheck.safe) {
+        throw new Error(`Unsafe user input detected: ${injectionCheck.reason}`);
+      }
+      userInfo.additionalInfo = sanitized;
+    }
+    
     // Strategy: Try Mistral first (cheapest), then OpenAI, then template fallback
     
     // Try 1: Mistral (most cost-effective)
@@ -526,10 +537,19 @@ Med venlig hilsen`;
     questions: MissingInfoQuestion[]
   ): Promise<{ questionId: string; answer: string }[]> {
     try {
+      // Sanitize email body to prevent injection
+      const sanitizedEmailBody = sanitizePrompt(emailBody);
+      
+      // Detect potential injection attempts
+      const injectionCheck = detectInjection(sanitizedEmailBody);
+      if (!injectionCheck.safe) {
+        throw new Error(`Unsafe email content detected: ${injectionCheck.reason}`);
+      }
+      
       const prompt = `Extract and match answers from this insurance company reply to the original questions.
 
 Company Reply:
-${emailBody}
+${sanitizedEmailBody}
 
 Original Questions:
 ${questions.map(q => `ID: ${q.id} - ${q.question}`).join('\n')}
@@ -563,7 +583,15 @@ If a question isn't answered, omit it from the array. Be thorough in extracting 
       });
 
       logAIUsage('OpenAI-gpt-4o-mini', 'answer-extraction', true);
-      const result = JSON.parse(response.choices[0].message.content || "{}");
+      
+      // Validate AI output
+      const rawOutput = response.choices[0].message.content || "{}";
+      const outputValidation = validateAIOutput(rawOutput, 'json');
+      if (!outputValidation.valid) {
+        throw new Error(`Invalid AI output: ${outputValidation.reason}`);
+      }
+      
+      const result = JSON.parse(rawOutput);
       return result.answers || [];
     } catch (error) {
       console.error("Answer extraction failed:", error);
