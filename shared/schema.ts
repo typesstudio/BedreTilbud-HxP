@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, json, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, json, boolean, integer, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -42,7 +42,12 @@ export const documents = pgTable("documents", {
   documentType: text("document_type"), // "current" or "offer"
   companyId: varchar("company_id").references(() => companies.id),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  userIdIdx: index("documents_user_id_idx").on(table.userId),
+  documentTypeIdx: index("documents_document_type_idx").on(table.documentType),
+  companyIdIdx: index("documents_company_id_idx").on(table.companyId),
+  userIdTypeIdx: index("documents_user_id_type_idx").on(table.userId, table.documentType),
+}));
 
 export const emailThreads = pgTable("email_threads", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -54,7 +59,12 @@ export const emailThreads = pgTable("email_threads", {
   replyToEmail: varchar("reply_to_email", { length: 255 }), // TOKEN@bedretilbud.com
   status: text("status").default("sent"), // "sent", "pending", "received"
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  userIdIdx: index("email_threads_user_id_idx").on(table.userId),
+  companyIdIdx: index("email_threads_company_id_idx").on(table.companyId),
+  requestTokenIdx: index("email_threads_request_token_idx").on(table.requestToken),
+  threadIdIdx: index("email_threads_thread_id_idx").on(table.threadId),
+}));
 
 export const emails = pgTable("emails", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -68,7 +78,10 @@ export const emails = pgTable("emails", {
   metadata: json("metadata"),
   sentAt: timestamp("sent_at"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  threadIdIdx: index("emails_thread_id_idx").on(table.threadId),
+  messageIdIdx: index("emails_message_id_idx").on(table.messageId),
+}));
 
 export const comparisons = pgTable("comparisons", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -80,7 +93,10 @@ export const comparisons = pgTable("comparisons", {
   aiRecommendation: text("ai_recommendation"),
   savings: integer("savings"), // in DKK
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  userIdIdx: index("comparisons_user_id_idx").on(table.userId),
+  companyIdIdx: index("comparisons_company_id_idx").on(table.companyId),
+}));
 
 export const householdMembers = pgTable("household_members", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -90,7 +106,9 @@ export const householdMembers = pgTable("household_members", {
   dateOfBirth: text("date_of_birth"),
   avatarUrl: text("avatar_url"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => ({
+  userIdIdx: index("household_members_user_id_idx").on(table.userId),
+}));
 
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
