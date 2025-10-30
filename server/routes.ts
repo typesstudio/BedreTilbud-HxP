@@ -8,6 +8,7 @@ import { emailService } from "./services/emailService";
 import { gmailOAuthService } from "./services/gmailOAuthService";
 import { requireAuth, requireOwnership } from "./middleware/auth";
 import { validateFileUpload } from "./middleware/uploadValidation";
+import { uploadLimiter, emailLimiter, aiLimiter } from "./middleware/rateLimiting";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -131,7 +132,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Document upload routes
-  app.post("/api/documents/upload", requireAuth, upload.array('files'), validateFileUpload, async (req, res) => {
+  app.post("/api/documents/upload", uploadLimiter, requireAuth, upload.array('files'), validateFileUpload, async (req, res) => {
     try {
       const { userId, documentType = 'current' } = req.body;
       const files = req.files as Express.Multer.File[];
@@ -307,7 +308,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Email routes
-  app.post("/api/emails/send-inquiries", requireAuth, async (req, res) => {
+  app.post("/api/emails/send-inquiries", emailLimiter, requireAuth, async (req, res) => {
     try {
       const { userId, companyIds, customMessage } = req.body;
       
@@ -928,7 +929,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Insurance Health Check routes
-  app.post("/api/insurance-check/analyze", requireAuth, async (req, res) => {
+  app.post("/api/insurance-check/analyze", aiLimiter, requireAuth, async (req, res) => {
     try {
       // Validate request body
       const { documentId } = validationSchemas.validateBody(validationSchemas.insuranceCheckAnalyzeSchema)(req.body);
