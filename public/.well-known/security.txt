@@ -1,0 +1,55 @@
+Contact: mailto:security@bedretilbud.dk
+Expires: 2026-12-31T23:59:59.000Z
+Preferred-Languages: da, en
+Canonical: https://bedretilbud.dk/.well-known/security.txt
+
+# Security Policy
+
+## Reporting Security Vulnerabilities
+
+If you discover a security vulnerability in BedreTilbud, please report it to us responsibly.
+
+**DO NOT** create public GitHub issues for security vulnerabilities.
+
+Instead, email us at: security@bedretilbud.dk
+
+Include:
+- Description of the vulnerability
+- Steps to reproduce
+- Potential impact
+- Your contact information (optional, for follow-up)
+
+## Response Timeline
+
+- Initial response: Within 48 hours
+- Status update: Within 7 days
+- Fix timeline: Varies by severity (critical issues prioritized)
+
+## Recognition
+
+We appreciate responsible disclosure and will acknowledge security researchers who help improve our platform (with permission).
+
+## Scope
+
+In scope:
+- BedreTilbud web application
+- API endpoints
+- File upload system
+- Email system
+- Authentication mechanisms
+
+Out of scope:
+- Social engineering attacks
+- Physical attacks
+- Denial of service attacks
+- Third-party integrations (report to respective vendors)
+
+## Safe Harbor
+
+We will not pursue legal action against security researchers who:
+- Follow responsible disclosure practices
+- Do not access/modify user data beyond what's necessary to demonstrate the vulnerability
+- Do not intentionally harm the platform or users
+- Report vulnerabilities in good faith
+
+Thank you for helping keep BedreTilbud secure!

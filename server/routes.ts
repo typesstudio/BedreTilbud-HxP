@@ -10,6 +10,9 @@ import { requireAuth, requireOwnership } from "./middleware/auth";
 import { validateFileUpload } from "./middleware/uploadValidation";
 import { uploadLimiter, emailLimiter, aiLimiter } from "./middleware/rateLimiting";
 import { generateCSRFToken, requireCSRFToken } from "./middleware/csrf";
+import { generateSignedUrl, validateSignedUrl } from "./utils/signedUrls";
+import { logger, auditLog } from "./utils/logging";
+import { calculateFileChecksum, validatePDFFile, scanFileForMalware } from "./utils/fileValidation";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -46,6 +49,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const token = generateCSRFToken(userId);
       res.json({ csrfToken: token });
     } catch (error: any) {
+      logger.error('Failed to generate CSRF token', error, { userId: req.headers['x-user-id'] as string });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Signed URL file download endpoint
+  app.get("/api/files/download", async (req, res) => {
+    try {
+      const { path: filePath, userId, expires, signature } = req.query as Record<string, string>;
+      
+      // Validate signed URL
+      const validation = validateSignedUrl(filePath, userId, expires, signature);
+      if (!validation.valid) {
+        logger.security('Invalid signed URL attempt', { filePath, userId, reason: validation.reason });
+        return res.status(403).json({ message: validation.reason || 'Invalid URL' });
+      }
+      
+      // Verify file exists and user has access
+      const fullPath = path.join(process.cwd(), filePath);
+      if (!fs.existsSync(fullPath)) {
+        return res.status(404).json({ message: 'File not found' });
+      }
+      
+      // Send file
+      logger.info('File downloaded via signed URL', { filePath, userId });
+      res.download(fullPath);
+    } catch (error: any) {
+      logger.error('File download failed', error);
       res.status(500).json({ message: error.message });
     }
   });
