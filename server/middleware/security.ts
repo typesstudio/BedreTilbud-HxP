@@ -11,6 +11,11 @@ const allowedOrigins = process.env.NODE_ENV === 'production'
 
 export const corsConfig = cors({
   origin: (origin, callback) => {
+    // In development, allow all origins (for Vite HMR and Replit preview)
+    if (process.env.NODE_ENV !== 'production') {
+      return callback(null, true);
+    }
+    
     // Allow requests with no origin (mobile apps, Postman, etc.)
     if (!origin) return callback(null, true);
     
