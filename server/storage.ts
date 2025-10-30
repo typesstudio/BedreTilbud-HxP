@@ -15,6 +15,7 @@ import {
   type InsertHouseholdMember
 } from "@shared/schema";
 import { randomUUID } from "crypto";
+import { withCache, apiCache } from "./utils/cache";
 
 export interface IStorage {
   // Users
@@ -361,11 +362,13 @@ export class MemStorage implements IStorage {
 export class DatabaseStorage implements IStorage {
   // Users
   async getUser(id: string): Promise<User | undefined> {
-    const { db } = await import("./db");
-    const { users } = await import("@shared/schema");
-    const { eq } = await import("drizzle-orm");
-    const [user] = await db.select().from(users).where(eq(users.id, id));
-    return user || undefined;
+    return await withCache(`user:${id}`, 60, async () => {
+      const { db } = await import("./db");
+      const { users } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const [user] = await db.select().from(users).where(eq(users.id, id));
+      return user || undefined;
+    });
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
@@ -388,6 +391,9 @@ export class DatabaseStorage implements IStorage {
     const { users } = await import("@shared/schema");
     const { eq } = await import("drizzle-orm");
     const [user] = await db.update(users).set(updates).where(eq(users.id, id)).returning();
+    
+    apiCache.invalidate(`user:${id}`);
+    
     return user;
   }
 
@@ -401,10 +407,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getActiveCompanies(): Promise<Company[]> {
-    const { db } = await import("./db");
-    const { companies } = await import("@shared/schema");
-    const { eq } = await import("drizzle-orm");
-    return await db.select().from(companies).where(eq(companies.active, true));
+    return await withCache('active-companies', 300, async () => {
+      const { db } = await import("./db");
+      const { companies } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      return await db.select().from(companies).where(eq(companies.active, true));
+    });
   }
 
   async createCompany(insertCompany: InsertCompany): Promise<Company> {
