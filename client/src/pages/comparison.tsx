@@ -72,10 +72,11 @@ export default function Comparison() {
   const userId = (comparison as any)?.userId;
   const companyId = (comparison as any)?.companyId;
   
-  const { data: threads = [] } = useQuery({
+  const { data: threadsResponse } = useQuery<{ data: any[]; pagination: any }>({
     queryKey: ["/api/emails/threads", userId],
     enabled: !!userId,
   });
+  const threads = threadsResponse?.data || [];
 
   // Send questions mutation
   const sendQuestionsMutation = useMutation({
@@ -213,7 +214,7 @@ export default function Comparison() {
   }));
 
   // Find the thread for this comparison
-  const thread = (threads as any[]).find((t: any) => t.companyId === companyId);
+  const thread = threads.find((t: any) => t.companyId === companyId);
   const threadId = thread?.id;
 
   const barWidthPercentage = offerPremium > 0 && currentPremium > 0 
