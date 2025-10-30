@@ -5,11 +5,18 @@ import { emailService } from "./services/emailService";
 import { createEmailPollingLock } from "./utils/distributedLock";
 import { validateSecrets } from "./config/secrets";
 import { globalLimiter } from "./middleware/rateLimiting";
+import { corsConfig, securityHeaders } from "./middleware/security";
 
 // Validate all required environment variables before starting the server
 validateSecrets();
 
 const app = express();
+
+// Apply security headers
+app.use(securityHeaders);
+
+// Apply CORS policy
+app.use(corsConfig);
 
 // Apply global rate limiting
 app.use(globalLimiter);
