@@ -1,4 +1,5 @@
 import express, { type Request, Response, NextFunction } from "express";
+import compression from "compression";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { emailService } from "./services/emailService";
@@ -21,6 +22,18 @@ app.use(corsConfig);
 
 // Apply global rate limiting
 app.use(globalLimiter);
+
+// Enable response compression (gzip/brotli)
+app.use(compression({
+  filter: (req: Request, res: Response) => {
+    if (req.headers['x-no-compression']) {
+      return false;
+    }
+    return compression.filter(req, res);
+  },
+  threshold: 1024, // Only compress responses larger than 1KB
+  level: 6, // Compression level (0-9, 6 is default balance)
+}));
 
 declare module 'http' {
   interface IncomingMessage {
