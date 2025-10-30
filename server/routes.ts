@@ -10,6 +10,7 @@ import { requireAuth, requireOwnership } from "./middleware/auth";
 import { validateFileUpload } from "./middleware/uploadValidation";
 import { uploadLimiter, emailLimiter, aiLimiter } from "./middleware/rateLimiting";
 import { generateCSRFToken, requireCSRFToken } from "./middleware/csrf";
+import { apiCaching, noCache } from "./middleware/caching";
 import { generateSignedUrl, validateSignedUrl } from "./utils/signedUrls";
 import { logger, auditLog } from "./utils/logging";
 import { calculateFileChecksum, validatePDFFile, scanFileForMalware } from "./utils/fileValidation";
@@ -43,7 +44,7 @@ const upload = multer({
 export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoints
   // CSRF token endpoint
-  app.get("/api/csrf-token", requireAuth, async (req, res) => {
+  app.get("/api/csrf-token", requireAuth, noCache, async (req, res) => {
     try {
       const userId = req.headers['x-user-id'] as string;
       const token = generateCSRFToken(userId);
@@ -81,7 +82,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/health", async (req, res) => {
+  app.get("/health", apiCaching(60), async (req, res) => {
     res.status(200).json({ 
       status: "ok", 
       timestamp: new Date().toISOString(),
@@ -89,7 +90,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.get("/ready", async (req, res) => {
+  app.get("/ready", apiCaching(60), async (req, res) => {
     try {
       // Check required environment variables
       const requiredEnvVars = ['OPENAI_API_KEY', 'MISTRAL_API_KEY', 'DATABASE_URL'];
@@ -142,7 +143,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/users/:id", requireAuth, requireOwnership, async (req, res) => {
+  app.get("/api/users/:id", requireAuth, requireOwnership, apiCaching(60), async (req, res) => {
     try {
       const user = await storage.getUser(req.params.id);
       if (!user) {
@@ -165,7 +166,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Company routes
-  app.get("/api/companies", async (req, res) => {
+  app.get("/api/companies", apiCaching(300), async (req, res) => {
     try {
       const companies = await storage.getActiveCompanies();
       res.json(companies);
