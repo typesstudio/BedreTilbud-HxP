@@ -142,7 +142,210 @@
 
 **Critical for 50+ Users:**
 - No auto-advancing carousels
-- Generous click/tap areas (minimum 44x44px)
+- Generous click/tap areas (minimum 48x48px on mobile, 44x44px desktop)
 - Clear visual feedback for all interactions
 - Persistent navigation (no hidden menus)
 - Ample whitespace between interactive elements
+
+## Mobile-First Responsive Design
+
+**Breakpoint Strategy:**
+- Mobile: < 768px (primary design target)
+- Tablet: 768px - 1023px
+- Desktop: ≥ 1024px
+- Large Desktop: ≥ 1440px
+
+**Core Mobile Principles:**
+1. **Mobile-first CSS** - Design for mobile, enhance for desktop
+2. **No horizontal scrolling** - Ever. All content must fit viewport width
+3. **Touch-optimized** - Minimum 48x48px tap targets with 8px spacing
+4. **Progressive enhancement** - Start simple, add complexity on larger screens
+5. **Performance-critical** - Lazy load images, reduce bundle size on mobile
+
+## Mobile Component Patterns
+
+### Tables → Stacked Cards Transformation
+**Desktop (≥768px):** Traditional 4-column table
+```html
+<Table>
+  <Table.Row>
+    <Table.Cell>Feature</Table.Cell>
+    <Table.Cell>Current</Table.Cell>
+    <Table.Cell>Offer</Table.Cell>
+    <Table.Cell>Difference</Table.Cell>
+  </Table.Row>
+</Table>
+```
+
+**Mobile (<768px):** Stacked comparison cards
+```html
+<div className="space-y-4 md:hidden">
+  <Card>
+    <CardHeader>Feature Name</CardHeader>
+    <div className="grid grid-cols-2 gap-4">
+      <div>
+        <Label>Nuværende</Label>
+        <Value>1,319 kr</Value>
+      </div>
+      <div>
+        <Label>Nyt tilbud</Label>
+        <Value>1,049 kr</Value>
+      </div>
+    </div>
+    <Badge>-271 kr/md</Badge>
+  </Card>
+</div>
+```
+
+### Charts on Mobile
+**Desktop:** Full-width area/bar charts with detailed axes
+**Mobile Adaptations:**
+- Reduce data points (show monthly instead of weekly)
+- Simplify axes labels
+- Use min-height: 300px for touch interaction
+- Consider horizontal scroll for timeline charts (with clear indicators)
+- Provide "View Full Chart" expansion option
+
+### Navigation Patterns
+**Desktop:** Horizontal top nav with breadcrumbs
+**Mobile:** 
+- Sticky top bar with hamburger menu (min-h-16)
+- Bottom navigation bar for primary actions (h-16)
+- Breadcrumbs replaced with back button
+- Full-screen menu overlays
+
+### Card Grids
+**Desktop:** `grid-cols-3 gap-6`
+**Tablet:** `md:grid-cols-2 gap-4`
+**Mobile:** `grid-cols-1 gap-4`
+
+### Form Layouts
+**Desktop:** 2-column form with side-by-side fields
+**Mobile:** Single column, full width inputs
+- Input height: h-14 (56px)
+- Spacing between fields: space-y-6
+- Labels above inputs (never beside)
+- Full-width buttons
+
+### Spacing Scale Adjustments
+**Desktop → Mobile:**
+- py-24 → py-12
+- py-16 → py-8
+- px-8 → px-4
+- gap-8 → gap-4
+- p-8 → p-6
+
+### Typography Responsive Scale
+Apply with Tailwind responsive classes:
+```
+text-5xl md:text-6xl    // Hero
+text-3xl md:text-5xl    // H1
+text-2xl md:text-3xl    // H2
+text-xl md:text-2xl     // H3
+text-base md:text-lg    // Body
+```
+
+## Touch Target Guidelines (Critical for 50+ Users)
+
+**Minimum Sizes:**
+- Primary buttons: 48px height, full-width on mobile
+- Icon buttons: 48x48px minimum
+- List items: 56px minimum height
+- Checkbox/Radio: 32x32px with 48x48px touch area
+- Links in paragraphs: 48px height (generous line-height)
+
+**Spacing Between Touch Targets:**
+- Minimum 8px vertical spacing between tappable elements
+- Minimum 12px in high-density areas (toolbars, button groups)
+
+**Button Styles Mobile:**
+```
+Primary: h-14 w-full rounded-lg text-lg font-semibold
+Secondary: h-12 w-full rounded-lg text-base
+Icon-only: min-w-[48px] min-h-[48px] rounded-lg
+```
+
+## Mobile Performance Optimizations
+
+**Images:**
+- Use `loading="lazy"` on all non-critical images
+- Provide responsive srcset: `<img srcset="image-sm.jpg 480w, image-md.jpg 768w" />`
+- WebP format with JPEG fallback
+- Max width 1200px on mobile (no need for larger)
+
+**Code Splitting:**
+- Lazy load comparison charts (import on scroll)
+- Defer non-critical JavaScript
+- Inline critical CSS
+
+**Bundle Size:**
+- Subframe components: Tree-shake unused components
+- Icons: Import only used icons individually
+- Fonts: Subset to Danish characters only
+
+## Mobile-Specific Component Rules
+
+### Comparison Cards (Mobile Alternative to Tables)
+```tsx
+<div className="md:hidden space-y-3">
+  <div className="rounded-lg border-2 p-4 space-y-3">
+    <div className="font-semibold text-lg">Category Name</div>
+    <div className="grid grid-cols-2 gap-3">
+      <div className="space-y-1">
+        <div className="text-sm text-muted-foreground">Nuværende</div>
+        <div className="text-base font-medium">Value</div>
+      </div>
+      <div className="space-y-1">
+        <div className="text-sm text-muted-foreground">Tilbud</div>
+        <div className="text-base font-medium">Value</div>
+      </div>
+    </div>
+    <Badge variant="success">Difference</Badge>
+  </div>
+</div>
+```
+
+### Accordion for Long Content
+Replace tabs with accordions on mobile:
+```tsx
+<Accordion type="single" className="md:hidden">
+  <AccordionItem value="item-1">
+    <AccordionTrigger className="text-lg py-4">Section</AccordionTrigger>
+    <AccordionContent className="px-4 pb-4">Content</AccordionContent>
+  </AccordionItem>
+</Accordion>
+```
+
+### Bottom Sticky Actions
+For important CTAs on mobile:
+```tsx
+<div className="md:hidden fixed bottom-0 left-0 right-0 p-4 bg-background border-t">
+  <Button className="w-full h-14">Primary Action</Button>
+</div>
+```
+
+## Testing Checklist
+
+**Mobile Viewports:**
+- iPhone SE (375px) - Minimum supported
+- iPhone 12/13 (390px) - Common
+- iPhone 12/13 Pro Max (428px) - Large phone
+- iPad Mini (768px) - Tablet breakpoint
+
+**Validation:**
+- [ ] No horizontal scroll at any viewport width
+- [ ] All touch targets ≥ 48x48px
+- [ ] Text readable without zoom (minimum 16px)
+- [ ] Forms usable with on-screen keyboard visible
+- [ ] Charts interactive and readable
+- [ ] Navigation accessible with thumb
+- [ ] Images load quickly (<3s on 3G)
+- [ ] Critical content above fold
+
+**Subframe Integration Rules:**
+When syncing new Subframe components, ensure:
+1. Add responsive classes: `className="w-full md:w-auto"`
+2. Wrap tables in mobile card alternative: `<div className="hidden md:block"><Table/></div>`
+3. Use Tailwind's `md:` prefix for desktop-only features
+4. Default to mobile layout, enhance with `md:` and `lg:`
+5. Test on 375px width before committing
