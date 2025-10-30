@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { CheckCircle, FileText } from "lucide-react";
+import { memo, useMemo } from "react";
 
 interface ComparisonGridProps {
   currentDocument: any;
@@ -8,19 +9,21 @@ interface ComparisonGridProps {
   comparisonData: any;
 }
 
-export default function ComparisonGrid({ currentDocument, offerDocument, comparisonData }: ComparisonGridProps) {
-  const currentData = currentDocument?.ocrData;
-  const offerData = offerDocument?.ocrData;
-  const coverageComparison = comparisonData?.coverageComparison || [];
+function ComparisonGrid({ currentDocument, offerDocument, comparisonData }: ComparisonGridProps) {
+  const currentData = useMemo(() => currentDocument?.ocrData, [currentDocument]);
+  const offerData = useMemo(() => offerDocument?.ocrData, [offerDocument]);
+  const coverageComparison = useMemo(() => comparisonData?.coverageComparison || [], [comparisonData]);
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('da-DK', {
-      style: 'currency',
-      currency: 'DKK',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount);
-  };
+  const formatCurrency = useMemo(() => {
+    return (amount: number) => {
+      return new Intl.NumberFormat('da-DK', {
+        style: 'currency',
+        currency: 'DKK',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(amount);
+    };
+  }, []);
 
   return (
     <div className="comparison-grid mb-8">
@@ -210,3 +213,5 @@ export default function ComparisonGrid({ currentDocument, offerDocument, compari
     </div>
   );
 }
+
+export default memo(ComparisonGrid);

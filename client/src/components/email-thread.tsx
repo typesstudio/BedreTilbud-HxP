@@ -1,6 +1,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Paperclip, Edit } from "lucide-react";
+import { memo, useMemo, useCallback } from "react";
 
 interface EmailThreadProps {
   emails: any[];
@@ -8,8 +9,8 @@ interface EmailThreadProps {
   getDirectionBadge: (direction: string) => React.ReactNode;
 }
 
-export default function EmailThread({ emails, company, getDirectionBadge }: EmailThreadProps) {
-  const formatDate = (date: string | Date) => {
+function EmailThread({ emails, company, getDirectionBadge }: EmailThreadProps) {
+  const formatDate = useCallback((date: string | Date) => {
     const d = new Date(date);
     return d.toLocaleDateString('da-DK', {
       day: 'numeric',
@@ -18,9 +19,9 @@ export default function EmailThread({ emails, company, getDirectionBadge }: Emai
       hour: '2-digit',
       minute: '2-digit'
     });
-  };
+  }, []);
 
-  const getEmailHeader = (email: any) => {
+  const getEmailHeader = useCallback((email: any) => {
     switch (email.direction) {
       case 'outbound':
         return `Dig → ${company?.name || 'Forsikringsselskab'}`;
@@ -31,9 +32,9 @@ export default function EmailThread({ emails, company, getDirectionBadge }: Emai
       default:
         return 'Ukendt afsender';
     }
-  };
+  }, [company]);
 
-  const getEmailStyle = (direction: string) => {
+  const getEmailStyle = useCallback((direction: string) => {
     switch (direction) {
       case 'outbound':
         return 'bg-muted';
@@ -44,9 +45,9 @@ export default function EmailThread({ emails, company, getDirectionBadge }: Emai
       default:
         return 'bg-muted';
     }
-  };
+  }, []);
 
-  const getDotStyle = (direction: string) => {
+  const getDotStyle = useCallback((direction: string) => {
     switch (direction) {
       case 'outbound':
         return 'bg-primary';
@@ -57,7 +58,7 @@ export default function EmailThread({ emails, company, getDirectionBadge }: Emai
       default:
         return 'bg-primary';
     }
-  };
+  }, []);
 
   return (
     <div className="space-y-8">
@@ -131,3 +132,5 @@ export default function EmailThread({ emails, company, getDirectionBadge }: Emai
     </div>
   );
 }
+
+export default memo(EmailThread);
