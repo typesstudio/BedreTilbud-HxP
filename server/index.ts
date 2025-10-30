@@ -15,6 +15,11 @@ validateSecrets();
 
 const app = express();
 
+// Trust proxy in development (for Replit environment)
+if (app.get("env") === "development") {
+  app.set('trust proxy', 1);
+}
+
 // Apply security headers
 app.use(securityHeaders);
 
