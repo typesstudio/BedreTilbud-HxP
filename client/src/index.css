@@ -216,3 +216,196 @@
 .shadow-card-lg {
   box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
 }
+
+/* ========================================
+   MOBILE-FIRST UTILITY CLASSES
+   ======================================== */
+
+/* Touch Target Optimization (50+ users) */
+@layer utilities {
+  /* Minimum 48x48px touch targets on mobile */
+  .touch-target {
+    @apply min-h-[48px] min-w-[48px];
+  }
+
+  .touch-target-lg {
+    @apply min-h-[56px] min-w-[56px];
+  }
+
+  /* Safe area for notched phones */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-area-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-area-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Mobile-optimized spacing */
+  .mobile-padding {
+    @apply px-4 py-6 md:px-6 md:py-8;
+  }
+
+  .mobile-gap {
+    @apply gap-4 md:gap-6;
+  }
+
+  /* Prevent horizontal scroll */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* Mobile-friendly buttons */
+  .btn-mobile-primary {
+    @apply h-14 w-full rounded-lg px-6 text-lg font-semibold;
+  }
+
+  .btn-mobile-secondary {
+    @apply h-12 w-full rounded-lg px-6 text-base font-medium;
+  }
+
+  /* Mobile card stacking */
+  .stack-on-mobile {
+    @apply flex flex-col gap-4 md:flex-row md:gap-6;
+  }
+
+  /* Mobile table alternative - comparison cards */
+  .comparison-card-mobile {
+    @apply rounded-lg border-2 border-neutral-200 bg-white p-4 shadow-sm md:hidden;
+  }
+
+  .comparison-card-header {
+    @apply mb-3 text-lg font-semibold text-foreground;
+  }
+
+  .comparison-card-grid {
+    @apply grid grid-cols-2 gap-3;
+  }
+
+  .comparison-card-label {
+    @apply text-sm font-medium text-muted-foreground;
+  }
+
+  .comparison-card-value {
+    @apply mt-1 text-base font-semibold text-foreground;
+  }
+
+  /* Mobile sticky elements */
+  .sticky-mobile-header {
+    @apply sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60;
+  }
+
+  .sticky-mobile-bottom {
+    @apply fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur p-4 supports-[backdrop-filter]:bg-background/60;
+  }
+
+  /* Mobile-optimized chart container */
+  .chart-mobile {
+    @apply h-[300px] w-full overflow-x-auto md:h-[400px] md:overflow-visible;
+  }
+
+  /* Text truncation for mobile */
+  .text-truncate-mobile {
+    @apply line-clamp-2 md:line-clamp-none;
+  }
+
+  /* Touch-friendly list items */
+  .list-item-mobile {
+    @apply flex min-h-[56px] items-center gap-3 rounded-lg px-4 py-3 transition-colors hover:bg-muted/50 active:bg-muted;
+  }
+
+  /* Mobile grid patterns */
+  .grid-mobile-1-desktop-2 {
+    @apply grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6;
+  }
+
+  .grid-mobile-1-desktop-3 {
+    @apply grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 md:gap-6;
+  }
+
+  .grid-mobile-1-desktop-4 {
+    @apply grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 md:gap-6;
+  }
+
+  /* Mobile form optimization */
+  .form-mobile {
+    @apply space-y-6 md:space-y-8;
+  }
+
+  .input-mobile {
+    @apply h-14 w-full rounded-lg border-2 px-4 text-lg md:h-12 md:text-base;
+  }
+
+  .label-mobile {
+    @apply mb-2 block text-base font-semibold md:text-sm;
+  }
+}
+
+/* Mobile-specific breakpoint utilities */
+@media (max-width: 767px) {
+  /* Ensure readable text on small screens */
+  .min-text-mobile {
+    font-size: max(16px, 1em);
+  }
+
+  /* Reduce motion for better performance on mobile */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Mobile-specific focus styles (larger for fat fingers) */
+  :focus-visible {
+    outline: 3px solid hsl(var(--ring));
+    outline-offset: 3px;
+  }
+
+  /* Improve tap highlight color on mobile */
+  * {
+    -webkit-tap-highlight-color: hsl(var(--primary) / 0.1);
+  }
+
+  /* Ensure tables don't overflow on mobile */
+  table {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+}
+
+/* Desktop-only display utilities */
+@media (min-width: 768px) {
+  .mobile-only {
+    display: none !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .desktop-only {
+    display: none !important;
+  }
+
+  /* Optimize padding for mobile */
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}
