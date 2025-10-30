@@ -1,0 +1,508 @@
+1) Run the following command to sync Subframe components:
+  
+  ```bash
+  npx @subframe/cli@latest sync --all -p 34bd735365b5
+  ```
+  
+  2) Create a new page using the following TSX code. If the page already exists, use it as reference to update the existing code but preserve existing business logic or functionality.
+  
+  ```tsx
+  "use client";
+
+import React from "react";
+import { Avatar } from "@/ui/components/Avatar";
+import { Badge } from "@/ui/components/Badge";
+import { Button } from "@/ui/components/Button";
+import { IconButton } from "@/ui/components/IconButton";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import { FeatherDownload } from "@subframe/core";
+import { FeatherEdit } from "@subframe/core";
+import { FeatherFileText } from "@subframe/core";
+import { FeatherMoreVertical } from "@subframe/core";
+import { FeatherPlus } from "@subframe/core";
+import { FeatherUpload } from "@subframe/core";
+
+function ProfileManagementHub() {
+  return (
+    <DefaultPageLayout>
+      <div className="flex h-full w-full flex-col items-start">
+        <div className="flex w-full grow shrink-0 basis-0 flex-col items-center gap-8 bg-default-background px-4 py-6 overflow-auto mobile:px-4 mobile:py-4">
+          <div className="flex w-full max-w-[768px] flex-col items-start gap-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4">
+            <div className="flex w-full flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+              <div className="flex w-full items-center gap-4 mobile:flex-row mobile:flex-nowrap mobile:gap-3">
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <span className="text-heading-1 font-heading-1 text-default-font mobile:text-heading-2 mobile:font-heading-2">
+                    Din profil
+                  </span>
+                  <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                    Her kan du ændre i din information og tilføje personer til
+                    din husstand, samt tilføje flere forsikringer
+                  </span>
+                </div>
+              </div>
+            </div>
+            <div className="flex w-full flex-col items-start gap-8 rounded-md border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-6 mobile:px-4 mobile:py-4">
+              <div className="flex w-full flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+                <div className="flex w-full items-center gap-2 flex-wrap">
+                  <span className="grow shrink-0 basis-0 text-heading-2 font-heading-2 text-default-font">
+                    Personal Information
+                  </span>
+                  <Button
+                    className="mobile:h-8 mobile:grow mobile:shrink-0 mobile:basis-0"
+                    variant="neutral-secondary"
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                  >
+                    Edit information
+                  </Button>
+                </div>
+                <div className="flex w-full flex-col items-start">
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
+                    <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                      Full name
+                    </span>
+                    <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold">
+                      John Smith
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
+                    <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                      Email
+                    </span>
+                    <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold">
+                      john.smith@email.com
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
+                    <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                      Phone number
+                    </span>
+                    <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold">
+                      +45 12 34 56 78
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
+                    <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                      Date of birth
+                    </span>
+                    <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold">
+                      15/03/1985
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
+                    <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                      Address
+                    </span>
+                    <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold">
+                      Vesterbrogade 123, 1620 Copenhagen
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
+                    <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                      Personal ID Number
+                    </span>
+                    <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold">
+                      ************
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex w-full flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+                <div className="flex w-full items-center gap-2 flex-wrap">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    Uploaded Insurance Documents
+                  </span>
+                  <Button
+                    className="mobile:h-8 mobile:grow mobile:shrink-0 mobile:basis-0"
+                    variant="neutral-secondary"
+                    icon={<FeatherUpload />}
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                  >
+                    Upload policy
+                  </Button>
+                </div>
+                <div className="flex w-full flex-col items-start">
+                  <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-6 mobile:flex-row mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:py-4">
+                    <IconWithBackground
+                      className="mobile:hidden"
+                      size="large"
+                      icon={<FeatherFileText />}
+                    />
+                    <IconWithBackground
+                      className="hidden mobile:flex"
+                      size="medium"
+                      icon={<FeatherFileText />}
+                    />
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start justify-center gap-1">
+                      <span className="w-full text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                        Home Insurance Policy
+                      </span>
+                      <span className="w-full text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                        Uploaded January 15, 2025 • PDF • 2.4 MB
+                      </span>
+                    </div>
+                    <Button
+                      className="mobile:hidden"
+                      variant="neutral-secondary"
+                      size="small"
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    >
+                      View
+                    </Button>
+                    <IconButton
+                      className="mobile:hidden"
+                      size="small"
+                      icon={<FeatherDownload />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                    <IconButton
+                      className="hidden mobile:flex"
+                      size="small"
+                      icon={<FeatherMoreVertical />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                  <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-6 mobile:flex-row mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:py-4">
+                    <IconWithBackground
+                      className="mobile:hidden"
+                      size="large"
+                      icon={<FeatherFileText />}
+                    />
+                    <IconWithBackground
+                      className="hidden mobile:flex"
+                      size="medium"
+                      icon={<FeatherFileText />}
+                    />
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start justify-center gap-1">
+                      <span className="w-full text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                        Car Insurance Policy
+                      </span>
+                      <span className="w-full text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                        Uploaded January 12, 2025 • PDF • 1.8 MB
+                      </span>
+                    </div>
+                    <Button
+                      className="mobile:hidden"
+                      variant="neutral-secondary"
+                      size="small"
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    >
+                      View
+                    </Button>
+                    <IconButton
+                      className="mobile:hidden"
+                      size="small"
+                      icon={<FeatherDownload />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                    <IconButton
+                      className="hidden mobile:flex"
+                      size="small"
+                      icon={<FeatherMoreVertical />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                  <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-6 mobile:flex-row mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:py-4">
+                    <IconWithBackground
+                      className="mobile:hidden"
+                      size="large"
+                      icon={<FeatherFileText />}
+                    />
+                    <IconWithBackground
+                      className="hidden mobile:flex"
+                      size="medium"
+                      icon={<FeatherFileText />}
+                    />
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start justify-center gap-1">
+                      <span className="w-full text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                        Health Insurance Policy
+                      </span>
+                      <span className="w-full text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                        Uploaded December 28, 2024 • PDF • 3.1 MB
+                      </span>
+                    </div>
+                    <Button
+                      className="mobile:hidden"
+                      variant="neutral-secondary"
+                      size="small"
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    >
+                      View
+                    </Button>
+                    <IconButton
+                      className="mobile:hidden"
+                      size="small"
+                      icon={<FeatherDownload />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                    <IconButton
+                      className="hidden mobile:flex"
+                      size="small"
+                      icon={<FeatherMoreVertical />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                  <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-6 mobile:flex-row mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:py-4">
+                    <IconWithBackground
+                      className="mobile:hidden"
+                      size="large"
+                      icon={<FeatherFileText />}
+                    />
+                    <IconWithBackground
+                      className="hidden mobile:flex"
+                      size="medium"
+                      icon={<FeatherFileText />}
+                    />
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start justify-center gap-1">
+                      <span className="w-full text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                        Travel Insurance Policy
+                      </span>
+                      <span className="w-full text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                        Uploaded December 20, 2024 • PDF • 1.2 MB
+                      </span>
+                    </div>
+                    <Button
+                      className="mobile:hidden"
+                      variant="neutral-secondary"
+                      size="small"
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    >
+                      View
+                    </Button>
+                    <IconButton
+                      className="mobile:hidden"
+                      size="small"
+                      icon={<FeatherDownload />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                    <IconButton
+                      className="hidden mobile:flex"
+                      size="small"
+                      icon={<FeatherMoreVertical />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="flex w-full flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+                <div className="flex w-full items-center gap-2 flex-wrap">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    Household Members
+                  </span>
+                  <Button
+                    className="mobile:h-8 mobile:grow mobile:shrink-0 mobile:basis-0"
+                    variant="neutral-secondary"
+                    icon={<FeatherPlus />}
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                  >
+                    Add member
+                  </Button>
+                </div>
+                <div className="flex w-full flex-col items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background px-4 py-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-3 mobile:py-3">
+                  <div className="flex w-full items-center gap-4 mobile:flex-row mobile:flex-nowrap mobile:gap-3">
+                    <Avatar
+                      className="mobile:hidden"
+                      image="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop"
+                    >
+                      MS
+                    </Avatar>
+                    <Avatar
+                      className="hidden mobile:flex"
+                      size="small"
+                      image="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=400&h=400&fit=crop"
+                    >
+                      MS
+                    </Avatar>
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                      <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                        Maria Smith
+                      </span>
+                      <span className="text-caption font-caption text-subtext-color">
+                        Spouse • Born 22/08/1987
+                      </span>
+                    </div>
+                    <IconButton
+                      size="small"
+                      icon={<FeatherEdit />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                  <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
+                  <div className="flex w-full items-center gap-4 mobile:flex-row mobile:flex-nowrap mobile:gap-3">
+                    <Avatar className="mobile:hidden" image="">
+                      ES
+                    </Avatar>
+                    <Avatar
+                      className="hidden mobile:flex"
+                      size="small"
+                      image=""
+                    >
+                      ES
+                    </Avatar>
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                      <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                        Emma Smith
+                      </span>
+                      <span className="text-caption font-caption text-subtext-color">
+                        Child • Born 14/05/2015
+                      </span>
+                    </div>
+                    <IconButton
+                      size="small"
+                      icon={<FeatherEdit />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                  <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
+                  <div className="flex w-full items-center gap-4 mobile:flex-row mobile:flex-nowrap mobile:gap-3">
+                    <Avatar className="mobile:hidden" image="">
+                      LS
+                    </Avatar>
+                    <Avatar
+                      className="hidden mobile:flex"
+                      size="small"
+                      image=""
+                    >
+                      LS
+                    </Avatar>
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                      <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                        Lucas Smith
+                      </span>
+                      <span className="text-caption font-caption text-subtext-color">
+                        Child • Born 09/11/2018
+                      </span>
+                    </div>
+                    <IconButton
+                      size="small"
+                      icon={<FeatherEdit />}
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div className="flex w-full flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+                <div className="flex w-full items-center gap-2 flex-wrap">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    Insurance Preferences
+                  </span>
+                  <Button
+                    className="mobile:h-8 mobile:grow mobile:shrink-0 mobile:basis-0"
+                    variant="neutral-secondary"
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                  >
+                    Edit preferences
+                  </Button>
+                </div>
+                <div className="flex w-full flex-col items-start gap-6 rounded-md border border-solid border-neutral-border bg-neutral-50 px-6 py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4 mobile:px-4 mobile:py-4">
+                  <div className="flex w-full flex-col items-start gap-3 mobile:flex-col mobile:flex-nowrap mobile:gap-2">
+                    <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                      Insurance Types I Need
+                    </span>
+                    <div className="flex w-full items-start gap-2 flex-wrap">
+                      <Badge>Rejseforsikring</Badge>
+                      <Badge>Bilforsikring</Badge>
+                      <Badge>Husforsikring</Badge>
+                      <Badge variant="neutral" icon={<FeatherPlus />}>
+                        Add insurance type
+                      </Badge>
+                    </div>
+                  </div>
+                  <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
+                  <div className="flex w-full flex-col items-start gap-3 mobile:flex-col mobile:flex-nowrap mobile:gap-2">
+                    <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                      What&#39;s Most Important to Me
+                    </span>
+                    <div className="flex w-full flex-col items-start">
+                      <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-4 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-3">
+                        <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                          Priority #1
+                        </span>
+                        <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold">
+                          Lowest price
+                        </span>
+                      </div>
+                      <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-4 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-3">
+                        <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                          Priority #2
+                        </span>
+                        <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold">
+                          Good customer service
+                        </span>
+                      </div>
+                      <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-4 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-3">
+                        <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                          Priority #3
+                        </span>
+                        <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold">
+                          Comprehensive coverage
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
+                  <div className="flex w-full flex-col items-start gap-3 mobile:flex-col mobile:flex-nowrap mobile:gap-2">
+                    <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                      Additional Requirements
+                    </span>
+                    <div className="flex w-full flex-col items-start gap-2">
+                      <span className="text-body font-body text-default-font mobile:text-caption mobile:font-caption">
+                        • Coverage needed worldwide for travel insurance
+                      </span>
+                      <span className="text-body font-body text-default-font mobile:text-caption mobile:font-caption">
+                        • Prefer Danish insurance companies
+                      </span>
+                      <span className="text-body font-body text-default-font mobile:text-caption mobile:font-caption">
+                        • Need family coverage for all policies
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex w-full flex-col items-center justify-center gap-2">
+              <span className="text-caption font-caption text-subtext-color text-center mobile:font-['Afacad_Flux'] mobile:text-[11px] mobile:font-[400] mobile:leading-[14px] mobile:tracking-normal">
+                © Copyright 2025, BedreTilbud.com. All rights reserved.
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </DefaultPageLayout>
+  );
+}
+
+export default ProfileManagementHub;
+
+  ```
+  
