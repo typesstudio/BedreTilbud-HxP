@@ -60,6 +60,12 @@ export interface IStorage {
   createHouseholdMember(member: InsertHouseholdMember): Promise<HouseholdMember>;
   updateHouseholdMember(id: string, updates: Partial<InsertHouseholdMember>): Promise<HouseholdMember>;
   deleteHouseholdMember(id: string): Promise<void>;
+
+  // Navigation Data
+  getNavigationData(userId: string): Promise<{
+    comparisons: Array<Comparison & { companyName: string }>;
+    pendingThreads: Array<EmailThread & { companyName: string }>;
+  }>;
 }
 
 export class MemStorage implements IStorage {
@@ -357,6 +363,38 @@ export class MemStorage implements IStorage {
   async deleteHouseholdMember(id: string): Promise<void> {
     this.householdMembers.delete(id);
   }
+
+  async getNavigationData(userId: string): Promise<{
+    comparisons: Array<Comparison & { companyName: string }>;
+    pendingThreads: Array<EmailThread & { companyName: string }>;
+  }> {
+    const userComparisons = Array.from(this.comparisons.values())
+      .filter(c => c.userId === userId);
+    
+    const comparisonsWithCompany = userComparisons.map(comparison => {
+      const company = this.companies.get(comparison.companyId || '');
+      return {
+        ...comparison,
+        companyName: company?.name || 'Unknown Company'
+      };
+    });
+
+    const userThreads = Array.from(this.emailThreads.values())
+      .filter(t => t.userId === userId && (t.status === 'sent' || t.status === 'pending'));
+    
+    const threadsWithCompany = userThreads.map(thread => {
+      const company = this.companies.get(thread.companyId || '');
+      return {
+        ...thread,
+        companyName: company?.name || 'Unknown Company'
+      };
+    });
+
+    return {
+      comparisons: comparisonsWithCompany,
+      pendingThreads: threadsWithCompany
+    };
+  }
 }
 
 export class DatabaseStorage implements IStorage {
@@ -606,6 +644,58 @@ export class DatabaseStorage implements IStorage {
     const { householdMembers } = await import("@shared/schema");
     const { eq } = await import("drizzle-orm");
     await db.delete(householdMembers).where(eq(householdMembers.id, id));
+  }
+
+  async getNavigationData(userId: string): Promise<{
+    comparisons: Array<Comparison & { companyName: string }>;
+    pendingThreads: Array<EmailThread & { companyName: string }>;
+  }> {
+    const { db } = await import("./db");
+    const { comparisons, emailThreads, companies } = await import("@shared/schema");
+    const { eq, and, or } = await import("drizzle-orm");
+
+    // Fetch comparisons with company names using SQL join
+    const userComparisons = await db
+      .select({
+        comparison: comparisons,
+        company: companies
+      })
+      .from(comparisons)
+      .leftJoin(companies, eq(comparisons.companyId, companies.id))
+      .where(eq(comparisons.userId, userId));
+
+    const comparisonsWithCompany = userComparisons.map(row => ({
+      ...row.comparison,
+      companyName: row.company?.name || 'Unknown Company'
+    }));
+
+    // Fetch pending threads with company names using SQL join
+    const userThreads = await db
+      .select({
+        thread: emailThreads,
+        company: companies
+      })
+      .from(emailThreads)
+      .leftJoin(companies, eq(emailThreads.companyId, companies.id))
+      .where(
+        and(
+          eq(emailThreads.userId, userId),
+          or(
+            eq(emailThreads.status, 'sent'),
+            eq(emailThreads.status, 'pending')
+          )
+        )
+      );
+
+    const threadsWithCompany = userThreads.map(row => ({
+      ...row.thread,
+      companyName: row.company?.name || 'Unknown Company'
+    }));
+
+    return {
+      comparisons: comparisonsWithCompany,
+      pendingThreads: threadsWithCompany
+    };
   }
 }
 

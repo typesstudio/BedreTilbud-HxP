@@ -173,6 +173,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Navigation data endpoint
+  app.get("/api/nav-data/:userId", requireAuth, requireOwnership, apiCaching(30), async (req, res) => {
+    try {
+      const navData = await storage.getNavigationData(req.params.userId);
+      res.json(navData);
+    } catch (error: any) {
+      logger.error('Failed to fetch navigation data', error, { userId: req.params.userId });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.put("/api/users/:id", requireAuth, requireOwnership, async (req, res) => {
     try {
       const updates = insertUserSchema.partial().parse(req.body);
