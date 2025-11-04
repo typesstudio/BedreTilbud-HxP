@@ -29,15 +29,16 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
         </span>
       }
       footer={
-        <Button
-          variant="brand-primary"
-          size="medium"
-          className="w-full"
-          onClick={() => {}}
-          data-testid="button-refer-friend"
-        >
-          Få bedre tilbud
-        </Button>
+        <Link href="#">
+          <Button
+            variant="brand-primary"
+            size="medium"
+            className="w-full"
+            data-testid="button-refer-friend"
+          >
+            Få bedre tilbud
+          </Button>
+        </Link>
       }
     >
       {/* Oversigt Section */}
