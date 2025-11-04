@@ -1,8 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { SidebarWithSections } from "@/ui/components/SidebarWithSections";
-import { Badge } from "@/ui/components/Badge";
-import { Button } from "@/ui/components/Button";
+import { SidebarWithSections, Badge, Button } from "@/ui";
 import { Eye, TrendingUp, UserCircle } from "lucide-react";
 
 interface NavigationSidebarProps {
