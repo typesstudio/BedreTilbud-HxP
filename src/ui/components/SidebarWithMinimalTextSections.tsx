@@ -125,7 +125,7 @@ const SidebarWithMinimalTextSectionsRoot = React.forwardRef<
   return (
     <nav
       className={SubframeUtils.twClassNames(
-        "flex h-full w-72 flex-col items-start bg-default-background",
+        "flex h-full w-72 flex-col items-start bg-default-background border-r border-solid border-neutral-border",
         className
       )}
       ref={ref}
