@@ -1,0 +1,118 @@
+1) Run the following command to sync Subframe components:
+  
+  ```bash
+  npx @subframe/cli@latest sync SidebarWithMinimalTextSections Badge Button -p 34bd735365b5
+  ```
+
+2) Add the following code to the page. If the code already exists, update the existing code but preserve existing business logic or functionality.
+  
+  ```tsx
+  <SidebarWithMinimalTextSections
+  header={
+    <div className="flex w-full items-center gap-4">
+      <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+        Bedretilbud.com
+      </span>
+    </div>
+  }
+  footer={
+    <div className="flex w-full flex-col items-start gap-4">
+      <div className="flex w-full items-center gap-6 rounded-md border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+        <FeatherRocket className="text-heading-1 font-heading-1 text-brand-700" />
+        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Få gratis flere tilbud
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Inviter dine venner
+          </span>
+        </div>
+      </div>
+      <Button
+        className="h-8 w-full flex-none"
+        disabled={false}
+        variant="brand-primary"
+        size="medium"
+        icon={null}
+        iconRight={null}
+        loading={false}
+        onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+      >
+        Få flere tilbud nu
+      </Button>
+    </div>
+  }
+>
+  <SidebarWithMinimalTextSections.NavSection label="Oversigt">
+    <SidebarWithMinimalTextSections.NavItem
+      icon={<FeatherCoins />}
+      selected={true}
+    >
+      Se alle bedre tilbud
+    </SidebarWithMinimalTextSections.NavItem>
+    <SidebarWithMinimalTextSections.NavItem icon={<FeatherRocket />}>
+      Få flere tilbud
+    </SidebarWithMinimalTextSections.NavItem>
+    <SidebarWithMinimalTextSections.NavItem icon={<FeatherUser />}>
+      Din profil
+    </SidebarWithMinimalTextSections.NavItem>
+  </SidebarWithMinimalTextSections.NavSection>
+  <SidebarWithMinimalTextSections.NavSection label="Dine bedre tilbud">
+    <div className="flex w-full items-center justify-center gap-4 pb-1">
+      <SidebarWithMinimalTextSections.NavItem>
+        Tryg forsikring
+      </SidebarWithMinimalTextSections.NavItem>
+      <Badge variant="brand" icon={null} iconRight={null}>
+        Se tilbud
+      </Badge>
+    </div>
+    <div className="flex w-full items-center justify-center gap-4 pb-1">
+      <SidebarWithMinimalTextSections.NavItem>
+        IF forsikring
+      </SidebarWithMinimalTextSections.NavItem>
+      <Badge variant="brand" icon={null} iconRight={null}>
+        Se tilbud
+      </Badge>
+    </div>
+  </SidebarWithMinimalTextSections.NavSection>
+  <SidebarWithMinimalTextSections.NavSection label="Tilbud indhentes">
+    <div className="flex w-full items-center justify-center gap-4 pb-1">
+      <SidebarWithMinimalTextSections.NavItem>
+        ALM brand forsikring
+      </SidebarWithMinimalTextSections.NavItem>
+      <Badge variant="neutral" icon={null} iconRight={null}>
+        På vej
+      </Badge>
+    </div>
+    <div className="flex w-full items-center justify-center gap-4 pb-1">
+      <SidebarWithMinimalTextSections.NavItem>
+        Privat sikring forsikring
+      </SidebarWithMinimalTextSections.NavItem>
+      <Badge variant="neutral" icon={null} iconRight={null}>
+        På vej
+      </Badge>
+    </div>
+    <div className="flex w-full items-center justify-center gap-4 pb-1">
+      <SidebarWithMinimalTextSections.NavItem>
+        Gjensidig forsikring
+      </SidebarWithMinimalTextSections.NavItem>
+      <Badge variant="neutral" icon={null} iconRight={null}>
+        På vej
+      </Badge>
+    </div>
+  </SidebarWithMinimalTextSections.NavSection>
+</SidebarWithMinimalTextSections>
+
+  ```
+
+3) Be sure to import the components used in the code as well.
+  
+  ```tsx
+  import React from "react";
+import { Badge } from "@/ui/components/Badge";
+import { Button } from "@/ui/components/Button";
+import { SidebarWithMinimalTextSections } from "@/ui/components/SidebarWithMinimalTextSections";
+import { FeatherCoins } from "@subframe/core";
+import { FeatherRocket } from "@subframe/core";
+import { FeatherUser } from "@subframe/core";
+  ```

@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { SidebarWithSections, Badge, Button } from "@/ui";
-import { Eye, TrendingUp, UserCircle } from "lucide-react";
+import { SidebarWithMinimalTextSections, Badge, Button } from "@/ui";
+import { FeatherCoins, FeatherRocket, FeatherUser } from "@subframe/core";
 
 interface NavigationSidebarProps {
   userId: string;
@@ -20,58 +20,77 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
   } | undefined;
 
   return (
-    <SidebarWithSections
+    <SidebarWithMinimalTextSections
       header={
-        <span className="text-heading-2 font-heading-2 text-default-font">
-          Bedretilbud.com
-        </span>
+        <div className="flex w-full items-center gap-4">
+          <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+            Bedretilbud.com
+          </span>
+        </div>
       }
       footer={
-        <Link href="#">
-          <Button
-            variant="brand-primary"
-            size="medium"
-            className="w-full"
-            data-testid="button-refer-friend"
-          >
-            Få bedre tilbud
-          </Button>
-        </Link>
+        <div className="flex w-full flex-col items-start gap-4">
+          <div className="flex w-full items-center gap-6 rounded-md border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+            <FeatherRocket className="text-heading-1 font-heading-1 text-brand-700" />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-body-bold font-body-bold text-default-font">
+                Få gratis flere tilbud
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                Inviter dine venner
+              </span>
+            </div>
+          </div>
+          <Link href="#" className="w-full">
+            <Button
+              className="h-8 w-full flex-none"
+              disabled={false}
+              variant="brand-primary"
+              size="medium"
+              icon={null}
+              iconRight={null}
+              loading={false}
+              data-testid="button-get-offers"
+            >
+              Få flere tilbud nu
+            </Button>
+          </Link>
+        </div>
       }
     >
       {/* Oversigt Section */}
-      <SidebarWithSections.NavSection label="Oversigt">
+      <SidebarWithMinimalTextSections.NavSection label="Oversigt">
         <Link href="/offers">
-          <SidebarWithSections.NavItem
-            icon={<Eye />}
+          <SidebarWithMinimalTextSections.NavItem
+            icon={<FeatherCoins />}
             selected={location === "/offers"}
             data-testid="nav-offers"
           >
             Se alle bedre tilbud
-          </SidebarWithSections.NavItem>
+          </SidebarWithMinimalTextSections.NavItem>
         </Link>
         <Link href="#">
-          <SidebarWithSections.NavItem
-            icon={<TrendingUp />}
+          <SidebarWithMinimalTextSections.NavItem
+            icon={<FeatherRocket />}
             selected={false}
             data-testid="nav-get-offers"
           >
             Få flere tilbud
-          </SidebarWithSections.NavItem>
+          </SidebarWithMinimalTextSections.NavItem>
         </Link>
         <Link href={`/profile/${userId}`}>
-          <SidebarWithSections.NavItem
-            icon={<UserCircle />}
+          <SidebarWithMinimalTextSections.NavItem
+            icon={<FeatherUser />}
             selected={location === `/profile/${userId}`}
             data-testid="nav-profile"
           >
             Din profil
-          </SidebarWithSections.NavItem>
+          </SidebarWithMinimalTextSections.NavItem>
         </Link>
-      </SidebarWithSections.NavSection>
+      </SidebarWithMinimalTextSections.NavSection>
 
       {/* Dine bedre tilbud Section */}
-      <SidebarWithSections.NavSection label="Dine bedre tilbud">
+      <SidebarWithMinimalTextSections.NavSection label="Dine bedre tilbud">
         {isLoading ? (
           <div className="px-3 py-2 text-caption font-caption text-subtext-color" data-testid="nav-loading">
             Indlæser...
@@ -82,25 +101,25 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
           </div>
         ) : (
           navData?.comparisons.map((comparison) => (
-            <Link key={comparison.id} href={`/comparison/${comparison.id}`}>
-              <SidebarWithSections.NavItem
-                selected={location === `/comparison/${comparison.id}`}
-                rightSlot={
-                  <Badge variant="brand" data-testid={`badge-comparison-${comparison.id}`}>
-                    Se tilbud
-                  </Badge>
-                }
-                data-testid={`nav-comparison-${comparison.id}`}
-              >
-                {comparison.companyName}
-              </SidebarWithSections.NavItem>
-            </Link>
+            <div key={comparison.id} className="flex w-full items-center justify-center gap-4 pb-1">
+              <Link href={`/comparison/${comparison.id}`} className="flex-1">
+                <SidebarWithMinimalTextSections.NavItem
+                  selected={location === `/comparison/${comparison.id}`}
+                  data-testid={`nav-comparison-${comparison.id}`}
+                >
+                  {comparison.companyName}
+                </SidebarWithMinimalTextSections.NavItem>
+              </Link>
+              <Badge variant="brand" icon={null} iconRight={null} data-testid={`badge-comparison-${comparison.id}`}>
+                Se tilbud
+              </Badge>
+            </div>
           ))
         )}
-      </SidebarWithSections.NavSection>
+      </SidebarWithMinimalTextSections.NavSection>
 
       {/* Tilbud indhentes Section */}
-      <SidebarWithSections.NavSection label="Tilbud indhentes">
+      <SidebarWithMinimalTextSections.NavSection label="Tilbud indhentes">
         {isLoading ? (
           <div className="px-3 py-2 text-caption font-caption text-subtext-color" data-testid="nav-pending-loading">
             Indlæser...
@@ -111,21 +130,20 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
           </div>
         ) : (
           navData?.pendingThreads.map((thread) => (
-            <SidebarWithSections.NavItem
-              key={thread.id}
-              selected={false}
-              rightSlot={
-                <Badge variant="neutral" data-testid={`badge-pending-${thread.id}`}>
-                  På vej
-                </Badge>
-              }
-              data-testid={`nav-pending-${thread.id}`}
-            >
-              {thread.companyName}
-            </SidebarWithSections.NavItem>
+            <div key={thread.id} className="flex w-full items-center justify-center gap-4 pb-1">
+              <SidebarWithMinimalTextSections.NavItem
+                selected={false}
+                data-testid={`nav-pending-${thread.id}`}
+              >
+                {thread.companyName}
+              </SidebarWithMinimalTextSections.NavItem>
+              <Badge variant="neutral" icon={null} iconRight={null} data-testid={`badge-pending-${thread.id}`}>
+                På vej
+              </Badge>
+            </div>
           ))
         )}
-      </SidebarWithSections.NavSection>
-    </SidebarWithSections>
+      </SidebarWithMinimalTextSections.NavSection>
+    </SidebarWithMinimalTextSections>
   );
 }
