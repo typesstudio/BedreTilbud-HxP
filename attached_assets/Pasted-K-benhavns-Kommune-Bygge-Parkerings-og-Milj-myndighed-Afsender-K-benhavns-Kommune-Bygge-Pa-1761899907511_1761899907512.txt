@@ -1,0 +1,288 @@
+Københavns Kommune
+Bygge-
+, Parkerings-
+, og Miljømyndighed
+Afsender
+Københavns Kommune, Bygge-
+, Parkerings-
+, og Miljømyndighed
+postboks 416, 1504 København V
+BBR-meddelelse
+Oplysninger fra Bygnings- og Boligregistret
+Ejendomsnummer (BFE-nr.): 6023336
+Udskriftsdato: 09.10.2025
+Denne BBR-meddelelse er hentet via selvbetjening.
+Tilføjelser eller rettelser bedes oplyst til kommunen på: BBR@kk.dk.
+Ejere af ejendommen kan desuden benytte selvbetjeningsløsningen på www.bbr.dk.
+Yderligere information om BBR-meddelelsen findes til sidst i dette dokument.
+Oplysninger om ejendom
+Ejendomsnummer (BFE-nr.): 6023336
+BBR-adresse: Hvidkildevej 43 (vejkode 3120), 2400 København NV
+Ejendommen består af: 1 grund
+Ejendommen har tidligere haft eller været en del af kommunalt ejendomsnummer: 101-248291
+Oplysninger om grund
+Adresse: Hvidkildevej 43, 2400 København NV
+Grundens areal: 255 m²
+Matrikelnummer: 933 , Ejerlavsnavn: Utterslev, København (ejerlavskode 2000175)
+Vandforsyning og afløbsforhold
+Grundens vandforsyning: Alment vandforsyningsanlæg (kode 1)
+Grundens afløbsforhold: Afløb til offentligt kloaksystem (kode 10)
+Bygninger tilknyttet grund
+Bygning 1
+Bygningens anvendelse: Række-
+, kæde- og klyngehus (kode 131)
+Opførelsesår: 1929
+Om-/tilbygningsår: Ingen oplysning registreret
+Antal etager: 1
+Beliggenhed
+Adresse: Hvidkildevej 43, 2400 København NV
+Matrikelnummer: 933 , Ejerlavsnavn: Utterslev, København (ejerlavskode 2000175)
+Kvalitet af koordinatsæt: Sikker geokodning (kode 1)
+Materialer
+Ydervægsmateriale: Mursten (kode 1)
+Tagdækningsmateriale: Tegl (kode 5)
+Varmeforsyning
+Bygningens varmeinstallation: Fjernvarme/blokvarme (kode 1)
+BBR-meddelelse
+Ejendomsnummer (BFE-nr.): 6023336
+Udskriftsdato: 09.10.2025
+Side 1 af 5
+Bolig- og erhvervsareal
+Bygningens samlede boligareal: 124 m²
+heraf Areal af lovlig beboelse i kælder: 0 m²
+Bygningens samlede erhvervsareal: 0 m²
+heraf Areal af erhverv i kælder: 0 m²
+Etagernes areal
+Samlet bygningsareal: 72 m²
+Kælderens areal: 65 m²
+heraf Kælderens udnyttede areal: 0 m²
+heraf Areal af dyb kælder: 0 m²
+heraf Areal af garage i kælder: 0 m²
+Tagetagens areal: 59 m²
+heraf Tagetagens udnyttede areal: 59 m²
+Arealer i grundplan
+Bebygget areal: 72 m²
+Overdækket areal: 0 m²
+Andre arealer
+Samlet andet areal: 7 m²
+heraf Areal af indbygget affaldsrum: 0 m²
+heraf Areal af indbygget garage: 0 m²
+heraf Areal af indbygget carport: 0 m²
+heraf Areal af indbygget udhus: 0 m²
+heraf Areal af indbygget udestue: 7 m²
+heraf Areal af lukkede overdækninger: 0 m²
+heraf Areal af udvendig efterisolering: 0 m²
+heraf Øvrige arealer: 0 m²
+Enheder tilknyttet Bygning 1
+Enhed: Hvidkildevej 43
+Enhedens anvendelse: Række-
+, kæde- og klyngehus (kode 131)
+Boligtype: Egentlig beboelseslejlighed med eget køkken (kode 1)
+Enhedens samlede areal: 124 m²
+heraf Enhedens boligareal: 124 m²
+heraf Enhedens erhvervsareal: 0 m²
+Antal badeværelser: 1
+Antal vandskyllende toiletter: 1
+Antal værelser: 5
+Tekniske anlæg tilknyttet grund
+Teknisk anlæg 1
+Klassifikation: Tank (kode 1110)
+Indhold: Mineralske olieprodukter (kode 10)
+Etableringsår: 2006
+Beliggenhed
+Adresse: Hvidkildevej 43, 2400 København NV
+Matrikelnummer: 933 , Ejerlavsnavn: Utterslev, København (ejerlavskode 2000175)
+Kvalitet af koordinatsæt: Usikker geokodning (kode 3)
+Tekniske oplysninger
+Driftsstatus: I drift (kode 1)
+Fabrikationsår: 2006
+Placering: Indendørs (kode 3)
+Størrelsesklasse: Ingen oplysning registreret
+Størrelse: 1200 liter
+Materiale: Stål (kode 2)
+Type: Enkeltvægget (kode 1)
+Typegodkendelsesnummer: 50-5413
+BBR-meddelelse
+Ejendomsnummer (BFE-nr.): 6023336
+Udskriftsdato: 09.10.2025
+Side 2 af 5
+Kort til BBR-meddelelsen
+Dette kort viser beliggenheden af ejendommens
+bygninger og tekniske anlæg.
+Bygninger og tekniske anlæg, der er registreret i BBR,
+vises med prikker samt B1 for Bygning 1, T1 for Teknisk
+anlæg 1 osv.
+Hvis prikken er rød, er der brug for ejers medvirken til at
+flytte prikken til den korrekte beliggenhed af bygning eller
+teknisk anlæg. Dette gøres af ejer på www.bbr.dk, hvor
+der kan zoomes ind på kortet.
+Det er kun prikkerne, ejer skal forholde sig til i BBR. Alle
+streger, grænser og bygningsomrids er baggrundsdata
+fra andre kilder. Matrikelkortet er vejledende, og
+skellenes nøjagtige placering falder ikke altid sammen
+med hække m.m. på luftfotoet. Se www.matriklen.dk.
+Luftfoto optages om foråret, og de hvide bygningsomrids
+tegnes på baggrund heraf. Derfor kan der ses
+forsinkelser, hvor fx en bygning stadig er tegnet med et
+hvidt bygningsomrids, selvom bygningen er nedrevet og
+slettet fra BBR. Se www.geodanmark.dk.
+BBR-meddelelse
+Ejendomsnummer (BFE-nr.): 6023336
+Udskriftsdato: 09.10.2025
+Side 3 af 5
+Om BBR-meddelelsen
+BBR-meddelelsen er en udskrift af de aktuelle
+oplysninger, som er registreret om en ejendoms
+bygninger, boliger og tekniske anlæg i Bygnings- og
+Boligregistret (BBR).
+Oplysningerne i BBR anvendes til mange formål i både
+stat, kommuner og private virksomheder. I det offentlige
+gælder det fx ejendomsvurdering og
+bloktilskud til kommunerne samt boligstøtte. I det private
+gælder det fx låntagning og ejendomshandel i finans- og
+ejendomssektoren.
+For nyere bygninger stammer oplysningerne i BBR
+primært fra byggesagsbehandlingen. For ældre
+bygninger stammer oplysningerne typisk fra nuværende
+eller tidligere ejere af en ejendom.
+Ejers oplysningspligt
+Det er altid den aktuelle ejer af en ejendom, der har
+ansvar for at indberette oplysninger til BBR for at sikre, at
+oplysningerne i BBR er korrekte.
+Derfor er det vigtigt, at du som ejer læser BBR-
+meddelelsen og kontrollerer, om alle bygninger, boliger
+og tekniske anlæg på ejendommen er registreret rigtigt.
+Ved køb af ejendom eller ved ændringer vedrørende
+bygnings- og boligforhold samt tekniske anlæg er det
+ekstra vigtigt at være opmærksom på, om
+registreringerne i BBR er korrekte.
+Hvis oplysningerne er mangelfulde eller forkerte, har du
+som ejer pligt til at meddele de rigtige oplysninger til
+kommunen. Dette kan fx gøres via selvbetjenings-
+løsningen på www.bbr.dk.
+Det er kommunen, som er ansvarlig for at registrere
+oplysningerne i BBR.
+Kommunen har lov til at kontrollere oplysningerne, der
+indberettes til BBR. Kontrollen kan ske ved besøg på
+ejendommen eller ved registersamkøring med andre
+kilder, fx folkeregistret eller luftfotos.
+Reglerne om Bygnings- og Boligregistret står i lov om
+bygnings- og boligregistrering (BBR-loven)
+(lovbekendtgørelse nr. 797 af 6. august 2019).
+Der kan gives en bøde efter BBR-loven, hvis oplysninger
+ikke indberettes til BBR, eller hvis der gives forkerte
+oplysninger.
+En registrering i BBR betyder ikke nødvendigvis, at et
+forhold er lovligt i henhold til anden lovgivning.
+Særlige oplysninger
+For bygninger til bolig eller erhverv kræver blandt andet
+disse oplysninger opmærksomhed:
+Opførelsesår
+Om- og tilbygningsår
+Bebygget areal
+Antal etager
+Samlet boligareal og erhvervsareal
+Areal af udnyttet tagetage
+Areal af indbygget udestue
+Tagdækningsmateriale (kodeliste)
+Ydervægsmateriale (kodeliste)
+Varmeinstallation (kodeliste)
+Opvarmningsmiddel (kodeliste)
+Antal badeværelser
+Antal vandskyllende toiletter.
+Nogle oplysninger i BBR registreres med en kode.
+Oversigt over koder kan ses på www.bbr.dk/kodelister.
+Opførelsesår
+Det år, hvor bygningen er opført. For nogle bygninger
+står år 1000, fordi opførelsesåret ikke er oplyst.
+Antal etager
+Alle etager i bygningen – bortset fra kælder og tagetage.
+Varmeinstallation og opvarmningsmiddel
+Den varmeinstallation og det opvarmningsmiddel, der
+kan opvarme bygningen. Hvis varmeinstallationen er
+fjernvarme, registreres ikke opvarmningsmiddel.
+Antal badeværelser
+Antal rum, der er indrettet til at tage bad i.
+Antal vandskyllende toiletter
+Antal toiletkummer (wc’er), der er i en bolig.
+BBR-meddelelse
+Ejendomsnummer (BFE-nr.): 6023336
+Udskriftsdato: 09.10.2025
+Side 4 af 5
+Registrering i BBR
+I BBR registreres oplysninger om grunde, bygninger,
+enheder og tekniske anlæg:
+Grund
+Grunden er et sammenhængende stykke jord og er
+normalt det samme som en matrikel. Nogle grunde kan
+dog bestå af flere matrikler. Større ejendomme, fx
+landbrugsejendomme, kan bestå af flere grunde. På
+grunden registreres oplysninger om fx vandforsyning og
+afløbsforhold.
+Bygning
+Bygninger i BBR er alt fra et redskabsskur til et
+butikscenter. På bygningen registreres fx oplysninger om
+bygningens anvendelse, opførelsesår, varmeinstallation,
+arealer samt ydervægs- og tagdækningsmateriale.
+Enhed
+En enhed er betegnelsen for fx en bolig i et parcelhus, en
+lejlighed eller et erhvervslejemål. En enhed ligger inde i
+en bygning og har sin egen adresse. Enfamiliehuse har
+typisk én boligenhed, en etageejendom har en enhed for
+hver beboelseslejlighed og hvert erhvervslejemål. På
+enheden registreres fx enhedens anvendelse, bolig- og
+erhvervsareal samt køkken-
+, toilet- og badeforhold.
+Tekniske anlæg
+Tekniske anlæg er fx olietanke, vindmøller,
+gyllebeholdere samt slanger til jordvarme og
+solcelleanlæg. Tekniske anlæg er som regel beliggende
+på en grund, men kan også være knyttet til en bygning.
+Arealer i BBR
+Arealer i BBR måles til ydersiden af ydervæggene. Det
+vil sige inklusive arealer af alle vægge. Areal af vægge
+mellem boliger deles ligeligt. Arealer måles i niveau med
+færdigt gulv, dog undtaget for tagetager, der måles 1,5
+meter over færdigt gulv til den udvendige side af taget.
+Boligareal
+Boligarealet er det areal, som er indrettet til boligformål.
+Det omfatter værelser og stuer, køkken, bade- og
+toiletrum, entré, interne trapper og gangarealer m.m.
+samt udnyttet areal i en tagetage.
+I boligarealet indgår desuden areal af kælderrum, der
+anvendes til boligformål, dvs. opfylder
+byggelovgivningens krav til beboelsesrum, samt areal af
+bade- og toiletrum i kælderen.
+For lejligheder indgår ofte en andel af bygningens
+adgangsareal i boligarealet, fx en andel af
+trappeopgangen, elevatoren eller altangangen.
+Adgangsarealer fordeles ligeligt mellem de enkelte
+boliger.
+For institutionsboliger indgår desuden en andel af fælles
+boligarealer i boligarealet.
+Bebygget areal
+Det areal, som bygningen fylder på grunden set oppefra.
+Tagudhæng og halvtage medregnes normalt ikke.
+Bebygget areal svarer typisk til stueetagens areal –
+inklusive indbygget udestue, udhus, garage og carport.
+Samlet bygningsareal
+Summen af alle bygningens regulære etagers areal –
+uden areal af tagetage, kælder, åbne altaner og åbne
+overdækkede terrasser, men inklusive indbygget
+udestue, udhus, garage og carport.
+Tagetagens areal
+Samlet areal af hele tagetagen – både bolig- og
+erhvervsareal samt det areal, der potentielt kan indrettes
+til bolig- eller erhvervsformål. Åbne altaner og
+tagterrasser medregnes ikke.
+Tagetagens udnyttede areal
+Den del af tagetagens areal, der er indrettet til
+boligformål eller anvendes til erhvervsformål og indgår i
+enhedens bolig- eller erhvervsareal.
+Kælderens areal
+Samlet areal af hele kælderen. Arealer i krybekældre
+medtages ikke.
+BBR-meddelelse
+Ejendomsnummer (BFE-nr.): 6023336
+Udskriftsdato: 09.10.2025
+Side 5 af 5
