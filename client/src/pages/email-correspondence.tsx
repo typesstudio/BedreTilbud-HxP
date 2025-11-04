@@ -3,12 +3,12 @@ import { useParams, useLocation } from "wouter";
 import { useState } from "react";
 import { Button } from "@/ui";
 import { TextField } from "@/ui";
-import { DefaultPageLayout } from "@/ui";
 import { FeatherBarChart2, FeatherSend, FeatherArrowLeft } from "@subframe/core";
 import { formatDistanceToNow } from "date-fns";
 import { da } from "date-fns/locale";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 
 export default function EmailCorrespondence() {
   const { threadId } = useParams();
@@ -48,36 +48,20 @@ export default function EmailCorrespondence() {
 
   if (isLoading) {
     return (
-      <DefaultPageLayout
-        breadcrumbs={[
-          { label: "Dine bedre tilbud", path: "/offers" },
-          { label: "Beskeder", path: location }
-        ]}
-        onNavigate={(path) => setLocation(path)}
-        onProfileClick={() => userId && setLocation(`/profile/${userId}`)}
-        onSendInquiryClick={() => setLocation("/send-inquiry")}
-      >
+      <AppLayoutWithNav userId={userId!}>
         <div className="flex h-screen w-full items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-subtext-color">Indlæser beskedtråd...</p>
           </div>
         </div>
-      </DefaultPageLayout>
+      </AppLayoutWithNav>
     );
   }
 
   if (!threadData) {
     return (
-      <DefaultPageLayout
-        breadcrumbs={[
-          { label: "Dine bedre tilbud", path: "/offers" },
-          { label: "Beskeder", path: location }
-        ]}
-        onNavigate={(path) => setLocation(path)}
-        onProfileClick={() => userId && setLocation(`/profile/${userId}`)}
-        onSendInquiryClick={() => setLocation("/send-inquiry")}
-      >
+      <AppLayoutWithNav userId={userId!}>
         <div className="flex h-screen w-full items-center justify-center">
           <div className="text-center">
             <h2 className="text-heading-2 font-heading-2 text-default-font mb-4">Tråd ikke fundet</h2>
@@ -86,7 +70,7 @@ export default function EmailCorrespondence() {
             </Button>
           </div>
         </div>
-      </DefaultPageLayout>
+      </AppLayoutWithNav>
     );
   }
 
@@ -137,16 +121,7 @@ export default function EmailCorrespondence() {
   const comparisonPath = comparisonId ? `/comparison/${comparisonId}` : "/offers";
 
   return (
-    <DefaultPageLayout
-      breadcrumbs={[
-        { label: "Dine bedre tilbud", path: "/offers" },
-        { label: "Sammenligning", path: comparisonPath },
-        { label: "Beskeder", path: location }
-      ]}
-      onNavigate={(path) => setLocation(path)}
-      onProfileClick={() => userId && setLocation(`/profile/${userId}`)}
-      onSendInquiryClick={() => setLocation("/send-inquiry")}
-    >
+    <AppLayoutWithNav userId={userId!}>
       <div className="flex h-full w-full items-center justify-center bg-default-background">
         <div className="flex w-full max-w-[900px] flex-none flex-col items-center justify-center rounded-md bg-white" style={{ height: 'calc(100vh - 100px)' }}>
           {/* Header */}
@@ -308,6 +283,6 @@ export default function EmailCorrespondence() {
           </div>
         </div>
       </div>
-    </DefaultPageLayout>
+    </AppLayoutWithNav>
   );
 }

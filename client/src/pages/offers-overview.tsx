@@ -6,6 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { FeatherArrowRight, FeatherMessageCircle, FeatherMail, FeatherShield } from "@subframe/core";
 import UserSelector from "@/components/user-selector";
+import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 
 export default function OffersOverview() {
   const [, setLocation] = useLocation();
@@ -91,12 +92,13 @@ export default function OffersOverview() {
   const hasPending = pendingThreads.length > 0;
 
   return (
-    <DefaultPageLayout
-      breadcrumbs={[{ label: "Dine bedre tilbud", path: "/offers" }]}
-      onNavigate={(path) => setLocation(path)}
-      onProfileClick={() => setLocation(`/profile/${userId}`)}
-      onSendInquiryClick={() => setLocation("/send-inquiry")}
-    >
+    <AppLayoutWithNav userId={userId}>
+      <DefaultPageLayout
+        breadcrumbs={[{ label: "Dine bedre tilbud", path: "/offers" }]}
+        onNavigate={(path) => setLocation(path)}
+        onProfileClick={() => setLocation(`/profile/${userId}`)}
+        onSendInquiryClick={() => setLocation("/send-inquiry")}
+      >
       <div className="container max-w-none flex h-full w-full flex-col items-center gap-12 bg-default-background py-12">
         <div className="flex w-full max-w-[768px] flex-col items-start gap-6">
           {/* Header Section */}
@@ -313,5 +315,6 @@ export default function OffersOverview() {
         </div>
       </div>
     </DefaultPageLayout>
+    </AppLayoutWithNav>
   );
 }

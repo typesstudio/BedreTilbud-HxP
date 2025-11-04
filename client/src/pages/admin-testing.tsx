@@ -2,10 +2,10 @@ import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "../../../src/ui/components/Button";
 import { IconWithBackground } from "../../../src/ui/components/IconWithBackground";
-import { DefaultPageLayout } from "../../../src/ui/layouts/DefaultPageLayout";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { 
   FeatherRefreshCw,
   FeatherMail,
@@ -18,6 +18,7 @@ import {
 
 export default function AdminTesting() {
   const { toast } = useToast();
+  const userId = localStorage.getItem("userId");
   const [selectedUserId, setSelectedUserId] = useState<string>("");
 
   // Get all users
@@ -74,7 +75,7 @@ export default function AdminTesting() {
   };
 
   return (
-    <DefaultPageLayout>
+    <AppLayoutWithNav userId={userId!}>
       <div className="container max-w-none flex h-full w-full flex-col items-center gap-8 bg-default-background py-12">
         <div className="flex w-full max-w-[1200px] flex-col items-start gap-8">
           {/* Header */}
@@ -351,6 +352,6 @@ export default function AdminTesting() {
           </div>
         </div>
       </div>
-    </DefaultPageLayout>
+    </AppLayoutWithNav>
   );
 }

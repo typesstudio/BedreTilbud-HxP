@@ -1,9 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "../../../src/ui/components/Button";
-import { DefaultPageLayout } from "../../../src/ui/layouts/DefaultPageLayout";
 import { FeatherCheck, FeatherX, FeatherExternalLink } from "@subframe/core";
+import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 
 export default function GmailSetup() {
+  const userId = localStorage.getItem("userId");
   const { data: status, isLoading } = useQuery({
     queryKey: ["/api/gmail/status"],
   });
@@ -13,7 +14,7 @@ export default function GmailSetup() {
   };
 
   return (
-    <DefaultPageLayout>
+    <AppLayoutWithNav userId={userId!}>
       <div className="flex w-full flex-col items-start gap-6 bg-default-background px-6 py-6">
         <div className="flex w-full flex-col items-start gap-4">
           <h1 className="text-heading-1 font-heading-1 text-default-font">
@@ -156,6 +157,6 @@ export default function GmailSetup() {
           </ul>
         </div>
       </div>
-    </DefaultPageLayout>
+    </AppLayoutWithNav>
   );
 }

@@ -5,12 +5,12 @@ import {
   Badge, 
   Button, 
   IconWithBackground, 
-  Table, 
-  DefaultPageLayout 
+  Table
 } from "@/ui";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { MobileComparisonCard } from "@/components/mobile-comparison-card";
+import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { 
   FeatherArrowRight,
   FeatherPiggyBank,
@@ -163,11 +163,7 @@ export default function InsuranceCheck() {
   // If no results yet, show upload section
   if (!healthCheckResult) {
     return (
-      <DefaultPageLayout
-        breadcrumbs={[{ label: "Tjek din forsikring", path: "/check" }]}
-        onNavigate={(path) => setLocation(path)}
-        onProfileClick={() => setLocation(`/profile/${userId}`)}
-      >
+      <AppLayoutWithNav userId={userId!}>
         <div className="flex w-full flex-col items-center justify-center bg-default-background px-6 py-12">
           <div className="flex w-full max-w-[600px] flex-col items-center gap-8">
             <div className="flex flex-col items-center gap-4 text-center">
@@ -268,7 +264,7 @@ export default function InsuranceCheck() {
             </div>
           </div>
         </div>
-      </DefaultPageLayout>
+      </AppLayoutWithNav>
     );
   }
 
@@ -285,14 +281,7 @@ export default function InsuranceCheck() {
   } = healthCheckResult;
 
   return (
-    <DefaultPageLayout
-      breadcrumbs={[
-        { label: "Dine tilbud", path: "/offers" },
-        { label: "Forsikrings tjek", path: "/check" }
-      ]}
-      onNavigate={(path) => setLocation(path)}
-      onProfileClick={() => setLocation(`/profile/${userId}`)}
-    >
+    <AppLayoutWithNav userId={userId!}>
       <div className="flex w-full flex-col items-center justify-center bg-default-background px-6 py-6">
         <div className="flex w-full max-w-[768px] flex-col items-start gap-6">
           {/* Header */}
@@ -623,6 +612,6 @@ export default function InsuranceCheck() {
           </div>
         </div>
       </div>
-    </DefaultPageLayout>
+    </AppLayoutWithNav>
   );
 }

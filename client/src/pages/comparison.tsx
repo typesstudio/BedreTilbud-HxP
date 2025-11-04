@@ -5,11 +5,11 @@ import {
   Badge, 
   Button, 
   IconWithBackground, 
-  DefaultPageLayout,
   AreaChart
 } from "@/ui";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { 
   FeatherArrowRight,
   FeatherArrowUp,
@@ -55,13 +55,12 @@ export default function Comparison() {
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const [selectedQuestionIds, setSelectedQuestionIds] = useState<string[]>([]);
+  const userId = localStorage.getItem("userId");
 
   const { data: comparison, isLoading } = useQuery({
     queryKey: ["/api/comparisons", id],
     enabled: !!id,
   });
-
-  const userId = (comparison as any)?.userId;
   const companyId = (comparison as any)?.companyId;
   
   const { data: threadsResponse } = useQuery<{ data: any[]; pagination: any }>({
@@ -112,30 +111,20 @@ export default function Comparison() {
 
   if (isLoading) {
     return (
-      <DefaultPageLayout
-        breadcrumbs={[{ label: "Dine bedre tilbud", path: "/offers" }]}
-        onNavigate={(path) => setLocation(path)}
-        onProfileClick={() => setLocation(`/profile/${userId}`)}
-        onSendInquiryClick={() => setLocation("/send-inquiry")}
-      >
+      <AppLayoutWithNav userId={userId!}>
         <div className="flex w-full h-screen items-center justify-center">
           <div className="text-center">
             <div className="w-16 h-16 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
             <p className="text-body font-body text-subtext-color">Indlæser sammenligning...</p>
           </div>
         </div>
-      </DefaultPageLayout>
+      </AppLayoutWithNav>
     );
   }
 
   if (!comparison) {
     return (
-      <DefaultPageLayout
-        breadcrumbs={[{ label: "Dine bedre tilbud", path: "/offers" }]}
-        onNavigate={(path) => setLocation(path)}
-        onProfileClick={() => setLocation(`/profile/${userId}`)}
-        onSendInquiryClick={() => setLocation("/send-inquiry")}
-      >
+      <AppLayoutWithNav userId={userId!}>
         <div className="flex w-full h-screen items-center justify-center">
           <div className="text-center">
             <h2 className="text-heading-2 font-heading-2 text-default-font mb-4">Sammenligning ikke fundet</h2>
@@ -144,7 +133,7 @@ export default function Comparison() {
             </Button>
           </div>
         </div>
-      </DefaultPageLayout>
+      </AppLayoutWithNav>
     );
   }
 
@@ -176,15 +165,7 @@ export default function Comparison() {
     : 80;
 
   return (
-    <DefaultPageLayout
-      breadcrumbs={[
-        { label: "Dine bedre tilbud", path: "/offers" },
-        { label: "Sammenligning", path: location }
-      ]}
-      onNavigate={(path) => setLocation(path)}
-      onProfileClick={() => setLocation(`/profile/${userId}`)}
-      onSendInquiryClick={() => setLocation("/send-inquiry")}
-    >
+    <AppLayoutWithNav userId={userId!}>
       <div className="flex w-full flex-col items-center justify-center bg-default-background px-4 py-4 mobile:px-3 mobile:py-3">
         <div className="flex w-full max-w-[768px] flex-col items-start gap-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4">
           
@@ -631,6 +612,6 @@ export default function Comparison() {
           </div>
         </div>
       </div>
-    </DefaultPageLayout>
+    </AppLayoutWithNav>
   );
 }

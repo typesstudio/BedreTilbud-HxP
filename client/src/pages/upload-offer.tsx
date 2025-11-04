@@ -9,6 +9,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Shield, ArrowLeft, Upload } from "lucide-react";
 import FileUpload from "@/components/file-upload";
 import UserSelector from "@/components/user-selector";
+import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 
 export default function UploadOffer() {
   const [, setLocation] = useLocation();
@@ -98,25 +99,7 @@ export default function UploadOffer() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="bg-card border-b border-border sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-20">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-primary rounded-lg flex items-center justify-center">
-                <Shield className="w-7 h-7 text-primary-foreground" strokeWidth={2.5} />
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold text-foreground">BedreTilbud</h1>
-                <p className="text-sm text-muted-foreground">Find bedre forsikringer</p>
-              </div>
-            </div>
-            <UserSelector />
-          </div>
-        </div>
-      </header>
-
+    <AppLayoutWithNav userId={userId!}>
       <main className="flex-1">
         <section className="py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto">
@@ -184,6 +167,6 @@ export default function UploadOffer() {
           </div>
         </section>
       </main>
-    </div>
+    </AppLayoutWithNav>
   );
 }

@@ -7,10 +7,10 @@ import {
   Button, 
   IconButton, 
   IconWithBackground, 
-  DefaultPageLayout,
   Dialog,
   TextField
 } from "@/ui";
+import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { FeatherDownload, FeatherEdit, FeatherFileText, FeatherMoreVertical, FeatherPlus, FeatherUpload, FeatherX } from "@subframe/core";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
@@ -134,12 +134,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <DefaultPageLayout
-      breadcrumbs={[{ label: "Din profil", path: location }]}
-      onNavigate={(path) => setLocation(path)}
-      onProfileClick={() => userId && setLocation(`/profile/${userId}`)}
-      onSendInquiryClick={() => setLocation("/send-inquiry")}
-    >
+    <AppLayoutWithNav userId={userId!}>
       <div className="flex h-full w-full flex-col items-start">
         <div className="flex w-full grow shrink-0 basis-0 flex-col items-center gap-8 bg-default-background px-4 py-6 overflow-auto mobile:px-4 mobile:py-4">
           <div className="flex w-full max-w-[768px] flex-col items-start gap-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4">
@@ -535,6 +530,6 @@ export default function ProfilePage() {
           </div>
         </Dialog.Content>
       </Dialog>
-    </DefaultPageLayout>
+    </AppLayoutWithNav>
   );
 }

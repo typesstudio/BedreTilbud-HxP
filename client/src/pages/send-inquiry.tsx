@@ -4,11 +4,11 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { Button } from "../../../src/ui/components/Button";
 import { IconWithBackground } from "../../../src/ui/components/IconWithBackground";
 import { LinkButton } from "../../../src/ui/components/LinkButton";
-import { DefaultPageLayout } from "../../../src/ui/layouts/DefaultPageLayout";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { 
   FeatherArrowLeft, 
   FeatherSend,
@@ -21,6 +21,7 @@ import {
 export default function SendInquiry() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const userId = localStorage.getItem("userId");
   const [selectedUserId, setSelectedUserId] = useState<string>("");
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
 
@@ -98,7 +99,7 @@ export default function SendInquiry() {
   const selectedUser = (users as any[]).find((u: any) => u.id === selectedUserId);
 
   return (
-    <DefaultPageLayout>
+    <AppLayoutWithNav userId={userId!}>
       <div className="container max-w-none flex h-full w-full flex-col items-center gap-8 bg-default-background py-12">
         <div className="flex w-full max-w-[768px] flex-col items-start gap-8">
           {/* Header */}
@@ -331,6 +332,6 @@ export default function SendInquiry() {
           </div>
         </div>
       </div>
-    </DefaultPageLayout>
+    </AppLayoutWithNav>
   );
 }
