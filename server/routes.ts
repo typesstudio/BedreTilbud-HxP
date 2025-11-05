@@ -335,13 +335,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = (page - 1) * limit;
       
-      const allDocuments = await storage.getUserDocuments(
+      // Get total count efficiently without loading all documents
+      const totalCount = await storage.countUserDocuments(
         req.params.userId,
         documentType as string
       );
       
-      const totalCount = allDocuments.length;
-      const paginatedDocuments = allDocuments.slice(offset, offset + limit);
+      // Get paginated results
+      const paginatedDocuments = await storage.getUserDocuments(
+        req.params.userId,
+        documentType as string,
+        limit,
+        offset
+      );
       
       res.json({
         data: paginatedDocuments,

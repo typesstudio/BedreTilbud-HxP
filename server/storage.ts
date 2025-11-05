@@ -31,7 +31,8 @@ export interface IStorage {
 
   // Documents
   getDocument(id: string): Promise<Document | undefined>;
-  getUserDocuments(userId: string, documentType?: string): Promise<Document[]>;
+  getUserDocuments(userId: string, documentType?: string, limit?: number, offset?: number): Promise<Document[]>;
+  countUserDocuments(userId: string, documentType?: string): Promise<number>;
   createDocument(document: InsertDocument): Promise<Document>;
 
   // Email Threads
@@ -198,11 +199,25 @@ export class MemStorage implements IStorage {
     return this.documents.get(id);
   }
 
-  async getUserDocuments(userId: string, documentType?: string): Promise<Document[]> {
-    return Array.from(this.documents.values()).filter(doc => 
+  async getUserDocuments(userId: string, documentType?: string, limit?: number, offset?: number): Promise<Document[]> {
+    const filtered = Array.from(this.documents.values()).filter(doc => 
       doc.userId === userId && 
       (documentType ? doc.documentType === documentType : true)
     );
+    
+    // Apply pagination if provided
+    if (limit !== undefined && offset !== undefined) {
+      return filtered.slice(offset, offset + limit);
+    }
+    
+    return filtered;
+  }
+
+  async countUserDocuments(userId: string, documentType?: string): Promise<number> {
+    return Array.from(this.documents.values()).filter(doc => 
+      doc.userId === userId && 
+      (documentType ? doc.documentType === documentType : true)
+    ).length;
   }
 
   async createDocument(insertDocument: InsertDocument): Promise<Document> {
@@ -488,17 +503,48 @@ export class DatabaseStorage implements IStorage {
     return doc || undefined;
   }
 
-  async getUserDocuments(userId: string, documentType?: string): Promise<Document[]> {
+  async getUserDocuments(userId: string, documentType?: string, limit?: number, offset?: number): Promise<Document[]> {
     const { db } = await import("./db");
     const { documents } = await import("@shared/schema");
-    const { eq, and } = await import("drizzle-orm");
+    const { eq, and, desc } = await import("drizzle-orm");
+    
+    let query = db.select().from(documents);
     
     if (documentType) {
-      return await db.select().from(documents).where(
-        and(eq(documents.userId, userId), eq(documents.documentType, documentType))
-      );
+      query = query.where(and(eq(documents.userId, userId), eq(documents.documentType, documentType))) as any;
+    } else {
+      query = query.where(eq(documents.userId, userId)) as any;
     }
-    return await db.select().from(documents).where(eq(documents.userId, userId));
+    
+    // Always order by creation date for consistent pagination
+    query = query.orderBy(desc(documents.createdAt)) as any;
+    
+    // Apply pagination
+    if (limit !== undefined) {
+      query = query.limit(limit) as any;
+    }
+    if (offset !== undefined) {
+      query = query.offset(offset) as any;
+    }
+    
+    return await query;
+  }
+
+  async countUserDocuments(userId: string, documentType?: string): Promise<number> {
+    const { db } = await import("./db");
+    const { documents } = await import("@shared/schema");
+    const { eq, and, count } = await import("drizzle-orm");
+    
+    let query = db.select({ count: count() }).from(documents);
+    
+    if (documentType) {
+      query = query.where(and(eq(documents.userId, userId), eq(documents.documentType, documentType))) as any;
+    } else {
+      query = query.where(eq(documents.userId, userId)) as any;
+    }
+    
+    const result = await query;
+    return result[0]?.count || 0;
   }
 
   async createDocument(insertDocument: InsertDocument): Promise<Document> {
