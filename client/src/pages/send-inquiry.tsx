@@ -26,9 +26,10 @@ export default function SendInquiry() {
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
 
   // Get all users
-  const { data: users = [], isLoading: usersLoading } = useQuery({
+  const { data: usersResponse, isLoading: usersLoading } = useQuery<{ data: any[]; pagination: any }>({
     queryKey: ["/api/users"],
   });
+  const users = usersResponse?.data || [];
 
   // Get companies
   const { data: companies = [] } = useQuery({
@@ -36,7 +37,7 @@ export default function SendInquiry() {
   });
 
   // Get user's current insurance documents
-  const { data: documents = [], isLoading: documentsLoading } = useQuery({
+  const { data: documentsResponse, isLoading: documentsLoading } = useQuery<{ data: any[]; pagination: any }>({
     queryKey: ["/api/documents/user", selectedUserId],
     enabled: !!selectedUserId,
     queryFn: async () => {
@@ -44,6 +45,7 @@ export default function SendInquiry() {
       return response.json();
     },
   });
+  const documents = documentsResponse?.data || [];
 
   // Send inquiries mutation
   const sendInquiriesMutation = useMutation({

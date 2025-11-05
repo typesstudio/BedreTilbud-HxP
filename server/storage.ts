@@ -40,6 +40,7 @@ export interface IStorage {
   getEmailThreadByToken(token: string): Promise<EmailThread | undefined>;
   getEmailThreadByCompany(userId: string, companyId: string): Promise<EmailThread | undefined>;
   getUserEmailThreads(userId: string): Promise<EmailThread[]>;
+  getUserEmailThreadsEnriched(userId: string, limit?: number, offset?: number): Promise<Array<EmailThread & { company: Company | null; emailCount: number; lastEmailAt: Date | null }>>;
   createEmailThread(thread: InsertEmailThread): Promise<EmailThread>;
   updateEmailThread(id: string, updates: Partial<InsertEmailThread>): Promise<EmailThread>;
 
@@ -240,6 +241,24 @@ export class MemStorage implements IStorage {
 
   async getUserEmailThreads(userId: string): Promise<EmailThread[]> {
     return Array.from(this.emailThreads.values()).filter(t => t.userId === userId);
+  }
+
+  async getUserEmailThreadsEnriched(userId: string, limit?: number, offset?: number): Promise<Array<EmailThread & { company: Company | null; emailCount: number; lastEmailAt: Date | null }>> {
+    const threads = Array.from(this.emailThreads.values()).filter(t => t.userId === userId);
+    const paginatedThreads = limit && offset !== undefined ? threads.slice(offset, offset + limit) : threads;
+    
+    return paginatedThreads.map(thread => {
+      const company = thread.companyId ? this.companies.get(thread.companyId) || null : null;
+      const emails = Array.from(this.emails.values()).filter(e => e.threadId === thread.id);
+      const sortedEmails = emails.sort((a, b) => (a.sentAt?.getTime() || 0) - (b.sentAt?.getTime() || 0));
+      
+      return {
+        ...thread,
+        company,
+        emailCount: emails.length,
+        lastEmailAt: sortedEmails.length > 0 ? sortedEmails[sortedEmails.length - 1].sentAt : null
+      };
+    });
   }
 
   async createEmailThread(insertThread: InsertEmailThread): Promise<EmailThread> {
@@ -529,6 +548,53 @@ export class DatabaseStorage implements IStorage {
     const { emailThreads } = await import("@shared/schema");
     const { eq } = await import("drizzle-orm");
     return await db.select().from(emailThreads).where(eq(emailThreads.userId, userId));
+  }
+
+  async getUserEmailThreadsEnriched(userId: string, limit?: number, offset?: number): Promise<Array<EmailThread & { company: Company | null; emailCount: number; lastEmailAt: Date | null }>> {
+    const { db } = await import("./db");
+    const { emailThreads, companies, emails } = await import("@shared/schema");
+    const { eq, desc, count, max, sql } = await import("drizzle-orm");
+    
+    // Use LEFT JOIN to get threads with company data and email counts in ONE query
+    // This eliminates the N+1 problem completely
+    const results = await db
+      .select({
+        id: emailThreads.id,
+        userId: emailThreads.userId,
+        companyId: emailThreads.companyId,
+        subject: emailThreads.subject,
+        threadId: emailThreads.threadId,
+        requestToken: emailThreads.requestToken,
+        replyToEmail: emailThreads.replyToEmail,
+        status: emailThreads.status,
+        createdAt: emailThreads.createdAt,
+        company: companies,
+        emailCount: sql<number>`COALESCE(COUNT(${emails.id}), 0)`.as('emailCount'),
+        lastEmailAt: sql<Date>`MAX(${emails.sentAt})`.as('lastEmailAt')
+      })
+      .from(emailThreads)
+      .leftJoin(companies, eq(emailThreads.companyId, companies.id))
+      .leftJoin(emails, eq(emailThreads.id, emails.threadId))
+      .where(eq(emailThreads.userId, userId))
+      .groupBy(emailThreads.id, companies.id)
+      .orderBy(desc(emailThreads.createdAt))
+      .limit(limit || 50)
+      .offset(offset || 0);
+    
+    return results.map(row => ({
+      id: row.id,
+      userId: row.userId,
+      companyId: row.companyId,
+      subject: row.subject,
+      threadId: row.threadId,
+      requestToken: row.requestToken,
+      replyToEmail: row.replyToEmail,
+      status: row.status,
+      createdAt: row.createdAt,
+      company: row.company,
+      emailCount: Number(row.emailCount),
+      lastEmailAt: row.lastEmailAt
+    }));
   }
 
   async createEmailThread(insertThread: InsertEmailThread): Promise<EmailThread> {

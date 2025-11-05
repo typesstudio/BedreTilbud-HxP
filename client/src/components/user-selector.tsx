@@ -15,9 +15,10 @@ export default function UserSelector() {
   const [, setLocation] = useLocation();
   const currentUserId = localStorage.getItem("userId");
 
-  const { data: users = [] } = useQuery({
+  const { data: usersResponse } = useQuery<{ data: any[]; pagination: any }>({
     queryKey: ["/api/users"],
   });
+  const users = usersResponse?.data || [];
 
   const handleUserChange = (userId: string) => {
     localStorage.setItem("userId", userId);

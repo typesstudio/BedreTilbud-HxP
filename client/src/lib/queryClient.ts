@@ -107,6 +107,51 @@ export const getQueryFn: <T>(options: {
     return await res.json();
   };
 
+// Smart retry logic: only retry on network errors or 5xx server errors
+// Don't retry on 4xx client errors (bad request, unauthorized, etc.)
+const shouldRetry = (failureCount: number, error: Error): boolean => {
+  // Max 3 retries
+  if (failureCount >= 3) return false;
+  
+  // Network errors (no response) - retry
+  if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+    return true;
+  }
+  
+  // Server errors (5xx) - retry
+  if (error.message.match(/^5\d\d:/)) {
+    return true;
+  }
+  
+  // Rate limiting (429) - retry with backoff
+  if (error.message.startsWith('429:')) {
+    return true;
+  }
+  
+  // Timeout errors - retry
+  if (error.message.includes('timeout') || error.message.includes('Timeout')) {
+    return true;
+  }
+  
+  // Client errors (4xx except 429) - don't retry
+  if (error.message.match(/^4\d\d:/)) {
+    // Special handling for 401 - clear userId and redirect to onboarding
+    if (error.message.startsWith('401:')) {
+      localStorage.removeItem('userId');
+      window.location.href = '/onboarding';
+    }
+    return false;
+  }
+  
+  // Unknown errors - retry once
+  return failureCount === 0;
+};
+
+// Exponential backoff: 1s, 2s, 4s
+const retryDelay = (attemptIndex: number) => {
+  return Math.min(1000 * 2 ** attemptIndex, 10000);
+};
+
 export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -114,10 +159,16 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       refetchOnWindowFocus: false,
       staleTime: Infinity,
-      retry: false,
+      retry: shouldRetry,
+      retryDelay: retryDelay,
+      // Network timeout: 30 seconds for queries
+      networkMode: 'online',
     },
     mutations: {
-      retry: false,
+      retry: shouldRetry,
+      retryDelay: retryDelay,
+      // Network timeout for mutations
+      networkMode: 'online',
     },
   },
 });

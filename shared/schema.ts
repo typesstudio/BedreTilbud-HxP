@@ -64,6 +64,9 @@ export const emailThreads = pgTable("email_threads", {
   companyIdIdx: index("email_threads_company_id_idx").on(table.companyId),
   requestTokenIdx: index("email_threads_request_token_idx").on(table.requestToken),
   threadIdIdx: index("email_threads_thread_id_idx").on(table.threadId),
+  // Composite indexes for common query patterns
+  userIdStatusIdx: index("email_threads_user_id_status_idx").on(table.userId, table.status),
+  userIdCreatedIdx: index("email_threads_user_id_created_idx").on(table.userId, table.createdAt),
 }));
 
 export const emails = pgTable("emails", {
@@ -81,6 +84,8 @@ export const emails = pgTable("emails", {
 }, (table) => ({
   threadIdIdx: index("emails_thread_id_idx").on(table.threadId),
   messageIdIdx: index("emails_message_id_idx").on(table.messageId),
+  // Composite index for efficient sorting in JOIN queries
+  threadIdSentAtIdx: index("emails_thread_id_sent_at_idx").on(table.threadId, table.sentAt),
 }));
 
 export const comparisons = pgTable("comparisons", {
@@ -96,6 +101,9 @@ export const comparisons = pgTable("comparisons", {
 }, (table) => ({
   userIdIdx: index("comparisons_user_id_idx").on(table.userId),
   companyIdIdx: index("comparisons_company_id_idx").on(table.companyId),
+  // Composite indexes for efficient querying
+  userIdCompanyCreatedIdx: index("comparisons_user_id_company_created_idx").on(table.userId, table.companyId, table.createdAt),
+  userIdCreatedIdx: index("comparisons_user_id_created_idx").on(table.userId, table.createdAt),
 }));
 
 export const householdMembers = pgTable("household_members", {

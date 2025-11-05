@@ -33,10 +33,11 @@ export default function ProfilePage() {
     enabled: !!userId,
   });
 
-  const { data: documents = [], isLoading: loadingDocs } = useQuery({
+  const { data: documentsResponse, isLoading: loadingDocs } = useQuery<{ data: any[]; pagination: any }>({
     queryKey: ["/api/documents/user", userId],
     enabled: !!userId,
   });
+  const documents = documentsResponse?.data || [];
 
   const { data: householdMembers = [], isLoading: loadingMembers } = useQuery({
     queryKey: ["/api/household-members", userId],

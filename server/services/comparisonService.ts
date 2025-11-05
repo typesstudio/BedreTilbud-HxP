@@ -9,7 +9,9 @@ if (!process.env.OPENAI_API_KEY) {
 }
 
 const openai = new OpenAI({ 
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
+  timeout: 60000, // 60 second timeout for AI operations
+  maxRetries: 2, // Retry failed requests up to 2 times
 });
 
 // Cost-effective AI usage logger

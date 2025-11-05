@@ -22,9 +22,10 @@ export default function AdminTesting() {
   const [selectedUserId, setSelectedUserId] = useState<string>("");
 
   // Get all users
-  const { data: users = [] } = useQuery({
+  const { data: usersResponse } = useQuery<{ data: any[]; pagination: any }>({
     queryKey: ["/api/users"],
   });
+  const users = usersResponse?.data || [];
 
   // Get Gmail status
   const { data: gmailStatus, isLoading: statusLoading, refetch: refetchStatus } = useQuery<any>({

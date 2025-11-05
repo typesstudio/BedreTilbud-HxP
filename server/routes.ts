@@ -90,31 +90,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  app.get("/ready", apiCaching(60), async (req, res) => {
+  app.get("/ready", noCache, async (req, res) => {
+    const checks: Record<string, { status: string; message?: string }> = {};
+    let allHealthy = true;
+
     try {
-      // Check required environment variables
+      // 1. Check required environment variables
       const requiredEnvVars = ['OPENAI_API_KEY', 'MISTRAL_API_KEY', 'DATABASE_URL'];
       const missingVars = requiredEnvVars.filter(v => !process.env[v]);
       
       if (missingVars.length > 0) {
-        return res.status(503).json({ 
-          status: "not_ready", 
-          error: `Missing environment variables: ${missingVars.join(', ')}`
-        });
+        checks.environment = { status: "fail", message: `Missing: ${missingVars.join(', ')}` };
+        allHealthy = false;
+      } else {
+        checks.environment = { status: "ok" };
       }
       
-      // Simple check - if we got here, we're ready
-      res.status(200).json({ 
-        status: "ready",
-        timestamp: new Date().toISOString(),
-        checks: {
-          environment: "ok"
+      // 2. Check database connection
+      try {
+        const { db } = await import("./db");
+        const { sql } = await import("drizzle-orm");
+        await db.execute(sql`SELECT 1`);
+        checks.database = { status: "ok" };
+      } catch (dbError: any) {
+        checks.database = { status: "fail", message: dbError.message };
+        allHealthy = false;
+      }
+      
+      // 3. Check database connection pool
+      try {
+        const { pool } = await import("./db");
+        const totalClients = pool.totalCount;
+        const idleClients = pool.idleCount;
+        const waitingClients = pool.waitingCount;
+        checks.connectionPool = { 
+          status: totalClients < 20 ? "ok" : "warn",
+          message: `Total: ${totalClients}, Idle: ${idleClients}, Waiting: ${waitingClients}`
+        };
+      } catch (poolError: any) {
+        checks.connectionPool = { status: "warn", message: poolError.message };
+      }
+      
+      // 4. Check Gmail API availability
+      try {
+        const gmailStatus = gmailOAuthService.getConnectionStatus();
+        if (gmailStatus.isConnected) {
+          checks.gmail = { status: "ok", message: "Connected" };
+        } else {
+          checks.gmail = { status: "warn", message: "Not connected - features limited" };
         }
+      } catch (gmailError: any) {
+        checks.gmail = { status: "warn", message: gmailError.message };
+      }
+      
+      // Return health status
+      const statusCode = allHealthy ? 200 : 503;
+      res.status(statusCode).json({ 
+        status: allHealthy ? "ready" : "degraded",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        checks
       });
     } catch (error: any) {
       res.status(503).json({ 
         status: "not_ready", 
-        error: error.message 
+        error: error.message,
+        checks
       });
     }
   });
@@ -148,14 +189,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get all users
+  // Get all users with pagination
   app.get("/api/users", async (req, res) => {
     try {
       const { db } = await import("./db");
       const { users } = await import("@shared/schema");
       const { desc } = await import("drizzle-orm");
+      
+      // Pagination support
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = (page - 1) * limit;
+      
+      // Get total count for pagination
       const allUsers = await db.select().from(users).orderBy(desc(users.createdAt));
-      res.json(allUsers);
+      const totalCount = allUsers.length;
+      
+      // Apply pagination
+      const paginatedUsers = allUsers.slice(offset, offset + limit);
+      
+      res.json({
+        data: paginatedUsers,
+        pagination: {
+          page,
+          limit,
+          totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+          hasMore: offset + limit < totalCount
+        }
+      });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -267,11 +329,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/documents/user/:userId", requireAuth, async (req, res) => {
     try {
       const { documentType } = req.query;
-      const documents = await storage.getUserDocuments(
+      
+      // Pagination support
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = (page - 1) * limit;
+      
+      const allDocuments = await storage.getUserDocuments(
         req.params.userId,
         documentType as string
       );
-      res.json(documents);
+      
+      const totalCount = allDocuments.length;
+      const paginatedDocuments = allDocuments.slice(offset, offset + limit);
+      
+      res.json({
+        data: paginatedDocuments,
+        pagination: {
+          page,
+          limit,
+          totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+          hasMore: offset + limit < totalCount
+        }
+      });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -435,23 +516,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = (page - 1) * limit;
 
+      // Get total count for pagination
       const allThreads = await storage.getUserEmailThreads(req.params.userId);
       const totalCount = allThreads.length;
-      const threads = allThreads.slice(offset, offset + limit);
       
-      // Enrich with company and email data
-      const enrichedThreads = await Promise.all(
-        threads.map(async (thread) => {
-          const company = thread.companyId ? await storage.getCompany(thread.companyId) : null;
-          const emails = await storage.getThreadEmails(thread.id);
-          
-          return {
-            ...thread,
-            company,
-            emailCount: emails.length,
-            lastEmailAt: emails.length > 0 ? emails[emails.length - 1].sentAt : null
-          };
-        })
+      // Use optimized JOIN query to fetch enriched threads in ONE query
+      // This eliminates the N+1 problem (was making 100+ queries, now just 2)
+      const enrichedThreads = await storage.getUserEmailThreadsEnriched(
+        req.params.userId,
+        limit,
+        offset
       );
 
       res.json({

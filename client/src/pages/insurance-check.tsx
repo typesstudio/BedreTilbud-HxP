@@ -57,7 +57,7 @@ export default function InsuranceCheck() {
   }
 
   // Fetch user's current insurance documents
-  const { data: userDocuments = [] } = useQuery({
+  const { data: userDocumentsResponse } = useQuery<{ data: any[]; pagination: any }>({
     queryKey: ["/api/documents/user", userId, "current"],
     queryFn: async () => {
       const response = await fetch(`/api/documents/user/${userId}?documentType=current`, {
@@ -70,6 +70,7 @@ export default function InsuranceCheck() {
       return response.json();
     },
   });
+  const userDocuments = userDocumentsResponse?.data || [];
 
   // Upload document mutation
   const uploadMutation = useMutation({
