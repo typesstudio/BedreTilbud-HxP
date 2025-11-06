@@ -5,6 +5,7 @@ import { FeatherUpload, FeatherArrowLeft, FeatherArrowRight, FeatherAlertCircle,
 import { useCallback, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import { useToast } from "@/hooks/use-toast";
+import { apiRequest } from "@/lib/queryClient";
 
 interface SubframeStep2Props {
   onComplete: (documentId: string | null, skipped: boolean) => void;
@@ -40,17 +41,7 @@ export function SubframeStep2({ onComplete, onBack, isLoading }: SubframeStep2Pr
     formData.append('documentType', 'current');
 
     try {
-      const response = await fetch('/api/documents/upload', {
-        method: 'POST',
-        body: formData,
-        credentials: 'include'
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Upload fejlede');
-      }
-
+      const response = await apiRequest('POST', '/api/documents/upload', formData);
       const result = await response.json();
       const documents = Array.isArray(result) ? result : [result];
       setUploadStatus('success');

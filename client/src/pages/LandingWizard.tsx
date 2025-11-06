@@ -85,15 +85,20 @@ export default function LandingWizard() {
 
       if (existingProgress) {
         setCurrentStep(existingProgress.currentStep as 1 | 2 | 3);
-        if (existingProgress.userId) setUserId(existingProgress.userId);
+        if (existingProgress.userId) {
+          setUserId(existingProgress.userId);
+          localStorage.setItem("userId", existingProgress.userId);
+        }
         if (existingProgress.documentId) setDocumentId(existingProgress.documentId);
         return;
       }
 
       await createProgressMutation.mutateAsync(userEmail);
 
-      const user = await createUserMutation.mutateAsync(userEmail) as unknown as User;
+      const response = await createUserMutation.mutateAsync(userEmail);
+      const user = await response.json() as User;
       setUserId(user.id);
+      localStorage.setItem("userId", user.id);
 
       await updateProgressMutation.mutateAsync({
         userId: user.id,
@@ -135,18 +140,7 @@ export default function LandingWizard() {
       companyIds: string[]; 
       documentId: string | null;
     }) => {
-      const response = await fetch('/api/send-inquiries', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(data)
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Kunne ikke sende forespørgsler');
-      }
-
+      const response = await apiRequest('POST', '/api/send-inquiries', data);
       return response.json();
     },
     onError: (error: any) => {
