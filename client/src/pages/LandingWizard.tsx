@@ -84,12 +84,25 @@ export default function LandingWizard() {
       });
 
       if (existingProgress) {
-        setCurrentStep(existingProgress.currentStep as 1 | 2 | 3);
         if (existingProgress.userId) {
           setUserId(existingProgress.userId);
           localStorage.setItem("userId", existingProgress.userId);
         }
         if (existingProgress.documentId) setDocumentId(existingProgress.documentId);
+        
+        const completedSteps = (existingProgress.completedSteps || []) as number[];
+        if (completedSteps.includes(3)) {
+          toast({
+            title: "Velkommen tilbage!",
+            description: "Du er nu logget ind",
+          });
+          setTimeout(() => {
+            setLocation('/offers');
+          }, 500);
+          return;
+        }
+        
+        setCurrentStep(existingProgress.currentStep as 1 | 2 | 3);
         return;
       }
 
