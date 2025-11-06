@@ -141,7 +141,7 @@ export default function LandingWizard() {
       companyIds: string[]; 
       documentId: string | null;
     }) => {
-      const response = await apiRequest('POST', '/api/send-inquiries', data);
+      const response = await apiRequest('POST', '/api/emails/send-inquiries', data);
       return response.json();
     },
     onError: (error: any) => {
