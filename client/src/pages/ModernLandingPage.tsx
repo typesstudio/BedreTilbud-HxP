@@ -1,8 +1,8 @@
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import { ArrowRight, Check, CheckCircle, Eye, Percent, MessageCircle, Upload, Loader2 } from "lucide-react";
+import { Button } from "@/ui/components/Button";
+import { TextField } from "@/ui/components/TextField";
+import { IconButton } from "@/ui/components/IconButton";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { FeatherArrowRight, FeatherCheck, FeatherCheckCircle, FeatherEye, FeatherPercent, FeatherSpeech, FeatherTypeOutline, FeatherUpload } from "@subframe/core";
 import { useWizardFlow } from "@/hooks/useWizardFlow";
 import { SubframeStep2 } from "@/components/wizard/SubframeStep2";
 import { SubframeStep3 } from "@/components/wizard/SubframeStep3";
@@ -28,11 +28,13 @@ export default function ModernLandingPage() {
 
   if (currentStep > 1) {
     return (
-      <div className="flex min-h-screen w-full flex-col items-center bg-background">
+      <div className="flex h-full w-full flex-col items-center bg-default-background">
         <div className="flex w-full flex-col items-center gap-12">
-          <div className="flex w-full items-center justify-between border-b px-6 py-4">
-            <span className="text-lg font-bold">Bedretilbud.com</span>
-            <span className="text-sm text-muted-foreground">
+          <div className="flex w-full items-center justify-between border-b border-solid border-neutral-border px-6 py-4">
+            <span className="text-body-bold font-body-bold text-default-font">
+              Bedretilbud.com
+            </span>
+            <span className="text-body font-body text-subtext-color">
               Få bedre tilbud på under 2 minutter
             </span>
           </div>
@@ -40,24 +42,30 @@ export default function ModernLandingPage() {
           <div className="flex w-full max-w-[768px] flex-col items-start gap-8 px-4">
             <div className="flex w-full items-center justify-between">
               <div className="flex items-center gap-2">
-                <Badge variant="default" className="rounded-full px-3 py-1">
-                  <Check className="mr-1 h-4 w-4" />
+                <IconWithBackground variant="success" icon={<FeatherCheck />} />
+                <span className="text-body-bold font-body-bold text-success-600">
                   Din Email
-                </Badge>
+                </span>
               </div>
-              <div className="h-px w-20 bg-border" />
+              <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
               <div className="flex items-center gap-2">
-                <Badge variant={currentStep >= 2 ? "default" : "secondary"} className="rounded-full px-3 py-1">
-                  <Upload className="mr-1 h-4 w-4" />
-                  Upload
-                </Badge>
+                <IconWithBackground 
+                  variant={currentStep >= 2 ? "brand" : "neutral"} 
+                  icon={<FeatherUpload />} 
+                />
+                <span className={`text-body font-body ${currentStep >= 2 ? 'text-brand-600 font-bold' : 'text-subtext-color'}`}>
+                  Upload Police
+                </span>
               </div>
-              <div className="h-px w-20 bg-border" />
+              <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
               <div className="flex items-center gap-2">
-                <Badge variant={currentStep >= 3 ? "default" : "secondary"} className="rounded-full px-3 py-1">
-                  <CheckCircle className="mr-1 h-4 w-4" />
-                  Vælg
-                </Badge>
+                <IconWithBackground
+                  variant={currentStep >= 3 ? "brand" : "neutral"}
+                  icon={<FeatherCheckCircle />}
+                />
+                <span className={`text-body font-body ${currentStep >= 3 ? 'text-brand-600 font-bold' : 'text-subtext-color'}`}>
+                  Vælg Selskaber
+                </span>
               </div>
             </div>
 
@@ -89,186 +97,212 @@ export default function ModernLandingPage() {
   }
 
   return (
-    <div className="flex min-h-screen w-full flex-col items-center bg-background">
-      <div className="flex w-full flex-col items-center gap-16">
-        <div className="flex w-full items-center justify-between border-b px-6 py-4">
-          <span className="text-lg font-bold">Bedretilbud.com</span>
-          <span className="text-sm font-semibold text-primary">
+    <div className="flex h-full w-full flex-col items-center bg-default-background">
+      <div className="flex w-full flex-col items-center gap-12">
+        <div className="flex w-full items-center justify-between border-b border-solid border-neutral-border px-2 py-2">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Bedretilbud.com
+          </span>
+          <span className="text-body-bold font-body-bold text-brand-600">
             Få bedre tilbud på under 2 minutter
           </span>
         </div>
         
-        <div className="flex w-full max-w-[768px] flex-col items-center gap-12 px-4 pt-8">
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-8 pt-12">
           <div className="flex w-full items-center justify-between">
             <div className="flex items-center gap-2">
-              <Badge variant="default" className="rounded-full px-3 py-1">
-                <Check className="mr-1 h-4 w-4" />
+              <IconWithBackground />
+              <span className="text-body-bold font-body-bold text-brand-600">
                 Din Email
-              </Badge>
+              </span>
             </div>
-            <div className="h-px w-20 bg-border" />
+            <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
             <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="rounded-full px-3 py-1">
-                <Upload className="mr-1 h-4 w-4" />
+              <IconWithBackground variant="neutral" icon={<FeatherUpload />} />
+              <span className="text-body font-body text-subtext-color">
                 Upload Police
-              </Badge>
+              </span>
             </div>
-            <div className="h-px w-20 bg-border" />
+            <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
             <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="rounded-full px-3 py-1">
-                <CheckCircle className="mr-1 h-4 w-4" />
-                Vælg Selskaber
-              </Badge>
+              <IconWithBackground
+                variant="neutral"
+                icon={<FeatherCheckCircle />}
+              />
+              <span className="text-body font-body text-subtext-color">
+                Få Bedre Tilbud
+              </span>
             </div>
           </div>
           
-          <div className="flex w-full flex-col items-center gap-8">
-            <div className="flex w-full flex-col items-center gap-4 text-center">
-              <h1 className="text-5xl font-bold leading-tight">
+          <div className="flex w-full flex-col items-center gap-6">
+            <div className="flex w-full flex-col items-center gap-2">
+              <span className="font-['Inter_Tight'] text-[56px] font-[600] leading-[56px] text-default-font text-center">
                 Få bedre forsikringer
-              </h1>
-              <p className="text-lg text-muted-foreground">
-                Upload dine nuværende aftaler én gang.<br />
-                Vi henter nye tilbud, sammenligner side om side
-              </p>
+              </span>
+              <span className="whitespace-pre-wrap text-body font-body text-subtext-color text-center">
+                {
+                  "Upload dine nuværende aftaler én gang. \nVi henter nye tilbud, sammenligner side om side"
+                }
+              </span>
             </div>
             
-            <form onSubmit={handleEmailSubmit} className="flex w-full max-w-[448px] flex-col gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="email">Email adresse</Label>
-                <Input
-                  id="email"
-                  type="email"
+            <form onSubmit={handleEmailSubmit} className="flex w-full max-w-[448px] flex-col items-start gap-6">
+              <TextField
+                className="h-auto w-full flex-none"
+                label="Email adresse"
+                helpText=""
+              >
+                <TextField.Input
                   placeholder="din@email.dk"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="h-12 text-base"
+                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => setEmail(event.target.value)}
                   data-testid="input-email"
                 />
-              </div>
+              </TextField>
               <Button
+                className="h-10 w-full flex-none"
+                variant="variation"
+                size="large"
                 type="submit"
-                size="lg"
-                className="h-12 w-full text-base"
                 disabled={isProcessingStep1 || !email}
+                loading={isProcessingStep1}
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
                 data-testid="button-continue"
               >
-                {isProcessingStep1 ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Vent venligst...
-                  </>
-                ) : (
-                  "Få bedre tilbud"
-                )}
+                {isProcessingStep1 ? "Vent venligst..." : "Få bedre tilbud"}
               </Button>
             </form>
           </div>
         </div>
 
-        <div className="grid w-full max-w-[1024px] grid-cols-1 gap-8 px-6 py-12 md:grid-cols-2 lg:grid-cols-4">
-          <div className="flex flex-col gap-3">
+        <div className="flex w-full max-w-[1024px] flex-wrap items-center gap-12 py-16">
+          <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-2">
             <div className="flex items-center gap-2">
-              <MessageCircle className="h-5 w-5" />
-              <span className="font-semibold">Ingen telefonkøer</span>
+              <FeatherSpeech className="font-['Inter'] text-[16px] font-[400] leading-[16px] text-default-font" />
+              <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-default-font -tracking-[0.01em]">
+                Ingen telefonkøer
+              </span>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Alt klares online, uden app eller glemte kodeord, kun din email
-            </p>
+            <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
+              Alt klares online, uden app, eller glemte kodeord, kun din email
+            </span>
           </div>
-          <div className="flex flex-col gap-3">
+          <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-2">
             <div className="flex items-center gap-2">
-              <Eye className="h-5 w-5" />
-              <span className="font-semibold">Side-om-side overblik</span>
+              <FeatherEye className="font-['Inter'] text-[16px] font-[400] leading-[16px] text-default-font" />
+              <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-default-font -tracking-[0.01em]">
+                Side-om-side overblik
+              </span>
             </div>
-            <p className="text-sm text-muted-foreground">
+            <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
               Dækning, pris, selvrisiko og udelukkelser på én skærm
-            </p>
+            </span>
           </div>
-          <div className="flex flex-col gap-3">
+          <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-2">
             <div className="flex items-center gap-2">
-              <Check className="h-5 w-5" />
-              <span className="font-semibold">Simpel forklaring</span>
+              <FeatherTypeOutline className="font-['Inter'] text-[16px] font-[400] leading-[16px] text-default-font" />
+              <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-default-font -tracking-[0.01em]">
+                Simpel forklaring
+              </span>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Vi oversætter jura og gebyrer til klart dansk
-            </p>
+            <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
+              Vi oversætter jura og gebyrer til klart dansk simpelt og nemt
+            </span>
           </div>
-          <div className="flex flex-col gap-3">
+          <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-2">
             <div className="flex items-center gap-2">
-              <Percent className="h-5 w-5" />
-              <span className="font-semibold">Pris-pres</span>
+              <FeatherPercent className="font-['Inter'] text-[16px] font-[400] leading-[16px] text-default-font" />
+              <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-default-font -tracking-[0.01em]">
+                Pris-pres
+              </span>
             </div>
-            <p className="text-sm text-muted-foreground">
-              Vi bruger de billigste tilbud til at presse konkurrenter
-            </p>
+            <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
+              Vi bruger de billigste tilbud til at presse konkurrenter.
+            </span>
           </div>
         </div>
 
-        <div className="w-full bg-gradient-to-b from-transparent via-muted/20 to-transparent">
-          <div className="mx-auto flex w-full max-w-[1024px] flex-col gap-12 px-6 py-16">
-            <div className="flex w-full flex-col gap-6 lg:flex-row lg:items-end">
-              <h2 className="text-4xl font-bold leading-tight lg:flex-1">
-                Sådan får du<br />bedre forsikringer
-              </h2>
-              <p className="text-lg text-muted-foreground lg:flex-1">
+        <div className="flex w-full flex-col items-center justify-center px-6 pt-12 bg-gradient-to-b from-transparent via-neutral-100 to-transparent">
+          <div className="flex w-full max-w-[1024px] flex-col items-start gap-16">
+            <div className="flex w-full items-end gap-12 flex-wrap">
+              <span className="grow shrink-0 basis-0 whitespace-pre-wrap font-['Inter'] text-[56px] font-[600] leading-[62px] text-default-font -tracking-[0.04em]">
+                {"Sådan får du\nbedre forsikringer"}
+              </span>
+              <span className="grow shrink-0 basis-0 font-['Inter'] text-[17px] font-[500] leading-[24px] text-subtext-color -tracking-[0.01em]">
                 Vi tager os af alt det besværlige. Upload din police én gang, så
                 sørger vi for at du altid har de bedste tilbud.
-              </p>
+              </span>
             </div>
-            <div className="grid gap-4 md:grid-cols-3">
-              <div className="flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
+            <div className="flex items-start gap-2 flex-wrap">
+              <div className="flex min-w-[320px] grow shrink-0 basis-0 flex-col items-center self-stretch overflow-hidden rounded-2xl shadow-[0px_4px_16px_-4px_#0000000a]">
                 <img
-                  className="h-48 w-full object-cover"
+                  className="h-64 w-full flex-none object-cover"
                   src="https://res.cloudinary.com/subframe/image/upload/v1724705412/uploads/302/rc9vp0qjfzzptopfssad.png"
                   alt="Upload policer"
                 />
-                <div className="flex items-center justify-between p-6">
-                  <span className="text-lg font-medium">
+                <div className="flex w-full grow shrink-0 basis-0 items-end gap-2 bg-default-background px-8 py-6">
+                  <span className="grow shrink-0 basis-0 font-['Inter'] text-[21px] font-[500] leading-[28px] text-default-font -tracking-[0.02em]">
                     Upload dine policer, tager kun 2 minutter
                   </span>
-                  <ArrowRight className="h-5 w-5 text-muted-foreground" />
+                  <IconButton
+                    size="large"
+                    icon={<FeatherArrowRight />}
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                  />
                 </div>
               </div>
-              <div className="flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
+              <div className="flex min-w-[320px] grow shrink-0 basis-0 flex-col items-center self-stretch overflow-hidden rounded-2xl shadow-[0px_4px_16px_-4px_#0000000a]">
                 <img
-                  className="h-48 w-full object-cover"
+                  className="h-64 w-full flex-none object-cover"
                   src="https://res.cloudinary.com/subframe/image/upload/v1724690142/uploads/302/fbkapcq4o1zsq98df0t6.png"
                   alt="Vi forhandler"
                 />
-                <div className="flex items-center justify-between p-6">
-                  <span className="text-lg font-medium">
+                <div className="flex w-full grow shrink-0 basis-0 items-end gap-2 bg-default-background px-8 py-6">
+                  <span className="grow shrink-0 basis-0 font-['Inter'] text-[21px] font-[500] leading-[28px] text-default-font -tracking-[0.02em]">
                     Vi forhandler med selskaberne for dig
                   </span>
-                  <ArrowRight className="h-5 w-5 text-muted-foreground" />
+                  <IconButton
+                    size="large"
+                    icon={<FeatherArrowRight />}
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                  />
                 </div>
               </div>
-              <div className="flex flex-col overflow-hidden rounded-xl border bg-card shadow-sm">
+              <div className="flex min-w-[320px] grow shrink-0 basis-0 flex-col items-center self-stretch overflow-hidden rounded-2xl shadow-[0px_4px_16px_-4px_#0000000a]">
                 <img
-                  className="h-48 w-full object-cover"
+                  className="h-64 w-full flex-none object-cover"
                   src="https://res.cloudinary.com/subframe/image/upload/v1724690087/uploads/302/w2ra2yihpofsdy1h4uhy.png"
                   alt="Godkend og spar"
                 />
-                <div className="flex items-center justify-between p-6">
-                  <span className="text-lg font-medium">
+                <div className="flex w-full grow shrink-0 basis-0 items-end gap-2 bg-default-background px-8 py-6">
+                  <span className="grow shrink-0 basis-0 font-['Inter'] text-[21px] font-[500] leading-[28px] text-default-font -tracking-[0.02em]">
                     Du godkender og begynder at spare
                   </span>
-                  <Check className="h-5 w-5 text-muted-foreground" />
+                  <IconButton
+                    size="large"
+                    icon={<FeatherCheck />}
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+                  />
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="flex w-full max-w-[768px] flex-col items-center gap-4 px-6 py-20 text-center">
-          <p className="text-xl">
-            Du spilder tid i telefonkøer. Du taler med sælgere. Du mister
-            overblikket.
-          </p>
-          <p className="text-xl font-medium text-muted-foreground">
-            Vi forhandler for dig, viser klart overblik og holder dig på Bedre
-            Tilbud
-          </p>
+        <div className="flex w-full flex-col items-center justify-center gap-12 px-6 py-24">
+          <div className="flex w-full max-w-[1024px] flex-col items-center justify-center gap-12">
+            <div className="flex w-full max-w-[768px] flex-col items-center gap-1">
+              <span className="font-['Inter'] text-[21px] font-[500] leading-[28px] text-default-font -tracking-[0.03em] text-center">
+                Du spilder tid i telefonkøer. Du taler med sælgere. Du mister
+                overblikket.
+              </span>
+              <span className="font-['Inter'] text-[23px] font-[500] leading-[28px] text-subtext-color -tracking-[0.03em] text-center">
+                Vi forhandler for dig, viser klart overblik og holder dig på Bedre
+                Tilbud
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
