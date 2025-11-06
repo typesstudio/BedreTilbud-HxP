@@ -95,46 +95,32 @@ export default function LandingWizard() {
       if (existingProgress) {
         console.log('[Step1] Processing existing user...');
         
-        if (!existingProgress.userId) {
-          console.log('[Step1] Existing progress but no userId - completing user creation...');
-          const response = await createUserMutation.mutateAsync(userEmail);
-          const user = await response.json() as User;
-          setUserId(user.id);
-          localStorage.setItem("userId", user.id);
-          clearCSRFToken();
-
-          await updateProgressMutation.mutateAsync({
-            userId: user.id,
-            completedSteps: [1],
-            currentStep: 2
-          });
-
-          setCurrentStep(2);
+        if (existingProgress.userId) {
+          setUserId(existingProgress.userId);
+          localStorage.setItem("userId", existingProgress.userId);
+          if (existingProgress.documentId) setDocumentId(existingProgress.documentId);
+          
+          const completedSteps = (existingProgress.completedSteps || []) as number[];
+          console.log('[Step1] Completed steps:', completedSteps);
+          
+          if (completedSteps.includes(3)) {
+            console.log('[Step1] User completed wizard, redirecting to offers...');
+            toast({
+              title: "Velkommen tilbage!",
+              description: "Du er nu logget ind",
+            });
+            setTimeout(() => {
+              setLocation('/offers');
+            }, 500);
+            return;
+          }
+          
+          console.log('[Step1] Resuming at step:', existingProgress.currentStep);
+          setCurrentStep(existingProgress.currentStep as 1 | 2 | 3);
           return;
         }
         
-        setUserId(existingProgress.userId);
-        localStorage.setItem("userId", existingProgress.userId);
-        if (existingProgress.documentId) setDocumentId(existingProgress.documentId);
-        
-        const completedSteps = (existingProgress.completedSteps || []) as number[];
-        console.log('[Step1] Completed steps:', completedSteps);
-        
-        if (completedSteps.includes(3)) {
-          console.log('[Step1] User completed wizard, redirecting to offers...');
-          toast({
-            title: "Velkommen tilbage!",
-            description: "Du er nu logget ind",
-          });
-          setTimeout(() => {
-            setLocation('/offers');
-          }, 500);
-          return;
-        }
-        
-        console.log('[Step1] Resuming at step:', existingProgress.currentStep);
-        setCurrentStep(existingProgress.currentStep as 1 | 2 | 3);
-        return;
+        console.log('[Step1] Existing progress but no userId - creating new user...');
       }
 
       console.log('[Step1] New user, creating progress...');

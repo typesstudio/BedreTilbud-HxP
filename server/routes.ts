@@ -260,10 +260,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/onboarding/progress/:email", async (req, res) => {
     try {
       const email = decodeURIComponent(req.params.email);
-      const progress = await storage.getOnboardingProgressByEmail(email);
+      let progress = await storage.getOnboardingProgressByEmail(email);
       if (!progress) {
         return res.status(404).json({ message: "No onboarding progress found for this email" });
       }
+      
+      if (!progress.userId) {
+        const existingUser = await storage.getUserByEmail(email);
+        if (existingUser) {
+          logger.info('Auto-linking existing user to onboarding progress', { email, userId: existingUser.id });
+          progress = await storage.updateOnboardingProgress(email, { userId: existingUser.id });
+        }
+      }
+      
       res.json(progress);
     } catch (error: any) {
       logger.error('Failed to fetch onboarding progress', error, { email: req.params.email });
