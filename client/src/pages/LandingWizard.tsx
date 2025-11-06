@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { apiRequest, queryClient, clearCSRFToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { SubframeProgress } from "@/components/wizard/SubframeProgress";
 import { SubframeStep1 } from "@/components/wizard/SubframeStep1";
@@ -99,6 +99,7 @@ export default function LandingWizard() {
       const user = await response.json() as User;
       setUserId(user.id);
       localStorage.setItem("userId", user.id);
+      clearCSRFToken();
 
       await updateProgressMutation.mutateAsync({
         userId: user.id,

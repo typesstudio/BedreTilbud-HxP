@@ -11,6 +11,11 @@ async function throwIfResNotOk(res: Response) {
 let csrfToken: string | null = null;
 let csrfTokenExpiry: number = 0;
 
+export function clearCSRFToken() {
+  csrfToken = null;
+  csrfTokenExpiry = 0;
+}
+
 async function getCSRFToken(): Promise<string | null> {
   // Return cached token if still valid
   if (csrfToken && Date.now() < csrfTokenExpiry) {
