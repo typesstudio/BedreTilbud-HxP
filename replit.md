@@ -4,6 +4,30 @@
 
 BedreTilbud is a Danish insurance comparison platform aimed at users aged 50+. Its primary purpose is to simplify insurance selection by allowing users to upload existing PDF policies, complete a questionnaire, and receive AI-powered comparative offers. The platform provides clear comparisons, personalized recommendations, and a user-friendly experience with a focus on accessibility through large typography and high contrast. The ambition is to streamline the insurance comparison process, making it transparent and efficient for an underserved demographic.
 
+## Recent Changes (November 2025)
+
+### Landing Page Wizard (In Progress)
+Implementing a new 3-step wizard as the primary landing page:
+1. **Step 1**: Email collection with simplified authentication (no magic link initially)
+2. **Step 2**: PDF upload with drag-and-drop (10MB limit, optional skip)
+3. **Step 3**: Company selection (4 popular + 4 others), CPR input (XXXXXX-XXXX format), priority selection
+
+**Backend Complete (Nov 6, 2025)**:
+- Added `logoUrl` and `popular` fields to companies table
+- Added `insurancePriority` field to users table
+- Created `onboarding_progress` table for wizard state persistence
+- Implemented onboarding progress API endpoints (GET/POST/PUT)
+- Pre-seeded 8 Danish insurance companies with Cloudinary logo URLs
+- Fixed all LSP errors in storage layer
+
+**Frontend To-Do**:
+- Sync Subframe components (ID: 34bd735365b5)
+- Build 3-step wizard components
+- Implement CPR validation and auto-formatting
+- Integrate with onboarding progress API
+- Add background OCR processing on offers page
+- See `LANDING_PAGE_IMPLEMENTATION_GUIDE.md` for complete specification
+
 ## User Preferences
 
 Preferred communication style: Simple, everyday language.

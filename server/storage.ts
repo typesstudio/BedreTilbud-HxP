@@ -108,6 +108,8 @@ export class MemStorage implements IStorage {
         name: "Tryg Forsikring", 
         email: "tilbud@tryg.dk",
         description: "Danmarks største forsikringsselskab",
+        logoUrl: null,
+        popular: false,
         active: true
       },
       {
@@ -115,6 +117,8 @@ export class MemStorage implements IStorage {
         name: "Topdanmark",
         email: "tilbud@topdanmark.dk", 
         description: "Konkurrencedygtige priser",
+        logoUrl: null,
+        popular: false,
         active: true
       },
       {
@@ -122,6 +126,8 @@ export class MemStorage implements IStorage {
         name: "svphil",
         email: "svphil@gmail.com",
         description: "Personlig forsikringsrådgiver",
+        logoUrl: null,
+        popular: false,
         active: true
       },
       {
@@ -129,6 +135,8 @@ export class MemStorage implements IStorage {
         name: "Types Studio",
         email: "hello@typesstudio.com",
         description: "Moderne forsikringsløsninger",
+        logoUrl: null,
+        popular: false,
         active: true
       }
     ];
@@ -166,6 +174,7 @@ export class MemStorage implements IStorage {
       priorityOne: insertUser.priorityOne ?? null,
       priorityTwo: insertUser.priorityTwo ?? null,
       priorityThree: insertUser.priorityThree ?? null,
+      insurancePriority: insertUser.insurancePriority ?? null,
       aiAutoResponseEnabled: insertUser.aiAutoResponseEnabled ?? null,
       createdAt: new Date() 
     };
@@ -198,6 +207,8 @@ export class MemStorage implements IStorage {
       name: insertCompany.name,
       email: insertCompany.email,
       description: insertCompany.description ?? null,
+      logoUrl: insertCompany.logoUrl ?? null,
+      popular: insertCompany.popular ?? null,
       active: insertCompany.active ?? null
     };
     this.companies.set(id, company);
@@ -330,6 +341,7 @@ export class MemStorage implements IStorage {
       id,
       threadId: insertEmail.threadId ?? null,
       messageId: insertEmail.messageId ?? null,
+      emailMessageId: insertEmail.emailMessageId ?? null,
       direction: insertEmail.direction ?? null,
       subject: insertEmail.subject ?? null,
       body: insertEmail.body ?? null,
@@ -461,7 +473,7 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       updatedAt: new Date()
     };
-    this.onboardingProgress.set(email, progress);
+    this.onboardingProgress.set(insertProgress.email, progress);
     return progress;
   }
 

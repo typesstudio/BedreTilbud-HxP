@@ -134,7 +134,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 4. Check Gmail API availability
       try {
         const gmailStatus = gmailOAuthService.getConnectionStatus();
-        if (gmailStatus.isConnected) {
+        if (gmailStatus.configured && gmailStatus.authorized) {
           checks.gmail = { status: "ok", message: "Connected" };
         } else {
           checks.gmail = { status: "warn", message: "Not connected - features limited" };
