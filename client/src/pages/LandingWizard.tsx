@@ -34,7 +34,7 @@ export default function LandingWizard() {
 
   const createProgressMutation = useMutation({
     mutationFn: async (email: string) => 
-      apiRequest('/api/onboarding/progress', 'POST', { email, currentStep: 1, completedSteps: [] }),
+      apiRequest('POST', '/api/onboarding/progress', { email, currentStep: 1, completedSteps: [] }),
     onError: (error: any) => {
       toast({
         title: "Fejl",
@@ -46,7 +46,7 @@ export default function LandingWizard() {
 
   const updateProgressMutation = useMutation({
     mutationFn: async (data: Partial<OnboardingProgress>) => 
-      apiRequest(`/api/onboarding/progress/${email}`, 'PUT', data),
+      apiRequest('PUT', `/api/onboarding/progress/${email}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/onboarding/progress', email] });
     }
@@ -54,7 +54,7 @@ export default function LandingWizard() {
 
   const createUserMutation = useMutation({
     mutationFn: async (email: string) => 
-      apiRequest('/api/users', 'POST', { email }),
+      apiRequest('POST', '/api/users', { email }),
     onError: (error: any) => {
       toast({
         title: "Fejl",
@@ -160,7 +160,7 @@ export default function LandingWizard() {
 
   const updateUserMutation = useMutation({
     mutationFn: async (data: { name: string; cpr: string; priority: string }) =>
-      apiRequest(`/api/users/${userId}`, 'PUT', {
+      apiRequest('PUT', `/api/users/${userId}`, {
         name: data.name,
         personalIdNumber: data.cpr,
         insurancePriority: data.priority
