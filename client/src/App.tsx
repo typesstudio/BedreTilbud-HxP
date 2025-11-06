@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
+const ModernLandingPage = lazy(() => import("@/pages/ModernLandingPage"));
 const LandingWizard = lazy(() => import("@/pages/LandingWizard"));
 const Home = lazy(() => import("@/pages/home"));
 const Onboarding = lazy(() => import("@/pages/onboarding"));
@@ -30,7 +31,8 @@ function Router() {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Switch>
-        <Route path="/" component={LandingWizard} />
+        <Route path="/" component={ModernLandingPage} />
+        <Route path="/wizard" component={LandingWizard} />
         <Route path="/home" component={Home} />
         <Route path="/onboarding" component={Onboarding} />
         <Route path="/onboarding/:step" component={Onboarding} />
