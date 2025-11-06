@@ -66,10 +66,12 @@ export default function LandingWizard() {
   });
 
   const handleStep1Complete = async (userEmail: string) => {
+    console.log('[Step1] Starting with email:', userEmail);
     setEmail(userEmail);
     setIsProcessingStep1(true);
 
     try {
+      console.log('[Step1] Fetching existing progress...');
       const existingProgress = await queryClient.fetchQuery<OnboardingProgress>({
         queryKey: ['/api/onboarding/progress', userEmail],
         queryFn: async () => {
@@ -77,15 +79,21 @@ export default function LandingWizard() {
             credentials: 'include'
           });
           if (!response.ok) {
-            if (response.status === 404) return null;
+            if (response.status === 404) {
+              console.log('[Step1] No existing progress (404)');
+              return null;
+            }
             throw new Error('Kunne ikke hente fremskridt');
           }
-          return response.json();
+          const data = await response.json();
+          console.log('[Step1] Existing progress found:', data);
+          return data;
         },
         retry: false
       });
 
       if (existingProgress) {
+        console.log('[Step1] Processing existing user...');
         if (existingProgress.userId) {
           setUserId(existingProgress.userId);
           localStorage.setItem("userId", existingProgress.userId);
@@ -93,7 +101,10 @@ export default function LandingWizard() {
         if (existingProgress.documentId) setDocumentId(existingProgress.documentId);
         
         const completedSteps = (existingProgress.completedSteps || []) as number[];
+        console.log('[Step1] Completed steps:', completedSteps);
+        
         if (completedSteps.includes(3)) {
+          console.log('[Step1] User completed wizard, redirecting to offers...');
           toast({
             title: "Velkommen tilbage!",
             description: "Du er nu logget ind",
@@ -104,9 +115,12 @@ export default function LandingWizard() {
           return;
         }
         
+        console.log('[Step1] Resuming at step:', existingProgress.currentStep);
         setCurrentStep(existingProgress.currentStep as 1 | 2 | 3);
         return;
       }
+
+      console.log('[Step1] New user, creating progress...');
 
       await createProgressMutation.mutateAsync(userEmail);
 
@@ -124,13 +138,14 @@ export default function LandingWizard() {
 
       setCurrentStep(2);
     } catch (error: any) {
-      console.error('Error in step 1:', error);
+      console.error('[Step1] Error occurred:', error);
       toast({
         title: "Fejl",
         description: error.message || "Kunne ikke fortsætte. Prøv venligst igen.",
         variant: "destructive"
       });
     } finally {
+      console.log('[Step1] Finally block - clearing loading state');
       setIsProcessingStep1(false);
     }
   };
