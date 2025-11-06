@@ -94,10 +94,27 @@ export default function LandingWizard() {
 
       if (existingProgress) {
         console.log('[Step1] Processing existing user...');
-        if (existingProgress.userId) {
-          setUserId(existingProgress.userId);
-          localStorage.setItem("userId", existingProgress.userId);
+        
+        if (!existingProgress.userId) {
+          console.log('[Step1] Existing progress but no userId - completing user creation...');
+          const response = await createUserMutation.mutateAsync(userEmail);
+          const user = await response.json() as User;
+          setUserId(user.id);
+          localStorage.setItem("userId", user.id);
+          clearCSRFToken();
+
+          await updateProgressMutation.mutateAsync({
+            userId: user.id,
+            completedSteps: [1],
+            currentStep: 2
+          });
+
+          setCurrentStep(2);
+          return;
         }
+        
+        setUserId(existingProgress.userId);
+        localStorage.setItem("userId", existingProgress.userId);
         if (existingProgress.documentId) setDocumentId(existingProgress.documentId);
         
         const completedSteps = (existingProgress.completedSteps || []) as number[];
