@@ -23,10 +23,24 @@ export function SubframeStep2({ onComplete, onBack, isLoading }: SubframeStep2Pr
     setUploadStatus('uploading');
 
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('files', file);
+    
+    const userId = localStorage.getItem('userId');
+    if (!userId) {
+      setUploadStatus('error');
+      toast({
+        title: "Fejl",
+        description: 'Bruger ID mangler',
+        variant: "destructive"
+      });
+      return;
+    }
+    
+    formData.append('userId', userId);
+    formData.append('documentType', 'current');
 
     try {
-      const response = await fetch('/api/upload', {
+      const response = await fetch('/api/documents/upload', {
         method: 'POST',
         body: formData,
         credentials: 'include'
@@ -38,6 +52,7 @@ export function SubframeStep2({ onComplete, onBack, isLoading }: SubframeStep2Pr
       }
 
       const result = await response.json();
+      const documents = Array.isArray(result) ? result : [result];
       setUploadStatus('success');
       
       toast({
@@ -46,7 +61,7 @@ export function SubframeStep2({ onComplete, onBack, isLoading }: SubframeStep2Pr
       });
 
       setTimeout(() => {
-        onComplete(result.id, false);
+        onComplete(documents[0]?.id || null, false);
       }, 500);
     } catch (error: any) {
       setUploadStatus('error');
