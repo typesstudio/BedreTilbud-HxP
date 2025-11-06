@@ -71,69 +71,32 @@ export default function LandingWizard() {
     setIsProcessingStep1(true);
 
     try {
-      console.log('[Step1] Fetching existing progress...');
-      const existingProgress = await queryClient.fetchQuery<OnboardingProgress>({
-        queryKey: ['/api/onboarding/progress', userEmail],
-        queryFn: async () => {
-          const response = await fetch(`/api/onboarding/progress/${userEmail}`, {
-            credentials: 'include'
-          });
-          if (!response.ok) {
-            if (response.status === 404) {
-              console.log('[Step1] No existing progress (404)');
-              return null;
-            }
-            throw new Error('Kunne ikke hente fremskridt');
-          }
-          const data = await response.json();
-          console.log('[Step1] Existing progress found:', data);
-          return data;
-        },
-        retry: false
+      console.log('[Step1] Checking if user exists...');
+      const checkResponse = await fetch(`/api/users/check/${encodeURIComponent(userEmail)}`, {
+        credentials: 'include'
       });
 
-      if (existingProgress) {
-        console.log('[Step1] Processing existing user...');
+      if (checkResponse.ok) {
+        const { exists, user } = await checkResponse.json();
         
-        if (existingProgress.userId) {
-          setUserId(existingProgress.userId);
-          localStorage.setItem("userId", existingProgress.userId);
-          if (existingProgress.documentId) setDocumentId(existingProgress.documentId);
+        if (exists && user) {
+          console.log('[Step1] User exists - logging in...');
+          setUserId(user.id);
+          localStorage.setItem("userId", user.id);
           
-          const completedSteps = (existingProgress.completedSteps || []) as number[];
-          console.log('[Step1] Completed steps:', completedSteps);
+          toast({
+            title: "Velkommen tilbage!",
+            description: "Du er nu logget ind",
+          });
           
-          if (completedSteps.includes(3)) {
-            console.log('[Step1] User completed wizard, redirecting to offers...');
-            toast({
-              title: "Velkommen tilbage!",
-              description: "Du er nu logget ind",
-            });
-            setTimeout(() => {
-              setLocation('/offers');
-            }, 500);
-            return;
-          }
-          
-          if (existingProgress.currentStep === 1 && completedSteps.length === 0) {
-            console.log('[Step1] User at step 1 with no progress - completing step 1...');
-            await updateProgressMutation.mutateAsync({
-              completedSteps: [1],
-              currentStep: 2
-            });
-            setCurrentStep(2);
-            return;
-          }
-          
-          console.log('[Step1] Resuming at step:', existingProgress.currentStep);
-          setCurrentStep(existingProgress.currentStep as 1 | 2 | 3);
+          setTimeout(() => {
+            setLocation('/offers');
+          }, 500);
           return;
         }
-        
-        console.log('[Step1] Existing progress but no userId - creating new user...');
       }
 
-      console.log('[Step1] New user, creating progress...');
+      console.log('[Step1] New user - starting onboarding...');
 
       await createProgressMutation.mutateAsync(userEmail);
 

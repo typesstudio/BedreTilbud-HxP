@@ -179,6 +179,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // User routes
+  app.get("/api/users/check/:email", async (req, res) => {
+    try {
+      const email = decodeURIComponent(req.params.email);
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(404).json({ exists: false });
+      }
+      res.json({ exists: true, user });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post("/api/users", async (req, res) => {
     try {
       const userData = insertUserSchema.parse(req.body);
