@@ -3,10 +3,10 @@ import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { WizardProgress } from "@/components/wizard/WizardProgress";
-import { Step1Email } from "@/components/wizard/Step1Email";
-import { Step2Upload } from "@/components/wizard/Step2Upload";
-import { Step3Companies } from "@/components/wizard/Step3Companies";
+import { SubframeProgress } from "@/components/wizard/SubframeProgress";
+import { SubframeStep1 } from "@/components/wizard/SubframeStep1";
+import { SubframeStep2 } from "@/components/wizard/SubframeStep2";
+import { SubframeStep3 } from "@/components/wizard/SubframeStep3";
 import type { OnboardingProgress, User } from "@shared/schema";
 
 export default function LandingWizard() {
@@ -214,26 +214,48 @@ export default function LandingWizard() {
   const isStep2Loading = updateProgressMutation.isPending;
   const isStep3Loading = updateProgressMutation.isPending || updateUserMutation.isPending || sendInquiriesMutation.isPending;
 
+  const handleBack = () => {
+    if (currentStep > 1) {
+      setCurrentStep((currentStep - 1) as 1 | 2 | 3);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950">
-      <div className="max-w-6xl mx-auto">
-        <WizardProgress currentStep={currentStep} completedSteps={completedSteps} />
+    <div className="flex h-full w-full flex-col items-center bg-default-background min-h-screen">
+      <div className="flex w-full flex-col items-center gap-12">
+        <div className="flex w-full items-center justify-between border-b border-solid border-neutral-border px-6 py-4">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Bedretilbud.com
+          </span>
+          <span className="text-body font-body text-subtext-color">
+            Få bedre tilbud på under 2 minutter
+          </span>
+        </div>
 
-        {currentStep === 1 && (
-          <Step1Email onComplete={handleStep1Complete} isLoading={isStep1Loading} />
-        )}
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-8 px-4">
+          <SubframeProgress currentStep={currentStep} completedSteps={completedSteps} />
 
-        {currentStep === 2 && (
-          <Step2Upload onComplete={handleStep2Complete} isLoading={isStep2Loading} />
-        )}
+          {currentStep === 1 && (
+            <SubframeStep1 onComplete={handleStep1Complete} isLoading={isStep1Loading} />
+          )}
 
-        {currentStep === 3 && (
-          <Step3Companies 
-            onComplete={handleStep3Complete} 
-            isLoading={isStep3Loading}
-            uploadSkipped={uploadSkipped}
-          />
-        )}
+          {currentStep === 2 && (
+            <SubframeStep2 
+              onComplete={handleStep2Complete} 
+              onBack={handleBack}
+              isLoading={isStep2Loading} 
+            />
+          )}
+
+          {currentStep === 3 && (
+            <SubframeStep3 
+              onComplete={handleStep3Complete} 
+              onBack={handleBack}
+              isLoading={isStep3Loading}
+              uploadSkipped={uploadSkipped}
+            />
+          )}
+        </div>
       </div>
     </div>
   );
