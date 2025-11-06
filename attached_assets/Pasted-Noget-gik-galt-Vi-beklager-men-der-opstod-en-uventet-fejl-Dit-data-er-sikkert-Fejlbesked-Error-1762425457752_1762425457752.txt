@@ -1,0 +1,22 @@
+Noget gik galt
+Vi beklager, men der opstod en uventet fejl. Dit data er sikkert.
+
+Fejlbesked:
+
+Error: Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: undefined. You likely forgot to export your component from the file it's defined in, or you might have mixed up default and named imports.
+
+Check the render method of `Comparison`.
+Se tekniske detaljer
+Error: Element type is invalid: expected a string (for built-in components) or a class/function (for composite components) but got: undefined. You likely forgot to export your component from the file it's defined in, or you might have mixed up default and named imports.
+
+Check the render method of `Comparison`.
+    at createFiberFromTypeAndProps (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=21a48395:20442:23)
+    at createFiberFromElement (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=21a48395:20463:23)
+    at reconcileSingleElement (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=21a48395:10513:31)
+    at reconcileChildFibers2 (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=21a48395:10550:43)
+    at reconcileChildren (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=21a48395:14290:37)
+    at updateHostComponent (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=21a48395:14807:11)
+    at beginWork (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=21a48395:15935:22)
+    at beginWork$1 (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=21a48395:19753:22)
+    at performUnitOfWork (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=21a48395:19198:20)
+    at workLoopSync (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=21a48395:19137:13)
