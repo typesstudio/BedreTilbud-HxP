@@ -17,6 +17,7 @@ export default function LandingWizard() {
   const [userId, setUserId] = useState<string>('');
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [uploadSkipped, setUploadSkipped] = useState(false);
+  const [isProcessingStep1, setIsProcessingStep1] = useState(false);
 
   const { data: progress } = useQuery<OnboardingProgress>({
     queryKey: ['/api/onboarding/progress', email],
@@ -66,6 +67,7 @@ export default function LandingWizard() {
 
   const handleStep1Complete = async (userEmail: string) => {
     setEmail(userEmail);
+    setIsProcessingStep1(true);
 
     try {
       const existingProgress = await queryClient.fetchQuery<OnboardingProgress>({
@@ -123,6 +125,13 @@ export default function LandingWizard() {
       setCurrentStep(2);
     } catch (error: any) {
       console.error('Error in step 1:', error);
+      toast({
+        title: "Fejl",
+        description: error.message || "Kunne ikke fortsætte. Prøv venligst igen.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsProcessingStep1(false);
     }
   };
 
@@ -218,7 +227,7 @@ export default function LandingWizard() {
 
   const completedSteps = (progress?.completedSteps as number[]) || [];
 
-  const isStep1Loading = createProgressMutation.isPending || createUserMutation.isPending;
+  const isStep1Loading = isProcessingStep1 || createProgressMutation.isPending || createUserMutation.isPending;
   const isStep2Loading = updateProgressMutation.isPending;
   const isStep3Loading = updateProgressMutation.isPending || updateUserMutation.isPending || sendInquiriesMutation.isPending;
 
