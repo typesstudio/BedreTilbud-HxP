@@ -2,7 +2,17 @@ import { Button } from "@/ui/components/Button";
 import { TextField } from "@/ui/components/TextField";
 import { IconButton } from "@/ui/components/IconButton";
 import { IconWithBackground } from "@/ui/components/IconWithBackground";
-import { FeatherArrowRight, FeatherCheck, FeatherCheckCircle, FeatherEye, FeatherPercent, FeatherSpeech, FeatherTypeOutline, FeatherUpload } from "@subframe/core";
+import { 
+  FeatherArrowRight, 
+  FeatherCheck, 
+  FeatherCheckCircle, 
+  FeatherChevronRight,
+  FeatherEye, 
+  FeatherPercent, 
+  FeatherSpeech, 
+  FeatherTypeOutline, 
+  FeatherUpload 
+} from "@subframe/core";
 import { useWizardFlow } from "@/hooks/useWizardFlow";
 import { SubframeStep2 } from "@/components/wizard/SubframeStep2";
 import { SubframeStep3 } from "@/components/wizard/SubframeStep3";
@@ -34,36 +44,36 @@ export default function ModernLandingPage() {
             <span className="text-body-bold font-body-bold text-default-font">
               Bedretilbud.com
             </span>
-            <span className="text-body font-body text-subtext-color">
+            <span className="text-body font-body text-subtext-color hidden sm:block">
               Få bedre tilbud på under 2 minutter
             </span>
           </div>
 
-          <div className="flex w-full max-w-[768px] flex-col items-start gap-8 px-4">
+          <div className="flex w-full max-w-[768px] flex-col items-start gap-8 px-4 sm:px-6">
             <div className="flex w-full items-center justify-between">
               <div className="flex items-center gap-2">
                 <IconWithBackground variant="success" icon={<FeatherCheck />} />
-                <span className="text-body-bold font-body-bold text-success-600">
+                <span className="text-body-bold font-body-bold text-success-600 hidden sm:inline">
                   Din Email
                 </span>
               </div>
-              <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
+              <div className="flex h-px w-12 sm:w-24 flex-none items-center bg-neutral-200" />
               <div className="flex items-center gap-2">
                 <IconWithBackground 
                   variant={currentStep >= 2 ? "brand" : "neutral"} 
                   icon={<FeatherUpload />} 
                 />
-                <span className={`text-body font-body ${currentStep >= 2 ? 'text-brand-600 font-bold' : 'text-subtext-color'}`}>
+                <span className={`text-body font-body hidden sm:inline ${currentStep >= 2 ? 'text-brand-600 font-bold' : 'text-subtext-color'}`}>
                   Upload Police
                 </span>
               </div>
-              <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
+              <div className="flex h-px w-12 sm:w-24 flex-none items-center bg-neutral-200" />
               <div className="flex items-center gap-2">
                 <IconWithBackground
                   variant={currentStep >= 3 ? "brand" : "neutral"}
                   icon={<FeatherCheckCircle />}
                 />
-                <span className={`text-body font-body ${currentStep >= 3 ? 'text-brand-600 font-bold' : 'text-subtext-color'}`}>
+                <span className={`text-body font-body hidden sm:inline ${currentStep >= 3 ? 'text-brand-600 font-bold' : 'text-subtext-color'}`}>
                   Vælg Selskaber
                 </span>
               </div>
@@ -99,55 +109,60 @@ export default function ModernLandingPage() {
   return (
     <div className="flex h-full w-full flex-col items-center bg-default-background">
       <div className="flex w-full flex-col items-center gap-12">
-        <div className="flex w-full items-center justify-between border-b border-solid border-neutral-border px-2 py-2">
+        {/* Header */}
+        <div className="flex w-full items-center justify-between border-b border-solid border-neutral-border px-4 sm:px-6 py-2">
           <span className="text-body-bold font-body-bold text-default-font">
             Bedretilbud.com
           </span>
-          <span className="text-body-bold font-body-bold text-brand-600">
+          <span className="text-body-bold font-body-bold text-brand-600 text-sm sm:text-base">
             Få bedre tilbud på under 2 minutter
           </span>
         </div>
         
-        <div className="flex w-full max-w-[768px] flex-col items-start gap-8 pt-12">
+        {/* Hero Section with Wizard */}
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-8 pt-12 px-4 sm:px-6">
+          {/* Progress Indicator */}
           <div className="flex w-full items-center justify-between">
             <div className="flex items-center gap-2">
               <IconWithBackground />
-              <span className="text-body-bold font-body-bold text-brand-600">
+              <span className="text-body-bold font-body-bold text-brand-600 hidden sm:inline">
                 Din Email
               </span>
             </div>
-            <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
+            <div className="flex h-px w-12 sm:w-24 flex-none items-center bg-neutral-200" />
             <div className="flex items-center gap-2">
               <IconWithBackground variant="neutral" icon={<FeatherUpload />} />
-              <span className="text-body font-body text-subtext-color">
+              <span className="text-body font-body text-subtext-color hidden sm:inline">
                 Upload Police
               </span>
             </div>
-            <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
+            <div className="flex h-px w-12 sm:w-24 flex-none items-center bg-neutral-200" />
             <div className="flex items-center gap-2">
               <IconWithBackground
                 variant="neutral"
                 icon={<FeatherCheckCircle />}
               />
-              <span className="text-body font-body text-subtext-color">
+              <span className="text-body font-body text-subtext-color hidden sm:inline">
                 Få Bedre Tilbud
               </span>
             </div>
           </div>
           
+          {/* Hero Content */}
           <div className="flex w-full flex-col items-center gap-6">
             <div className="flex w-full flex-col items-center gap-2">
-              <span className="font-['Inter_Tight'] text-[56px] font-[600] leading-[56px] text-default-font text-center">
+              <span className="font-['Inter_Tight'] text-[32px] sm:text-[56px] font-[600] leading-[36px] sm:leading-[56px] text-default-font text-center">
                 Få bedre forsikringer
               </span>
-              <span className="whitespace-pre-wrap text-body font-body text-subtext-color text-center">
+              <span className="whitespace-pre-wrap text-body font-body text-subtext-color text-center px-4">
                 {
                   "Upload dine nuværende aftaler én gang. \nVi henter nye tilbud, sammenligner side om side"
                 }
               </span>
             </div>
             
-            <form onSubmit={handleEmailSubmit} className="flex w-full max-w-[448px] flex-col items-start gap-6">
+            {/* Email Form */}
+            <form onSubmit={handleEmailSubmit} className="flex w-full max-w-[448px] flex-col items-start gap-6 px-4 sm:px-0">
               <TextField
                 className="h-auto w-full flex-none"
                 label="Email adresse"
@@ -167,7 +182,6 @@ export default function ModernLandingPage() {
                 type="submit"
                 disabled={isProcessingStep1 || !email}
                 loading={isProcessingStep1}
-                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
                 data-testid="button-continue"
               >
                 {isProcessingStep1 ? "Vent venligst..." : "Få bedre tilbud"}
@@ -176,7 +190,8 @@ export default function ModernLandingPage() {
           </div>
         </div>
 
-        <div className="flex w-full max-w-[1024px] flex-wrap items-center gap-12 py-16">
+        {/* Features Grid */}
+        <div className="flex w-full max-w-[1024px] flex-wrap items-center gap-8 sm:gap-12 py-8 sm:py-16 px-4 sm:px-6">
           <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-2">
             <div className="flex items-center gap-2">
               <FeatherSpeech className="font-['Inter'] text-[16px] font-[400] leading-[16px] text-default-font" />
@@ -223,26 +238,27 @@ export default function ModernLandingPage() {
           </div>
         </div>
 
-        <div className="flex w-full flex-col items-center justify-center px-6 pt-12 bg-gradient-to-b from-transparent via-neutral-100 to-transparent">
-          <div className="flex w-full max-w-[1024px] flex-col items-start gap-16">
-            <div className="flex w-full items-end gap-12 flex-wrap">
-              <span className="grow shrink-0 basis-0 whitespace-pre-wrap font-['Inter'] text-[56px] font-[600] leading-[62px] text-default-font -tracking-[0.04em]">
+        {/* How it Works Section */}
+        <div className="flex w-full flex-col items-center justify-center px-4 sm:px-6 pt-12 bg-gradient-to-b from-transparent via-neutral-100 to-transparent">
+          <div className="flex w-full max-w-[1024px] flex-col items-start gap-12 sm:gap-16 pb-8 sm:pb-12">
+            <div className="flex w-full items-end gap-8 sm:gap-12 flex-wrap">
+              <span className="grow shrink-0 basis-0 whitespace-pre-wrap font-['Inter'] text-[32px] sm:text-[56px] font-[600] leading-[36px] sm:leading-[62px] text-default-font -tracking-[0.04em]">
                 {"Sådan får du\nbedre forsikringer"}
               </span>
-              <span className="grow shrink-0 basis-0 font-['Inter'] text-[17px] font-[500] leading-[24px] text-subtext-color -tracking-[0.01em]">
+              <span className="grow shrink-0 basis-0 font-['Inter'] text-[15px] sm:text-[17px] font-[500] leading-[22px] sm:leading-[24px] text-subtext-color -tracking-[0.01em]">
                 Vi tager os af alt det besværlige. Upload din police én gang, så
                 sørger vi for at du altid har de bedste tilbud.
               </span>
             </div>
-            <div className="flex items-start gap-2 flex-wrap">
-              <div className="flex min-w-[320px] grow shrink-0 basis-0 flex-col items-center self-stretch overflow-hidden rounded-2xl shadow-[0px_4px_16px_-4px_#0000000a]">
+            <div className="flex items-start gap-4 sm:gap-2 flex-wrap">
+              <div className="flex min-w-[280px] sm:min-w-[320px] grow shrink-0 basis-0 flex-col items-center self-stretch overflow-hidden rounded-2xl shadow-[0px_4px_16px_-4px_#0000000a]">
                 <img
-                  className="h-64 w-full flex-none object-cover"
+                  className="h-48 sm:h-64 w-full flex-none object-cover"
                   src="https://res.cloudinary.com/subframe/image/upload/v1724705412/uploads/302/rc9vp0qjfzzptopfssad.png"
                   alt="Upload policer"
                 />
-                <div className="flex w-full grow shrink-0 basis-0 items-end gap-2 bg-default-background px-8 py-6">
-                  <span className="grow shrink-0 basis-0 font-['Inter'] text-[21px] font-[500] leading-[28px] text-default-font -tracking-[0.02em]">
+                <div className="flex w-full grow shrink-0 basis-0 items-end gap-2 bg-default-background px-6 sm:px-8 py-4 sm:py-6">
+                  <span className="grow shrink-0 basis-0 font-['Inter'] text-[17px] sm:text-[21px] font-[500] leading-[24px] sm:leading-[28px] text-default-font -tracking-[0.02em]">
                     Upload dine policer, tager kun 2 minutter
                   </span>
                   <IconButton
@@ -252,14 +268,14 @@ export default function ModernLandingPage() {
                   />
                 </div>
               </div>
-              <div className="flex min-w-[320px] grow shrink-0 basis-0 flex-col items-center self-stretch overflow-hidden rounded-2xl shadow-[0px_4px_16px_-4px_#0000000a]">
+              <div className="flex min-w-[280px] sm:min-w-[320px] grow shrink-0 basis-0 flex-col items-center self-stretch overflow-hidden rounded-2xl shadow-[0px_4px_16px_-4px_#0000000a]">
                 <img
-                  className="h-64 w-full flex-none object-cover"
+                  className="h-48 sm:h-64 w-full flex-none object-cover"
                   src="https://res.cloudinary.com/subframe/image/upload/v1724690142/uploads/302/fbkapcq4o1zsq98df0t6.png"
                   alt="Vi forhandler"
                 />
-                <div className="flex w-full grow shrink-0 basis-0 items-end gap-2 bg-default-background px-8 py-6">
-                  <span className="grow shrink-0 basis-0 font-['Inter'] text-[21px] font-[500] leading-[28px] text-default-font -tracking-[0.02em]">
+                <div className="flex w-full grow shrink-0 basis-0 items-end gap-2 bg-default-background px-6 sm:px-8 py-4 sm:py-6">
+                  <span className="grow shrink-0 basis-0 font-['Inter'] text-[17px] sm:text-[21px] font-[500] leading-[24px] sm:leading-[28px] text-default-font -tracking-[0.02em]">
                     Vi forhandler med selskaberne for dig
                   </span>
                   <IconButton
@@ -269,14 +285,14 @@ export default function ModernLandingPage() {
                   />
                 </div>
               </div>
-              <div className="flex min-w-[320px] grow shrink-0 basis-0 flex-col items-center self-stretch overflow-hidden rounded-2xl shadow-[0px_4px_16px_-4px_#0000000a]">
+              <div className="flex min-w-[280px] sm:min-w-[320px] grow shrink-0 basis-0 flex-col items-center self-stretch overflow-hidden rounded-2xl shadow-[0px_4px_16px_-4px_#0000000a]">
                 <img
-                  className="h-64 w-full flex-none object-cover"
+                  className="h-48 sm:h-64 w-full flex-none object-cover"
                   src="https://res.cloudinary.com/subframe/image/upload/v1724690087/uploads/302/w2ra2yihpofsdy1h4uhy.png"
                   alt="Godkend og spar"
                 />
-                <div className="flex w-full grow shrink-0 basis-0 items-end gap-2 bg-default-background px-8 py-6">
-                  <span className="grow shrink-0 basis-0 font-['Inter'] text-[21px] font-[500] leading-[28px] text-default-font -tracking-[0.02em]">
+                <div className="flex w-full grow shrink-0 basis-0 items-end gap-2 bg-default-background px-6 sm:px-8 py-4 sm:py-6">
+                  <span className="grow shrink-0 basis-0 font-['Inter'] text-[17px] sm:text-[21px] font-[500] leading-[24px] sm:leading-[28px] text-default-font -tracking-[0.02em]">
                     Du godkender og begynder at spare
                   </span>
                   <IconButton
@@ -289,20 +305,367 @@ export default function ModernLandingPage() {
             </div>
           </div>
         </div>
+      </div>
 
-        <div className="flex w-full flex-col items-center justify-center gap-12 px-6 py-24">
-          <div className="flex w-full max-w-[1024px] flex-col items-center justify-center gap-12">
-            <div className="flex w-full max-w-[768px] flex-col items-center gap-1">
-              <span className="font-['Inter'] text-[21px] font-[500] leading-[28px] text-default-font -tracking-[0.03em] text-center">
-                Du spilder tid i telefonkøer. Du taler med sælgere. Du mister
-                overblikket.
+      {/* Problem / Solution Statement */}
+      <div className="flex w-full flex-col items-center justify-center gap-12 px-4 sm:px-6 py-16 sm:py-24">
+        <div className="flex w-full max-w-[1024px] flex-col items-center justify-center gap-12">
+          <div className="flex w-full max-w-[768px] flex-col items-center gap-1">
+            <span className="font-['Inter'] text-[18px] sm:text-[21px] font-[500] leading-[26px] sm:leading-[28px] text-default-font -tracking-[0.03em] text-center">
+              Du spilder tid i telefonkøer. Du taler med sælgere. Du mister
+              overblikket.
+            </span>
+            <span className="font-['Inter'] text-[20px] sm:text-[23px] font-[500] leading-[26px] sm:leading-[28px] text-subtext-color -tracking-[0.03em] text-center">
+              Vi forhandler for dig, viser klart overblik og holder dig på Bedre
+              Tilbud
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Testimonials Section */}
+      <div className="flex w-full flex-col items-start justify-center gap-4 overflow-hidden">
+        <div className="flex w-full flex-col items-center px-4 sm:px-6 py-12 sm:py-20 bg-gradient-to-b from-neutral-50 to-transparent">
+          <div className="flex w-full flex-col items-center gap-12 sm:gap-16 px-0 sm:px-12 pt-12 pb-12 sm:pb-20">
+            <div className="flex w-full flex-col items-center gap-2">
+              <span className="font-['Inter'] text-[32px] sm:text-[56px] font-[600] leading-[38px] sm:leading-[62px] text-default-font text-center -tracking-[0.04em]">
+                Vi har hjulpet rigtig mange danskere
               </span>
-              <span className="font-['Inter'] text-[23px] font-[500] leading-[28px] text-subtext-color -tracking-[0.03em] text-center">
-                Vi forhandler for dig, viser klart overblik og holder dig på Bedre
-                Tilbud
+              <span className="font-['Inter'] text-[15px] sm:text-[17px] font-[500] leading-[22px] sm:leading-[24px] text-subtext-color text-center -tracking-[0.01em]">
+                Tusinder har allerede fundet bedre tilbud
               </span>
             </div>
+            <div className="flex w-full items-start gap-4 sm:gap-6 flex-wrap">
+              <div className="flex min-w-[280px] sm:min-w-[288px] grow shrink-0 basis-0 flex-col items-start gap-6 rounded-2xl border border-solid border-neutral-border bg-default-background px-6 sm:px-8 py-6 sm:py-8">
+                <div className="flex flex-col items-start gap-1">
+                  <span className="font-['Inter'] text-[17px] font-[500] leading-[24px] text-default-font -tracking-[0.01em]">
+                    Martin Jensen
+                  </span>
+                  <span className="font-['Inter'] text-[14px] font-[400] leading-[20px] text-subtext-color -tracking-[0.01em]">
+                    Bilforsikring
+                  </span>
+                </div>
+                <span className="font-['Inter'] text-[17px] font-[400] leading-[24px] text-default-font -tracking-[0.01em]">
+                  Jeg sparede 4.200 kr på min bilforsikring uden at miste noget
+                  dækning. Det tog kun 2 minutter at uploade min police, og jeg
+                  fik en bedretilbud på under en uge
+                </span>
+                <div className="flex items-center gap-2">
+                  <IconWithBackground variant="success" size="small" />
+                  <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-success-600 -tracking-[0.01em]">
+                    Sparede 4.200 kr/år
+                  </span>
+                </div>
+              </div>
+              <div className="flex min-w-[280px] sm:min-w-[288px] grow shrink-0 basis-0 flex-col items-start gap-6 rounded-2xl border border-solid border-neutral-border bg-default-background px-6 sm:px-8 py-6 sm:py-8">
+                <div className="flex flex-col items-start gap-1">
+                  <span className="font-['Inter'] text-[17px] font-[500] leading-[24px] text-default-font -tracking-[0.01em]">
+                    Sofie Andersen
+                  </span>
+                  <span className="font-['Inter'] text-[14px] font-[400] leading-[20px] text-subtext-color -tracking-[0.01em]">
+                    Indboforsikring
+                  </span>
+                </div>
+                <span className="font-['Inter'] text-[17px] font-[400] leading-[24px] text-default-font -tracking-[0.01em]">
+                  Efter at have brugt samme forsikringsselskab i 15 år, var det
+                  en lettelse at få hjælp til at sammenligne. Jeg fandt et meget
+                  bedre tilbud.
+                </span>
+                <div className="flex items-center gap-2">
+                  <IconWithBackground variant="success" size="small" />
+                  <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-success-600 -tracking-[0.01em]">
+                    Sparede 2.800 kr/år
+                  </span>
+                </div>
+              </div>
+              <div className="flex min-w-[280px] sm:min-w-[288px] grow shrink-0 basis-0 flex-col items-start gap-6 rounded-2xl border border-solid border-neutral-border bg-default-background px-6 sm:px-8 py-6 sm:py-8">
+                <div className="flex flex-col items-start gap-1">
+                  <span className="font-['Inter'] text-[17px] font-[500] leading-[24px] text-default-font -tracking-[0.01em]">
+                    Kasper Nielsen
+                  </span>
+                  <span className="font-['Inter'] text-[14px] font-[400] leading-[20px] text-subtext-color -tracking-[0.01em]">
+                    Husforsikring
+                  </span>
+                </div>
+                <span className="font-['Inter'] text-[17px] font-[400] leading-[24px] text-default-font -tracking-[0.01em]">
+                  Jeg troede jeg havde en god pris, men Bedretilbud viste mig
+                  skjulte gebyrer jeg ikke kendte til. Nu betaler jeg mindre for
+                  mere, det er jeg glad for.
+                </span>
+                <div className="flex items-center gap-2">
+                  <IconWithBackground variant="success" size="small" />
+                  <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-success-600 -tracking-[0.01em]">
+                    Sparede 5.600 kr/år
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
+
+          {/* Klare sammenligninger Section */}
+          <div className="flex w-full max-w-[1024px] flex-col items-start gap-6 px-4 sm:px-0">
+            <div className="flex w-full flex-col items-start gap-6 sm:gap-8">
+              <div className="flex w-full flex-col items-start gap-4 sm:gap-6">
+                <div className="flex items-center gap-2">
+                  <div className="flex h-2 w-4 flex-none flex-col items-start gap-2 rounded-full bg-brand-600" />
+                  <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-default-font -tracking-[0.01em]">
+                    Simpelt og hurtigt
+                  </span>
+                  <FeatherChevronRight className="text-body font-body text-default-font" />
+                </div>
+                <span className="w-full max-w-[768px] font-['Inter'] text-[32px] sm:text-[56px] font-[600] leading-[38px] sm:leading-[62px] text-default-font -tracking-[0.04em]">
+                  Klare sammenligninger
+                </span>
+              </div>
+              <div className="flex w-full max-w-[448px] flex-col items-start">
+                <span className="w-full whitespace-pre-wrap font-['Inter'] text-[16px] sm:text-[17px] font-[500] leading-[22px] sm:leading-[24px] text-default-font -tracking-[0.01em]">
+                  {"Ingen lange formularer eller besværlige processer"}
+                </span>
+                <span className="w-full whitespace-pre-wrap font-['Inter'] text-[16px] sm:text-[17px] font-[500] leading-[22px] sm:leading-[24px] text-subtext-color -tracking-[0.01em]">
+                  {
+                    "Se præcis hvad der er inkluderet, hvad det koster, og hvad forskellen er mellem tilbuddene - alt på én side."
+                  }
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Comparison Screenshot */}
+        <img
+          className="max-h-[400px] sm:max-h-[576px] w-full max-w-[1024px] flex-none px-4 sm:px-0"
+          src="https://res.cloudinary.com/subframe/image/upload/v1724705485/uploads/302/lynkyfusi4ab4z91o69c.png"
+          alt="Sammenligning"
+        />
+
+        {/* Vi forhandler for dig / Løbende overvågning */}
+        <div className="flex w-full flex-col items-center px-4 sm:px-6 pt-8 sm:pt-16">
+          <div className="flex w-full max-w-[1024px] items-center justify-center border-t border-solid border-neutral-100 flex-wrap">
+            <div className="flex min-w-[280px] sm:min-w-[320px] grow shrink-0 basis-0 flex-col items-start gap-6 sm:gap-8 border-r-0 sm:border-r border-solid border-neutral-100 pr-0 sm:pr-12 py-8 sm:py-12">
+              <div className="flex w-full flex-col items-start gap-1">
+                <span className="w-full font-['Inter'] text-[19px] sm:text-[21px] font-[500] leading-[26px] sm:leading-[28px] text-default-font -tracking-[0.03em]">
+                  Vi forhandler for dig
+                </span>
+                <span className="w-full whitespace-pre-wrap font-['Inter'] text-[16px] sm:text-[17px] font-[500] leading-[22px] sm:leading-[24px] text-subtext-color -tracking-[0.01em]">
+                  {
+                    "Vi kontakter automatisk forsikringsselskaber, sammenligner tilbud og forhandler bedre priser."
+                  }
+                </span>
+              </div>
+              <img
+                className="h-56 sm:h-72 w-full max-w-[576px] flex-none object-cover"
+                src="https://res.cloudinary.com/subframe/image/upload/v1724705499/uploads/302/jh06ubduyciizexxi4ep.png"
+                alt="Vi forhandler"
+              />
+            </div>
+            <div className="flex min-w-[280px] sm:min-w-[320px] grow shrink-0 basis-0 flex-col items-start gap-6 sm:gap-8 pl-0 sm:pl-12 py-8 sm:py-12">
+              <div className="flex w-full flex-col items-start gap-1">
+                <span className="w-full font-['Inter'] text-[19px] sm:text-[21px] font-[500] leading-[26px] sm:leading-[28px] text-default-font -tracking-[0.03em]">
+                  Løbende overvågning
+                </span>
+                <span className="w-full whitespace-pre-wrap font-['Inter'] text-[16px] sm:text-[17px] font-[500] leading-[22px] sm:leading-[24px] text-subtext-color -tracking-[0.01em]">
+                  {
+                    "Vi tjekker kontinuerligt markedet for bedre tilbud, så du altid har den bedste forsikring til den laveste pris."
+                  }
+                </span>
+              </div>
+              <img
+                className="h-56 sm:h-72 w-full max-w-[576px] flex-none object-cover"
+                src="https://res.cloudinary.com/subframe/image/upload/v1724705524/uploads/302/l5oq75rpdkq2kowa2xkj.png"
+                alt="Løbende overvågning"
+              />
+            </div>
+          </div>
+
+          {/* Bedre tilbud finder sig selv */}
+          <div className="flex h-px w-full max-w-[1024px] flex-none flex-col items-center gap-2 bg-neutral-100" />
+          <div className="flex w-full max-w-[1024px] items-center justify-center gap-6 border-b border-solid border-neutral-100 py-12 sm:py-16 flex-wrap">
+            <div className="flex min-w-[280px] sm:min-w-[320px] grow shrink-0 basis-0 items-center gap-8">
+              <div className="flex max-w-[384px] grow shrink-0 basis-0 flex-col items-start gap-4 sm:gap-6">
+                <span className="w-full whitespace-pre-wrap font-['Inter'] text-[20px] sm:text-[24px] font-[500] leading-[26px] sm:leading-[28px] text-default-font -tracking-[0.03em]">
+                  {"Bedre tilbud finder sig selv"}
+                </span>
+                <div className="flex flex-col items-start gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-6 w-1 flex-none flex-col items-center justify-center gap-2 rounded-full bg-brand-600" />
+                    <span className="whitespace-pre-wrap font-['Inter'] text-[16px] sm:text-[17px] font-[500] leading-[22px] sm:leading-[24px] text-brand-700 -tracking-[0.01em]">
+                      {"Vi overvåger priserne på markedet"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-6 w-1 flex-none flex-col items-center justify-center gap-2 rounded-full bg-neutral-300" />
+                    <span className="whitespace-pre-wrap font-['Inter'] text-[16px] sm:text-[17px] font-[500] leading-[22px] sm:leading-[24px] text-subtext-color -tracking-[0.01em]">
+                      {"Vi indhenter nye tilbud når priser ændres"}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-6 w-1 flex-none flex-col items-center justify-center gap-2 rounded-full bg-neutral-300" />
+                    <span className="whitespace-pre-wrap font-['Inter'] text-[16px] sm:text-[17px] font-[500] leading-[22px] sm:leading-[24px] text-subtext-color -tracking-[0.01em]">
+                      {"Du får kun besked når der er et bedre tilbud"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex min-w-[280px] sm:min-w-[320px] grow shrink-0 basis-0 items-center justify-center gap-6">
+              <img
+                className="h-80 sm:h-112 grow shrink-0 basis-0 object-cover"
+                src="https://res.cloudinary.com/subframe/image/upload/v1724690075/uploads/302/ajop7v0t3y1bjmf9obyp.png"
+                alt="Automatisk overvågning"
+              />
+            </div>
+          </div>
+
+          {/* Hvad får du med Bedretilbud? */}
+          <div className="flex w-full flex-col items-center justify-center px-4 sm:px-6 pt-24 sm:pt-40">
+            <div className="flex w-full max-w-[1024px] flex-col items-center justify-center gap-12 sm:gap-16">
+              <div className="flex w-full items-end gap-8 sm:gap-12 flex-wrap">
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4 sm:gap-6">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-2 w-4 flex-none flex-col items-start gap-2 rounded-full bg-success-400" />
+                    <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-default-font -tracking-[0.01em]">
+                      Styrken i samarbejde
+                    </span>
+                  </div>
+                  <span className="w-full font-['Inter'] text-[32px] sm:text-[56px] font-[600] leading-[38px] sm:leading-[62px] text-default-font -tracking-[0.04em]">
+                    Hvad får du med Bedretilbud?
+                  </span>
+                </div>
+                <span className="grow shrink-0 basis-0 font-['Inter'] text-[15px] sm:text-[17px] font-[500] leading-[22px] sm:leading-[24px] text-subtext-color -tracking-[0.01em]">
+                  Vi fokuserer på at give dig bedre priser, bedre dækning og
+                  bedre service - alt sammen automatisk.
+                </span>
+              </div>
+              <div className="flex w-full items-start gap-4 sm:gap-2 flex-wrap">
+                <div className="flex min-w-[280px] sm:min-w-[320px] grow shrink-0 basis-0 flex-col items-center self-stretch overflow-hidden rounded-2xl shadow-[0px_4px_16px_-4px_#0000000a]">
+                  <img
+                    className="h-64 sm:h-80 w-full flex-none object-cover"
+                    src="https://res.cloudinary.com/subframe/image/upload/v1724705565/uploads/302/zltdyudg7ksbnmbba3dr.png"
+                    alt="Lavere priser"
+                  />
+                  <div className="flex w-full grow shrink-0 basis-0 items-end gap-4 bg-default-background px-6 sm:px-8 py-4 sm:py-6">
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                      <span className="w-full font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
+                        Lavere priser
+                      </span>
+                      <span className="w-full font-['Inter'] text-[17px] font-[500] leading-[24px] text-default-font -tracking-[0.03em]">
+                        Spar tusinder om året ved at skifte til bedre tilbud
+                      </span>
+                    </div>
+                    <IconButton
+                      size="large"
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                </div>
+                <div className="flex min-w-[280px] sm:min-w-[320px] grow shrink-0 basis-0 flex-col items-center self-stretch overflow-hidden rounded-2xl shadow-[0px_4px_16px_-4px_#0000000a]">
+                  <img
+                    className="h-64 sm:h-80 w-full flex-none object-cover"
+                    src="https://res.cloudinary.com/subframe/image/upload/v1724690142/uploads/302/fbkapcq4o1zsq98df0t6.png"
+                    alt="Ingen skjulte gebyrer"
+                  />
+                  <div className="flex w-full grow shrink-0 basis-0 items-end gap-4 bg-default-background px-6 sm:px-8 py-4 sm:py-6">
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                      <span className="w-full font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
+                        Ingen skjulte gebyrer
+                      </span>
+                      <span className="w-full font-['Inter'] text-[17px] font-[500] leading-[24px] text-default-font -tracking-[0.03em]">
+                        Vi oversætter alt det småt til simpelt dansk
+                      </span>
+                    </div>
+                    <IconButton
+                      size="large"
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                </div>
+                <div className="flex min-w-[280px] sm:min-w-[320px] grow shrink-0 basis-0 flex-col items-center self-stretch overflow-hidden rounded-2xl shadow-[0px_4px_16px_-4px_#0000000a]">
+                  <img
+                    className="h-64 sm:h-80 w-full flex-none object-cover"
+                    src="https://res.cloudinary.com/subframe/image/upload/v1724705587/uploads/302/pmtf0cxxfdalumkmlstj.png"
+                    alt="Garanterede besparelser"
+                  />
+                  <div className="flex w-full grow shrink-0 basis-0 items-end gap-4 bg-default-background px-6 sm:px-8 py-4 sm:py-6">
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                      <span className="w-full font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
+                        Garanterede besparelser
+                      </span>
+                      <span className="w-full font-['Inter'] text-[17px] font-[500] leading-[24px] text-default-font -tracking-[0.03em]">
+                        Spar i gennemsnit 3.200 kr om året
+                      </span>
+                    </div>
+                    <IconButton
+                      size="large"
+                      onClick={(
+                        event: React.MouseEvent<HTMLButtonElement>
+                      ) => {}}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Final CTA */}
+            <div className="flex w-full items-center justify-center gap-6 px-4 sm:px-6 py-16 sm:py-24">
+              <div className="flex max-w-[1024px] grow shrink-0 basis-0 flex-wrap items-end justify-center gap-12 sm:gap-16">
+                <div className="flex min-w-[280px] sm:min-w-[320px] grow shrink-0 basis-0 flex-col items-start gap-12 sm:gap-16">
+                  <span className="w-full whitespace-pre-wrap font-['Inter'] text-[32px] sm:text-[56px] font-[600] leading-[38px] sm:leading-[62px] text-default-font -tracking-[0.04em]">
+                    {"Klar til bedre\nforsikringer?"}
+                  </span>
+                </div>
+                <div className="flex grow shrink-0 basis-0 items-center justify-start sm:justify-end gap-2 flex-wrap">
+                  <Button
+                    variant="neutral-primary"
+                    size="large"
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    data-testid="button-insurance-check"
+                  >
+                    Få et forsikringstjek
+                  </Button>
+                  <Button
+                    size="large"
+                    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                    }}
+                    data-testid="button-get-offers"
+                  >
+                    Få bedre tilbud
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex w-full flex-col items-start gap-6 px-4 sm:px-6 py-12">
+        <div className="flex w-full flex-col items-center gap-6 sm:gap-8 border-t border-solid border-neutral-border px-4 sm:px-6 py-12">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Bedretilbud.com
+          </span>
+          <div className="flex items-center gap-3 flex-wrap justify-center">
+            <span className="text-body font-body text-subtext-color cursor-pointer hover:text-default-font">
+              Få bedre tilbud
+            </span>
+            <span className="text-body font-body text-neutral-300">·</span>
+            <span className="text-body font-body text-subtext-color cursor-pointer hover:text-default-font">
+              Få et forsikringstjek
+            </span>
+            <span className="text-body font-body text-neutral-300">·</span>
+            <span className="text-body font-body text-subtext-color cursor-pointer hover:text-default-font">
+              Kontakt os
+            </span>
+          </div>
+          <span className="text-caption font-caption text-subtext-color text-center">
+            © 2025 Bedretilbud.com. Alle rettigheder forbeholdes.
+          </span>
         </div>
       </div>
     </div>
