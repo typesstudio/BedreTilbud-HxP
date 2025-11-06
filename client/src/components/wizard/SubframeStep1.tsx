@@ -6,7 +6,7 @@ import { emailSchema } from "@/lib/validators";
 import { z } from "zod";
 
 interface SubframeStep1Props {
-  onComplete: (email: string) => void;
+  onComplete: (email: string) => Promise<void>;
   isLoading: boolean;
 }
 
@@ -22,8 +22,8 @@ export function SubframeStep1({ onComplete, isLoading }: SubframeStep1Props) {
     defaultValues: { email: "" }
   });
 
-  const onSubmit = (data: EmailFormData) => {
-    onComplete(data.email);
+  const onSubmit = async (data: EmailFormData) => {
+    await onComplete(data.email);
   };
 
   return (
