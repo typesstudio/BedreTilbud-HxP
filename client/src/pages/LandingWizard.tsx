@@ -115,6 +115,16 @@ export default function LandingWizard() {
             return;
           }
           
+          if (existingProgress.currentStep === 1 && completedSteps.length === 0) {
+            console.log('[Step1] User at step 1 with no progress - completing step 1...');
+            await updateProgressMutation.mutateAsync({
+              completedSteps: [1],
+              currentStep: 2
+            });
+            setCurrentStep(2);
+            return;
+          }
+          
           console.log('[Step1] Resuming at step:', existingProgress.currentStep);
           setCurrentStep(existingProgress.currentStep as 1 | 2 | 3);
           return;
