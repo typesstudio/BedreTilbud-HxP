@@ -1,12 +1,10 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { useState } from "react";
-import { 
-  Badge, 
-  Button, 
-  IconWithBackground, 
-  AreaChart
-} from "@/ui";
+import { Badge } from "../../../src/ui/components/Badge";
+import { Button } from "../../../src/ui/components/Button";
+import { IconWithBackground } from "../../../src/ui/components/IconWithBackground";
+import { AreaChart } from "../../../src/ui/components/AreaChart";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
