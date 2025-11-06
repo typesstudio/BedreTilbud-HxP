@@ -256,6 +256,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Onboarding Progress routes
+  app.get("/api/onboarding/progress/:email", async (req, res) => {
+    try {
+      const email = decodeURIComponent(req.params.email);
+      const progress = await storage.getOnboardingProgressByEmail(email);
+      if (!progress) {
+        return res.status(404).json({ message: "No onboarding progress found for this email" });
+      }
+      res.json(progress);
+    } catch (error: any) {
+      logger.error('Failed to fetch onboarding progress', error, { email: req.params.email });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/onboarding/progress", async (req, res) => {
+    try {
+      const { insertOnboardingProgressSchema } = await import("@shared/schema");
+      const progressData = insertOnboardingProgressSchema.parse(req.body);
+      const progress = await storage.createOnboardingProgress(progressData);
+      logger.info('Onboarding progress created', { email: progress.email });
+      res.json(progress);
+    } catch (error: any) {
+      logger.error('Failed to create onboarding progress', error);
+      res.status(400).json({ message: error.message });
+    }
+  });
+
+  app.put("/api/onboarding/progress/:email", async (req, res) => {
+    try {
+      const email = decodeURIComponent(req.params.email);
+      const { insertOnboardingProgressSchema } = await import("@shared/schema");
+      const updates = insertOnboardingProgressSchema.partial().parse(req.body);
+      const progress = await storage.updateOnboardingProgress(email, updates);
+      logger.info('Onboarding progress updated', { email: progress.email, currentStep: progress.currentStep });
+      res.json(progress);
+    } catch (error: any) {
+      logger.error('Failed to update onboarding progress', error, { email: req.params.email });
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   // Company routes
   app.get("/api/companies", apiCaching(300), async (req, res) => {
     try {

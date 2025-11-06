@@ -12,7 +12,9 @@ import {
   type Comparison,
   type InsertComparison,
   type HouseholdMember,
-  type InsertHouseholdMember
+  type InsertHouseholdMember,
+  type OnboardingProgress,
+  type InsertOnboardingProgress
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { withCache, apiCache } from "./utils/cache";
@@ -68,6 +70,11 @@ export interface IStorage {
     comparisons: Array<Comparison & { companyName: string }>;
     pendingThreads: Array<EmailThread & { companyName: string }>;
   }>;
+
+  // Onboarding Progress
+  getOnboardingProgressByEmail(email: string): Promise<OnboardingProgress | undefined>;
+  createOnboardingProgress(progress: InsertOnboardingProgress): Promise<OnboardingProgress>;
+  updateOnboardingProgress(email: string, updates: Partial<InsertOnboardingProgress>): Promise<OnboardingProgress>;
 }
 
 export class MemStorage implements IStorage {
@@ -78,6 +85,7 @@ export class MemStorage implements IStorage {
   private emails: Map<string, Email> = new Map();
   private comparisons: Map<string, Comparison> = new Map();
   private householdMembers: Map<string, HouseholdMember> = new Map();
+  private onboardingProgress: Map<string, OnboardingProgress> = new Map();
 
   constructor() {
     // Initialize with default Danish insurance companies
@@ -91,6 +99,8 @@ export class MemStorage implements IStorage {
         name: "Alka Forsikring",
         email: "tilbud@alka.dk",
         description: "Specialister i bilforsikring",
+        logoUrl: null,
+        popular: false,
         active: true
       },
       {
@@ -428,6 +438,45 @@ export class MemStorage implements IStorage {
       comparisons: comparisonsWithCompany,
       pendingThreads: threadsWithCompany
     };
+  }
+
+  // Onboarding Progress
+  async getOnboardingProgressByEmail(email: string): Promise<OnboardingProgress | undefined> {
+    return Array.from(this.onboardingProgress.values()).find(p => p.email === email);
+  }
+
+  async createOnboardingProgress(insertProgress: InsertOnboardingProgress): Promise<OnboardingProgress> {
+    const id = randomUUID();
+    const progress: OnboardingProgress = {
+      id,
+      email: insertProgress.email,
+      userId: insertProgress.userId ?? null,
+      currentStep: insertProgress.currentStep ?? 1,
+      completedSteps: insertProgress.completedSteps ?? [],
+      selectedCompanyIds: insertProgress.selectedCompanyIds ?? [],
+      documentId: insertProgress.documentId ?? null,
+      name: insertProgress.name ?? null,
+      cpr: insertProgress.cpr ?? null,
+      priority: insertProgress.priority ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.onboardingProgress.set(email, progress);
+    return progress;
+  }
+
+  async updateOnboardingProgress(email: string, updates: Partial<InsertOnboardingProgress>): Promise<OnboardingProgress> {
+    const progress = await this.getOnboardingProgressByEmail(email);
+    if (!progress) {
+      throw new Error('Onboarding progress not found');
+    }
+    const updated = {
+      ...progress,
+      ...updates,
+      updatedAt: new Date()
+    };
+    this.onboardingProgress.set(email, updated);
+    return updated;
   }
 }
 
@@ -808,6 +857,38 @@ export class DatabaseStorage implements IStorage {
       comparisons: comparisonsWithCompany,
       pendingThreads: threadsWithCompany
     };
+  }
+
+  // Onboarding Progress
+  async getOnboardingProgressByEmail(email: string): Promise<OnboardingProgress | undefined> {
+    const { db } = await import("./db");
+    const { onboardingProgress } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [progress] = await db.select().from(onboardingProgress).where(eq(onboardingProgress.email, email));
+    return progress || undefined;
+  }
+
+  async createOnboardingProgress(insertProgress: InsertOnboardingProgress): Promise<OnboardingProgress> {
+    const { db } = await import("./db");
+    const { onboardingProgress } = await import("@shared/schema");
+    const [progress] = await db.insert(onboardingProgress).values(insertProgress).returning();
+    return progress;
+  }
+
+  async updateOnboardingProgress(email: string, updates: Partial<InsertOnboardingProgress>): Promise<OnboardingProgress> {
+    const { db } = await import("./db");
+    const { onboardingProgress } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [progress] = await db.update(onboardingProgress)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(onboardingProgress.email, email))
+      .returning();
+    
+    if (!progress) {
+      throw new Error('Onboarding progress not found');
+    }
+    
+    return progress;
   }
 }
 

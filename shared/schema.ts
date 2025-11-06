@@ -20,6 +20,7 @@ export const users = pgTable("users", {
   priorityOne: text("priority_one"),
   priorityTwo: text("priority_two"),
   priorityThree: text("priority_three"),
+  insurancePriority: text("insurance_priority"), // "cheap", "coverage", or "convenience" from onboarding
   aiAutoResponseEnabled: boolean("ai_auto_response_enabled").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -29,6 +30,8 @@ export const companies = pgTable("companies", {
   name: text("name").notNull(),
   email: text("email").notNull(),
   description: text("description"),
+  logoUrl: text("logo_url"), // Company logo URL
+  popular: boolean("popular").default(false), // Mark popular companies
   active: boolean("active").default(true),
 });
 
@@ -118,6 +121,24 @@ export const householdMembers = pgTable("household_members", {
   userIdIdx: index("household_members_user_id_idx").on(table.userId),
 }));
 
+export const onboardingProgress = pgTable("onboarding_progress", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull(),
+  userId: varchar("user_id").references(() => users.id), // Populated after user created
+  currentStep: integer("current_step").default(1), // 1, 2, or 3
+  completedSteps: json("completed_steps").default([]), // Array of completed step numbers
+  selectedCompanyIds: json("selected_company_ids").default([]), // Array of company IDs
+  documentId: varchar("document_id").references(() => documents.id), // Uploaded document
+  name: text("name"), // From step 3
+  cpr: text("cpr"), // From step 3
+  priority: text("priority"), // "cheap", "coverage", or "convenience"
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  emailIdx: index("onboarding_progress_email_idx").on(table.email),
+  userIdIdx: index("onboarding_progress_user_id_idx").on(table.userId),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -153,6 +174,12 @@ export const insertHouseholdMemberSchema = createInsertSchema(householdMembers).
   createdAt: true,
 });
 
+export const insertOnboardingProgressSchema = createInsertSchema(onboardingProgress).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -168,3 +195,5 @@ export type Comparison = typeof comparisons.$inferSelect;
 export type InsertComparison = z.infer<typeof insertComparisonSchema>;
 export type HouseholdMember = typeof householdMembers.$inferSelect;
 export type InsertHouseholdMember = z.infer<typeof insertHouseholdMemberSchema>;
+export type OnboardingProgress = typeof onboardingProgress.$inferSelect;
+export type InsertOnboardingProgress = z.infer<typeof insertOnboardingProgressSchema>;

@@ -1,0 +1,179 @@
+Add the following code to the page. If the code already exists, update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+<div className="flex w-full max-w-[768px] flex-col items-start gap-8">
+  <div className="flex w-full items-center justify-between">
+    <div className="flex items-center gap-2">
+      <IconWithBackground variant="success" />
+      <span className="text-body-bold font-body-bold text-default-font">
+        Din Email
+      </span>
+    </div>
+    <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
+    <div className="flex items-center gap-2">
+      <IconWithBackground icon={<FeatherUpload />} />
+      <span className="text-body-bold font-body-bold text-brand-600">
+        Upload Police
+      </span>
+    </div>
+    <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
+    <div className="flex items-center gap-2">
+      <IconWithBackground variant="neutral" icon={<FeatherCheckCircle />} />
+      <span className="text-body font-body text-subtext-color">
+        Få Bedre Tilbud
+      </span>
+    </div>
+  </div>
+  <div className="flex w-full flex-col items-start gap-6">
+    <div className="flex w-full flex-col items-start gap-2">
+      <span className="text-heading-1 font-heading-1 text-default-font">
+        Upload din nuværende forsikring
+      </span>
+      <span className="text-body font-body text-subtext-color">
+        Vi laver en grundig gennemgang og finder skjulte gebyrer, manglende
+        dækning og beregner din mulige besparelse
+      </span>
+    </div>
+    <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
+      <span className="text-heading-3 font-heading-3 text-default-font">
+        Sådan gør du
+      </span>
+      <div className="flex w-full flex-col items-start gap-3">
+        <div className="flex w-full items-start gap-4">
+          <div className="flex h-8 w-8 flex-none items-center justify-center gap-2 rounded-full bg-brand-600">
+            <span className="text-body-bold font-body-bold text-white">1</span>
+          </div>
+          <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+            <span className="text-body-bold font-body-bold text-default-font">
+              Log ind hos dit forsikringsselskab
+            </span>
+            <span className="text-body font-body text-subtext-color">
+              Brug MitID til at logge ind på din forsikrings hjemmeside
+            </span>
+          </div>
+        </div>
+        <div className="flex w-full items-start gap-4">
+          <div className="flex h-8 w-8 flex-none items-center justify-center gap-2 rounded-full bg-brand-600">
+            <span className="text-body-bold font-body-bold text-white">2</span>
+          </div>
+          <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+            <span className="text-body-bold font-body-bold text-default-font">
+              Gå til dine policer
+            </span>
+            <span className="text-body font-body text-subtext-color">
+              Find afsnittet &quot;Mine Policer&quot; eller &quot;Mine
+              Forsikringer&quot;
+            </span>
+          </div>
+        </div>
+        <div className="flex w-full items-start gap-4">
+          <div className="flex h-8 w-8 flex-none items-center justify-center gap-2 rounded-full bg-brand-600">
+            <span className="text-body-bold font-body-bold text-white">3</span>
+          </div>
+          <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+            <span className="text-body-bold font-body-bold text-default-font">
+              Upload til os
+            </span>
+            <span className="text-body font-body text-subtext-color">
+              Download policen som PDF og upload den her
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+      <span className="text-heading-3 font-heading-3 text-default-font">
+        Hvad vi tjekker
+      </span>
+      <div className="flex w-full items-start gap-4">
+        <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md bg-neutral-50 px-4 py-4">
+          <IconWithBackground
+            variant="error"
+            size="medium"
+            icon={<FeatherAlertCircle />}
+          />
+          <div className="flex flex-col items-start gap-1">
+            <span className="text-body-bold font-body-bold text-default-font">
+              Skjulte gebyrer
+            </span>
+            <span className="text-caption font-caption text-subtext-color">
+              Vi finder skjulte omkostninger
+            </span>
+          </div>
+        </div>
+        <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md bg-neutral-50 px-4 py-4">
+          <IconWithBackground
+            variant="warning"
+            size="medium"
+            icon={<FeatherShield />}
+          />
+          <div className="flex flex-col items-start gap-1">
+            <span className="text-body-bold font-body-bold text-default-font">
+              Manglende dækning
+            </span>
+            <span className="text-caption font-caption text-subtext-color">
+              Vi identificerer huller i din beskyttelse
+            </span>
+          </div>
+        </div>
+        <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md bg-neutral-50 px-4 py-4">
+          <IconWithBackground
+            variant="success"
+            size="medium"
+            icon={<FeatherPiggyBank />}
+          />
+          <div className="flex flex-col items-start gap-1">
+            <span className="text-body-bold font-body-bold text-default-font">
+              Besparelser
+            </span>
+            <span className="text-caption font-caption text-subtext-color">
+              Vi beregner hvad du kan spare
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <Button
+      className="h-10 w-full flex-none"
+      size="large"
+      icon={<FeatherUpload />}
+      onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+    >
+      Upload din forsikring
+    </Button>
+  </div>
+  <div className="flex w-full items-center justify-between pt-4">
+    <LinkButton
+      icon={<FeatherArrowLeft />}
+      onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+    >
+      Tilbage
+    </LinkButton>
+    <LinkButton
+      iconRight={<FeatherArrowRight />}
+      onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+    >
+      Spring over
+    </LinkButton>
+  </div>
+</div>
+
+```Be sure to import the components using the following code:
+  
+```tsx
+import React from "react";
+import { Button } from "@/ui/components/Button";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { LinkButton } from "@/ui/components/LinkButton";
+import { FeatherAlertCircle } from "@subframe/core";
+import { FeatherArrowLeft } from "@subframe/core";
+import { FeatherArrowRight } from "@subframe/core";
+import { FeatherCheckCircle } from "@subframe/core";
+import { FeatherPiggyBank } from "@subframe/core";
+import { FeatherShield } from "@subframe/core";
+import { FeatherUpload } from "@subframe/core";
+```Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync IconWithBackground Button LinkButton -p 34bd735365b5
+```

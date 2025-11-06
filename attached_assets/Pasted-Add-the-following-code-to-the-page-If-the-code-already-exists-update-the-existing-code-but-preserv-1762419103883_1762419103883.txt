@@ -1,0 +1,274 @@
+Add the following code to the page. If the code already exists, update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+<div className="flex w-full max-w-[768px] flex-col items-start gap-8">
+  <div className="flex w-full items-center justify-between">
+    <div className="flex items-center gap-2">
+      <IconWithBackground variant="success" />
+      <span className="text-body-bold font-body-bold text-default-font">
+        Din Email
+      </span>
+    </div>
+    <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
+    <div className="flex items-center gap-2">
+      <IconWithBackground variant="success" icon={<FeatherUpload />} />
+      <span className="text-body-bold font-body-bold text-default-font">
+        Upload Police
+      </span>
+    </div>
+    <div className="flex h-px w-24 flex-none items-center bg-neutral-200" />
+    <div className="flex items-center gap-2">
+      <IconWithBackground icon={<FeatherCheckCircle />} />
+      <span className="text-body-bold font-body-bold text-brand-600">
+        Få bedre tilbud
+      </span>
+    </div>
+  </div>
+  <div className="flex w-full flex-col items-start gap-6">
+    <div className="flex w-full flex-col items-start gap-2">
+      <span className="text-heading-1 font-heading-1 text-default-font">
+        Hvilke forsikringsselskaber vil du have tilbud fra?
+      </span>
+      <span className="text-body font-body text-subtext-color">
+        Vælg de selskaber du gerne vil sammenligne. Vi kontakter dem automatisk
+        og forhandler de bedste priser for dig.
+      </span>
+    </div>
+    <div className="flex w-full items-center justify-between">
+      <span className="text-body-bold font-body-bold text-default-font">
+        Populære selskaber
+      </span>
+      <Button
+        variant="neutral-secondary"
+        size="small"
+        onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+      >
+        Vælg alle
+      </Button>
+    </div>
+    <div className="flex w-full items-start gap-4 flex-wrap">
+      <div className="flex min-w-[240px] grow shrink-0 basis-0 flex-col items-start gap-4 rounded-lg border-2 border-solid border-brand-600 bg-default-background px-6 py-6 transition-shadow cursor-pointer">
+        <div className="flex w-full items-start justify-between">
+          <img
+            className="h-12 flex-none object-contain"
+            src="https://res.cloudinary.com/subframe/image/upload/v1711417507/shared/dkh8m7duzxhvdhs0hyxr.png"
+          />
+          <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-brand-600">
+            <FeatherCheck className="text-body font-body text-white" />
+          </div>
+        </div>
+        <div className="flex flex-col items-start gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-body-bold font-body-bold text-default-font">
+              Tryg Forsikring
+            </span>
+            <Badge>Populær</Badge>
+          </div>
+          <span className="text-caption font-caption text-subtext-color">
+            Danmarks største forsikringsselskab
+          </span>
+        </div>
+      </div>
+      <div className="flex min-w-[240px] grow shrink-0 basis-0 flex-col items-start gap-4 rounded-lg border border-solid border-brand-600 bg-default-background px-6 py-6 transition-all cursor-pointer">
+        <div className="flex w-full items-start justify-between">
+          <img
+            className="h-12 flex-none object-contain"
+            src="https://res.cloudinary.com/subframe/image/upload/v1711417549/shared/jtjkdxvy1mm2ozvaymwv.png"
+          />
+          <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-solid border-neutral-200" />
+        </div>
+        <div className="flex flex-col items-start gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-body-bold font-body-bold text-default-font">
+              Alka Forsikring
+            </span>
+            <Badge>Populær</Badge>
+          </div>
+          <span className="text-caption font-caption text-subtext-color">
+            Kendte for gode priser og service
+          </span>
+        </div>
+      </div>
+    </div>
+    <div className="flex w-full items-start gap-4 flex-wrap">
+      <div className="flex min-w-[240px] grow shrink-0 basis-0 flex-col items-start gap-4 rounded-lg border-2 border-solid border-brand-600 bg-default-background px-6 py-6 transition-shadow cursor-pointer">
+        <div className="flex w-full items-start justify-between">
+          <img
+            className="h-12 flex-none object-contain"
+            src="https://res.cloudinary.com/subframe/image/upload/v1711417554/shared/wbkksiezhpupflka2y4z.png"
+          />
+          <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full bg-brand-600">
+            <FeatherCheck className="text-body font-body text-white" />
+          </div>
+        </div>
+        <div className="flex flex-col items-start gap-1">
+          <span className="text-body-bold font-body-bold text-default-font">
+            IF Forsikring
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Skandinaviens førende forsikring
+          </span>
+        </div>
+      </div>
+      <div className="flex min-w-[240px] grow shrink-0 basis-0 flex-col items-start gap-4 rounded-lg border border-solid border-brand-600 bg-default-background px-6 py-6 transition-all cursor-pointer">
+        <div className="flex w-full items-start justify-between">
+          <img
+            className="h-12 flex-none object-contain"
+            src="https://res.cloudinary.com/subframe/image/upload/v1711417564/shared/zhcrzoah8kty6cup8zud.png"
+          />
+          <div className="flex h-8 w-8 flex-none items-center justify-center rounded-full border border-solid border-neutral-200" />
+        </div>
+        <div className="flex flex-col items-start gap-1">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Gjensidige
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Nordisk forsikringsleder
+          </span>
+        </div>
+      </div>
+    </div>
+    <span className="text-body-bold font-body-bold text-default-font">
+      Andre selskaber
+    </span>
+    <div className="flex w-full items-start gap-4 flex-wrap">
+      <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-3 rounded-lg border border-solid border-brand-600 bg-default-background px-4 py-4 transition-all cursor-pointer">
+        <div className="flex w-full items-start justify-between">
+          <img
+            className="h-10 flex-none object-contain"
+            src="https://res.cloudinary.com/subframe/image/upload/v1711417544/shared/gpuochj4inwyymtmkt9r.png"
+          />
+          <div className="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-solid border-neutral-200" />
+        </div>
+        <span className="text-body-bold font-body-bold text-default-font">
+          Topdanmark
+        </span>
+      </div>
+      <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-3 rounded-lg border border-solid border-brand-600 bg-default-background px-4 py-4 transition-all cursor-pointer">
+        <div className="flex w-full items-start justify-between">
+          <img
+            className="h-10 flex-none object-contain"
+            src="https://res.cloudinary.com/subframe/image/upload/v1711417542/shared/s4olcs1go1ntkcqhqyuw.png"
+          />
+          <div className="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-solid border-neutral-200" />
+        </div>
+        <span className="text-body-bold font-body-bold text-default-font">
+          Privatsikring
+        </span>
+      </div>
+      <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-3 rounded-lg border-2 border-solid border-brand-600 bg-default-background px-4 py-4 transition-shadow cursor-pointer">
+        <div className="flex w-full items-start justify-between">
+          <img
+            className="h-10 flex-none object-contain"
+            src="https://res.cloudinary.com/subframe/image/upload/v1711417555/shared/dkh8m7duzxhvdhs0hyxr.png"
+          />
+          <div className="flex h-6 w-6 flex-none items-center justify-center rounded-full bg-brand-600">
+            <FeatherCheck className="text-caption font-caption text-white" />
+          </div>
+        </div>
+        <span className="text-body-bold font-body-bold text-default-font">
+          Alm. Brand
+        </span>
+      </div>
+      <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-3 rounded-lg border border-solid border-brand-600 bg-default-background px-4 py-4 transition-all cursor-pointer">
+        <div className="flex w-full items-start justify-between">
+          <img
+            className="h-10 flex-none object-contain"
+            src="https://res.cloudinary.com/subframe/image/upload/v1711417549/shared/jtjkdxvy1mm2ozvaymwv.png"
+          />
+          <div className="flex h-6 w-6 flex-none items-center justify-center rounded-full border border-solid border-neutral-200" />
+        </div>
+        <span className="text-body-bold font-body-bold text-default-font">
+          Codan
+        </span>
+      </div>
+    </div>
+    <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
+      <span className="text-heading-3 font-heading-3 text-default-font">
+        Dine informationer
+      </span>
+      <div className="flex w-full flex-col items-start gap-4">
+        <TextField className="h-auto w-full flex-none" label="Navn" helpText="">
+          <TextField.Input
+            placeholder="Dit fulde navn"
+            value=""
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => {}}
+          />
+        </TextField>
+        <TextField
+          className="h-auto w-full flex-none"
+          label="CPR-nummer"
+          helpText=""
+        >
+          <TextField.Input
+            placeholder="XXXXXX-XXXX"
+            value=""
+            onChange={(event: React.ChangeEvent<HTMLInputElement>) => {}}
+          />
+        </TextField>
+        <div className="flex w-full flex-col items-start gap-2">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Hvad er vigtigst for dig?
+          </span>
+          <ToggleGroup
+            className="h-auto w-full flex-none"
+            value=""
+            onValueChange={(value: string) => {}}
+          >
+            <ToggleGroup.Item icon={<FeatherDollarSign />} value="21bfab04">
+              Billig forsikring
+            </ToggleGroup.Item>
+            <ToggleGroup.Item icon={<FeatherShield />} value="216c9896">
+              Bedste dækning
+            </ToggleGroup.Item>
+            <ToggleGroup.Item icon={<FeatherPackage />} value="357ce764">
+              Alt samlet ét sted
+            </ToggleGroup.Item>
+          </ToggleGroup>
+        </div>
+      </div>
+    </div>
+    <div className="flex w-full flex-col items-start gap-3 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-4">
+      <div className="flex w-full items-center gap-3">
+        <FeatherInfo className="text-heading-3 font-heading-3 text-brand-600" />
+        <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-default-font">
+          Vi forhandler automatisk med alle valgte selskaber
+        </span>
+      </div>
+      <span className="text-caption font-caption text-subtext-color">
+        Jo flere selskaber du vælger, jo bedre kan vi forhandle. Vi anbefaler at
+        vælge mindst 4-5 selskaber for de bedste resultater.
+      </span>
+    </div>
+    <Button
+      className="h-10 w-full flex-none"
+      size="large"
+      icon={<FeatherCheckCircle />}
+      onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+    >
+      Find bedre tilbud (4 selskaber valgt)
+    </Button>
+  </div>
+</div>
+
+```Be sure to import the components using the following code:
+  
+```tsx
+import React from "react";
+import { Badge } from "@/ui/components/Badge";
+import { Button } from "@/ui/components/Button";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { TextField } from "@/ui/components/TextField";
+import { ToggleGroup } from "@/ui/components/ToggleGroup";
+import { FeatherCheck } from "@subframe/core";
+import { FeatherCheckCircle } from "@subframe/core";
+import { FeatherDollarSign } from "@subframe/core";
+import { FeatherInfo } from "@subframe/core";
+import { FeatherPackage } from "@subframe/core";
+import { FeatherShield } from "@subframe/core";
+import { FeatherUpload } from "@subframe/core";
+```Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync IconWithBackground Button Badge TextField ToggleGroup -p 34bd735365b5
+```
