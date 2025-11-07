@@ -1,15 +1,14 @@
-import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { 
   Badge, 
   Button, 
   IconWithBackground, 
-  Table,
-  ListingsTabs
+  ListingsTabs,
+  AreaChart
 } from "@/ui";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { MobileComparisonCard } from "@/components/mobile-comparison-card";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { 
   FeatherHome,
@@ -17,7 +16,6 @@ import {
   FeatherBuilding,
   FeatherCar,
   FeatherPlane,
-  FeatherRefreshCw,
   FeatherTrendingUp,
   FeatherTrendingDown,
   FeatherTruck,
@@ -28,7 +26,10 @@ import {
   FeatherHelpCircle,
   FeatherClock,
   FeatherPiggyBank,
-  FeatherInfo
+  FeatherSquare,
+  FeatherArrowRight,
+  FeatherArrowUp,
+  FeatherSend
 } from "@subframe/core";
 import type { Policy } from "@shared/schema";
 
@@ -45,7 +46,6 @@ const iconMap: { [key: string]: any } = {
   "help-circle": FeatherHelpCircle,
   "alert-circle": FeatherAlertCircle,
   "check": FeatherCheck,
-  "info": FeatherInfo,
   "building": FeatherBuilding,
   "car": FeatherCar,
   "plane": FeatherPlane
@@ -92,31 +92,16 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
     type => policiesData && policiesData[type as keyof PolicyGroup]?.length > 0
   );
 
-  const [selectedType, setSelectedType] = useState<string>(availableTypes[0] || 'indbo');
+  const [selectedType, setSelectedType] = useState<string>('indbo');
+
+  useEffect(() => {
+    if (availableTypes.length > 0 && !availableTypes.includes(selectedType)) {
+      setSelectedType(availableTypes[0]);
+    }
+  }, [availableTypes, selectedType]);
 
   const selectedPolicies = policiesData?.[selectedType as keyof PolicyGroup] || [];
   const selectedPolicy = selectedPolicies[0];
-
-  const refreshMutation = useMutation({
-    mutationFn: async (policyId: string) => {
-      const response = await apiRequest("POST", `/api/policies/${policyId}/refresh`);
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/policies', 'user', userId] });
-      toast({
-        title: "Genindlæst",
-        description: "Forsikringstjek er opdateret",
-      });
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Fejl",
-        description: error.message || "Kunne ikke genindlæse forsikringstjek",
-        variant: "destructive",
-      });
-    },
-  });
 
   const formatCurrency = (amount: number | null | undefined) => {
     if (amount == null) return "N/A";
@@ -124,11 +109,6 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     }).format(amount) + ' kr';
-  };
-
-  const calculatePercentage = (savings: number | null | undefined, premium: number | null | undefined) => {
-    if (savings == null || premium == null || premium === 0) return null;
-    return ((savings / premium) * 100).toFixed(1);
   };
 
   if (isLoading) {
@@ -142,19 +122,16 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
   }
 
   const healthCheckPayload = selectedPolicy?.healthCheckPayload as any;
-  const healthCheckSavingsAnnual = selectedPolicy?.healthCheckSavingsAnnual;
-  const premium = selectedPolicy?.premium;
-  const savingsPercentage = calculatePercentage(healthCheckSavingsAnnual, premium);
 
   return (
     <AppLayoutWithNav userId={userId}>
-      <div className="flex w-full flex-col items-center bg-default-background px-6 py-6 mobile:px-4 mobile:py-4">
-        <div className="flex w-full max-w-[768px] flex-col items-start gap-6 mobile:gap-4">
+      <div className="flex w-full flex-col items-center justify-center bg-default-background px-6 py-6">
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-6">
           
           {/* Header */}
-          <div className="flex w-full items-center justify-between gap-4">
-            <div className="flex flex-col items-start gap-1">
-              <span className="text-heading-1 font-heading-1 text-default-font mobile:text-heading-2 mobile:font-heading-2">
+          <div className="flex w-full items-start gap-2 px-2 py-2">
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 px-2 py-2">
+              <span className="text-heading-1 font-heading-1 text-default-font">
                 Dit forsikringstjek
               </span>
               <span className="text-body font-body text-subtext-color">
@@ -162,31 +139,28 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
               </span>
             </div>
             <Button
-              variant="brand-primary"
-              size="medium"
-              className="h-12 mobile:w-full"
+              onClick={() => {}}
               data-testid="button-get-better-offer"
             >
               Få bedre tilbud
             </Button>
           </div>
 
-          {/* ListingsTabs for policy types */}
+          {/* ListingsTabs Navigation */}
           <div className="flex w-full flex-col items-start gap-2 border-b border-solid border-neutral-border bg-default-background sticky top-0 z-20">
             <div className="flex w-full items-center gap-2 overflow-x-auto">
               <ListingsTabs>
                 {(['indbo', 'ulykke', 'hus', 'bil', 'rejse'] as const).map((type) => {
                   const IconComponent = policyTypeIcons[type];
-                  const hasData = policiesData?.[type]?.length > 0;
+                  const hasData = (policiesData?.[type]?.length ?? 0) > 0;
                   
                   return (
                     <ListingsTabs.Item
                       key={type}
                       checked={selectedType === type}
                       icon={<IconComponent />}
-                      onClick={() => setSelectedType(type)}
+                      onClick={() => hasData && setSelectedType(type)}
                       data-testid={`tab-${type}`}
-                      className={!hasData ? 'opacity-50' : ''}
                     >
                       {policyTypeLabels[type]}
                     </ListingsTabs.Item>
@@ -200,7 +174,7 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
           {selectedPolicies.length === 0 && (() => {
             const EmptyIcon = policyTypeIcons[selectedType] || FeatherShield;
             return (
-              <div className="flex w-full flex-col items-center gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-12 mobile:px-4 mobile:py-8">
+              <div className="flex w-full flex-col items-center gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-12">
                 <IconWithBackground
                   variant="neutral"
                   size="large"
@@ -210,69 +184,66 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
                   <span className="text-heading-3 font-heading-3 text-default-font">
                     Du har ingen {policyTypeLabels[selectedType].toLowerCase()} uploadet
                   </span>
-                <span className="text-body font-body text-subtext-color">
-                  Gå til din profil og upload dine forsikringer for at få et detaljeret tjek
-                </span>
+                  <span className="text-body font-body text-subtext-color">
+                    Gå til din profil og upload dine forsikringer for at få et detaljeret tjek
+                  </span>
+                </div>
               </div>
-            </div>
             );
           })()}
 
           {/* Health Check Results */}
-          {selectedPolicy && (
+          {selectedPolicy && healthCheckPayload && (
             <>
-              {/* Annual Savings Card */}
-              {healthCheckSavingsAnnual != null && healthCheckSavingsAnnual > 0 && (
-                <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:px-4 mobile:py-4">
+              {/* 1. ÅRLIG POTENTIEL BESPARELSE */}
+              {healthCheckPayload.annualSavings && (
+                <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
                   <span className="text-heading-2 font-heading-2 text-default-font">
                     Årlig potentiel besparelse
                   </span>
-                  <div className="flex w-full items-center justify-between rounded-lg border border-solid border-success-200 bg-success-50 px-6 py-4 mobile:px-4 mobile:py-3">
-                    <span className="text-heading-1 font-heading-1 text-success-600 mobile:text-heading-2 mobile:font-heading-2">
-                      {formatCurrency(healthCheckSavingsAnnual)}
+                  <div className="flex w-full items-center justify-between rounded-lg border border-solid border-success-200 bg-success-50 px-6 py-4">
+                    <span className="text-heading-1 font-heading-1 text-success-600">
+                      {formatCurrency(healthCheckPayload.annualSavings.amount)}
                     </span>
                     <div className="flex flex-col items-start gap-1">
                       <span className="text-body-bold font-body-bold text-success-700">
-                        Din årlige besparelse
+                        {healthCheckPayload.annualSavings.explanation}
                       </span>
-                      {savingsPercentage && (
-                        <span className="text-caption font-caption text-success-600">
-                          {savingsPercentage}% lavere omkostning
-                        </span>
-                      )}
+                      <span className="text-caption font-caption text-success-600">
+                        {healthCheckPayload.annualSavings.percentageLower}% lavere omkostning
+                      </span>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Strengths Cards */}
-              {healthCheckPayload?.strengths && healthCheckPayload.strengths.length > 0 && (
-                <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:px-4 mobile:py-4">
+              {/* 2. HØJDEPUNKTER HVOR ANBEFALINGEN ER BEDRE */}
+              {healthCheckPayload.highlights && healthCheckPayload.highlights.length > 0 && (
+                <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
                   <span className="text-heading-3 font-heading-3 text-default-font">
                     Højdepunkter hvor anbefalingen er bedre
                   </span>
-                  <div className="flex w-full items-start gap-4 mobile:flex-col">
-                    {healthCheckPayload.strengths.slice(0, 4).map((strength: any, index: number) => {
-                      const IconComponent = iconMap[strength.icon] || FeatherCheck;
-                      const shouldBeSuccess = index < 2;
+                  <div className="flex w-full items-start gap-4">
+                    {healthCheckPayload.highlights.map((highlight: any, index: number) => {
+                      const IconComponent = iconMap[highlight.icon] || FeatherCheck;
                       return (
                         <div
                           key={index}
-                          className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4 mobile:w-full"
-                          data-testid={`strength-${index}`}
+                          className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4"
+                          data-testid={`highlight-${index}`}
                         >
                           <IconWithBackground
-                            variant={shouldBeSuccess ? "success" : "neutral"}
+                            variant={highlight.variant as any}
                             size="medium"
                             icon={<IconComponent />}
                             square={true}
                           />
                           <div className="flex flex-col items-start gap-1">
                             <span className="text-body-bold font-body-bold text-default-font">
-                              {strength.title}
+                              {highlight.title}
                             </span>
                             <span className="text-caption font-caption text-subtext-color">
-                              {strength.description}
+                              {highlight.description}
                             </span>
                           </div>
                         </div>
@@ -282,50 +253,12 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
                 </div>
               )}
 
-              {/* Weaknesses Cards */}
-              {healthCheckPayload?.weaknesses && healthCheckPayload.weaknesses.length > 0 && (
-                <div className="flex w-full flex-col items-start gap-4">
-                  <span className="text-heading-2 font-heading-2 text-default-font mobile:text-heading-3 mobile:font-heading-3">
-                    Områder der kan forbedres
-                  </span>
-                  <div className="flex w-full flex-wrap items-start gap-4">
-                    {healthCheckPayload.weaknesses.map((weakness: any, index: number) => {
-                      const IconComponent = iconMap[weakness.icon] || FeatherAlertCircle;
-                      const variantColor = weakness.severity === 'critical' ? 'error' : 'warning';
-                      return (
-                        <div
-                          key={index}
-                          className={`flex min-w-[280px] grow shrink-0 basis-0 flex-col items-start gap-3 rounded-lg border border-solid ${weakness.severity === 'critical' ? 'border-error-200 bg-error-50' : 'border-warning-200 bg-warning-50'} px-4 py-4 mobile:min-w-full`}
-                          data-testid={`weakness-${index}`}
-                        >
-                          <IconWithBackground
-                            variant={variantColor as any}
-                            size="medium"
-                            icon={<IconComponent />}
-                            square={true}
-                          />
-                          <div className="flex flex-col items-start gap-1">
-                            <span className="text-body-bold font-body-bold text-default-font">
-                              {weakness.title}
-                            </span>
-                            <span className="text-caption font-caption text-subtext-color">
-                              {weakness.description}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Comparison Table */}
-              {healthCheckPayload?.comparisonData && (
-                <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6 mobile:px-4 mobile:py-4">
+              {/* 3. HVAD ER INKLUDERET */}
+              {healthCheckPayload.whatsIncluded && healthCheckPayload.whatsIncluded.length > 0 && (
+                <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
                   <span className="text-heading-3 font-heading-3 text-default-font">
-                    Detaljeret sammenligning
+                    Hvad er inkluderet
                   </span>
-                  
                   <div className="flex w-full flex-col items-start overflow-x-auto">
                     <div className="flex w-full min-w-[576px] items-center gap-4 border-b-2 border-solid border-neutral-300 bg-neutral-50 pb-3 sticky top-0 z-10">
                       <div className="flex w-48 flex-none flex-col items-start">
@@ -335,80 +268,247 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
                       </div>
                       <div className="flex grow shrink-0 basis-0 flex-col items-center">
                         <span className="text-body-bold font-body-bold text-default-font">
-                          Nuværende
-                        </span>
-                        <span className="text-caption font-caption text-subtext-color">
-                          {selectedPolicy.company || 'Din nuværende'}
-                        </span>
-                      </div>
-                      <div className="flex grow shrink-0 basis-0 flex-col items-center">
-                        <span className="text-body-bold font-body-bold text-default-font">
-                          Nyt tilbud
-                        </span>
-                        <span className="text-caption font-caption text-subtext-color">
-                          Anbefaling
+                          Status
                         </span>
                       </div>
                     </div>
                     <div className="flex w-full min-w-[576px] flex-col items-start">
-                      {healthCheckPayload.comparisonData.map((item: any, index: number) => {
-                        const isIncluded = (value: string) => {
-                          if (!value) return false;
-                          const lowerValue = value.toLowerCase();
-                          return lowerValue.includes('inkluderet') || lowerValue.includes('ja') || !lowerValue.includes('ikke');
-                        };
-                        
-                        const currentIncluded = isIncluded(item.current);
-                        const recommendationIncluded = isIncluded(item.recommendation);
-                        
-                        return (
-                          <div 
-                            key={index} 
-                            className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-4"
-                            data-testid={`comparison-row-${index}`}
-                          >
-                            <div className="flex w-48 flex-none flex-col items-start gap-1">
-                              <span className="text-body-bold font-body-bold text-default-font">
-                                {item.category}
-                              </span>
-                              {item.description && (
-                                <span className="text-caption font-caption text-subtext-color">
-                                  {item.description}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex grow shrink-0 basis-0 items-center justify-center">
-                              <Badge variant={currentIncluded ? "success" : "error"}>
-                                {item.current}
-                              </Badge>
-                            </div>
-                            <div className="flex grow shrink-0 basis-0 items-center justify-center">
-                              <Badge variant={recommendationIncluded ? "success" : "error"}>
-                                {item.recommendation}
-                              </Badge>
-                            </div>
+                      {healthCheckPayload.whatsIncluded.map((item: any, index: number) => (
+                        <div
+                          key={index}
+                          className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-4"
+                          data-testid={`coverage-${index}`}
+                        >
+                          <div className="flex w-48 flex-none flex-col items-start gap-1">
+                            <span className="text-body-bold font-body-bold text-default-font">
+                              {item.coverage}
+                            </span>
+                            <span className="text-caption font-caption text-subtext-color">
+                              {item.description}
+                            </span>
                           </div>
-                        );
-                      })}
+                          <div className="flex grow shrink-0 basis-0 items-center justify-center">
+                            <Badge variant={item.status === 'success' ? 'success' : 'neutral'}>
+                              {item.value}
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Low Confidence Warning */}
-              {selectedPolicy.extractionConfidence != null && selectedPolicy.extractionConfidence < 60 && (
-                <div className="flex w-full items-start gap-3 rounded-lg border border-solid border-warning-200 bg-warning-50 px-4 py-4">
-                  <IconWithBackground
-                    variant="warning"
-                    size="small"
-                    icon={<FeatherAlertCircle />}
-                  />
-                  <div className="flex flex-col items-start gap-1">
-                    <span className="text-body-bold font-body-bold text-default-font">
-                      Lav udtræksikkerhed
+              {/* 4. NØGLETAL SAMMENLIGNING */}
+              {healthCheckPayload.keyFigures && healthCheckPayload.keyFigures.length > 0 && (
+                <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+                  <span className="text-heading-3 font-heading-3 text-default-font">
+                    Nøgletal sammenligning
+                  </span>
+                  <div className="flex w-full items-start gap-4 flex-wrap">
+                    {healthCheckPayload.keyFigures.map((figure: any, index: number) => {
+                      const IconComponent = iconMap[figure.icon] || FeatherHome;
+                      return (
+                        <div
+                          key={index}
+                          className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-center gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4"
+                          data-testid={`key-figure-${index}`}
+                        >
+                          <IconWithBackground
+                            variant={figure.variant as any}
+                            size="large"
+                            icon={<IconComponent />}
+                          />
+                          <div className="flex w-full flex-col items-center gap-1">
+                            <span className="text-caption-bold font-caption-bold text-subtext-color">
+                              {figure.label}
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-heading-2 font-heading-2 text-neutral-500">
+                                {figure.currentValue}
+                              </span>
+                              <FeatherArrowRight className="text-heading-3 font-heading-3 text-success-600" />
+                              <span className="text-heading-2 font-heading-2 text-success-600">
+                                {figure.newValue}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 5. MANGLENDE INFORMATION */}
+              {healthCheckPayload.missingInformation && (
+                <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+                  <div className="flex w-full flex-col items-start gap-2">
+                    <div className="flex w-full items-center justify-between">
+                      <span className="text-heading-3 font-heading-3 text-default-font">
+                        Manglende information
+                      </span>
+                      <Badge variant="warning">
+                        {healthCheckPayload.missingInformation.totalIssues} punkter
+                      </Badge>
+                    </div>
+                    <span className="text-body font-body text-subtext-color">
+                      Vi har fundet punkter der mangler tydelig dokumentation
                     </span>
-                    <span className="text-caption font-caption text-subtext-color">
-                      Nogle data kan være unøjagtige. Genindlæs eller upload et bedre dokument.
+                  </div>
+                  <div className="flex w-full flex-col items-start gap-4">
+                    {healthCheckPayload.missingInformation.categories.map((category: any, catIndex: number) => {
+                      const IconComponent = iconMap[category.icon] || FeatherHelpCircle;
+                      return (
+                        <div key={catIndex} className="flex w-full flex-col items-start gap-3">
+                          <div className="flex w-full items-center gap-2">
+                            <IconWithBackground
+                              variant={category.criticalCount > 0 ? "error" : category.importantCount > 0 ? "warning" : "neutral"}
+                              size="small"
+                              icon={<IconComponent />}
+                            />
+                            <span className="text-body-bold font-body-bold text-default-font">
+                              {category.name}
+                            </span>
+                            {category.criticalCount > 0 && (
+                              <Badge variant="error">{category.criticalCount} Kritiske</Badge>
+                            )}
+                            {category.importantCount > 0 && (
+                              <Badge variant="warning">{category.importantCount} Vigtige</Badge>
+                            )}
+                            {category.questionsCount > 0 && (
+                              <Badge variant="neutral">{category.questionsCount} Spørgsmål</Badge>
+                            )}
+                          </div>
+                          {category.items.map((item: any, itemIndex: number) => (
+                            <div
+                              key={itemIndex}
+                              className={`flex w-full items-start gap-3 rounded-md border ${
+                                item.severity === 'critical'
+                                  ? 'border-2 border-solid border-error-600 bg-error-50'
+                                  : item.severity === 'important'
+                                  ? 'border border-solid border-warning-200 bg-warning-50'
+                                  : 'border border-solid border-neutral-border bg-neutral-50'
+                              } px-4 py-4`}
+                              data-testid={`missing-info-${catIndex}-${itemIndex}`}
+                            >
+                              <FeatherSquare
+                                className={`text-body font-body mt-0.5 ${
+                                  item.severity === 'critical'
+                                    ? 'text-error-600'
+                                    : item.severity === 'important'
+                                    ? 'text-warning-600'
+                                    : 'text-neutral-400'
+                                }`}
+                              />
+                              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                                <div className="flex w-full flex-col items-start gap-1 px-2 py-2">
+                                  <span className="text-body-bold font-body-bold text-default-font">
+                                    {item.title}
+                                  </span>
+                                  {item.description && (
+                                    <span className="text-caption font-caption text-subtext-color">
+                                      {item.description}
+                                    </span>
+                                  )}
+                                </div>
+                                {item.response && (
+                                  <div className="flex w-full flex-col items-start gap-1 rounded-md border border-solid border-success-300 bg-white px-3 py-2">
+                                    <span className="text-caption-bold font-caption-bold text-success-700">
+                                      Svar fra selskabet
+                                    </span>
+                                    <span className="text-body font-body text-default-font">
+                                      {item.response}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          {catIndex < healthCheckPayload.missingInformation.categories.length - 1 && (
+                            <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-200" />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {healthCheckPayload.missingInformation.criticalCount > 0 && (
+                    <div className="flex w-full items-center gap-2 rounded-md bg-error-50 px-4 py-3">
+                      <FeatherAlertCircle className="text-body font-body text-error-600" />
+                      <span className="text-caption font-caption text-error-700">
+                        {healthCheckPayload.missingInformation.criticalCount} kritiske punkter kræver øjeblikkelig afklaring
+                      </span>
+                    </div>
+                  )}
+                  <Button
+                    className="h-10 w-full flex-none"
+                    size="large"
+                    icon={<FeatherSend />}
+                    onClick={() => {}}
+                    data-testid="button-send-to-company"
+                  >
+                    Send til selskabet (0 valgt)
+                  </Button>
+                </div>
+              )}
+
+              {/* 6. KUMULATIV BESPARELSE */}
+              {healthCheckPayload.cumulativeSavings && (
+                <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+                  <div className="flex w-full items-center justify-between">
+                    <div className="flex flex-col items-start gap-2">
+                      <span className="text-heading-2 font-heading-2 text-default-font">
+                        Kumulativ besparelse
+                      </span>
+                      <span className="text-body font-body text-subtext-color">
+                        Se hvor meget du sparer måned for måned
+                      </span>
+                    </div>
+                    <Badge variant="success" icon={<FeatherArrowUp />}>
+                      {formatCurrency(healthCheckPayload.cumulativeSavings.totalOver10Years)} over 10 år
+                    </Badge>
+                  </div>
+                  {healthCheckPayload.cumulativeSavings.chartData && (
+                    <AreaChart
+                      categories={["savings"]}
+                      data={healthCheckPayload.cumulativeSavings.chartData.map((d: any) => ({
+                        month: d.month,
+                        savings: d.savings
+                      }))}
+                      index="month"
+                    />
+                  )}
+                  <div className="flex w-full items-start gap-4 flex-wrap">
+                    <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                      <span className="text-caption font-caption text-subtext-color">
+                        Månedlig besparelse
+                      </span>
+                      <span className="text-heading-2 font-heading-2 text-success-600">
+                        {healthCheckPayload.cumulativeSavings.monthlyRange.min}-
+                        {healthCheckPayload.cumulativeSavings.monthlyRange.max} kr
+                      </span>
+                    </div>
+                    <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                      <span className="text-caption font-caption text-subtext-color">
+                        Total efter 12 måneder
+                      </span>
+                      <span className="text-heading-2 font-heading-2 text-success-600">
+                        {formatCurrency(healthCheckPayload.cumulativeSavings.after12Months)} spart
+                      </span>
+                    </div>
+                    <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                      <span className="text-caption font-caption text-subtext-color">
+                        Forventet efter 10 år
+                      </span>
+                      <span className="text-heading-2 font-heading-2 text-success-600">
+                        {formatCurrency(healthCheckPayload.cumulativeSavings.after10Years)} spart
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex w-full items-center gap-2 rounded-md bg-success-50 px-4 py-3">
+                    <FeatherPiggyBank className="text-body font-body text-success-700" />
+                    <span className="text-body font-body text-default-font">
+                      Vi låser ind når priserne dykker og maksimerer din besparelse
                     </span>
                   </div>
                 </div>
