@@ -191,17 +191,19 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
           </div>
 
           {/* Empty State */}
-          {selectedPolicies.length === 0 && (
-            <div className="flex w-full flex-col items-center gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-12 mobile:px-4 mobile:py-8">
-              <IconWithBackground
-                variant="neutral"
-                size="large"
-                icon={policyTypeIcons[selectedType] ? <>{policyTypeIcons[selectedType]()}</> : <FeatherShield />}
-              />
-              <div className="flex flex-col items-center gap-2 text-center">
-                <span className="text-heading-3 font-heading-3 text-default-font">
-                  Du har ingen {policyTypeLabels[selectedType].toLowerCase()} uploadet
-                </span>
+          {selectedPolicies.length === 0 && (() => {
+            const EmptyIcon = policyTypeIcons[selectedType] || FeatherShield;
+            return (
+              <div className="flex w-full flex-col items-center gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-12 mobile:px-4 mobile:py-8">
+                <IconWithBackground
+                  variant="neutral"
+                  size="large"
+                  icon={<EmptyIcon />}
+                />
+                <div className="flex flex-col items-center gap-2 text-center">
+                  <span className="text-heading-3 font-heading-3 text-default-font">
+                    Du har ingen {policyTypeLabels[selectedType].toLowerCase()} uploadet
+                  </span>
                 <span className="text-body font-body text-subtext-color">
                   Upload dine forsikringer for at få et detaljeret tjek
                 </span>
@@ -215,7 +217,8 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
                 Upload forsikring
               </Button>
             </div>
-          )}
+            );
+          })()}
 
           {/* Health Check Results */}
           {selectedPolicy && (
