@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { SidebarWithMinimalTextSections, Badge, Button } from "@/ui";
-import { FeatherCoins, FeatherRocket, FeatherUser } from "@subframe/core";
+import { FeatherCoins, FeatherRocket, FeatherUser, FeatherShield } from "@subframe/core";
 
 interface NavigationSidebarProps {
   userId: string;
@@ -60,6 +60,15 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
     >
       {/* Oversigt Section */}
       <SidebarWithMinimalTextSections.NavSection label="Oversigt">
+        <Link href={`/forsikringstjek/${userId}`}>
+          <SidebarWithMinimalTextSections.NavItem
+            icon={<FeatherShield />}
+            selected={location === `/forsikringstjek/${userId}`}
+            data-testid="nav-forsikringstjek"
+          >
+            Forsikringstjek
+          </SidebarWithMinimalTextSections.NavItem>
+        </Link>
         <Link href="/offers">
           <SidebarWithMinimalTextSections.NavItem
             icon={<FeatherCoins />}

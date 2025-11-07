@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { InsuranceData } from "./mistralOcrService";
+import { Policy } from "../../shared/schema";
 import { retryAICall } from "../utils/retry";
 
 if (!process.env.OPENAI_API_KEY) {
@@ -68,18 +69,24 @@ export interface HealthCheckResult {
 }
 
 class InsuranceCheckService {
-  async analyzeInsuranceHealth(policyData: InsuranceData): Promise<HealthCheckResult> {
+  async analyzeInsuranceHealth(policy: Policy): Promise<HealthCheckResult> {
     try {
+      const coverageDetails = policy.coverageDetails as any;
+      const policyType = policy.policyType || 'home';
+      
       const prompt = `You are a Danish insurance expert analyzing a user's current insurance policy.
 
 POLICY DATA:
-${JSON.stringify(policyData, null, 2)}
+Policy Type: ${policyType}
+Annual Premium: ${policy.premium || 'N/A'} DKK
+Deductible: ${policy.deductible || 'N/A'} DKK
+Coverage Details: ${JSON.stringify(coverageDetails, null, 2)}
 
 TASK: Perform a comprehensive health check analysis.
 
 1. OVERALL ASSESSMENT (0-10 score)
    - Calculate based on: coverage completeness, pricing competitiveness, value for money
-   - Industry benchmarks for Danish ${policyData.policyType || 'home'} insurance
+   - Industry benchmarks for Danish ${policyType} insurance
 
 2. POTENTIAL SAVINGS
    - Compare premium against industry average for similar coverage

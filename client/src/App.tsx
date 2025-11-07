@@ -20,6 +20,7 @@ const SendInquiry = lazy(() => import("@/pages/send-inquiry"));
 const AdminTesting = lazy(() => import("@/pages/admin-testing"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const InsuranceCheck = lazy(() => import("@/pages/insurance-check"));
+const InsuranceCheckPage = lazy(() => import("@/pages/InsuranceCheckPage"));
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -44,6 +45,7 @@ function Router() {
         <Route path="/profile/:userId" component={ProfilePage} />
         <Route path="/gmail-setup" component={GmailSetup} />
         <Route path="/check" component={InsuranceCheck} />
+        <Route path="/forsikringstjek/:userId" component={InsuranceCheckPage} />
         <Route path="/admin" component={AdminTesting} />
         <Route component={NotFound} />
       </Switch>

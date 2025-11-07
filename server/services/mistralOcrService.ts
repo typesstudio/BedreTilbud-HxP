@@ -25,6 +25,28 @@ export interface InsuranceData {
   validTo?: string;
 }
 
+export interface ExtractedPolicy {
+  type: string;
+  company: string;
+  premium?: number;
+  deductible?: number;
+  coverages?: {
+    name: string;
+    amount?: number;
+    description?: string;
+  }[];
+  benefits?: string[];
+  pageRange?: string;
+  policyNumber?: string;
+  validFrom?: string;
+  validTo?: string;
+}
+
+export interface PolicyExtractionResult {
+  policies: ExtractedPolicy[];
+  rawOcrResponse: any;
+}
+
 export class MistralOCRService {
   private async encodePdfToBase64(pdfPath: string): Promise<string> {
     try {
@@ -36,7 +58,7 @@ export class MistralOCRService {
     }
   }
 
-  async extractInsuranceDataFromPDF(filePath: string): Promise<InsuranceData> {
+  async extractInsuranceDataFromPDF(filePath: string): Promise<PolicyExtractionResult> {
     try {
       console.log(`[Mistral OCR] Starting extraction for: ${filePath}`);
       
@@ -81,40 +103,48 @@ export class MistralOCRService {
         messages: [
           {
             role: "system",
-            content: `You are an expert at extracting insurance policy information from documents. Extract key information and return it in EXACTLY this JSON format:
+            content: `You are an expert at extracting insurance policy information from documents. 
             
+            TASK: Identify ALL distinct insurance policies in the document and extract each one separately.
+            
+            Return JSON in EXACTLY this format:
             {
-              "companyName": "string",
-              "policyType": "string",
-              "annualPremium": number,
-              "deductible": number,
-              "coverages": [{name: "string", amount: number, description: "string"}],
-              "benefits": ["string"],
-              "policyNumber": "string",
-              "validFrom": "YYYY-MM-DD",
-              "validTo": "YYYY-MM-DD"
+              "policies": [
+                {
+                  "type": "string (e.g., Indboforsikring, Ulykkesforsikring, Husforsikring, Bilforsikring, Rejseforsikring)",
+                  "company": "string (insurance company name)",
+                  "premium": number (annual premium in DKK),
+                  "deductible": number (deductible in DKK),
+                  "coverages": [{name: "string", amount: number, description: "string"}],
+                  "benefits": ["string"],
+                  "pageRange": "string (e.g., '1-3' for pages covered by this policy)",
+                  "policyNumber": "string",
+                  "validFrom": "YYYY-MM-DD",
+                  "validTo": "YYYY-MM-DD"
+                }
+              ]
             }
             
             CRITICAL RULES:
-            1. If document contains multiple policies (e.g., Fritidshus + Indbo + Ulykke), COMBINE them:
-               - policyType: "Fritidshusforsikring, Indboforsikring, Ulykkesforsikring"
-               - annualPremium: sum all premiums (e.g., 5682.13 + 3154.04 + 995.10 = 9831.27)
-               - deductible: use highest value
-               - coverages: merge ALL coverages into ONE flat array
-               - benefits: merge ALL benefits into ONE flat array
-            
-            2. NEVER create nested structures, arrays of policies, or policyTypes field
-            3. Keep all text in Danish if document is in Danish
-            4. All amounts must be numbers in DKK
-            5. Return ONLY the JSON object, no additional text`
+            1. Extract EACH policy as a SEPARATE object in the policies array
+            2. For each policy, identify:
+               - The specific type (Indbo, Ulykke, Hus, Bil, Rejse, etc.)
+               - The company offering it
+               - Premium and deductible for THAT policy only
+               - Coverages specific to THAT policy
+               - Page range where this policy appears
+            3. If a document has multiple policies (e.g., Fritidshus + Indbo + Ulykke), create 3 separate objects
+            4. Keep all text in Danish if document is in Danish
+            5. All amounts must be numbers in DKK
+            6. Return ONLY the JSON object, no additional text`
           },
           {
             role: "user",
-            content: `Extract insurance policy information from this markdown document:\n\n${extractedMarkdown}`
+            content: `Extract ALL insurance policies from this markdown document:\n\n${extractedMarkdown}`
           },
         ],
         responseFormat: { type: "json_object" },
-        maxTokens: 2048,
+        maxTokens: 4096,
       });
 
       const choice = chatResponse.choices?.[0];
@@ -139,9 +169,12 @@ export class MistralOCRService {
       }
       
       const result = JSON.parse(content);
-      console.log(`[Mistral OCR] Successfully extracted data with ${Object.keys(result).length} fields`);
+      console.log(`[Mistral OCR] Successfully extracted ${result.policies?.length || 0} policies`);
       
-      return result as InsuranceData;
+      return {
+        policies: result.policies || [],
+        rawOcrResponse: ocrResponse
+      };
     } catch (error) {
       console.error("[Mistral OCR] Extraction failed:", error);
       throw new Error(`Failed to extract insurance data: ${error instanceof Error ? error.message : 'Unknown error'}`);

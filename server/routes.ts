@@ -14,6 +14,7 @@ import { apiCaching, noCache } from "./middleware/caching";
 import { generateSignedUrl, validateSignedUrl } from "./utils/signedUrls";
 import { logger, auditLog } from "./utils/logging";
 import { calculateFileChecksum, validatePDFFile, scanFileForMalware } from "./utils/fileValidation";
+import { convertToPolicyRecord } from "./utils/policyExtractionParser";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -369,52 +370,136 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "No files uploaded" });
       }
 
-      const documents = [];
+      const documentsWithPolicies = [];
 
       for (const file of files) {
-        // Extract insurance data using OCR
-        const ocrData = await ocrService.extractInsuranceDataFromPDF(file.path);
-        
-        const document = await storage.createDocument({
-          userId,
-          fileName: file.originalname,
-          filePath: file.path,
-          fileSize: file.size,
-          ocrData,
-          documentType,
-          companyId: documentType === 'offer' ? req.body.companyId : undefined
-        });
+        let document;
+        try {
+          // Extract insurance data using OCR - returns {policies, rawOcrResponse}
+          logger.info('[Upload] Starting OCR extraction', { fileName: file.originalname, userId });
+          const { policies, rawOcrResponse } = await ocrService.extractInsuranceDataFromPDF(file.path);
+          
+          // Create document with processing status
+          document = await storage.createDocument({
+            userId,
+            fileName: file.originalname,
+            filePath: file.path,
+            fileSize: file.size,
+            ocrRawResponse: rawOcrResponse,
+            extractionStatus: 'processing',
+            documentType,
+            companyId: documentType === 'offer' ? req.body.companyId : undefined
+          });
 
-        documents.push(document);
+          logger.info('[Upload] Document created, processing policies', { 
+            documentId: document.id, 
+            policyCount: policies.length 
+          });
 
-        // If it's an offer, create a comparison with current policy
-        if (documentType === 'offer' && req.body.companyId) {
-          const currentDocuments = await storage.getUserDocuments(userId, 'current');
-          if (currentDocuments.length > 0 && currentDocuments[0].ocrData) {
-            const comparison = await comparisonService.compareInsurancePolicies(
-              currentDocuments[0].ocrData as any,
-              ocrData
+          // Process each policy
+          const createdPolicies = [];
+          for (const extractedPolicy of policies) {
+            // Convert to policy record
+            const policyRecord = convertToPolicyRecord(
+              extractedPolicy,
+              document.id,
+              userId,
+              req.body.companyId
             );
 
-            await storage.createComparison({
-              userId,
-              currentDocumentId: currentDocuments[0].id,
-              offerDocumentId: document.id,
-              companyId: req.body.companyId,
-              comparisonData: comparison,
-              aiRecommendation: comparison.verdict === 'recommended' 
-                ? 'Vi anbefaler dette tilbud - det giver dig bedre dækning til en lavere pris.'
-                : comparison.verdict === 'not_recommended'
-                ? 'Vi anbefaler ikke dette tilbud - dit nuværende forsikring er bedre.'
-                : 'Dette tilbud kan være interessant - gennemgå fordele og ulemper nøje.',
-              savings: comparison.savings || 0
+            // Save policy
+            const savedPolicy = await storage.createPolicy(policyRecord);
+            createdPolicies.push(savedPolicy);
+
+            logger.info('[Upload] Policy created', { 
+              policyId: savedPolicy.id, 
+              type: savedPolicy.policyType 
             });
           }
+
+          // Run all health checks in parallel
+          logger.info('[Upload] Running health checks in parallel', { policyCount: createdPolicies.length });
+          const healthCheckPromises = createdPolicies.map(async (policy) => {
+            try {
+              logger.info('[AI Usage] OpenAI-gpt-4o-mini - insurance-health-check - Starting', { 
+                policyId: policy.id 
+              });
+              
+              const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(policy);
+              
+              logger.info('[AI Usage] OpenAI-gpt-4o-mini - insurance-health-check - Success', { 
+                policyId: policy.id,
+                score: healthCheckResult.overallScore,
+                savings: healthCheckResult.potentialSavings.realistic
+              });
+
+              // Update policy with health check data
+              await storage.updatePolicyHealthCheck(policy.id, {
+                status: 'completed',
+                payload: healthCheckResult,
+                savingsAnnual: healthCheckResult.potentialSavings.realistic
+              });
+
+              return { policyId: policy.id, success: true };
+            } catch (error: any) {
+              logger.error('[Upload] Health check failed for policy', error instanceof Error ? error : new Error(String(error)), { 
+                policyId: policy.id 
+              });
+              logger.info('[AI Usage] OpenAI-gpt-4o-mini - insurance-health-check - Failed', { 
+                policyId: policy.id 
+              });
+              
+              // Mark as failed but don't throw
+              await storage.updatePolicyHealthCheck(policy.id, {
+                status: 'failed',
+                payload: { error: 'Health check failed' },
+                savingsAnnual: 0
+              });
+
+              return { policyId: policy.id, success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+            }
+          });
+
+          await Promise.all(healthCheckPromises);
+
+          // Update document with completed status
+          await storage.updateDocument(document.id, {
+            extractionStatus: 'completed',
+            totalPoliciesExtracted: policies.length
+          });
+
+          logger.info('[Upload] Document processing completed', { 
+            documentId: document.id, 
+            policiesExtracted: policies.length 
+          });
+
+          documentsWithPolicies.push({
+            document,
+            policies: createdPolicies
+          });
+
+        } catch (error: any) {
+          logger.error('[Upload] OCR extraction failed', error, { fileName: file.originalname });
+          
+          // If document was created, mark as failed
+          if (document) {
+            await storage.updateDocument(document.id, {
+              extractionStatus: 'failed'
+            });
+          }
+
+          // Continue to next file instead of failing entire upload
+          documentsWithPolicies.push({
+            document: document || null,
+            error: error.message,
+            policies: []
+          });
         }
       }
 
-      res.json(documents);
+      res.json(documentsWithPolicies);
     } catch (error: any) {
+      logger.error('[Upload] Upload route failed', error);
       res.status(500).json({ message: error.message });
     }
   });
@@ -510,68 +595,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const doc of docsToReprocess) {
         try {
           console.log(`[Reprocess] Processing document: ${doc.fileName}`);
-          const ocrData = await ocrService.extractInsuranceDataFromPDF(doc.filePath);
+          const { policies, rawOcrResponse } = await ocrService.extractInsuranceDataFromPDF(doc.filePath);
           
           // Update document with new OCR data
           await db
             .update(documentsTable)
-            .set({ ocrData })
+            .set({ 
+              ocrRawResponse: rawOcrResponse,
+              extractionStatus: 'completed',
+              totalPoliciesExtracted: policies.length
+            })
             .where(eq(documentsTable.id, doc.id));
 
-          reprocessedDocs.push({ id: doc.id, fileName: doc.fileName, status: 'success' });
+          reprocessedDocs.push({ id: doc.id, fileName: doc.fileName, status: 'success', policiesExtracted: policies.length });
 
-          // If it's an offer document, create/update comparison
-          if (doc.documentType === 'offer' && doc.companyId) {
-            const currentDocs = await storage.getUserDocuments(req.params.userId, 'current');
-            if (currentDocs.length > 0 && currentDocs[0].ocrData) {
-              const comparison = await comparisonService.compareInsurancePolicies(
-                currentDocs[0].ocrData as any,
-                ocrData
-              );
-
-              // Check if comparison exists
-              const existingComparison = await db
-                .select()
-                .from(comparisonsTable)
-                .where(
-                  and(
-                    eq(comparisonsTable.offerDocumentId, doc.id),
-                    eq(comparisonsTable.currentDocumentId, currentDocs[0].id)
-                  )
-                );
-
-              if (existingComparison.length > 0) {
-                // Update existing comparison
-                await db
-                  .update(comparisonsTable)
-                  .set({
-                    comparisonData: comparison,
-                    aiRecommendation: comparison.verdict === 'recommended' 
-                      ? 'Vi anbefaler dette tilbud - det giver dig bedre dækning til en lavere pris.'
-                      : comparison.verdict === 'not_recommended'
-                      ? 'Vi anbefaler ikke dette tilbud - dit nuværende forsikring er bedre.'
-                      : 'Dette tilbud kan være interessant - gennemgå fordele og ulemper nøje.',
-                    savings: comparison.savings || 0
-                  })
-                  .where(eq(comparisonsTable.id, existingComparison[0].id));
-              } else {
-                // Create new comparison
-                await storage.createComparison({
-                  userId: req.params.userId,
-                  currentDocumentId: currentDocs[0].id,
-                  offerDocumentId: doc.id,
-                  companyId: doc.companyId,
-                  comparisonData: comparison,
-                  aiRecommendation: comparison.verdict === 'recommended' 
-                    ? 'Vi anbefaler dette tilbud - det giver dig bedre dækning til en lavere pris.'
-                    : comparison.verdict === 'not_recommended'
-                    ? 'Vi anbefaler ikke dette tilbud - dit nuværende forsikring er bedre.'
-                    : 'Dette tilbud kan være interessant - gennemgå fordele og ulemper nøje.',
-                  savings: comparison.savings || 0
-                });
-              }
-            }
-          }
+          // Note: Comparison logic removed as it's deprecated in favor of multi-policy extraction
+          // If comparison is needed, it should be reimplemented using the new policy structure
         } catch (error: any) {
           console.error(`[Reprocess] Failed to process ${doc.fileName}:`, error);
           reprocessedDocs.push({ id: doc.id, fileName: doc.fileName, status: 'failed', error: error.message });
@@ -583,6 +622,109 @@ export async function registerRoutes(app: Express): Promise<Server> {
         documents: reprocessedDocs
       });
     } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Policy routes
+  app.get("/api/policies/user/:userId", requireAuth, async (req, res) => {
+    try {
+      const userId = req.params.userId;
+      
+      // Check authentication
+      const requestingUserId = req.headers['x-user-id'] as string;
+      if (requestingUserId !== userId) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      // Get all policies for user
+      const policies = await storage.getPoliciesByUser(userId);
+
+      // Group policies by type
+      const grouped = {
+        indbo: policies.filter(p => p.policyType === 'indbo'),
+        ulykke: policies.filter(p => p.policyType === 'ulykke'),
+        hus: policies.filter(p => p.policyType === 'hus'),
+        bil: policies.filter(p => p.policyType === 'bil'),
+        rejse: policies.filter(p => p.policyType === 'rejse'),
+        other: policies.filter(p => p.policyType === 'other')
+      };
+
+      logger.info('[Policies] User policies retrieved', { 
+        userId, 
+        totalPolicies: policies.length,
+        breakdown: {
+          indbo: grouped.indbo.length,
+          ulykke: grouped.ulykke.length,
+          hus: grouped.hus.length,
+          bil: grouped.bil.length,
+          rejse: grouped.rejse.length,
+          other: grouped.other.length
+        }
+      });
+
+      res.json(grouped);
+    } catch (error: any) {
+      logger.error('[Policies] Failed to fetch user policies', error, { userId: req.params.userId });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/policies/:policyId/refresh", requireAuth, async (req, res) => {
+    try {
+      const policyId = req.params.policyId;
+      
+      // Get the policy
+      const policy = await storage.getPolicy(policyId);
+      if (!policy) {
+        return res.status(404).json({ message: "Policy not found" });
+      }
+
+      // Check authentication
+      const requestingUserId = req.headers['x-user-id'] as string;
+      if (requestingUserId !== policy.userId) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      logger.info('[Policies] Refreshing health check', { policyId, userId: policy.userId });
+
+      try {
+        // Run health check
+        logger.info('[AI Usage] OpenAI-gpt-4o-mini - insurance-health-check - Starting', { policyId });
+        
+        const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(policy);
+        
+        logger.info('[AI Usage] OpenAI-gpt-4o-mini - insurance-health-check - Success', { 
+          policyId,
+          score: healthCheckResult.overallScore,
+          savings: healthCheckResult.potentialSavings.realistic
+        });
+
+        // Update policy with new health check data
+        const updatedPolicy = await storage.updatePolicyHealthCheck(policyId, {
+          status: 'completed',
+          payload: healthCheckResult,
+          savingsAnnual: healthCheckResult.potentialSavings.realistic
+        });
+
+        logger.info('[Policies] Health check refreshed successfully', { policyId });
+
+        res.json(updatedPolicy);
+      } catch (error: any) {
+        logger.error('[Policies] Health check refresh failed', error, { policyId });
+        logger.info('[AI Usage] OpenAI-gpt-4o-mini - insurance-health-check - Failed', { policyId });
+
+        // Update policy with failed status
+        await storage.updatePolicyHealthCheck(policyId, {
+          status: 'failed',
+          payload: { error: 'Health check failed' },
+          savingsAnnual: 0
+        });
+
+        res.status(500).json({ message: `Health check failed: ${error.message}` });
+      }
+    } catch (error: any) {
+      logger.error('[Policies] Refresh endpoint failed', error, { policyId: req.params.policyId });
       res.status(500).json({ message: error.message });
     }
   });

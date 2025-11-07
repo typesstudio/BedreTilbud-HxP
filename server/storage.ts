@@ -13,6 +13,8 @@ import {
   type InsertComparison,
   type HouseholdMember,
   type InsertHouseholdMember,
+  type Policy,
+  type InsertPolicy,
   type OnboardingProgress,
   type InsertOnboardingProgress
 } from "@shared/schema";
@@ -36,6 +38,7 @@ export interface IStorage {
   getUserDocuments(userId: string, documentType?: string, limit?: number, offset?: number): Promise<Document[]>;
   countUserDocuments(userId: string, documentType?: string): Promise<number>;
   createDocument(document: InsertDocument): Promise<Document>;
+  updateDocument(id: string, updates: Partial<InsertDocument>): Promise<Document>;
   deleteDocument(id: string): Promise<void>;
 
   // Email Threads
@@ -66,6 +69,21 @@ export interface IStorage {
   updateHouseholdMember(id: string, updates: Partial<InsertHouseholdMember>): Promise<HouseholdMember>;
   deleteHouseholdMember(id: string): Promise<void>;
 
+  // Policies
+  getPolicy(id: string): Promise<Policy | undefined>;
+  getPoliciesByUser(userId: string): Promise<Policy[]>;
+  getPoliciesByTypeAndUser(userId: string, policyType: string, isOwnPolicy?: boolean): Promise<Policy[]>;
+  getPoliciesByDocument(documentId: string): Promise<Policy[]>;
+  createPolicy(policy: InsertPolicy): Promise<Policy>;
+  updatePolicy(id: string, updates: Partial<InsertPolicy>): Promise<Policy>;
+  updatePolicyHealthCheck(id: string, healthCheckData: {
+    status: string;
+    payload: any;
+    savingsAnnual: number;
+  }): Promise<Policy>;
+  deletePolicy(id: string): Promise<void>;
+  detectDuplicatePolicies(userId: string, policyType: string, companyId: string | null, premium: number | null): Promise<Policy[]>;
+
   // Navigation Data
   getNavigationData(userId: string): Promise<{
     comparisons: Array<Comparison & { companyName: string }>;
@@ -86,6 +104,7 @@ export class MemStorage implements IStorage {
   private emails: Map<string, Email> = new Map();
   private comparisons: Map<string, Comparison> = new Map();
   private householdMembers: Map<string, HouseholdMember> = new Map();
+  private policies: Map<string, Policy> = new Map();
   private onboardingProgress: Map<string, OnboardingProgress> = new Map();
 
   constructor() {
@@ -252,12 +271,24 @@ export class MemStorage implements IStorage {
       filePath: insertDocument.filePath,
       fileSize: insertDocument.fileSize ?? null,
       ocrData: insertDocument.ocrData ?? null,
+      ocrRawResponse: insertDocument.ocrRawResponse ?? null,
+      extractionStatus: insertDocument.extractionStatus ?? null,
+      totalPoliciesExtracted: insertDocument.totalPoliciesExtracted ?? null,
       documentType: insertDocument.documentType ?? null,
       companyId: insertDocument.companyId ?? null,
       createdAt: new Date() 
     };
     this.documents.set(id, document);
     return document;
+  }
+
+  async updateDocument(id: string, updates: Partial<InsertDocument>): Promise<Document> {
+    const existing = this.documents.get(id);
+    if (!existing) throw new Error("Document not found");
+    
+    const updated: Document = { ...existing, ...updates };
+    this.documents.set(id, updated);
+    return updated;
   }
 
   async deleteDocument(id: string): Promise<void> {
@@ -424,6 +455,102 @@ export class MemStorage implements IStorage {
 
   async deleteHouseholdMember(id: string): Promise<void> {
     this.householdMembers.delete(id);
+  }
+
+  // Policies
+  async getPolicy(id: string): Promise<Policy | undefined> {
+    return this.policies.get(id);
+  }
+
+  async getPoliciesByUser(userId: string): Promise<Policy[]> {
+    return Array.from(this.policies.values()).filter(p => p.userId === userId);
+  }
+
+  async getPoliciesByTypeAndUser(userId: string, policyType: string, isOwnPolicy?: boolean): Promise<Policy[]> {
+    let policies = Array.from(this.policies.values()).filter(
+      p => p.userId === userId && p.policyType === policyType
+    );
+    if (isOwnPolicy !== undefined) {
+      policies = policies.filter(p => p.isOwnPolicy === isOwnPolicy);
+    }
+    return policies;
+  }
+
+  async getPoliciesByDocument(documentId: string): Promise<Policy[]> {
+    return Array.from(this.policies.values()).filter(p => p.documentId === documentId);
+  }
+
+  async createPolicy(insertPolicy: InsertPolicy): Promise<Policy> {
+    const id = randomUUID();
+    const policy: Policy = {
+      id,
+      documentId: insertPolicy.documentId,
+      userId: insertPolicy.userId,
+      companyId: insertPolicy.companyId ?? null,
+      policyType: insertPolicy.policyType,
+      isOwnPolicy: insertPolicy.isOwnPolicy ?? true,
+      premium: insertPolicy.premium ?? null,
+      deductible: insertPolicy.deductible ?? null,
+      coverageDetails: insertPolicy.coverageDetails ?? null,
+      sourcePageRange: insertPolicy.sourcePageRange ?? null,
+      extractionConfidence: insertPolicy.extractionConfidence ?? null,
+      healthCheckStatus: insertPolicy.healthCheckStatus ?? "pending",
+      healthCheckPayload: insertPolicy.healthCheckPayload ?? null,
+      healthCheckSavingsAnnual: insertPolicy.healthCheckSavingsAnnual ?? null,
+      healthCheckUpdatedAt: insertPolicy.healthCheckUpdatedAt ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.policies.set(id, policy);
+    return policy;
+  }
+
+  async updatePolicy(id: string, updates: Partial<InsertPolicy>): Promise<Policy> {
+    const existing = this.policies.get(id);
+    if (!existing) throw new Error("Policy not found");
+    
+    const updated: Policy = { ...existing, ...updates, updatedAt: new Date() };
+    this.policies.set(id, updated);
+    return updated;
+  }
+
+  async updatePolicyHealthCheck(id: string, healthCheckData: {
+    status: string;
+    payload: any;
+    savingsAnnual: number;
+  }): Promise<Policy> {
+    const existing = this.policies.get(id);
+    if (!existing) throw new Error("Policy not found");
+    
+    const updated: Policy = {
+      ...existing,
+      healthCheckStatus: healthCheckData.status,
+      healthCheckPayload: healthCheckData.payload,
+      healthCheckSavingsAnnual: healthCheckData.savingsAnnual,
+      healthCheckUpdatedAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.policies.set(id, updated);
+    return updated;
+  }
+
+  async deletePolicy(id: string): Promise<void> {
+    this.policies.delete(id);
+  }
+
+  async detectDuplicatePolicies(
+    userId: string,
+    policyType: string,
+    companyId: string | null,
+    premium: number | null
+  ): Promise<Policy[]> {
+    const policies = Array.from(this.policies.values()).filter(p => {
+      if (p.userId !== userId || p.policyType !== policyType) return false;
+      if (companyId && p.companyId !== companyId) return false;
+      if (premium && p.premium && Math.abs(p.premium - premium) > 100) return false; // Allow 100 DKK difference
+      return true;
+    });
+    return policies;
   }
 
   async getNavigationData(userId: string): Promise<{
@@ -618,6 +745,16 @@ export class DatabaseStorage implements IStorage {
     const { db } = await import("./db");
     const { documents } = await import("@shared/schema");
     const [doc] = await db.insert(documents).values(insertDocument).returning();
+    return doc;
+  }
+
+  async updateDocument(id: string, updates: Partial<InsertDocument>): Promise<Document> {
+    const { db } = await import("./db");
+    const { documents } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [doc] = await db.update(documents).set(updates).where(eq(documents.id, id)).returning();
+    if (!doc) throw new Error("Document not found");
+    apiCache.invalidate(`/api/documents/`);
     return doc;
   }
 
@@ -831,6 +968,117 @@ export class DatabaseStorage implements IStorage {
     const { householdMembers } = await import("@shared/schema");
     const { eq } = await import("drizzle-orm");
     await db.delete(householdMembers).where(eq(householdMembers.id, id));
+  }
+
+  // Policies
+  async getPolicy(id: string): Promise<Policy | undefined> {
+    const { db } = await import("./db");
+    const { policies } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const result = await db.select().from(policies).where(eq(policies.id, id));
+    return result[0];
+  }
+
+  async getPoliciesByUser(userId: string): Promise<Policy[]> {
+    const { db } = await import("./db");
+    const { policies } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    return db.select().from(policies).where(eq(policies.userId, userId));
+  }
+
+  async getPoliciesByTypeAndUser(userId: string, policyType: string, isOwnPolicy?: boolean): Promise<Policy[]> {
+    const { db } = await import("./db");
+    const { policies } = await import("@shared/schema");
+    const { eq, and } = await import("drizzle-orm");
+    
+    const conditions = [eq(policies.userId, userId), eq(policies.policyType, policyType)];
+    if (isOwnPolicy !== undefined) {
+      conditions.push(eq(policies.isOwnPolicy, isOwnPolicy));
+    }
+    
+    return db.select().from(policies).where(and(...conditions));
+  }
+
+  async getPoliciesByDocument(documentId: string): Promise<Policy[]> {
+    const { db } = await import("./db");
+    const { policies } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    return db.select().from(policies).where(eq(policies.documentId, documentId));
+  }
+
+  async createPolicy(policy: InsertPolicy): Promise<Policy> {
+    const { db } = await import("./db");
+    const { policies } = await import("@shared/schema");
+    const result = await db.insert(policies).values(policy).returning();
+    return result[0];
+  }
+
+  async updatePolicy(id: string, updates: Partial<InsertPolicy>): Promise<Policy> {
+    const { db } = await import("./db");
+    const { policies } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const result = await db.update(policies)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(policies.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async updatePolicyHealthCheck(id: string, healthCheckData: {
+    status: string;
+    payload: any;
+    savingsAnnual: number;
+  }): Promise<Policy> {
+    const { db } = await import("./db");
+    const { policies } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const result = await db.update(policies)
+      .set({
+        healthCheckStatus: healthCheckData.status,
+        healthCheckPayload: healthCheckData.payload,
+        healthCheckSavingsAnnual: healthCheckData.savingsAnnual,
+        healthCheckUpdatedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(policies.id, id))
+      .returning();
+    return result[0];
+  }
+
+  async deletePolicy(id: string): Promise<void> {
+    const { db } = await import("./db");
+    const { policies } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    await db.delete(policies).where(eq(policies.id, id));
+  }
+
+  async detectDuplicatePolicies(
+    userId: string,
+    policyType: string,
+    companyId: string | null,
+    premium: number | null
+  ): Promise<Policy[]> {
+    const { db } = await import("./db");
+    const { policies } = await import("@shared/schema");
+    const { eq, and, sql } = await import("drizzle-orm");
+    
+    const conditions = [
+      eq(policies.userId, userId),
+      eq(policies.policyType, policyType)
+    ];
+    
+    if (companyId) {
+      conditions.push(eq(policies.companyId, companyId));
+    }
+    
+    if (premium) {
+      // Allow 100 DKK difference for potential duplicates
+      conditions.push(
+        sql`ABS(${policies.premium} - ${premium}) <= 100`
+      );
+    }
+    
+    return db.select().from(policies).where(and(...conditions));
   }
 
   async getNavigationData(userId: string): Promise<{
