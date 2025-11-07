@@ -78,20 +78,23 @@ export default function ProfilePage() {
       formData.append("userId", userId!);
       formData.append("documentType", "current");
       
-      const response = await fetch("/api/documents/upload", {
-        method: "POST",
-        body: formData,
-        headers: {
-          "X-User-ID": userId!,
-        },
-      });
-      
-      if (!response.ok) throw new Error("Upload failed");
+      const response = await apiRequest("POST", "/api/documents/upload", formData);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents/user", userId] });
-      toast({ title: "Dokument uploadet" });
+      queryClient.invalidateQueries({ queryKey: ["/api/policies", "user", userId] });
+      toast({ 
+        title: "Dokument uploadet og analyseret", 
+        description: "Dit forsikringstjek er klar" 
+      });
+    },
+    onError: (error: Error) => {
+      toast({ 
+        title: "Upload fejlede", 
+        description: error.message || "Kunne ikke uploade dokument",
+        variant: "destructive" 
+      });
     },
   });
 

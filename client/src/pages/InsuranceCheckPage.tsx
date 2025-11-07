@@ -211,17 +211,9 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
                     Du har ingen {policyTypeLabels[selectedType].toLowerCase()} uploadet
                   </span>
                 <span className="text-body font-body text-subtext-color">
-                  Upload dine forsikringer for at få et detaljeret tjek
+                  Gå til din profil og upload dine forsikringer for at få et detaljeret tjek
                 </span>
               </div>
-              <Button
-                variant="brand-primary"
-                size="medium"
-                className="h-12"
-                data-testid="button-upload-policy"
-              >
-                Upload forsikring
-              </Button>
             </div>
             );
           })()}
