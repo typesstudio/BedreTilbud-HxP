@@ -166,26 +166,28 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
           </div>
 
           {/* ListingsTabs for policy types */}
-          <div className="w-full">
-            <ListingsTabs>
-              {(['indbo', 'ulykke', 'hus', 'bil', 'rejse'] as const).map((type) => {
-                const IconComponent = policyTypeIcons[type];
-                const hasData = policiesData?.[type]?.length > 0;
-                
-                return (
-                  <ListingsTabs.Item
-                    key={type}
-                    checked={selectedType === type}
-                    icon={<IconComponent />}
-                    onClick={() => setSelectedType(type)}
-                    data-testid={`tab-${type}`}
-                    className={!hasData ? 'opacity-50' : ''}
-                  >
-                    {policyTypeLabels[type]}
-                  </ListingsTabs.Item>
-                );
-              })}
-            </ListingsTabs>
+          <div className="flex w-full flex-col items-start gap-2 border-b border-solid border-neutral-border bg-default-background sticky top-0 z-20">
+            <div className="flex w-full items-center gap-2 overflow-x-auto">
+              <ListingsTabs>
+                {(['indbo', 'ulykke', 'hus', 'bil', 'rejse'] as const).map((type) => {
+                  const IconComponent = policyTypeIcons[type];
+                  const hasData = policiesData?.[type]?.length > 0;
+                  
+                  return (
+                    <ListingsTabs.Item
+                      key={type}
+                      checked={selectedType === type}
+                      icon={<IconComponent />}
+                      onClick={() => setSelectedType(type)}
+                      data-testid={`tab-${type}`}
+                      className={!hasData ? 'opacity-50' : ''}
+                    >
+                      {policyTypeLabels[type]}
+                    </ListingsTabs.Item>
+                  );
+                })}
+              </ListingsTabs>
+            </div>
           </div>
 
           {/* Empty State */}
