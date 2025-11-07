@@ -43,6 +43,9 @@ export const documents = pgTable("documents", {
   filePath: text("file_path").notNull(),
   fileSize: integer("file_size"),
   ocrData: json("ocr_data"),
+  ocrRawResponse: json("ocr_raw_response"), // Store full Mistral OCR response for re-parsing
+  extractionStatus: text("extraction_status").default("pending"), // "pending", "processing", "completed", "failed"
+  totalPoliciesExtracted: integer("total_policies_extracted").default(0),
   documentType: text("document_type"), // "current" or "offer"
   companyId: varchar("company_id").references(() => companies.id),
   createdAt: timestamp("created_at").defaultNow(),
@@ -122,6 +125,40 @@ export const householdMembers = pgTable("household_members", {
   userIdIdx: index("household_members_user_id_idx").on(table.userId),
 }));
 
+export const policies = pgTable("policies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id").references(() => documents.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  companyId: varchar("company_id").references(() => companies.id),
+  policyType: text("policy_type").notNull(), // "indbo", "ulykke", "hus", "bil", "rejse", "other"
+  isOwnPolicy: boolean("is_own_policy").default(true), // true = user's current policy, false = offer from company
+  
+  // Core policy data
+  premium: integer("premium"), // Annual premium in DKK
+  deductible: integer("deductible"), // Deductible in DKK
+  coverageDetails: json("coverage_details"), // Full coverage information
+  
+  // Extraction metadata
+  sourcePageRange: text("source_page_range"), // e.g., "1-3" for traceability
+  extractionConfidence: integer("extraction_confidence"), // 0-100 score from AI
+  
+  // Health check caching
+  healthCheckStatus: text("health_check_status").default("pending"), // "pending", "processing", "completed", "failed"
+  healthCheckPayload: json("health_check_payload"), // Complete health check results
+  healthCheckSavingsAnnual: integer("health_check_savings_annual"), // Potential annual savings in DKK
+  healthCheckUpdatedAt: timestamp("health_check_updated_at"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("policies_user_id_idx").on(table.userId),
+  documentIdIdx: index("policies_document_id_idx").on(table.documentId),
+  policyTypeIdx: index("policies_policy_type_idx").on(table.policyType),
+  healthCheckStatusIdx: index("policies_health_check_status_idx").on(table.healthCheckStatus),
+  userIdPolicyTypeIdx: index("policies_user_id_policy_type_idx").on(table.userId, table.policyType),
+  userIdIsOwnIdx: index("policies_user_id_is_own_idx").on(table.userId, table.isOwnPolicy),
+}));
+
 export const onboardingProgress = pgTable("onboarding_progress", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull(),
@@ -181,6 +218,12 @@ export const insertOnboardingProgressSchema = createInsertSchema(onboardingProgr
   updatedAt: true,
 });
 
+export const insertPolicySchema = createInsertSchema(policies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -196,5 +239,7 @@ export type Comparison = typeof comparisons.$inferSelect;
 export type InsertComparison = z.infer<typeof insertComparisonSchema>;
 export type HouseholdMember = typeof householdMembers.$inferSelect;
 export type InsertHouseholdMember = z.infer<typeof insertHouseholdMemberSchema>;
+export type Policy = typeof policies.$inferSelect;
+export type InsertPolicy = z.infer<typeof insertPolicySchema>;
 export type OnboardingProgress = typeof onboardingProgress.$inferSelect;
 export type InsertOnboardingProgress = z.infer<typeof insertOnboardingProgressSchema>;
