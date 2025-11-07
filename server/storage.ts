@@ -36,6 +36,7 @@ export interface IStorage {
   getUserDocuments(userId: string, documentType?: string, limit?: number, offset?: number): Promise<Document[]>;
   countUserDocuments(userId: string, documentType?: string): Promise<number>;
   createDocument(document: InsertDocument): Promise<Document>;
+  deleteDocument(id: string): Promise<void>;
 
   // Email Threads
   getEmailThread(id: string): Promise<EmailThread | undefined>;
@@ -160,6 +161,7 @@ export class MemStorage implements IStorage {
     const user: User = { 
       id,
       email: insertUser.email,
+      passwordHash: insertUser.passwordHash ?? null,
       name: insertUser.name ?? null,
       phone: insertUser.phone ?? null,
       dateOfBirth: insertUser.dateOfBirth ?? null,
@@ -256,6 +258,10 @@ export class MemStorage implements IStorage {
     };
     this.documents.set(id, document);
     return document;
+  }
+
+  async deleteDocument(id: string): Promise<void> {
+    this.documents.delete(id);
   }
 
   // Email Threads
@@ -613,6 +619,14 @@ export class DatabaseStorage implements IStorage {
     const { documents } = await import("@shared/schema");
     const [doc] = await db.insert(documents).values(insertDocument).returning();
     return doc;
+  }
+
+  async deleteDocument(id: string): Promise<void> {
+    const { db } = await import("./db");
+    const { documents } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    await db.delete(documents).where(eq(documents.id, id));
+    apiCache.invalidate(`/api/documents/`);
   }
 
   // Email Threads

@@ -22,9 +22,11 @@ export default function ProfilePage() {
   const [location, setLocation] = useLocation();
   const [showAddMemberDialog, setShowAddMemberDialog] = useState(false);
   const [showEditPrefsDialog, setShowEditPrefsDialog] = useState(false);
+  const [showPasswordDialog, setShowPasswordDialog] = useState(false);
   const [newMember, setNewMember] = useState({ name: "", relationship: "", dateOfBirth: "" });
-  const [prefs, setPrefs] = useState({ priorityOne: "", priorityTwo: "", priorityThree: "", additionalInfo: "", insuranceTypes: [] as string[] });
-  const [newInsuranceType, setNewInsuranceType] = useState("");
+  const [prefs, setPrefs] = useState<any>({ insurancePriority: "" });
+  const [password, setPassword] = useState({ current: "", new: "", confirm: "" });
+  const [deleteConfirmDocId, setDeleteConfirmDocId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -93,6 +95,37 @@ export default function ProfilePage() {
     },
   });
 
+  const deleteDocumentMutation = useMutation({
+    mutationFn: async (documentId: string) => {
+      const response = await apiRequest("DELETE", `/api/documents/${documentId}`, {});
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/user", userId] });
+      setDeleteConfirmDocId(null);
+      toast({ title: "Dokument slettet" });
+    },
+  });
+
+  const updatePasswordMutation = useMutation({
+    mutationFn: async (data: { currentPassword: string; newPassword: string }) => {
+      const response = await apiRequest("POST", `/api/users/${userId}/password`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      setShowPasswordDialog(false);
+      setPassword({ current: "", new: "", confirm: "" });
+      toast({ title: "Adgangskode opdateret" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Fejl", 
+        description: error.message || "Kunne ikke opdatere adgangskode",
+        variant: "destructive"
+      });
+    },
+  });
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file && file.type === "application/pdf") {
@@ -110,29 +143,6 @@ export default function ProfilePage() {
     return <div className="flex h-screen items-center justify-center">Bruger ikke fundet</div>;
   }
 
-  const insuranceTypes = user.insuranceTypes || [];
-
-  const openEditPrefs = () => {
-    setPrefs({
-      priorityOne: user.priorityOne || "",
-      priorityTwo: user.priorityTwo || "",
-      priorityThree: user.priorityThree || "",
-      additionalInfo: user.additionalInfo || "",
-      insuranceTypes: user.insuranceTypes || []
-    });
-    setShowEditPrefsDialog(true);
-  };
-
-  const handleAddInsuranceType = () => {
-    if (newInsuranceType && !prefs.insuranceTypes.includes(newInsuranceType)) {
-      setPrefs({ ...prefs, insuranceTypes: [...prefs.insuranceTypes, newInsuranceType] });
-      setNewInsuranceType("");
-    }
-  };
-
-  const handleRemoveInsuranceType = (type: string) => {
-    setPrefs({ ...prefs, insuranceTypes: prefs.insuranceTypes.filter(t => t !== type) });
-  };
 
   return (
     <AppLayoutWithNav userId={userId!}>
@@ -185,6 +195,24 @@ export default function ProfilePage() {
                       </span>
                     </div>
                   ))}
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
+                    <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-subtext-color mobile:text-caption mobile:font-caption">
+                      Adgangskode
+                    </span>
+                    <div className="flex grow shrink-0 basis-0 items-center gap-2 mobile:flex-col mobile:items-start mobile:w-full">
+                      <span className="flex-1 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid="text-password-status">
+                        {user.passwordHash ? "••••••••" : "Ikke angivet"}
+                      </span>
+                      <Button
+                        variant="neutral-secondary"
+                        size="small"
+                        onClick={() => setShowPasswordDialog(true)}
+                        data-testid="button-change-password"
+                      >
+                        {user.passwordHash ? "Skift adgangskode" : "Opret adgangskode"}
+                      </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -253,6 +281,17 @@ export default function ProfilePage() {
                           size="small"
                           icon={<FeatherDownload />}
                           data-testid={`button-download-doc-${doc.id}`}
+                        />
+                        <IconButton
+                          className="mobile:hidden touch-target"
+                          size="small"
+                          icon={<FeatherX />}
+                          onClick={() => {
+                            if (confirm(`Er du sikker på, at du vil slette "${doc.fileName}"?`)) {
+                              deleteDocumentMutation.mutate(doc.id);
+                            }
+                          }}
+                          data-testid={`button-delete-doc-${doc.id}`}
                         />
                         <IconButton
                           className="hidden mobile:flex touch-target"
@@ -339,69 +378,23 @@ export default function ProfilePage() {
                   <Button
                     className="h-12 mobile:grow mobile:shrink-0 mobile:basis-0 touch-target"
                     variant="neutral-secondary"
-                    onClick={openEditPrefs}
+                    onClick={() => setShowEditPrefsDialog(true)}
                     data-testid="button-edit-preferences"
                   >
-                    Rediger præferencer
+                    Rediger præference
                   </Button>
                 </div>
-                <div className="flex w-full flex-col items-start gap-6 rounded-md border border-solid border-neutral-border bg-neutral-50 px-6 py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4 mobile:px-4 mobile:py-4">
-                  <div className="flex w-full flex-col items-start gap-3 mobile:flex-col mobile:flex-nowrap mobile:gap-2">
-                    <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
-                      Forsikringstyper jeg har brug for
+                <div className="flex w-full flex-col items-start gap-4 rounded-md border border-solid border-neutral-border bg-neutral-50 px-6 py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-4 mobile:py-4">
+                  <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                    Hvad er vigtigst for dig?
+                  </span>
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-4 mobile:py-3">
+                    <span className="flex-1 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid="text-insurance-priority">
+                      {user.insurancePriority === 'cheap' ? '💰 Laveste pris' :
+                       user.insurancePriority === 'coverage' ? '🛡️ Bedste dækning' :
+                       user.insurancePriority === 'convenience' ? '✨ God kundeservice' :
+                       'Ikke valgt'}
                     </span>
-                    <div className="flex w-full items-start gap-2 flex-wrap">
-                      {insuranceTypes.length > 0 ? (
-                        insuranceTypes.map((type: string) => (
-                          <Badge key={type} data-testid={`badge-insurance-${type}`}>{type}</Badge>
-                        ))
-                      ) : (
-                        <>
-                          <Badge variant="neutral" icon={<FeatherPlus />}>
-                            Tilføj forsikringstype
-                          </Badge>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
-                  <div className="flex w-full flex-col items-start gap-3 mobile:flex-col mobile:flex-nowrap mobile:gap-2">
-                    <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
-                      Hvad er vigtigst for mig
-                    </span>
-                    <div className="flex w-full flex-col items-start">
-                      {[
-                        { label: "Prioritet #1", value: user.priorityOne || "Laveste pris", testid: "text-priority-1" },
-                        { label: "Prioritet #2", value: user.priorityTwo || "Bedste dækning", testid: "text-priority-2" },
-                        { label: "Prioritet #3", value: user.priorityThree || "God kundeservice", testid: "text-priority-3" },
-                      ].map((item) => (
-                        <div key={item.label} className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-4 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-3">
-                          <span className="grow shrink-0 basis-0 text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
-                            {item.label}
-                          </span>
-                          <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid={item.testid}>
-                            {item.value}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
-                  <div className="flex w-full flex-col items-start gap-3 mobile:flex-col mobile:flex-nowrap mobile:gap-2">
-                    <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
-                      Yderligere krav
-                    </span>
-                    <div className="flex w-full flex-col items-start gap-2">
-                      {user.additionalInfo ? (
-                        <span className="text-body font-body text-default-font mobile:text-caption mobile:font-caption" data-testid="text-additional-info">
-                          {user.additionalInfo}
-                        </span>
-                      ) : (
-                        <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
-                          Ingen yderligere krav angivet
-                        </span>
-                      )}
-                    </div>
                   </div>
                 </div>
               </div>
@@ -422,19 +415,37 @@ export default function ProfilePage() {
             <div className="flex flex-col gap-4">
               <TextField
                 label="Navn"
-                value={newMember.name}
-                onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
-              />
+                helpText=""
+              >
+                <TextField.Input
+                  value={newMember.name}
+                  onChange={(e) => setNewMember({ ...newMember, name: e.target.value })}
+                  placeholder="Indtast navn"
+                  data-testid="input-member-name"
+                />
+              </TextField>
               <TextField
                 label="Relation (f.eks. Ægtefælle, Barn)"
-                value={newMember.relationship}
-                onChange={(e) => setNewMember({ ...newMember, relationship: e.target.value })}
-              />
+                helpText=""
+              >
+                <TextField.Input
+                  value={newMember.relationship}
+                  onChange={(e) => setNewMember({ ...newMember, relationship: e.target.value })}
+                  placeholder="Indtast relation"
+                  data-testid="input-member-relationship"
+                />
+              </TextField>
               <TextField
                 label="Fødselsdato (DD/MM/ÅÅÅÅ)"
-                value={newMember.dateOfBirth}
-                onChange={(e) => setNewMember({ ...newMember, dateOfBirth: e.target.value })}
-              />
+                helpText=""
+              >
+                <TextField.Input
+                  value={newMember.dateOfBirth}
+                  onChange={(e) => setNewMember({ ...newMember, dateOfBirth: e.target.value })}
+                  placeholder="DD/MM/ÅÅÅÅ"
+                  data-testid="input-member-dob"
+                />
+              </TextField>
             </div>
 
             <div className="flex gap-3">
@@ -462,54 +473,36 @@ export default function ProfilePage() {
         <Dialog.Content>
           <div className="flex flex-col gap-6 p-6 w-full max-w-md">
             <div className="flex items-center justify-between">
-              <span className="text-heading-3 font-heading-3 text-default-font">Rediger præferencer</span>
+              <span className="text-heading-3 font-heading-3 text-default-font">Vælg forsikringspræference</span>
               <IconButton size="small" icon={<FeatherX />} onClick={() => setShowEditPrefsDialog(false)} />
             </div>
             
-            <div className="flex flex-col gap-4">
-              <div>
-                <label className="text-sm font-medium text-default-font mb-2 block">Forsikringstyper</label>
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {prefs.insuranceTypes.map((type) => (
-                    <Badge key={type} variant="brand">
-                      {type}
-                      <button onClick={() => handleRemoveInsuranceType(type)} className="ml-1">×</button>
-                    </Badge>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <TextField
-                    placeholder="Tilføj type"
-                    value={newInsuranceType}
-                    onChange={(e) => setNewInsuranceType(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleAddInsuranceType()}
+            <div className="flex flex-col gap-3">
+              <span className="text-body-bold font-body-bold text-default-font">Hvad er vigtigst for dig?</span>
+              {[
+                { value: 'cheap', label: '💰 Laveste pris', desc: 'Find den billigste forsikring' },
+                { value: 'coverage', label: '🛡️ Bedste dækning', desc: 'Maksimal beskyttelse' },
+                { value: 'convenience', label: '✨ God kundeservice', desc: 'Nemt og hurtigt' },
+              ].map((option) => (
+                <label
+                  key={option.value}
+                  className="flex items-start gap-3 p-4 border border-solid border-neutral-border rounded-md cursor-pointer hover:bg-neutral-50"
+                  data-testid={`radio-priority-${option.value}`}
+                >
+                  <input
+                    type="radio"
+                    name="insurancePriority"
+                    value={option.value}
+                    checked={(prefs as any).insurancePriority === option.value}
+                    onChange={() => setPrefs({ ...prefs, insurancePriority: option.value } as any)}
+                    className="mt-1"
                   />
-                  <Button onClick={handleAddInsuranceType} disabled={!newInsuranceType}>
-                    Tilføj
-                  </Button>
-                </div>
-              </div>
-
-              <TextField
-                label="Prioritet #1"
-                value={prefs.priorityOne}
-                onChange={(e) => setPrefs({ ...prefs, priorityOne: e.target.value })}
-              />
-              <TextField
-                label="Prioritet #2"
-                value={prefs.priorityTwo}
-                onChange={(e) => setPrefs({ ...prefs, priorityTwo: e.target.value })}
-              />
-              <TextField
-                label="Prioritet #3"
-                value={prefs.priorityThree}
-                onChange={(e) => setPrefs({ ...prefs, priorityThree: e.target.value })}
-              />
-              <TextField
-                label="Yderligere krav"
-                value={prefs.additionalInfo}
-                onChange={(e) => setPrefs({ ...prefs, additionalInfo: e.target.value })}
-              />
+                  <div className="flex flex-col">
+                    <span className="text-body-bold font-body-bold text-default-font">{option.label}</span>
+                    <span className="text-caption font-caption text-subtext-color">{option.desc}</span>
+                  </div>
+                </label>
+              ))}
             </div>
 
             <div className="flex gap-3">
@@ -522,10 +515,88 @@ export default function ProfilePage() {
               </Button>
               <Button
                 className="flex-1"
-                onClick={() => updatePrefsMutation.mutate(prefs)}
+                onClick={() => updatePrefsMutation.mutate({ insurancePriority: (prefs as any).insurancePriority })}
                 disabled={updatePrefsMutation.isPending}
+                data-testid="button-save-preferences"
               >
                 {updatePrefsMutation.isPending ? "Gemmer..." : "Gem"}
+              </Button>
+            </div>
+          </div>
+        </Dialog.Content>
+      </Dialog>
+
+      {/* Password Change Dialog */}
+      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
+        <Dialog.Content>
+          <div className="flex flex-col gap-6 p-6 w-full max-w-md">
+            <div className="flex items-center justify-between">
+              <span className="text-heading-3 font-heading-3 text-default-font">
+                {user?.passwordHash ? "Skift adgangskode" : "Opret adgangskode"}
+              </span>
+              <IconButton size="small" icon={<FeatherX />} onClick={() => setShowPasswordDialog(false)} />
+            </div>
+            
+            <div className="flex flex-col gap-4">
+              {user?.passwordHash && (
+                <TextField label="Nuværende adgangskode" helpText="">
+                  <TextField.Input
+                    type="password"
+                    value={password.current}
+                    onChange={(e) => setPassword({ ...password, current: e.target.value })}
+                    placeholder="Indtast nuværende adgangskode"
+                    data-testid="input-current-password"
+                  />
+                </TextField>
+              )}
+              <TextField label="Ny adgangskode" helpText="Mindst 8 tegn">
+                <TextField.Input
+                  type="password"
+                  value={password.new}
+                  onChange={(e) => setPassword({ ...password, new: e.target.value })}
+                  placeholder="Indtast ny adgangskode"
+                  data-testid="input-new-password"
+                />
+              </TextField>
+              <TextField label="Bekræft adgangskode" helpText="">
+                <TextField.Input
+                  type="password"
+                  value={password.confirm}
+                  onChange={(e) => setPassword({ ...password, confirm: e.target.value })}
+                  placeholder="Indtast ny adgangskode igen"
+                  data-testid="input-confirm-password"
+                />
+              </TextField>
+            </div>
+
+            <div className="flex gap-3">
+              <Button
+                className="flex-1"
+                variant="neutral-secondary"
+                onClick={() => setShowPasswordDialog(false)}
+              >
+                Annuller
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={() => {
+                  if (password.new !== password.confirm) {
+                    toast({ title: "Adgangskoderne matcher ikke", variant: "destructive" });
+                    return;
+                  }
+                  if (password.new.length < 8) {
+                    toast({ title: "Adgangskoden skal være mindst 8 tegn", variant: "destructive" });
+                    return;
+                  }
+                  updatePasswordMutation.mutate({
+                    currentPassword: password.current,
+                    newPassword: password.new
+                  });
+                }}
+                disabled={updatePasswordMutation.isPending || !password.new}
+                data-testid="button-save-password"
+              >
+                {updatePasswordMutation.isPending ? "Gemmer..." : "Gem"}
               </Button>
             </div>
           </div>

@@ -269,6 +269,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post("/api/users/:id/password", requireAuth, requireOwnership, requireCSRFToken, async (req, res) => {
+    try {
+      const bcrypt = await import("bcrypt");
+      const { currentPassword, newPassword } = validationSchemas.updatePasswordSchema.parse(req.body);
+      
+      const user = await storage.getUser(req.params.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (user.passwordHash) {
+        const isValid = await bcrypt.compare(currentPassword || '', user.passwordHash);
+        if (!isValid) {
+          auditLog('password_change_failed', req.params.id, 'Invalid current password');
+          return res.status(401).json({ message: "Current password is incorrect" });
+        }
+      }
+
+      const passwordHash = await bcrypt.hash(newPassword, 10);
+      const updatedUser = await storage.updateUser(req.params.id, { passwordHash });
+      
+      auditLog('password_changed', req.params.id, 'Password updated successfully');
+      res.json({ message: "Password updated successfully" });
+    } catch (error: any) {
+      logger.error('Password update failed', error, { userId: req.params.id });
+      res.status(400).json({ message: error.message });
+    }
+  });
+
   // Onboarding Progress routes
   app.get("/api/onboarding/progress/:email", async (req, res) => {
     try {
@@ -424,6 +453,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.delete("/api/documents/:id", requireAuth, requireCSRFToken, async (req, res) => {
+    try {
+      const document = await storage.getDocument(req.params.id);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const userId = req.headers['x-user-id'] as string;
+      if (document.userId !== userId) {
+        auditLog('unauthorized_document_delete_attempt', userId, `Attempted to delete document ${req.params.id}`);
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      if (document.filePath && fs.existsSync(document.filePath)) {
+        fs.unlinkSync(document.filePath);
+      }
+
+      await storage.deleteDocument(req.params.id);
+      auditLog('document_deleted', userId, `Deleted document: ${document.fileName}`);
+      
+      res.status(204).send();
+    } catch (error: any) {
+      logger.error('Document deletion failed', error, { documentId: req.params.id });
       res.status(500).json({ message: error.message });
     }
   });

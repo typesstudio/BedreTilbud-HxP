@@ -51,6 +51,12 @@ export const reprocessDocumentSchema = z.object({
   documentIds: z.array(z.string().uuid('Invalid document ID')).optional(),
 });
 
+// User password endpoints
+export const updatePasswordSchema = z.object({
+  currentPassword: z.string().optional(),
+  newPassword: z.string().min(8, 'Password must be at least 8 characters').max(100, 'Password too long'),
+});
+
 // Parameter validation
 export const uuidParamSchema = z.object({
   id: z.string().uuid('Invalid ID format'),
