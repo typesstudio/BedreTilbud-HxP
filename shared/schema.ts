@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, json, boolean, integer, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, json, boolean, integer, numeric, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -134,8 +134,8 @@ export const policies = pgTable("policies", {
   isOwnPolicy: boolean("is_own_policy").default(true), // true = user's current policy, false = offer from company
   
   // Core policy data
-  premium: integer("premium"), // Annual premium in DKK
-  deductible: integer("deductible"), // Deductible in DKK
+  premium: numeric("premium", { precision: 10, scale: 2 }), // Annual premium in DKK
+  deductible: numeric("deductible", { precision: 10, scale: 2 }), // Deductible in DKK
   coverageDetails: json("coverage_details"), // Full coverage information
   
   // Extraction metadata
@@ -145,7 +145,7 @@ export const policies = pgTable("policies", {
   // Health check caching
   healthCheckStatus: text("health_check_status").default("pending"), // "pending", "processing", "completed", "failed"
   healthCheckPayload: json("health_check_payload"), // Complete health check results
-  healthCheckSavingsAnnual: integer("health_check_savings_annual"), // Potential annual savings in DKK
+  healthCheckSavingsAnnual: numeric("health_check_savings_annual", { precision: 10, scale: 2 }), // Potential annual savings in DKK
   healthCheckUpdatedAt: timestamp("health_check_updated_at"),
   
   createdAt: timestamp("created_at").defaultNow(),
