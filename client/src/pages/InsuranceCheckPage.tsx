@@ -19,6 +19,9 @@ import {
   FeatherPlane,
   FeatherRefreshCw,
   FeatherTrendingUp,
+  FeatherTrendingDown,
+  FeatherTruck,
+  FeatherDroplet,
   FeatherAlertCircle,
   FeatherCheck,
   FeatherDollarSign,
@@ -31,6 +34,9 @@ import type { Policy } from "@shared/schema";
 
 const iconMap: { [key: string]: any } = {
   "trending-up": FeatherTrendingUp,
+  "trending-down": FeatherTrendingDown,
+  "truck": FeatherTruck,
+  "droplet": FeatherDroplet,
   "shield": FeatherShield,
   "home": FeatherHome,
   "clock": FeatherClock,
@@ -79,7 +85,7 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
   const { toast } = useToast();
   
   const { data: policiesData, isLoading } = useQuery<PolicyGroup>({
-    queryKey: ['/api/policies/user', userId],
+    queryKey: ['/api/policies', 'user', userId],
   });
 
   const availableTypes = ['indbo', 'ulykke', 'hus', 'bil', 'rejse'].filter(
@@ -97,7 +103,7 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/policies/user', userId] });
+      queryClient.invalidateQueries({ queryKey: ['/api/policies', 'user', userId] });
       toast({
         title: "Genindlæst",
         description: "Forsikringstjek er opdateret",
@@ -225,57 +231,46 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
             <>
               {/* Annual Savings Card */}
               {healthCheckSavingsAnnual != null && healthCheckSavingsAnnual > 0 && (
-                <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-brand-50 px-6 py-6 mobile:px-4 mobile:py-4">
-                  <div className="flex w-full items-center justify-between gap-4 mobile:flex-col mobile:items-start">
-                    <div className="flex flex-col items-start gap-2">
-                      <span className="text-heading-3 font-heading-3 text-default-font">
-                        Årlig potentiel besparelse
-                      </span>
-                      <span className="text-heading-1 font-heading-1 text-brand-700 mobile:text-heading-2 mobile:font-heading-2">
-                        {formatCurrency(healthCheckSavingsAnnual)}
-                      </span>
-                    </div>
-                    <div className="flex flex-col items-end gap-1 mobile:items-start mobile:w-full">
-                      <span className="text-body-bold font-body-bold text-brand-700">
+                <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:px-4 mobile:py-4">
+                  <span className="text-heading-2 font-heading-2 text-default-font">
+                    Årlig potentiel besparelse
+                  </span>
+                  <div className="flex w-full items-center justify-between rounded-lg border border-solid border-success-200 bg-success-50 px-6 py-4 mobile:px-4 mobile:py-3">
+                    <span className="text-heading-1 font-heading-1 text-success-600 mobile:text-heading-2 mobile:font-heading-2">
+                      {formatCurrency(healthCheckSavingsAnnual)}
+                    </span>
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-body-bold font-body-bold text-success-700">
                         Din årlige besparelse
                       </span>
                       {savingsPercentage && (
-                        <span className="text-body font-body text-brand-600">
+                        <span className="text-caption font-caption text-success-600">
                           {savingsPercentage}% lavere omkostning
                         </span>
                       )}
                     </div>
                   </div>
-                  <Button
-                    variant="neutral-secondary"
-                    size="small"
-                    icon={<FeatherRefreshCw />}
-                    loading={refreshMutation.isPending}
-                    onClick={() => selectedPolicy.id && refreshMutation.mutate(selectedPolicy.id)}
-                    data-testid="button-refresh-health-check"
-                  >
-                    Genindlæs tjek
-                  </Button>
                 </div>
               )}
 
               {/* Strengths Cards */}
               {healthCheckPayload?.strengths && healthCheckPayload.strengths.length > 0 && (
-                <div className="flex w-full flex-col items-start gap-4">
-                  <span className="text-heading-2 font-heading-2 text-default-font mobile:text-heading-3 mobile:font-heading-3">
+                <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:px-4 mobile:py-4">
+                  <span className="text-heading-3 font-heading-3 text-default-font">
                     Højdepunkter hvor anbefalingen er bedre
                   </span>
-                  <div className="flex w-full flex-wrap items-start gap-4">
-                    {healthCheckPayload.strengths.map((strength: any, index: number) => {
+                  <div className="flex w-full items-start gap-4 mobile:flex-col">
+                    {healthCheckPayload.strengths.slice(0, 4).map((strength: any, index: number) => {
                       const IconComponent = iconMap[strength.icon] || FeatherCheck;
+                      const shouldBeSuccess = index < 2;
                       return (
                         <div
                           key={index}
-                          className="flex min-w-[280px] grow shrink-0 basis-0 flex-col items-start gap-3 rounded-lg border border-solid border-success-200 bg-success-50 px-4 py-4 mobile:min-w-full"
+                          className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4 mobile:w-full"
                           data-testid={`strength-${index}`}
                         >
                           <IconWithBackground
-                            variant="success"
+                            variant={shouldBeSuccess ? "success" : "neutral"}
                             size="medium"
                             icon={<IconComponent />}
                             square={true}
@@ -334,65 +329,76 @@ export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) 
 
               {/* Comparison Table */}
               {healthCheckPayload?.comparisonData && (
-                <div className="flex w-full flex-col items-start gap-4">
-                  <span className="text-heading-2 font-heading-2 text-default-font mobile:text-heading-3 mobile:font-heading-3">
+                <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6 mobile:px-4 mobile:py-4">
+                  <span className="text-heading-3 font-heading-3 text-default-font">
                     Detaljeret sammenligning
                   </span>
                   
-                  {/* Desktop Table */}
-                  <div className="hidden md:block w-full overflow-x-auto">
-                    <div className="min-w-[576px]">
-                      <Table
-                        header={
-                          <Table.HeaderRow>
-                            <Table.HeaderCell>Dækning</Table.HeaderCell>
-                            <Table.HeaderCell>Nuværende</Table.HeaderCell>
-                            <Table.HeaderCell>Nyt tilbud</Table.HeaderCell>
-                          </Table.HeaderRow>
-                        }
-                      >
-                        {healthCheckPayload.comparisonData.map((item: any, index: number) => (
-                          <Table.Row key={index} data-testid={`comparison-row-${index}`}>
-                            <Table.Cell>
+                  <div className="flex w-full flex-col items-start overflow-x-auto">
+                    <div className="flex w-full min-w-[576px] items-center gap-4 border-b-2 border-solid border-neutral-300 bg-neutral-50 pb-3 sticky top-0 z-10">
+                      <div className="flex w-48 flex-none flex-col items-start">
+                        <span className="text-caption-bold font-caption-bold text-subtext-color">
+                          Dækning
+                        </span>
+                      </div>
+                      <div className="flex grow shrink-0 basis-0 flex-col items-center">
+                        <span className="text-body-bold font-body-bold text-default-font">
+                          Nuværende
+                        </span>
+                        <span className="text-caption font-caption text-subtext-color">
+                          {selectedPolicy.company || 'Din nuværende'}
+                        </span>
+                      </div>
+                      <div className="flex grow shrink-0 basis-0 flex-col items-center">
+                        <span className="text-body-bold font-body-bold text-default-font">
+                          Nyt tilbud
+                        </span>
+                        <span className="text-caption font-caption text-subtext-color">
+                          Anbefaling
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex w-full min-w-[576px] flex-col items-start">
+                      {healthCheckPayload.comparisonData.map((item: any, index: number) => {
+                        const isIncluded = (value: string) => {
+                          if (!value) return false;
+                          const lowerValue = value.toLowerCase();
+                          return lowerValue.includes('inkluderet') || lowerValue.includes('ja') || !lowerValue.includes('ikke');
+                        };
+                        
+                        const currentIncluded = isIncluded(item.current);
+                        const recommendationIncluded = isIncluded(item.recommendation);
+                        
+                        return (
+                          <div 
+                            key={index} 
+                            className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-4"
+                            data-testid={`comparison-row-${index}`}
+                          >
+                            <div className="flex w-48 flex-none flex-col items-start gap-1">
                               <span className="text-body-bold font-body-bold text-default-font">
                                 {item.category}
                               </span>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <span className="text-body font-body text-default-font">
-                                {item.current}
-                              </span>
-                            </Table.Cell>
-                            <Table.Cell>
-                              <div className="flex items-center gap-2">
-                                <span className="text-body font-body text-default-font">
-                                  {item.recommendation}
+                              {item.description && (
+                                <span className="text-caption font-caption text-subtext-color">
+                                  {item.description}
                                 </span>
-                                {item.status && (
-                                  <Badge variant={item.status === 'better' ? 'success' : item.status === 'worse' ? 'error' : 'neutral'}>
-                                    {item.status === 'better' ? 'Bedre' : item.status === 'worse' ? 'Værre' : 'Samme'}
-                                  </Badge>
-                                )}
-                              </div>
-                            </Table.Cell>
-                          </Table.Row>
-                        ))}
-                      </Table>
+                              )}
+                            </div>
+                            <div className="flex grow shrink-0 basis-0 items-center justify-center">
+                              <Badge variant={currentIncluded ? "success" : "error"}>
+                                {item.current}
+                              </Badge>
+                            </div>
+                            <div className="flex grow shrink-0 basis-0 items-center justify-center">
+                              <Badge variant={recommendationIncluded ? "success" : "error"}>
+                                {item.recommendation}
+                              </Badge>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
-                  </div>
-
-                  {/* Mobile Card View */}
-                  <div className="block md:hidden w-full">
-                    <MobileComparisonCard 
-                      rows={healthCheckPayload.comparisonData.map((item: any) => ({
-                        feature: item.category,
-                        current: item.current,
-                        offer: item.recommendation,
-                        difference: item.status === 'better' ? 'Bedre' : item.status === 'worse' ? 'Værre' : 'Samme',
-                        status: item.status,
-                        isCategory: false
-                      }))}
-                    />
                   </div>
                 </div>
               )}
