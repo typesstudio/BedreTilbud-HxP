@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useParams } from "wouter";
 import { 
   Badge, 
   Button, 
@@ -76,13 +77,20 @@ interface PolicyGroup {
   other: Policy[];
 }
 
-interface InsuranceCheckPageProps {
-  params: { userId: string };
-}
-
-export default function InsuranceCheckPage({ params }: InsuranceCheckPageProps) {
-  const { userId } = params;
+export default function InsuranceCheckPage() {
+  const { userId } = useParams<{ userId: string }>();
   const { toast } = useToast();
+
+  if (!userId) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-default-background">
+        <div className="flex flex-col items-center gap-4">
+          <span className="text-heading-2 font-heading-2 text-default-font">Bruger ikke fundet</span>
+          <span className="text-body font-body text-subtext-color">Gå tilbage til forsiden</span>
+        </div>
+      </div>
+    );
+  }
   
   const { data: policiesData, isLoading } = useQuery<PolicyGroup>({
     queryKey: ['/api/policies', 'user', userId],
