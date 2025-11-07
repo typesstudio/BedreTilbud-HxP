@@ -145,7 +145,7 @@ Danish market context:
 - Average home insurance: 3,000-6,000 kr/year
 - Average car insurance: 4,000-8,000 kr/year
 
-Return JSON in this exact format:
+Return JSON in this exact format (ONLY include these 6 sections):
 {
   "overallScore": 7,
   "scoreExplanation": "God grunddækning med potentiale for besparelser",
@@ -237,33 +237,7 @@ Return JSON in this exact format:
       {"month": "År 5", "savings": 17100},
       {"month": "År 10", "savings": 34400}
     ]
-  },
-  "potentialSavings": {
-    "conservative": 1500,
-    "realistic": 2500,
-    "optimistic": 4000,
-    "explanation": "Baseret på markedsgennemsnit"
-  },
-  "strengths": [
-    {"title": "Høj ansvarsdækning", "description": "10M kr ansvarsdækning", "icon": "shield", "variant": "success"}
-  ],
-  "weaknesses": [
-    {"title": "Høj præmie vs selvrisiko", "description": "5,000 kr præmie med 5,000 kr selvrisiko", "icon": "dollar-sign", "variant": "warning", "severity": "important"}
-  ],
-  "coverageGaps": {
-    "categories": [
-      {"name": "Manglende Dækning", "icon": "alert-circle", "items": [{"title": "Elektronik dækning", "description": "Ikke inkluderet", "severity": "important", "estimatedCost": 500}]},
-      {"name": "Overpris Elementer", "icon": "trending-up", "items": [{"title": "Grundpræmie", "description": "15% over markedsgennemsnit", "severity": "critical", "potentialSaving": 800}]},
-      {"name": "Anbefalede Forbedringer", "icon": "help-circle", "items": []}
-    ]
-  },
-  "marketComparison": [
-    {"category": "Årlig Præmie", "current": "5,000 kr", "marketAverage": "4,200 kr", "difference": "+19%", "status": "worse"},
-    {"category": "Selvrisiko", "current": "5,000 kr", "marketAverage": "3,500 kr", "difference": "+43%", "status": "worse"}
-  ],
-  "recommendations": [
-    {"priority": 1, "title": "Få konkurrerende tilbud", "description": "3-5 forsikringsselskaber", "estimatedImpact": "2,500 kr/år"}
-  ]
+  }
 }
 
 IMPORTANT: Write ALL text in Danish. Be specific with numbers. Use realistic Danish market data.`;

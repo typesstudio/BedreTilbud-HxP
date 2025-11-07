@@ -117,6 +117,18 @@ export default function InsuranceCheckPage() {
   const selectedPolicies = policiesData?.[selectedType as keyof PolicyGroup] || [];
   const selectedPolicy = selectedPolicies[0];
 
+  // DEBUG: Log what we're receiving
+  useEffect(() => {
+    if (policiesData) {
+      console.log('[Insurance Check] Policies Data:', policiesData);
+      console.log('[Insurance Check] Selected Type:', selectedType);
+      console.log('[Insurance Check] Selected Policies:', selectedPolicies);
+      console.log('[Insurance Check] Selected Policy:', selectedPolicy);
+      console.log('[Insurance Check] Health Check Payload:', selectedPolicy?.healthCheckPayload);
+      console.log('[Insurance Check] Health Check Status:', selectedPolicy?.healthCheckStatus);
+    }
+  }, [policiesData, selectedType, selectedPolicy]);
+
   const formatCurrency = (amount: number | null | undefined) => {
     if (amount == null) return "N/A";
     return new Intl.NumberFormat('da-DK', {

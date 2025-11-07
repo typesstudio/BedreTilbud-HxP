@@ -430,14 +430,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
               logger.info('[AI Usage] OpenAI-gpt-4o-mini - insurance-health-check - Success', { 
                 policyId: policy.id,
                 score: healthCheckResult.overallScore,
-                savings: healthCheckResult.potentialSavings.realistic
+                savings: healthCheckResult.annualSavings?.amount || 0
               });
 
               // Update policy with health check data
               await storage.updatePolicyHealthCheck(policy.id, {
                 status: 'completed',
                 payload: healthCheckResult,
-                savingsAnnual: healthCheckResult.potentialSavings.realistic
+                savingsAnnual: healthCheckResult.annualSavings?.amount || 0
               });
 
               return { policyId: policy.id, success: true };
@@ -711,14 +711,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         logger.info('[AI Usage] OpenAI-gpt-4o-mini - insurance-health-check - Success', { 
           policyId,
           score: healthCheckResult.overallScore,
-          savings: healthCheckResult.potentialSavings.realistic
+          savings: healthCheckResult.annualSavings?.amount || 0
         });
 
         // Update policy with new health check data
         const updatedPolicy = await storage.updatePolicyHealthCheck(policyId, {
           status: 'completed',
           payload: healthCheckResult,
-          savingsAnnual: healthCheckResult.potentialSavings.realistic
+          savingsAnnual: healthCheckResult.annualSavings?.amount || 0
         });
 
         logger.info('[Policies] Health check refreshed successfully', { policyId });
@@ -739,6 +739,82 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch (error: any) {
       logger.error('[Policies] Refresh endpoint failed', error, { policyId: req.params.policyId });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Bulk refresh all policies for a user
+  app.post("/api/policies/user/:userId/refresh-all", requireAuth, async (req, res) => {
+    try {
+      const userId = req.params.userId;
+      
+      // Check authentication
+      const requestingUserId = req.headers['x-user-id'] as string;
+      if (requestingUserId !== userId) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      // Get all policies for user
+      const policies = await storage.getPoliciesByUser(userId);
+      
+      if (policies.length === 0) {
+        return res.json({ message: "No policies to refresh", refreshed: 0 });
+      }
+
+      logger.info('[Policies] Bulk refresh starting', { userId, policyCount: policies.length });
+
+      // Refresh all policies in parallel
+      const refreshPromises = policies.map(async (policy) => {
+        try {
+          logger.info('[AI Usage] OpenAI-gpt-4o-mini - insurance-health-check - Starting', { policyId: policy.id });
+          
+          const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(policy);
+          
+          logger.info('[AI Usage] OpenAI-gpt-4o-mini - insurance-health-check - Success', { 
+            policyId: policy.id,
+            score: healthCheckResult.overallScore,
+            savings: healthCheckResult.annualSavings?.amount || 0
+          });
+
+          await storage.updatePolicyHealthCheck(policy.id, {
+            status: 'completed',
+            payload: healthCheckResult,
+            savingsAnnual: healthCheckResult.annualSavings?.amount || 0
+          });
+
+          return { policyId: policy.id, success: true };
+        } catch (error: any) {
+          logger.error('[Policies] Bulk refresh failed for policy', error, { policyId: policy.id });
+          logger.info('[AI Usage] OpenAI-gpt-4o-mini - insurance-health-check - Failed', { policyId: policy.id });
+
+          await storage.updatePolicyHealthCheck(policy.id, {
+            status: 'failed',
+            payload: { error: 'Health check failed' },
+            savingsAnnual: 0
+          });
+
+          return { policyId: policy.id, success: false, error: error.message };
+        }
+      });
+
+      const results = await Promise.all(refreshPromises);
+      const successCount = results.filter(r => r.success).length;
+      
+      logger.info('[Policies] Bulk refresh complete', { 
+        userId, 
+        total: policies.length,
+        succeeded: successCount,
+        failed: policies.length - successCount
+      });
+
+      res.json({ 
+        message: `Refreshed ${successCount} of ${policies.length} policies`,
+        refreshed: successCount,
+        total: policies.length,
+        results
+      });
+    } catch (error: any) {
+      logger.error('[Policies] Bulk refresh failed', error, { userId: req.params.userId });
       res.status(500).json({ message: error.message });
     }
   });
