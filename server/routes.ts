@@ -555,12 +555,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized" });
       }
 
+      // CASCADE DELETE: First delete all policies associated with this document
+      const relatedPolicies = await storage.getPoliciesByDocument(req.params.id);
+      logger.info('[Document Delete] Deleting related policies', { 
+        documentId: req.params.id, 
+        policyCount: relatedPolicies.length 
+      });
+      
+      for (const policy of relatedPolicies) {
+        await storage.deletePolicy(policy.id);
+        logger.info('[Document Delete] Policy deleted', { policyId: policy.id, policyType: policy.policyType });
+      }
+
+      // Delete the physical file
       if (document.filePath && fs.existsSync(document.filePath)) {
         fs.unlinkSync(document.filePath);
       }
 
+      // Finally delete the document record
       await storage.deleteDocument(req.params.id);
-      auditLog('document_deleted', userId, `Deleted document: ${document.fileName}`);
+      auditLog('document_deleted', userId, `Deleted document: ${document.fileName} with ${relatedPolicies.length} policies`);
       
       res.status(204).send();
     } catch (error: any) {
