@@ -91,8 +91,14 @@ export default function InsuranceCheckPage() {
       </div>
     );
   }
+
+  // Set localStorage userId from URL param SYNCHRONOUSLY before queries run
+  // This ensures the X-User-ID header is present on first fetch
+  if (userId && localStorage.getItem('userId') !== userId) {
+    localStorage.setItem('userId', userId);
+  }
   
-  const { data: policiesData, isLoading } = useQuery<PolicyGroup>({
+  const { data: policiesData, isLoading, isError, refetch } = useQuery<PolicyGroup>({
     queryKey: ['/api/policies', 'user', userId],
   });
 
@@ -124,6 +130,24 @@ export default function InsuranceCheckPage() {
       <AppLayoutWithNav userId={userId}>
         <div className="flex items-center justify-center min-h-screen bg-default-background">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+      </AppLayoutWithNav>
+    );
+  }
+
+  if (isError) {
+    return (
+      <AppLayoutWithNav userId={userId}>
+        <div className="flex items-center justify-center min-h-screen bg-default-background">
+          <div className="flex flex-col items-center gap-4">
+            <span className="text-heading-2 font-heading-2 text-default-font">Der opstod en fejl</span>
+            <span className="text-body font-body text-subtext-color text-center">
+              Kunne ikke hente dine forsikringer. Prøv venligst igen.
+            </span>
+            <Button onClick={() => refetch()} data-testid="button-retry">
+              Prøv igen
+            </Button>
+          </div>
         </div>
       </AppLayoutWithNav>
     );
