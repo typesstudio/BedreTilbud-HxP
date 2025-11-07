@@ -36,76 +36,6 @@ export default function ModernLandingPage() {
     }
   };
 
-  if (currentStep > 1) {
-    return (
-      <div className="flex h-full w-full flex-col items-center bg-default-background">
-        <div className="flex w-full flex-col items-center gap-12">
-          <div className="flex w-full items-center justify-between border-b border-solid border-neutral-border px-6 py-4">
-            <span className="text-body-bold font-body-bold text-default-font">
-              Bedretilbud.com
-            </span>
-            <span className="text-body font-body text-subtext-color hidden sm:block">
-              Få bedre tilbud på under 2 minutter
-            </span>
-          </div>
-
-          <div className="flex w-full max-w-[768px] flex-col items-start gap-8 px-4 sm:px-6">
-            <div className="flex w-full items-center justify-between">
-              <div className="flex items-center gap-2">
-                <IconWithBackground variant="success" icon={<FeatherCheck />} />
-                <span className="text-body-bold font-body-bold text-success-600 hidden sm:inline">
-                  Din Email
-                </span>
-              </div>
-              <div className="flex h-px w-12 sm:w-24 flex-none items-center bg-neutral-200" />
-              <div className="flex items-center gap-2">
-                <IconWithBackground 
-                  variant={currentStep >= 2 ? "brand" : "neutral"} 
-                  icon={<FeatherUpload />} 
-                />
-                <span className={`hidden sm:inline ${currentStep >= 2 ? 'text-body-bold font-body-bold text-brand-600' : 'text-body font-body text-subtext-color'}`}>
-                  Upload Police
-                </span>
-              </div>
-              <div className="flex h-px w-12 sm:w-24 flex-none items-center bg-neutral-200" />
-              <div className="flex items-center gap-2">
-                <IconWithBackground
-                  variant={currentStep >= 3 ? "brand" : "neutral"}
-                  icon={<FeatherCheckCircle />}
-                />
-                <span className={`hidden sm:inline ${currentStep >= 3 ? 'text-body-bold font-body-bold text-brand-600' : 'text-body font-body text-subtext-color'}`}>
-                  Vælg Selskaber
-                </span>
-              </div>
-            </div>
-
-            {currentStep === 2 && (
-              <SubframeStep2 
-                onComplete={handleStep2Complete} 
-                onBack={() => {}}
-                isLoading={false} 
-              />
-            )}
-
-            {currentStep === 3 && (
-              <SubframeStep3 
-                onComplete={(data) => handleStep3Complete(
-                  data.selectedCompanyIds,
-                  data.name,
-                  data.cpr,
-                  data.priority
-                )} 
-                onBack={() => {}}
-                isLoading={false}
-                uploadSkipped={false}
-              />
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex h-full w-full flex-col items-center bg-default-background">
       <div className="flex w-full flex-col items-center gap-12">
@@ -124,70 +54,102 @@ export default function ModernLandingPage() {
           {/* Progress Indicator */}
           <div className="flex w-full items-center justify-between">
             <div className="flex items-center gap-2">
-              <IconWithBackground />
-              <span className="text-body-bold font-body-bold text-brand-600 hidden sm:inline">
+              <IconWithBackground 
+                variant={currentStep > 1 ? "success" : "brand"} 
+                icon={currentStep > 1 ? <FeatherCheck /> : undefined} 
+              />
+              <span className={`hidden sm:inline ${currentStep > 1 ? 'text-body-bold font-body-bold text-success-600' : 'text-body-bold font-body-bold text-brand-600'}`}>
                 Din Email
               </span>
             </div>
             <div className="flex h-px w-12 sm:w-24 flex-none items-center bg-neutral-200" />
             <div className="flex items-center gap-2">
-              <IconWithBackground variant="neutral" icon={<FeatherUpload />} />
-              <span className="text-body font-body text-subtext-color hidden sm:inline">
+              <IconWithBackground 
+                variant={currentStep > 2 ? "success" : currentStep === 2 ? "brand" : "neutral"} 
+                icon={currentStep > 2 ? <FeatherCheck /> : <FeatherUpload />} 
+              />
+              <span className={`hidden sm:inline ${currentStep > 2 ? 'text-body-bold font-body-bold text-success-600' : currentStep === 2 ? 'text-body-bold font-body-bold text-brand-600' : 'text-body font-body text-subtext-color'}`}>
                 Upload Police
               </span>
             </div>
             <div className="flex h-px w-12 sm:w-24 flex-none items-center bg-neutral-200" />
             <div className="flex items-center gap-2">
               <IconWithBackground
-                variant="neutral"
+                variant={currentStep === 3 ? "brand" : "neutral"}
                 icon={<FeatherCheckCircle />}
               />
-              <span className="text-body font-body text-subtext-color hidden sm:inline">
-                Få Bedre Tilbud
+              <span className={`hidden sm:inline ${currentStep === 3 ? 'text-body-bold font-body-bold text-brand-600' : 'text-body font-body text-subtext-color'}`}>
+                Vælg Selskaber
               </span>
             </div>
           </div>
           
-          {/* Hero Content */}
-          <div className="flex w-full flex-col items-center gap-6">
-            <div className="flex w-full flex-col items-center gap-2">
-              <span className="text-heading-1 font-heading-1 text-default-font text-center">
-                Få bedre forsikringer
-              </span>
-              <span className="whitespace-pre-wrap text-body font-body text-subtext-color text-center px-4">
-                {
-                  "Upload dine nuværende aftaler én gang. \nVi henter nye tilbud, sammenligner side om side"
-                }
-              </span>
+          {/* Step 1: Email Collection */}
+          {currentStep === 1 && (
+            <div className="flex w-full flex-col items-center gap-6">
+              <div className="flex w-full flex-col items-center gap-2">
+                <span className="text-heading-1 font-heading-1 text-default-font text-center">
+                  Få bedre forsikringer
+                </span>
+                <span className="whitespace-pre-wrap text-body font-body text-subtext-color text-center px-4">
+                  {
+                    "Upload dine nuværende aftaler én gang. \nVi henter nye tilbud, sammenligner side om side"
+                  }
+                </span>
+              </div>
+              
+              {/* Email Form */}
+              <form onSubmit={handleEmailSubmit} className="flex w-full max-w-[448px] flex-col items-start gap-6 px-4 sm:px-0">
+                <TextField
+                  className="h-auto w-full flex-none"
+                  label="Email adresse"
+                  helpText=""
+                >
+                  <TextField.Input
+                    placeholder="din@email.dk"
+                    value={email}
+                    onChange={(event: React.ChangeEvent<HTMLInputElement>) => setEmail(event.target.value)}
+                    data-testid="input-email"
+                  />
+                </TextField>
+                <Button
+                  className="h-10 w-full flex-none"
+                  variant="variation"
+                  size="large"
+                  type="submit"
+                  disabled={isProcessingStep1 || !email}
+                  loading={isProcessingStep1}
+                  data-testid="button-continue"
+                >
+                  {isProcessingStep1 ? "Vent venligst..." : "Få bedre tilbud"}
+                </Button>
+              </form>
             </div>
-            
-            {/* Email Form */}
-            <form onSubmit={handleEmailSubmit} className="flex w-full max-w-[448px] flex-col items-start gap-6 px-4 sm:px-0">
-              <TextField
-                className="h-auto w-full flex-none"
-                label="Email adresse"
-                helpText=""
-              >
-                <TextField.Input
-                  placeholder="din@email.dk"
-                  value={email}
-                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => setEmail(event.target.value)}
-                  data-testid="input-email"
-                />
-              </TextField>
-              <Button
-                className="h-10 w-full flex-none"
-                variant="variation"
-                size="large"
-                type="submit"
-                disabled={isProcessingStep1 || !email}
-                loading={isProcessingStep1}
-                data-testid="button-continue"
-              >
-                {isProcessingStep1 ? "Vent venligst..." : "Få bedre tilbud"}
-              </Button>
-            </form>
-          </div>
+          )}
+
+          {/* Step 2: PDF Upload */}
+          {currentStep === 2 && (
+            <SubframeStep2 
+              onComplete={handleStep2Complete} 
+              onBack={() => {}}
+              isLoading={false} 
+            />
+          )}
+
+          {/* Step 3: Company Selection */}
+          {currentStep === 3 && (
+            <SubframeStep3 
+              onComplete={(data) => handleStep3Complete(
+                data.selectedCompanyIds,
+                data.name,
+                data.cpr,
+                data.priority
+              )} 
+              onBack={() => {}}
+              isLoading={false}
+              uploadSkipped={false}
+            />
+          )}
         </div>
 
         {/* Features Grid */}
