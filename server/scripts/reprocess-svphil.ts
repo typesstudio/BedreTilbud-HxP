@@ -1,7 +1,8 @@
 import { storage } from "../storage";
 import { mistralOcrService } from "../services/mistralOcrService";
 import { convertToPolicyRecord } from "../utils/policyExtractionParser";
-import { policyMatchingService } from "../services/policyMatchingService";
+import { PolicyMatchingService } from "../services/policyMatchingService";
+import { comparisonService } from "../services/comparisonService";
 
 const USER_ID = 'e86b6430-0013-4fdc-9025-27aefe2d1528';
 const COMPANY_ID = '7bc8a405-83b2-4c7e-81e3-2644232a023e';
@@ -20,7 +21,22 @@ async function reprocessSvphil() {
   
   console.log(`[Reprocess Svphil] Document path: ${document.filePath}`);
   
-  console.log('\n[Reprocess Svphil] Step 1: Delete existing offer policies...');
+  console.log('\n[Reprocess Svphil] Step 1: Delete existing comparisons via SQL (MUST be first due to FK constraints)...');
+  const { db } = await import("../db");
+  const { comparisons } = await import("../../shared/schema");
+  const { eq, and } = await import("drizzle-orm");
+  const existingComparisons = await storage.getComparisonsByUserAndCompany(USER_ID, COMPANY_ID);
+  console.log(`[Reprocess Svphil] Found ${existingComparisons.length} existing comparisons to delete`);
+  
+  await db.delete(comparisons).where(
+    and(
+      eq(comparisons.userId, USER_ID),
+      eq(comparisons.companyId, COMPANY_ID)
+    )
+  );
+  console.log(`  ✅ Deleted ${existingComparisons.length} comparisons`);
+  
+  console.log('\n[Reprocess Svphil] Step 2: Delete existing offer policies...');
   const existingPolicies = await storage.getPoliciesByUser(USER_ID);
   const offerPolicies = existingPolicies.filter(p => 
     p.documentId === OFFER_DOCUMENT_ID && !p.isOwnPolicy
@@ -31,14 +47,7 @@ async function reprocessSvphil() {
     await storage.deletePolicy(policy.id);
     console.log(`  ✅ Deleted policy: ${policy.policyType}`);
   }
-  
-  console.log('\n[Reprocess Svphil] Step 2: Delete existing comparisons...');
-  const existingComparisons = await storage.getComparisonsByUserAndCompany(USER_ID, COMPANY_ID);
-  console.log(`[Reprocess Svphil] Found ${existingComparisons.length} existing comparisons to delete`);
-  for (const comparison of existingComparisons) {
-    await storage.deleteComparison(comparison.id);
-    console.log(`  ✅ Deleted comparison: ${comparison.policyType}`);
-  }
+
   
   console.log('\n[Reprocess Svphil] Step 3: Re-run OCR extraction with improved prompt...');
   const extractionResult = await mistralOcrService.extractInsuranceDataFromPDF(document.filePath);
@@ -77,6 +86,7 @@ async function reprocessSvphil() {
   });
   
   console.log('\n[Reprocess Svphil] Step 5: Run policy matching and comparisons...');
+  const policyMatchingService = new PolicyMatchingService(storage, comparisonService);
   const result = await policyMatchingService.matchAndCompareOfferPolicies(
     USER_ID,
     COMPANY_ID,
@@ -105,7 +115,7 @@ async function reprocessSvphil() {
   console.log(`  - Verdict: ${overview.verdict}`);
   console.log(`  - Policy Count: ${overview.policyCount}`);
   console.log('\nQuick Comparison:');
-  overview.quickComparison.forEach(q => {
+  overview.quickComparison.forEach((q: any) => {
     console.log(`  - ${q.policyType}: ${q.savings} kr/year (${q.verdict})`);
   });
   
