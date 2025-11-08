@@ -129,14 +129,11 @@ export class PolicyMatchingService {
   ): Promise<Comparison> {
     console.log(`[Policy Matching] Generating comparison for ${policyType}...`);
 
-    const currentDoc = await this.storage.getDocument(currentPolicy.documentId);
-    const offerDoc = await this.storage.getDocument(offerPolicy.documentId);
-
-    const currentData = currentDoc?.ocrData;
-    const offerData = offerDoc?.ocrData;
+    const currentData = currentPolicy.coverageDetails;
+    const offerData = offerPolicy.coverageDetails;
 
     if (!currentData || !offerData) {
-      throw new Error(`Missing OCR data for ${policyType} comparison`);
+      throw new Error(`Missing coverage details for ${policyType} comparison`);
     }
 
     const comparisonResult = await this.comparisonService.compareInsurancePolicies(
@@ -154,7 +151,7 @@ export class PolicyMatchingService {
       offerDocumentId: offerPolicy.documentId,
       comparisonData: comparisonResult,
       aiRecommendation: comparisonResult.aiRecommendation,
-      savings: comparisonResult.savings
+      savings: Math.round(comparisonResult.savings || 0)
     });
 
     console.log(`[Policy Matching] ✅ Comparison created for ${policyType}, savings: ${comparisonResult.savings} DKK`);

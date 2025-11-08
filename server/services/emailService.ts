@@ -8,6 +8,7 @@ import { PolicyMatchingService } from "./policyMatchingService";
 import { getUncachableResendClient } from "../resendClient";
 import { generateRequestToken, formatReplyToEmail, extractTokenFromEmail } from "../utils/tokenGenerator";
 import { parseEmailReply } from "../utils/emailReplyParser";
+import { parsePolicyType } from "../utils/policyExtractionParser";
 import type { Email } from "@shared/schema";
 import fs from "fs";
 import path from "path";
@@ -372,18 +373,19 @@ export class EmailService {
               const offerPolicies: any[] = [];
               if (insuranceData.policies && Array.isArray(insuranceData.policies)) {
                 for (const policyData of insuranceData.policies) {
+                  const normalizedType = parsePolicyType(policyData.type);
                   const policy = await storage.createPolicy({
                     documentId: document.id,
                     userId: existingThread.userId ?? '',
                     companyId: existingThread.companyId ?? null,
-                    policyType: policyData.type,
+                    policyType: normalizedType,
                     premium: policyData.premium?.toString(),
                     deductible: policyData.deductible?.toString(),
                     coverageDetails: policyData,
                     isOwnPolicy: false
                   });
                   offerPolicies.push(policy);
-                  console.log(`[Email] Policy created`, { policyId: policy.id, type: policyData.type });
+                  console.log(`[Email] Policy created`, { policyId: policy.id, originalType: policyData.type, normalizedType });
                 }
               }
 
