@@ -261,16 +261,167 @@ export default function OfferComparisonPage() {
     const comparison = comparisons.find((c: any) => c.policyType === policyType);
     if (!comparison) return null;
 
+    const comparisonData = comparison.comparisonData || {};
+    const currentOcrData = comparison.currentPolicy?.ocrData || {};
+    const offerOcrData = comparison.offerPolicy?.ocrData || {};
+    const currentPremium = parseFloat(comparison.currentPolicy?.premium) || currentOcrData.annualPremium || 0;
+    const offerPremium = parseFloat(comparison.offerPolicy?.premium) || offerOcrData.annualPremium || 0;
+    const savings = currentPremium - offerPremium;
+    const savingsPercentage = currentPremium > 0 ? ((savings / currentPremium) * 100) : 0;
+    const highlights = comparisonData.highlights || [];
+    const detailedComparison = comparisonData.detailedComparison || [];
+
+    const isWorseOffer = savings < 0;
+    const absoluteSavings = Math.abs(savings);
+    const absoluteSavingsPercentage = Math.abs(savingsPercentage);
+
+    const barWidthPercentage = offerPremium > 0 && currentPremium > 0
+      ? Math.min((offerPremium / currentPremium) * 100, 100)
+      : 80;
+
     return (
-      <div className="flex flex-col gap-6 p-6">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col gap-6 p-6 max-w-[768px] mx-auto">
+        <div className="flex items-center justify-between">
           <span className="text-heading-2 font-heading-2 text-default-font">
-            {policyTypeLabels[policyType]} - Detaljeret sammenligning
+            {policyTypeLabels[policyType]}
           </span>
+          <Badge variant={isWorseOffer ? "error" : "success"}>
+            {isWorseOffer ? "Dyrere" : "Billigere"}
+          </Badge>
         </div>
-        <div className="text-body font-body text-subtext-color">
-          Detaljeret sammenligning for {policyTypeLabels[policyType]} kommer her
+
+        <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
+          <span className="text-heading-3 font-heading-3 text-default-font">
+            Årlig omkostning sammenligning
+          </span>
+          
+          <div className={`flex items-center justify-between rounded-lg border p-4 ${isWorseOffer ? 'border-error-200 bg-error-50 dark:bg-error-900' : 'border-success-200 bg-success-50 dark:bg-success-900'}`}>
+            <div className="flex items-center gap-3">
+              <IconWithBackground
+                variant={isWorseOffer ? "error" : "success"}
+                size="medium"
+              >
+                <FeatherTrendingUp className="text-default-font" />
+              </IconWithBackground>
+              <div className="flex flex-col gap-1">
+                <span className={`text-body-bold font-body-bold ${isWorseOffer ? 'text-error-700' : 'text-success-700'}`}>
+                  {isWorseOffer ? 'Dyrere tilbud' : 'Årlig besparelse'}
+                </span>
+                <span className={`text-caption font-caption ${isWorseOffer ? 'text-error-600' : 'text-success-600'}`}>
+                  {absoluteSavingsPercentage.toFixed(1)}% {isWorseOffer ? 'dyrere' : 'billigere'}
+                </span>
+              </div>
+            </div>
+            <span className={`text-heading-2 font-heading-2 ${isWorseOffer ? 'text-error-600' : 'text-success-600'}`}>
+              {formatCurrency(absoluteSavings)}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <span className="text-body-bold font-body-bold text-default-font">
+              Nuværende forsikring
+            </span>
+            <span className="text-heading-3 font-heading-3 text-default-font">
+              {formatCurrency(currentPremium)}/år
+            </span>
+          </div>
+
+          <div className="flex h-12 w-full rounded-lg bg-success-100 dark:bg-success-900 overflow-hidden">
+            <div
+              className={`flex h-12 items-center justify-between px-6 ${isWorseOffer ? 'bg-error-500' : 'bg-success-500'}`}
+              style={{ width: `${barWidthPercentage}%` }}
+            >
+              <span className="text-body-bold font-body-bold text-white">
+                Nyt tilbud
+              </span>
+              <span className="text-heading-3 font-heading-3 text-white">
+                {formatCurrency(offerPremium)}/år
+              </span>
+            </div>
+          </div>
         </div>
+
+        {highlights.length > 0 && (
+          <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
+            <span className="text-heading-3 font-heading-3 text-default-font">
+              Højdepunkter
+            </span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {highlights.map((highlight: any, index: number) => {
+                const Icon = iconMap[highlight.icon] || FeatherCheck;
+                return (
+                  <div key={index} className="flex items-start gap-3 p-4 bg-neutral-50 dark:bg-neutral-900 rounded-md border border-neutral-200 dark:border-neutral-700">
+                    <IconWithBackground
+                      variant={highlight.variant || (isWorseOffer ? "error" : "success")}
+                      size="medium"
+                    >
+                      <Icon className="text-default-font" />
+                    </IconWithBackground>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-body-bold font-body-bold text-default-font">
+                        {highlight.title}
+                      </span>
+                      <span className="text-caption font-caption text-subtext-color">
+                        {highlight.description}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {detailedComparison.length > 0 && (
+          <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
+            <span className="text-heading-3 font-heading-3 text-default-font">
+              Detaljeret sammenligning
+            </span>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <thead>
+                  <tr className="border-b-2 border-neutral-300 dark:border-neutral-600">
+                    <th className="text-left p-3 text-caption-bold font-caption-bold text-subtext-color">Dækning</th>
+                    <th className="text-center p-3 text-body-bold font-body-bold text-default-font">Nuværende</th>
+                    <th className="text-center p-3 text-body-bold font-body-bold text-default-font">Nyt tilbud</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detailedComparison.map((category: any, catIndex: number) => (
+                    category.rows && category.rows.map((row: any, rowIndex: number) => (
+                      <tr key={`${catIndex}-${rowIndex}`} className="border-b border-neutral-border">
+                        <td className="p-3 text-body-bold font-body-bold text-default-font">
+                          {row.feature}
+                          {row.description && (
+                            <div className="text-caption font-caption text-subtext-color">{row.description}</div>
+                          )}
+                        </td>
+                        <td className="p-3 text-center">
+                          {row.currentValue === 'inkluderet' || row.currentValue === true ? (
+                            <Badge variant="success">inkluderet</Badge>
+                          ) : row.currentValue === 'ikke inkluderet' || row.currentValue === false ? (
+                            <Badge variant="neutral">ikke inkluderet</Badge>
+                          ) : (
+                            <span className="text-body font-body text-default-font">{row.currentValue}</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-center">
+                          {row.offerValue === 'inkluderet' || row.offerValue === true ? (
+                            <Badge variant="success">inkluderet</Badge>
+                          ) : row.offerValue === 'ikke inkluderet' || row.offerValue === false ? (
+                            <Badge variant="neutral">ikke inkluderet</Badge>
+                          ) : (
+                            <span className="text-body font-body text-default-font">{row.offerValue}</span>
+                          )}
+                        </td>
+                      </tr>
+                    ))
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
       </div>
     );
   };
