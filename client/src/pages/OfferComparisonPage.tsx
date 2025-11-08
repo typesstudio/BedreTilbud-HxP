@@ -5,7 +5,8 @@ import {
   Badge,
   Button,
   IconWithBackground,
-  ListingsTabs
+  ListingsTabs,
+  Table
 } from "@/ui";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import {
@@ -214,41 +215,48 @@ export default function OfferComparisonPage() {
         {combinedData.quickComparison && combinedData.quickComparison.length > 0 && (
           <div className="flex flex-col gap-4">
             <span className="text-heading-3 font-heading-3 text-default-font">Hurtig oversigt</span>
-            <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b border-neutral-200 dark:border-neutral-700">
-                    <th className="text-left p-3 text-body-bold font-body-bold text-default-font">Type</th>
-                    <th className="text-right p-3 text-body-bold font-body-bold text-default-font">Nuværende</th>
-                    <th className="text-right p-3 text-body-bold font-body-bold text-default-font">Tilbud</th>
-                    <th className="text-right p-3 text-body-bold font-body-bold text-default-font">Besparelse</th>
-                    <th className="text-center p-3 text-body-bold font-body-bold text-default-font">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {combinedData.quickComparison.map((row: any, index: number) => (
-                    <tr key={index} className="border-b border-neutral-100 dark:border-neutral-800">
-                      <td className="p-3 text-body font-body text-default-font">
+            <div className="overflow-x-auto bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
+              <Table
+                header={
+                  <Table.HeaderRow>
+                    <Table.HeaderCell className="text-left">Type</Table.HeaderCell>
+                    <Table.HeaderCell className="text-right">Nuværende</Table.HeaderCell>
+                    <Table.HeaderCell className="text-right">Tilbud</Table.HeaderCell>
+                    <Table.HeaderCell className="text-right">Besparelse</Table.HeaderCell>
+                    <Table.HeaderCell className="text-center">Status</Table.HeaderCell>
+                  </Table.HeaderRow>
+                }
+              >
+                {combinedData.quickComparison.map((row: any, index: number) => (
+                  <Table.Row key={index}>
+                    <Table.Cell>
+                      <span className="text-body-bold font-body-bold text-default-font">
                         {policyTypeLabels[row.policyType] || row.policyType}
-                      </td>
-                      <td className="p-3 text-body font-body text-right text-subtext-color">
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell className="justify-end">
+                      <span className="text-body font-body text-subtext-color">
                         {formatCurrency(row.currentPremium)}
-                      </td>
-                      <td className="p-3 text-body font-body text-right text-subtext-color">
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell className="justify-end">
+                      <span className="text-body font-body text-subtext-color">
                         {formatCurrency(row.offerPremium)}
-                      </td>
-                      <td className="p-3 text-body-bold font-body-bold text-right text-brand-600">
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell className="justify-end">
+                      <span className="text-body-bold font-body-bold text-brand-600">
                         {formatCurrency(row.savings)}
-                      </td>
-                      <td className="p-3 text-center">
-                        <Badge variant={verdictColors[row.verdict] as any}>
-                          {verdictLabels[row.verdict]}
-                        </Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell className="justify-center">
+                      <Badge variant={verdictColors[row.verdict] as any}>
+                        {verdictLabels[row.verdict]}
+                      </Badge>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table>
             </div>
           </div>
         )}
@@ -378,47 +386,52 @@ export default function OfferComparisonPage() {
               Detaljeret sammenligning
             </span>
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
-                <thead>
-                  <tr className="border-b-2 border-neutral-300 dark:border-neutral-600">
-                    <th className="text-left p-3 text-caption-bold font-caption-bold text-subtext-color">Dækning</th>
-                    <th className="text-center p-3 text-body-bold font-body-bold text-default-font">Nuværende</th>
-                    <th className="text-center p-3 text-body-bold font-body-bold text-default-font">Nyt tilbud</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {detailedComparison.map((category: any, catIndex: number) => (
-                    category.rows && category.rows.map((row: any, rowIndex: number) => (
-                      <tr key={`${catIndex}-${rowIndex}`} className="border-b border-neutral-border">
-                        <td className="p-3 text-body-bold font-body-bold text-default-font">
-                          {row.feature}
+              <Table
+                header={
+                  <Table.HeaderRow>
+                    <Table.HeaderCell className="text-left">Dækning</Table.HeaderCell>
+                    <Table.HeaderCell className="text-center">Nuværende</Table.HeaderCell>
+                    <Table.HeaderCell className="text-center">Nyt tilbud</Table.HeaderCell>
+                  </Table.HeaderRow>
+                }
+              >
+                {detailedComparison.map((category: any, catIndex: number) => (
+                  category.rows && category.rows.map((row: any, rowIndex: number) => (
+                    <Table.Row key={`${catIndex}-${rowIndex}`}>
+                      <Table.Cell>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-body-bold font-body-bold text-default-font">
+                            {row.feature}
+                          </span>
                           {row.description && (
-                            <div className="text-caption font-caption text-subtext-color">{row.description}</div>
+                            <span className="text-caption font-caption text-subtext-color">
+                              {row.description}
+                            </span>
                           )}
-                        </td>
-                        <td className="p-3 text-center">
-                          {row.currentValue === 'inkluderet' || row.currentValue === true ? (
-                            <Badge variant="success">inkluderet</Badge>
-                          ) : row.currentValue === 'ikke inkluderet' || row.currentValue === false ? (
-                            <Badge variant="neutral">ikke inkluderet</Badge>
-                          ) : (
-                            <span className="text-body font-body text-default-font">{row.currentValue}</span>
-                          )}
-                        </td>
-                        <td className="p-3 text-center">
-                          {row.offerValue === 'inkluderet' || row.offerValue === true ? (
-                            <Badge variant="success">inkluderet</Badge>
-                          ) : row.offerValue === 'ikke inkluderet' || row.offerValue === false ? (
-                            <Badge variant="neutral">ikke inkluderet</Badge>
-                          ) : (
-                            <span className="text-body font-body text-default-font">{row.offerValue}</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))
-                  ))}
-                </tbody>
-              </table>
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell className="justify-center">
+                        {row.currentValue === 'inkluderet' || row.currentValue === true ? (
+                          <Badge variant="success">inkluderet</Badge>
+                        ) : row.currentValue === 'ikke inkluderet' || row.currentValue === false ? (
+                          <Badge variant="neutral">ikke inkluderet</Badge>
+                        ) : (
+                          <span className="text-body font-body text-default-font">{row.currentValue}</span>
+                        )}
+                      </Table.Cell>
+                      <Table.Cell className="justify-center">
+                        {row.offerValue === 'inkluderet' || row.offerValue === true ? (
+                          <Badge variant="success">inkluderet</Badge>
+                        ) : row.offerValue === 'ikke inkluderet' || row.offerValue === false ? (
+                          <Badge variant="neutral">ikke inkluderet</Badge>
+                        ) : (
+                          <span className="text-body font-body text-default-font">{row.offerValue}</span>
+                        )}
+                      </Table.Cell>
+                    </Table.Row>
+                  ))
+                ))}
+              </Table>
             </div>
           </div>
         )}
