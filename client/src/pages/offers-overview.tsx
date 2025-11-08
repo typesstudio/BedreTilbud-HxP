@@ -234,7 +234,7 @@ export default function OffersOverview() {
                       <Button
                         className="h-12 md:h-10 w-full md:w-auto touch-target"
                         iconRight={<FeatherArrowRight />}
-                        onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation(`/comparison/${comparison.id}`)}
+                        onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation(`/sammenligning/${userId}/${comparison.companyId}`)}
                         data-testid={`button-view-comparison-${comparison.id}`}
                       >
                         Se sammenligning
