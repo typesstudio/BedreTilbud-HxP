@@ -6,6 +6,7 @@ import { comparisonService } from "./services/comparisonService";
 import { insuranceCheckService } from "./services/insuranceCheckService";
 import { emailService } from "./services/emailService";
 import { gmailOAuthService } from "./services/gmailOAuthService";
+import { PolicyMatchingService } from "./services/policyMatchingService";
 import { requireAuth, requireOwnership } from "./middleware/auth";
 import { validateFileUpload } from "./middleware/uploadValidation";
 import { uploadLimiter, emailLimiter, aiLimiter } from "./middleware/rateLimiting";
@@ -815,6 +816,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       logger.error('[Policies] Bulk refresh failed', error, { userId: req.params.userId });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Offer Comparison routes (Sammenligning)
+  const policyMatchingService = new PolicyMatchingService(storage, comparisonService);
+
+  app.get("/api/sammenligning/:userId/:companyId", requireAuth, async (req, res) => {
+    try {
+      const { userId, companyId } = req.params;
+      
+      const comparisons = await storage.getComparisonsByUserAndCompany(userId, companyId);
+      
+      if (comparisons.length === 0) {
+        return res.status(404).json({ message: "No comparisons found for this company" });
+      }
+
+      const enrichedComparisons = await Promise.all(
+        comparisons.map(async (comparison) => {
+          const currentPolicy = comparison.currentPolicyId 
+            ? await storage.getPolicy(comparison.currentPolicyId) 
+            : null;
+          const offerPolicy = comparison.offerPolicyId 
+            ? await storage.getPolicy(comparison.offerPolicyId) 
+            : null;
+          const company = comparison.companyId 
+            ? await storage.getCompany(comparison.companyId) 
+            : null;
+
+          return {
+            ...comparison,
+            currentPolicy,
+            offerPolicy,
+            company
+          };
+        })
+      );
+
+      res.json(enrichedComparisons);
+    } catch (error: any) {
+      console.error('[Sammenligning] Error fetching comparisons:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.get("/api/sammenligning/:userId/:companyId/combined", requireAuth, async (req, res) => {
+    try {
+      const { userId, companyId } = req.params;
+      
+      const combinedOverview = await policyMatchingService.getCombinedOverview(userId, companyId);
+      
+      const company = await storage.getCompany(companyId);
+      
+      res.json({
+        ...combinedOverview,
+        company
+      });
+    } catch (error: any) {
+      console.error('[Sammenligning] Error generating combined overview:', error);
       res.status(500).json({ message: error.message });
     }
   });
