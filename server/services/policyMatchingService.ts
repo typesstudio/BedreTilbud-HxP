@@ -141,6 +141,10 @@ export class PolicyMatchingService {
       offerData as any
     );
 
+    const savingsValue = typeof comparisonResult.savings === 'object' && comparisonResult.savings !== null
+      ? (comparisonResult.savings as any).annual
+      : comparisonResult.savings;
+
     const comparison = await this.storage.createComparison({
       userId,
       companyId,
@@ -151,7 +155,7 @@ export class PolicyMatchingService {
       offerDocumentId: offerPolicy.documentId,
       comparisonData: comparisonResult,
       aiRecommendation: comparisonResult.aiRecommendation,
-      savings: Math.round(comparisonResult.savings || 0)
+      savings: Math.round(Number.isFinite(savingsValue) ? savingsValue : 0)
     });
 
     console.log(`[Policy Matching] ✅ Comparison created for ${policyType}, savings: ${comparisonResult.savings} DKK`);
@@ -164,7 +168,8 @@ export class PolicyMatchingService {
 
     const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(offerPolicy);
 
-    const savingsAnnual = healthCheckResult.potentialSavings?.realistic || 0;
+    const rawSavings = healthCheckResult.potentialSavings?.realistic || 0;
+    const savingsAnnual = Number.isFinite(rawSavings) ? rawSavings : 0;
 
     await this.storage.updatePolicyHealthCheck(offerPolicy.id, {
       status: 'completed',
