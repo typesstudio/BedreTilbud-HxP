@@ -4,6 +4,7 @@ import { storage } from "../storage";
 import { mistralOcrService as ocrService } from "./mistralOcrService";
 import { comparisonService } from "./comparisonService";
 import { aiResponseService } from "./aiResponseService";
+import { PolicyMatchingService } from "./policyMatchingService";
 import { getUncachableResendClient } from "../resendClient";
 import { generateRequestToken, formatReplyToEmail, extractTokenFromEmail } from "../utils/tokenGenerator";
 import { parseEmailReply } from "../utils/emailReplyParser";
@@ -364,27 +365,41 @@ export class EmailService {
                 companyId: existingThread.companyId
               });
               documentsCreated++;
+              
+              console.log(`[Email] Document created, processing policies`, { documentId: document.id, policyCount: insuranceData.policies?.length || 0 });
 
-              // Create comparison if we have a current policy
-              const currentDocuments = await storage.getUserDocuments(existingThread.userId ?? '', 'current');
-              if (currentDocuments.length > 0) {
-                const currentDoc = currentDocuments[0];
-                if (currentDoc.ocrData) {
-                  const comparison = await comparisonService.compareInsurancePolicies(
-                    currentDoc.ocrData as any,
-                    insuranceData
-                  );
-                  
-                  await storage.createComparison({
+              // Create policy records from extracted data
+              const offerPolicies: any[] = [];
+              if (insuranceData.policies && Array.isArray(insuranceData.policies)) {
+                for (const policyData of insuranceData.policies) {
+                  const policy = await storage.createPolicy({
+                    documentId: document.id,
                     userId: existingThread.userId,
-                    currentDocumentId: currentDoc.id,
-                    offerDocumentId: document.id,
                     companyId: existingThread.companyId,
-                    comparisonData: comparison,
-                    aiRecommendation: comparison.aiRecommendation,
-                    savings: Math.round(comparison.savings || 0)
+                    type: policyData.type,
+                    premium: policyData.premium?.toString(),
+                    ocrData: policyData
                   });
+                  offerPolicies.push(policy);
+                  console.log(`[Email] Policy created`, { policyId: policy.id, type: policy.type });
                 }
+              }
+
+              // Use PolicyMatchingService to create comparisons
+              if (offerPolicies.length > 0) {
+                console.log(`[Email] Matching ${offerPolicies.length} offer policies to user's current policies`);
+                const policyMatchingService = new PolicyMatchingService(storage, comparisonService);
+                const matchResult = await policyMatchingService.matchAndCompareOfferPolicies(
+                  existingThread.userId ?? '',
+                  existingThread.companyId ?? '',
+                  document.id,
+                  offerPolicies
+                );
+                console.log(`[Email] Policy matching complete`, { 
+                  comparisonsCreated: matchResult.comparisons.length,
+                  healthChecksCreated: matchResult.healthChecks.length,
+                  unmatchedPolicies: matchResult.unmatchedOfferPolicies.length
+                });
               }
               
               attachments.push({ fileName, filePath });
