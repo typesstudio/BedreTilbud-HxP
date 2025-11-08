@@ -137,10 +137,10 @@ class InsuranceCheckService {
         coverageDetails: JSON.stringify(coverageDetails, null, 2)
       });
 
-      // Use retry logic + OpenAI gpt-4o-mini (same as comparison for consistency)
+      // Use retry logic + OpenAI gpt-4o for high-quality analysis
       const response = await retryAICall(async () => {
         return await openai.chat.completions.create({
-          model: "gpt-4o-mini",
+          model: "gpt-4o",
           messages: [
             {
               role: "system",
@@ -156,12 +156,12 @@ class InsuranceCheckService {
         });
       }, 'insurance-health-check');
 
-      logAIUsage('OpenAI-gpt-4o-mini', 'insurance-health-check', true);
+      logAIUsage('OpenAI-gpt-4o', 'insurance-health-check', true);
       const result = JSON.parse(response.choices[0].message.content || "{}");
       return result as HealthCheckResult;
     } catch (error) {
       console.error("Insurance health check failed:", error);
-      logAIUsage('OpenAI-gpt-4o-mini', 'insurance-health-check', false);
+      logAIUsage('OpenAI-gpt-4o', 'insurance-health-check', false);
       throw new Error(`Failed to analyze insurance: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }

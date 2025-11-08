@@ -115,11 +115,11 @@ export class ComparisonService {
         userPreferences: JSON.stringify(userPreferences || {}, null, 2)
       });
 
-      // Use cost-effective gpt-4o-mini for comparisons (much cheaper than gpt-4-turbo)
+      // Use high-quality gpt-4o for comparisons (better analysis than gpt-4o-mini)
       // Wrap in retry logic for resilience
       const response = await retryAICall(async () => {
         return await openai.chat.completions.create({
-          model: "gpt-4o-mini",
+          model: "gpt-4o",
           messages: [
             {
               role: "system",
@@ -135,12 +135,12 @@ export class ComparisonService {
         });
       }, 'policy-comparison');
 
-      logAIUsage('OpenAI-gpt-4o-mini', 'policy-comparison', true);
+      logAIUsage('OpenAI-gpt-4o', 'policy-comparison', true);
       const result = JSON.parse(response.choices[0].message.content || "{}");
       return result as ComparisonResult;
     } catch (error) {
       console.error("Comparison failed:", error);
-      logAIUsage('OpenAI-gpt-4o-mini', 'policy-comparison', false);
+      logAIUsage('OpenAI-gpt-4o', 'policy-comparison', false);
       throw new Error(`Failed to compare policies: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
