@@ -52,7 +52,7 @@ const Item = React.forwardRef<HTMLDivElement, ItemProps>(function Item(
         {children ? (
           <span
             className={SubframeUtils.twClassNames(
-              "line-clamp-1 w-full font-['Inter'] text-[12px] font-[500] leading-[16px] text-neutral-500 text-center group-hover/d4ec529f:text-default-font",
+              "line-clamp-1 w-full text-body font-body text-neutral-500 text-center group-hover/d4ec529f:text-default-font",
               {
                 "text-default-font group-hover/d4ec529f:text-default-font":
                   checked,
