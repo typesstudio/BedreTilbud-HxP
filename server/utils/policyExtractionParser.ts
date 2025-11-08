@@ -64,9 +64,27 @@ export function convertToPolicyRecord(
   const policyType = parsePolicyType(extracted.type);
   const confidence = calculateExtractionConfidence(extracted);
   
+  const premiumValue = extracted.premium;
+  const premium = premiumValue !== null && premiumValue !== undefined ? premiumValue.toString() : null;
+  const deductibleValue = extracted.deductible;
+  const deductible = deductibleValue !== null && deductibleValue !== undefined ? deductibleValue.toString() : null;
+  
+  if (premiumValue === null || premiumValue === undefined || premiumValue === 0) {
+    console.warn(`[OCR Validation] ⚠️ Missing or zero premium for ${extracted.type}`, {
+      documentId,
+      policyType,
+      company: extracted.company,
+      extractedPremium: extracted.premium,
+      pageRange: extracted.pageRange,
+      confidence
+    });
+  }
+  
   const coverageDetails = {
     type: extracted.type,
     company: extracted.company,
+    premium: extracted.premium,
+    deductible: extracted.deductible,
     coverages: extracted.coverages || [],
     benefits: extracted.benefits || [],
     policyNumber: extracted.policyNumber,
@@ -80,8 +98,8 @@ export function convertToPolicyRecord(
     companyId: companyId || null,
     policyType,
     isOwnPolicy: true,
-    premium: extracted.premium || null,
-    deductible: extracted.deductible || null,
+    premium,
+    deductible,
     coverageDetails,
     sourcePageRange: extracted.pageRange || null,
     extractionConfidence: confidence,
