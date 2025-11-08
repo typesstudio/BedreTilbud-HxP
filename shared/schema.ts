@@ -101,6 +101,12 @@ export const comparisons = pgTable("comparisons", {
   currentDocumentId: varchar("current_document_id").references(() => documents.id),
   offerDocumentId: varchar("offer_document_id").references(() => documents.id),
   companyId: varchar("company_id").references(() => companies.id),
+  
+  // New fields for per-type comparisons
+  policyType: text("policy_type"), // "indbo", "ulykke", "hus", "bil", "rejse", "other"
+  currentPolicyId: varchar("current_policy_id").references(() => policies.id),
+  offerPolicyId: varchar("offer_policy_id").references(() => policies.id),
+  
   comparisonData: json("comparison_data"),
   aiRecommendation: text("ai_recommendation"),
   savings: integer("savings"), // in DKK
@@ -108,9 +114,13 @@ export const comparisons = pgTable("comparisons", {
 }, (table) => ({
   userIdIdx: index("comparisons_user_id_idx").on(table.userId),
   companyIdIdx: index("comparisons_company_id_idx").on(table.companyId),
+  policyTypeIdx: index("comparisons_policy_type_idx").on(table.policyType),
+  currentPolicyIdIdx: index("comparisons_current_policy_id_idx").on(table.currentPolicyId),
+  offerPolicyIdIdx: index("comparisons_offer_policy_id_idx").on(table.offerPolicyId),
   // Composite indexes for efficient querying
   userIdCompanyCreatedIdx: index("comparisons_user_id_company_created_idx").on(table.userId, table.companyId, table.createdAt),
   userIdCreatedIdx: index("comparisons_user_id_created_idx").on(table.userId, table.createdAt),
+  userIdCompanyTypeIdx: index("comparisons_user_id_company_type_idx").on(table.userId, table.companyId, table.policyType),
 }));
 
 export const householdMembers = pgTable("household_members", {

@@ -60,6 +60,7 @@ export interface IStorage {
   getComparison(id: string): Promise<Comparison | undefined>;
   getUserComparisons(userId: string): Promise<Comparison[]>;
   getComparisonByUserAndCompany(userId: string, companyId: string): Promise<Comparison | undefined>;
+  getComparisonsByUserAndCompany(userId: string, companyId: string): Promise<Comparison[]>;
   createComparison(comparison: InsertComparison): Promise<Comparison>;
 
   // Household Members
@@ -404,6 +405,10 @@ export class MemStorage implements IStorage {
     return Array.from(this.comparisons.values()).find(c => c.userId === userId && c.companyId === companyId);
   }
 
+  async getComparisonsByUserAndCompany(userId: string, companyId: string): Promise<Comparison[]> {
+    return Array.from(this.comparisons.values()).filter(c => c.userId === userId && c.companyId === companyId);
+  }
+
   async createComparison(insertComparison: InsertComparison): Promise<Comparison> {
     const id = randomUUID();
     const comparison: Comparison = { 
@@ -412,6 +417,9 @@ export class MemStorage implements IStorage {
       currentDocumentId: insertComparison.currentDocumentId ?? null,
       offerDocumentId: insertComparison.offerDocumentId ?? null,
       companyId: insertComparison.companyId ?? null,
+      policyType: insertComparison.policyType ?? null,
+      currentPolicyId: insertComparison.currentPolicyId ?? null,
+      offerPolicyId: insertComparison.offerPolicyId ?? null,
       comparisonData: insertComparison.comparisonData ?? null,
       aiRecommendation: insertComparison.aiRecommendation ?? null,
       savings: insertComparison.savings ?? null,
@@ -526,7 +534,7 @@ export class MemStorage implements IStorage {
       ...existing,
       healthCheckStatus: healthCheckData.status,
       healthCheckPayload: healthCheckData.payload,
-      healthCheckSavingsAnnual: healthCheckData.savingsAnnual,
+      healthCheckSavingsAnnual: healthCheckData.savingsAnnual.toString() as any,
       healthCheckUpdatedAt: new Date(),
       updatedAt: new Date(),
     };
@@ -547,7 +555,7 @@ export class MemStorage implements IStorage {
     const policies = Array.from(this.policies.values()).filter(p => {
       if (p.userId !== userId || p.policyType !== policyType) return false;
       if (companyId && p.companyId !== companyId) return false;
-      if (premium && p.premium && Math.abs(p.premium - premium) > 100) return false; // Allow 100 DKK difference
+      if (premium && p.premium && Math.abs(Number(p.premium) - premium) > 100) return false; // Allow 100 DKK difference
       return true;
     });
     return policies;
@@ -925,6 +933,15 @@ export class DatabaseStorage implements IStorage {
     return comparison || undefined;
   }
 
+  async getComparisonsByUserAndCompany(userId: string, companyId: string): Promise<Comparison[]> {
+    const { db } = await import("./db");
+    const { comparisons } = await import("@shared/schema");
+    const { eq, and } = await import("drizzle-orm");
+    return await db.select().from(comparisons).where(
+      and(eq(comparisons.userId, userId), eq(comparisons.companyId, companyId))
+    );
+  }
+
   async createComparison(insertComparison: InsertComparison): Promise<Comparison> {
     const { db } = await import("./db");
     const { comparisons } = await import("@shared/schema");
@@ -1036,7 +1053,7 @@ export class DatabaseStorage implements IStorage {
       .set({
         healthCheckStatus: healthCheckData.status,
         healthCheckPayload: healthCheckData.payload,
-        healthCheckSavingsAnnual: healthCheckData.savingsAnnual,
+        healthCheckSavingsAnnual: healthCheckData.savingsAnnual.toString() as any,
         healthCheckUpdatedAt: new Date(),
         updatedAt: new Date(),
       })
