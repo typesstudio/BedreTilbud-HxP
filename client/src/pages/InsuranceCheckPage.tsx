@@ -117,18 +117,6 @@ export default function InsuranceCheckPage() {
   const selectedPolicies = policiesData?.[selectedType as keyof PolicyGroup] || [];
   const selectedPolicy = selectedPolicies[0];
 
-  // DEBUG: Log what we're receiving
-  useEffect(() => {
-    if (policiesData) {
-      console.log('[Insurance Check] Policies Data:', policiesData);
-      console.log('[Insurance Check] Selected Type:', selectedType);
-      console.log('[Insurance Check] Selected Policies:', selectedPolicies);
-      console.log('[Insurance Check] Selected Policy:', selectedPolicy);
-      console.log('[Insurance Check] Health Check Payload:', selectedPolicy?.healthCheckPayload);
-      console.log('[Insurance Check] Health Check Status:', selectedPolicy?.healthCheckStatus);
-    }
-  }, [policiesData, selectedType, selectedPolicy]);
-
   const formatCurrency = (amount: number | null | undefined) => {
     if (amount == null) return "N/A";
     return new Intl.NumberFormat('da-DK', {
@@ -190,26 +178,27 @@ export default function InsuranceCheckPage() {
             </Button>
           </div>
 
-          {/* ListingsTabs Navigation */}
+          {/* ListingsTabs Navigation - Only show tabs for insurance types with data */}
           <div className="flex w-full flex-col items-start gap-2 border-b border-solid border-neutral-border bg-default-background sticky top-0 z-20">
             <div className="flex w-full items-center gap-2 overflow-x-auto">
               <ListingsTabs>
-                {(['indbo', 'ulykke', 'hus', 'bil', 'rejse'] as const).map((type) => {
-                  const IconComponent = policyTypeIcons[type];
-                  const hasData = (policiesData?.[type]?.length ?? 0) > 0;
-                  
-                  return (
-                    <ListingsTabs.Item
-                      key={type}
-                      checked={selectedType === type}
-                      icon={<IconComponent />}
-                      onClick={() => hasData && setSelectedType(type)}
-                      data-testid={`tab-${type}`}
-                    >
-                      {policyTypeLabels[type]}
-                    </ListingsTabs.Item>
-                  );
-                })}
+                {(['indbo', 'ulykke', 'hus', 'bil', 'rejse'] as const)
+                  .filter((type) => (policiesData?.[type]?.length ?? 0) > 0)
+                  .map((type) => {
+                    const IconComponent = policyTypeIcons[type];
+                    
+                    return (
+                      <ListingsTabs.Item
+                        key={type}
+                        checked={selectedType === type}
+                        icon={<IconComponent />}
+                        onClick={() => setSelectedType(type)}
+                        data-testid={`tab-${type}`}
+                      >
+                        {policyTypeLabels[type]}
+                      </ListingsTabs.Item>
+                    );
+                  })}
               </ListingsTabs>
             </div>
           </div>
