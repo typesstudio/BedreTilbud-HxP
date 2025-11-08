@@ -823,7 +823,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Offer Comparison routes (Sammenligning)
   const policyMatchingService = new PolicyMatchingService(storage, comparisonService);
 
-  app.get("/api/sammenligning/:userId/:companyId", requireAuth, async (req, res) => {
+  app.get("/api/sammenligning/:userId/:companyId", requireAuth, requireOwnership, async (req, res) => {
     try {
       const { userId, companyId } = req.params;
       
@@ -861,7 +861,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/sammenligning/:userId/:companyId/combined", requireAuth, async (req, res) => {
+  app.get("/api/sammenligning/:userId/:companyId/combined", requireAuth, requireOwnership, async (req, res) => {
     try {
       const { userId, companyId } = req.params;
       

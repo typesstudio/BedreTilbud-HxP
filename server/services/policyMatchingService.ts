@@ -108,6 +108,7 @@ export class PolicyMatchingService {
           offerPolicy,
           policyType
         });
+        currentByType.delete(policyType);
       } else {
         unmatchedList.push({
           offerPolicy,
