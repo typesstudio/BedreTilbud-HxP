@@ -374,31 +374,32 @@ export class EmailService {
                 for (const policyData of insuranceData.policies) {
                   const policy = await storage.createPolicy({
                     documentId: document.id,
-                    userId: existingThread.userId,
-                    companyId: existingThread.companyId,
-                    type: policyData.type,
+                    userId: existingThread.userId ?? '',
+                    companyId: existingThread.companyId ?? null,
+                    policyType: policyData.type,
                     premium: policyData.premium?.toString(),
-                    ocrData: policyData
+                    deductible: policyData.deductible?.toString(),
+                    coverageDetails: policyData,
+                    isOwnPolicy: false
                   });
                   offerPolicies.push(policy);
-                  console.log(`[Email] Policy created`, { policyId: policy.id, type: policy.type });
+                  console.log(`[Email] Policy created`, { policyId: policy.id, type: policyData.type });
                 }
               }
 
               // Use PolicyMatchingService to create comparisons
-              if (offerPolicies.length > 0) {
+              if (offerPolicies.length > 0 && existingThread.userId && existingThread.companyId) {
                 console.log(`[Email] Matching ${offerPolicies.length} offer policies to user's current policies`);
                 const policyMatchingService = new PolicyMatchingService(storage, comparisonService);
                 const matchResult = await policyMatchingService.matchAndCompareOfferPolicies(
-                  existingThread.userId ?? '',
-                  existingThread.companyId ?? '',
+                  existingThread.userId,
+                  existingThread.companyId,
                   document.id,
                   offerPolicies
                 );
                 console.log(`[Email] Policy matching complete`, { 
-                  comparisonsCreated: matchResult.comparisons.length,
-                  healthChecksCreated: matchResult.healthChecks.length,
-                  unmatchedPolicies: matchResult.unmatchedOfferPolicies.length
+                  comparisonsCreated: matchResult.matchedComparisons.length,
+                  healthChecksCreated: matchResult.unmatchedHealthChecks.length
                 });
               }
               
