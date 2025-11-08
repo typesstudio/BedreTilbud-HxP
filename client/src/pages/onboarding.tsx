@@ -78,7 +78,7 @@ export default function Onboarding() {
         title: "Forespørgsler sendt",
         description: "Dine forespørgsler er sendt til de valgte selskaber",
       });
-      setLocation("/offers-overview");
+      setLocation("/offers");
     },
     onError: (error: any) => {
       toast({

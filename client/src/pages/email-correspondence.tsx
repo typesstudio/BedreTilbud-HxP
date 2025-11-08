@@ -65,7 +65,7 @@ export default function EmailCorrespondence() {
         <div className="flex h-screen w-full items-center justify-center">
           <div className="text-center">
             <h2 className="text-heading-2 font-heading-2 text-default-font mb-4">Tråd ikke fundet</h2>
-            <Button onClick={() => setLocation("/offers-overview")}>
+            <Button onClick={() => setLocation("/offers")}>
               Tilbage til oversigt
             </Button>
           </div>
