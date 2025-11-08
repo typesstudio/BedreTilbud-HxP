@@ -6,6 +6,32 @@ BedreTilbud is a Danish insurance comparison platform aimed at users aged 50+. I
 
 ## Recent Changes (November 2025)
 
+### Multi-Policy Comparison Feature (Complete - Nov 8, 2025)
+Implemented automatic 1:1 policy matching and tabbed comparison interface for offers with multiple policies:
+
+**Backend (Complete)**:
+- Extended comparisons schema with `policyType`, `currentPolicyId`, `offerPolicyId` fields and indexes
+- Created `PolicyMatchingService` for automatic 1:1 matching (offer policy → current policy by type)
+- Implemented combined overview service aggregating savings/highlights across all policy types
+- Added API endpoints with requireOwnership authorization:
+  - `GET /api/sammenligning/:userId/:companyId` - Get all comparisons for a company
+  - `GET /api/sammenligning/:userId/:companyId/combined` - Get aggregated overview
+- Fixed PostgreSQL numeric type handling (premium fields converted to numbers)
+
+**Frontend (Complete)**:
+- Created `OfferComparisonPage.tsx` at `/sammenligning/:userId/:companyId`
+- Implemented tabbed interface with "Samlet" (combined) tab + individual policy type tabs
+- Combined tab shows total savings, quick comparison table, aggregated highlights
+- Individual tabs display detailed policy-specific comparisons with savings, highlights, detailed tables
+- Updated offers-overview page to link to new multi-policy comparison page
+- Production-ready with proper error handling and loading states
+
+**Architecture Notes**:
+- When company sends multi-policy offer, backend automatically matches each offer policy to user's current policy by type
+- Unmatched offer policies (where user has no current policy of that type) trigger health checks
+- Map deletion in matching logic ensures strict 1:1 matching (no policy reuse)
+- Architect-reviewed: production-ready, no security issues
+
 ### Landing Page Wizard (In Progress)
 Implementing a new 3-step wizard as the primary landing page:
 1. **Step 1**: Email collection with simplified authentication (no magic link initially)
@@ -40,9 +66,10 @@ The backend is built with Node.js and Express.js, exposing a RESTful API. It emp
 - **Mistral OCR Service**: Extracts and structures data from PDF policies using Mistral AI's OCR.
 - **Mistral Text Service**: Generates personalized emails and auto-responses.
 - **Comparison Service**: Provides AI-powered policy comparisons, savings calculations, and recommendations using a hybrid AI strategy (Mistral first, then OpenAI's `gpt-4o-mini`).
+- **Policy Matching Service**: Automatically matches offer policies to user's current policies by type (1:1 matching) when companies send multi-policy offers, creating comparisons or health checks as appropriate.
 - **Email Service**: Manages email inquiries, monitors a Gmail inbox for replies, extracts content, and handles threading.
 - **AI Response Service**: Automatically responds to company replies using a hybrid AI strategy.
-- **Storage Adapter**: Abstracts data persistence using Drizzle ORM with Neon Serverless PostgreSQL, managing various entities like users, companies, and comparisons.
+- **Storage Adapter**: Abstracts data persistence using Drizzle ORM with Neon Serverless PostgreSQL, managing various entities like users, companies, comparisons, and policies.
 - **Insurance Health Check Service**: Analyzes single uploaded policies to provide an overall health score, potential savings, strengths/weaknesses, market comparison, and actionable recommendations using `gpt-4o-mini`.
 
 File uploads are handled by Multer, supporting PDF files up to 10MB. The database utilizes Drizzle ORM with PostgreSQL, employing UUID primary keys, JSON columns, and optimized indexing for performance. A hybrid AI strategy minimizes costs by prioritizing Mistral AI and falling back to OpenAI's `gpt-4o-mini` or template-based responses, with all AI operations logged for cost analysis. Comprehensive security measures include input validation, role-based access control, rate limiting, file security, network security headers, PII-redacting logging, and a global error handler. Reliability is enhanced with AI retry logic, distributed locking for email polling, and optimized connection pooling. Scalability features include pagination for data endpoints and health check endpoints.
