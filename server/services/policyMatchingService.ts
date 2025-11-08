@@ -144,6 +144,9 @@ export class PolicyMatchingService {
     const savingsValue = typeof comparisonResult.savings === 'object' && comparisonResult.savings !== null
       ? (comparisonResult.savings as any).annual
       : comparisonResult.savings;
+    
+    const savingsNumber = Number(savingsValue);
+    const finalSavings = Number.isFinite(savingsNumber) ? savingsNumber : 0;
 
     const comparison = await this.storage.createComparison({
       userId,
@@ -155,7 +158,7 @@ export class PolicyMatchingService {
       offerDocumentId: offerPolicy.documentId,
       comparisonData: comparisonResult,
       aiRecommendation: comparisonResult.aiRecommendation,
-      savings: Math.round(Number.isFinite(savingsValue) ? savingsValue : 0)
+      savings: Math.round(finalSavings)
     });
 
     console.log(`[Policy Matching] ✅ Comparison created for ${policyType}, savings: ${comparisonResult.savings} DKK`);
@@ -169,7 +172,8 @@ export class PolicyMatchingService {
     const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(offerPolicy);
 
     const rawSavings = healthCheckResult.potentialSavings?.realistic || 0;
-    const savingsAnnual = Number.isFinite(rawSavings) ? rawSavings : 0;
+    const savingsNumber = Number(rawSavings);
+    const savingsAnnual = Number.isFinite(savingsNumber) ? savingsNumber : 0;
 
     await this.storage.updatePolicyHealthCheck(offerPolicy.id, {
       status: 'completed',
@@ -225,7 +229,12 @@ export class PolicyMatchingService {
       
       if (!data) continue;
 
-      const savings = data.savings || 0;
+      const savingsRaw = data.savings;
+      const savingsValue = typeof savingsRaw === 'object' && savingsRaw !== null
+        ? (savingsRaw.annual || 0)
+        : (savingsRaw || 0);
+      const savingsNumber = Number(savingsValue);
+      const savings = Number.isFinite(savingsNumber) ? savingsNumber : 0;
       totalSavings += savings;
 
       const currentPolicy = comparison.currentPolicyId ? 
@@ -250,7 +259,7 @@ export class PolicyMatchingService {
         policyType: comparison.policyType || 'Unknown',
         currentPremium: Number(currentPremium),
         offerPremium: Number(offerPremium),
-        savings,
+        savings: Number.isFinite(savings) ? savings : 0,
         verdict: data.verdict || 'consider'
       });
 

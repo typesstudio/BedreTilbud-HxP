@@ -44,6 +44,20 @@ async function rerunComparison() {
     console.log(`  - Verdict: ${(comp.comparisonData as any)?.verdict || 'N/A'}`);
   }
   
+  console.log('\n[Rerun Comparison] Testing combined overview...');
+  const overview = await policyMatchingService.getCombinedOverview(userId, companyId);
+  
+  console.log('Combined Overview Results:');
+  console.log(`  - Total Savings: ${overview.totalSavings} kr/year`);
+  console.log(`  - Total Savings %: ${overview.totalSavingsPercentage}%`);
+  console.log(`  - Policy Count: ${overview.policyCount}`);
+  console.log(`  - Overall Verdict: ${overview.verdict}`);
+  console.log(`  - Highlights Count: ${overview.highlights.length}`);
+  console.log('\nQuick Comparison:');
+  overview.quickComparison.forEach(q => {
+    console.log(`  - ${q.policyType}: ${q.savings} kr/year savings (${q.verdict})`);
+  });
+  
   console.log('\n[Rerun Comparison] Complete!');
   process.exit(0);
 }
