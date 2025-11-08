@@ -3,6 +3,7 @@ import { InsuranceData } from "./mistralOcrService";
 import { mistralTextService } from "./mistralTextService";
 import { retryAICall } from "../utils/retry";
 import { sanitizePrompt, detectInjection, validateAIOutput } from "../utils/aiSanitization";
+import { loadPrompt, replaceVariables } from "../ai-prompts/utils/promptLoader";
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
@@ -107,128 +108,12 @@ export class ComparisonService {
     }
   ): Promise<ComparisonResult> {
     try {
-      const prompt = `You are an expert Danish insurance advisor analyzing insurance policies. Compare these two policies and identify ALL missing or unclear information that could affect the customer.
-
-Current Policy:
-${JSON.stringify(currentPolicy, null, 2)}
-
-New Offer:
-${JSON.stringify(offerPolicy, null, 2)}
-
-User Preferences:
-${JSON.stringify(userPreferences || {}, null, 2)}
-
-As an insurance expert, scrutinize the offer for:
-- Hidden costs, fee structures, price increases after binding period
-- Unclear coverage definitions, loopholes, exclusions
-- Missing policy details, terms, or conditions
-- Ambiguous claims handling procedures
-- Undisclosed limitations or restrictions
-
-Categorize findings by severity:
-- CRITICAL: Major issues that could lead to claim rejection or unexpected costs
-- IMPORTANT: Significant gaps that should be clarified before purchase
-- QUESTION: General clarifications that would be helpful to know
-
-Provide comprehensive analysis in this JSON structure:
-{
-  "savings": number,
-  "savingsPercentage": number,
-  "verdict": "recommended" | "consider" | "not_recommended",
-  "aiRecommendation": "detailed explanation in Danish",
-  "pros": ["list", "of", "advantages"],
-  "cons": ["list", "of", "disadvantages"],
-  "highlights": [
-    {
-      "title": "Højere dækningssum",
-      "description": "+500k bygning",
-      "icon": "trending-up",
-      "variant": "success"
-    }
-  ],
-  "detailedComparison": [
-    {
-      "category": "Pris og gebyrer",
-      "rows": [
-        {
-          "feature": "Månedlig præmie",
-          "current": "1.319 kr",
-          "offer": "1.049 kr",
-          "difference": "-271 kr/md",
-          "status": "better"
-        }
-      ]
-    }
-  ],
-  "keyMetrics": [
-    {
-      "label": "Bygningsdækning",
-      "current": "2.5M",
-      "offer": "3.0M",
-      "icon": "home",
-      "variant": "success"
-    }
-  ],
-  "addedBenefits": [
-    {
-      "label": "Lækagesensor",
-      "variant": "success"
-    }
-  ],
-  "coverageComparison": [
-    {
-      "category": "coverage category",
-      "current": "current details", 
-      "offer": "offer details",
-      "status": "same" | "improved" | "reduced"
-    }
-  ],
-  "qualityScore": number,
-  "missingInfo": {
-    "totalCritical": number,
-    "totalImportant": number,
-    "totalQuestions": number,
-    "categories": [
-      {
-        "name": "Pris & Økonomi",
-        "icon": "dollar-sign",
-        "iconVariant": "error",
-        "criticalCount": number,
-        "importantCount": number,
-        "questionCount": number,
-        "questions": [
-          {
-            "id": "unique-id",
-            "question": "Prisændringer efter bindingsperiode",
-            "explanation": "Ingen faktorer eller maksimal stigningsprocent angivet",
-            "severity": "critical",
-            "category": "Pris & Økonomi",
-            "categoryIcon": "dollar-sign"
-          }
-        ]
-      }
-    ]
-  },
-  "cumulativeSavings": {
-    "monthly": number,
-    "yearly": number,
-    "tenYear": number,
-    "chartData": [
-      { "year": "År 1", "savings": number },
-      { "year": "År 2", "savings": number }
-    ]
-  }
-}
-
-IMPORTANT: Categorize ALL missing information into exactly these 4 categories:
-1. "Pris & Økonomi" (dollar-sign icon) - Price changes, fees, discounts, bundle pricing, deductible options
-2. "Dækning" (shield icon) - Coverage definitions, limitations, exclusions, geographical restrictions
-3. "Skadebehandling" (clock icon) - Claims handling, response times, payout procedures, documentation requirements
-4. "Andet" (help-circle icon) - All other questions that don't fit the above categories
-
-Every question MUST be assigned to one of these categories. Be thorough in identifying missing information - this is critical for customer protection.
-
-Write ALL text in Danish. Be thorough in identifying missing information - this is critical for customer protection.`;
+      const promptTemplate = loadPrompt('comparison/policy-comparison');
+      const prompt = replaceVariables(promptTemplate, {
+        currentPolicy: JSON.stringify(currentPolicy, null, 2),
+        offerPolicy: JSON.stringify(offerPolicy, null, 2),
+        userPreferences: JSON.stringify(userPreferences || {}, null, 2)
+      });
 
       // Use cost-effective gpt-4o-mini for comparisons (much cheaper than gpt-4-turbo)
       // Wrap in retry logic for resilience

@@ -1,5 +1,6 @@
 import { Mistral } from '@mistralai/mistralai';
 import fs from 'fs';
+import { loadPrompt, replaceVariables } from '../ai-prompts/utils/promptLoader';
 
 if (!process.env.MISTRAL_API_KEY) {
   throw new Error("MISTRAL_API_KEY environment variable is required");
@@ -98,49 +99,22 @@ export class MistralOCRService {
 
       // Step 2: Use Mistral Chat to structure the extracted markdown
       console.log(`[Mistral OCR] Sending to Mistral Chat for structured extraction...`);
+      
+      const systemPrompt = loadPrompt('ocr/policy-extraction');
+      const userPrompt = replaceVariables(systemPrompt, {
+        extractedMarkdown
+      });
+      
       const chatResponse = await mistral.chat.complete({
         model: "mistral-large-latest",
         messages: [
           {
             role: "system",
-            content: `You are an expert at extracting insurance policy information from documents. 
-            
-            TASK: Identify ALL distinct insurance policies in the document and extract each one separately.
-            
-            Return JSON in EXACTLY this format:
-            {
-              "policies": [
-                {
-                  "type": "string (e.g., Indboforsikring, Ulykkesforsikring, Husforsikring, Bilforsikring, Rejseforsikring)",
-                  "company": "string (insurance company name)",
-                  "premium": number (annual premium in DKK),
-                  "deductible": number (deductible in DKK),
-                  "coverages": [{name: "string", amount: number, description: "string"}],
-                  "benefits": ["string"],
-                  "pageRange": "string (e.g., '1-3' for pages covered by this policy)",
-                  "policyNumber": "string",
-                  "validFrom": "YYYY-MM-DD",
-                  "validTo": "YYYY-MM-DD"
-                }
-              ]
-            }
-            
-            CRITICAL RULES:
-            1. Extract EACH policy as a SEPARATE object in the policies array
-            2. For each policy, identify:
-               - The specific type (Indbo, Ulykke, Hus, Bil, Rejse, etc.)
-               - The company offering it
-               - Premium and deductible for THAT policy only
-               - Coverages specific to THAT policy
-               - Page range where this policy appears
-            3. If a document has multiple policies (e.g., Fritidshus + Indbo + Ulykke), create 3 separate objects
-            4. Keep all text in Danish if document is in Danish
-            5. All amounts must be numbers in DKK
-            6. Return ONLY the JSON object, no additional text`
+            content: systemPrompt
           },
           {
             role: "user",
-            content: `Extract ALL insurance policies from this markdown document:\n\n${extractedMarkdown}`
+            content: userPrompt
           },
         ],
         responseFormat: { type: "json_object" },

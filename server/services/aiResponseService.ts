@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
 import { storage } from "../storage";
+import { loadPrompt, replaceVariables } from "../ai-prompts/utils/promptLoader";
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
@@ -12,9 +13,6 @@ const openai = new OpenAI({
   timeout: 60000, // 60 second timeout for AI operations
   maxRetries: 2, // Retry failed requests up to 2 times
 });
-
-// Load system prompt from file
-const SYSTEM_PROMPT_PATH = path.join(process.cwd(), "ai-prompts", "email-auto-response.md");
 
 export interface AIResponseContext {
   userId: string;
@@ -29,17 +27,6 @@ export interface AIResponseContext {
 }
 
 export class AIResponseService {
-  private systemPrompt: string;
-
-  constructor() {
-    // Load system prompt on initialization
-    try {
-      this.systemPrompt = fs.readFileSync(SYSTEM_PROMPT_PATH, 'utf-8');
-    } catch (error) {
-      console.error("[AI Response] Failed to load system prompt:", error);
-      this.systemPrompt = "You are a helpful AI assistant for BedreTilbud, a Danish insurance comparison platform.";
-    }
-  }
 
   async generateResponse(context: AIResponseContext): Promise<string> {
     try {
@@ -102,12 +89,14 @@ Generate a response following the guidelines in the system prompt. Remember:
 
       console.log(`[AI Response] Calling OpenAI with context...`);
       
+      const systemPrompt = loadPrompt('emails/system-prompt');
+      
       const response = await openai.chat.completions.create({
         model: "gpt-4",
         messages: [
           {
             role: "system",
-            content: this.systemPrompt
+            content: systemPrompt
           },
           {
             role: "user",
