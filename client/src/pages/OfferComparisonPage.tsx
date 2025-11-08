@@ -429,17 +429,22 @@ export default function OfferComparisonPage() {
   return (
     <AppLayoutWithNav userId={userId}>
       <div className="flex flex-col h-full w-full">
-        <div className="border-b border-neutral-200 dark:border-neutral-700">
-          <ListingsTabs
-            tabs={tabs.map(tab => ({
-              id: tab.id,
-              text: tab.label,
-              count: tab.count,
-              icon: tab.Icon ? <tab.Icon className="text-subtext-color" /> : undefined,
-              active: selectedTab === tab.id,
-              onClick: () => setSelectedTab(tab.id)
-            }))}
-          />
+        <div className="border-b border-neutral-200 dark:border-neutral-700 px-6">
+          <ListingsTabs>
+            {tabs.map(tab => {
+              const IconComponent = tab.Icon;
+              return (
+                <ListingsTabs.Item
+                  key={tab.id}
+                  checked={selectedTab === tab.id}
+                  icon={IconComponent ? <IconComponent /> : undefined}
+                  onClick={() => setSelectedTab(tab.id)}
+                >
+                  {tab.label}
+                </ListingsTabs.Item>
+              );
+            })}
+          </ListingsTabs>
         </div>
 
         <div className="flex-1 overflow-y-auto">

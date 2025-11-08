@@ -87,8 +87,34 @@ export default function OffersOverview() {
     }).format(amount);
   };
 
+  // Group comparisons by company
+  const companiesWithOffers = comparisons?.length > 0 
+    ? Object.values(
+        (comparisons as any[]).reduce((acc: any, comp: any) => {
+          const companyId = comp.companyId;
+          if (!acc[companyId]) {
+            acc[companyId] = {
+              companyId,
+              company: comp.company,
+              totalSavings: 0,
+              policyCount: 0,
+              policies: [],
+              createdAt: comp.createdAt
+            };
+          }
+          acc[companyId].totalSavings += comp.savings || 0;
+          acc[companyId].policyCount += 1;
+          acc[companyId].policies.push(comp.policyType);
+          if (new Date(comp.createdAt) > new Date(acc[companyId].createdAt)) {
+            acc[companyId].createdAt = comp.createdAt;
+          }
+          return acc;
+        }, {})
+      )
+    : [];
+
   const pendingThreads = (threads as any[]).filter((t: any) => t.status !== 'received' && !getComparisonForThread(t.id));
-  const hasOffers = (comparisons as any[]).length > 0;
+  const hasOffers = companiesWithOffers.length > 0;
   const hasPending = pendingThreads.length > 0;
 
   return (
@@ -174,44 +200,47 @@ export default function OffersOverview() {
           {/* Received Offers Section */}
           {hasOffers && (
             <div className="flex w-full flex-col items-start gap-4 md:gap-6">
-              {(comparisons as any[]).map((comparison: any) => {
-                const currentPremium = comparison.currentDocument?.ocrData?.annualPremium || 0;
-                const offerPremium = comparison.offerDocument?.ocrData?.annualPremium || 0;
-                const monthlyCurrent = currentPremium / 12;
-                const monthlyOffer = offerPremium / 12;
-                const monthlySavings = (currentPremium - offerPremium) / 12;
-                const yearlySavings = comparison.savings || 0;
+              {(companiesWithOffers as any[]).map((companyOffer: any) => {
+                const yearlySavings = companyOffer.totalSavings || 0;
+                const monthlySavings = yearlySavings / 12;
+                const policyTypeLabels: { [key: string]: string } = {
+                  indbo: "Indbo",
+                  ulykke: "Ulykke",
+                  hus: "Hus",
+                  bil: "Bil",
+                  rejse: "Rejse"
+                };
 
                 return (
                   <div 
-                    key={comparison.id}
+                    key={companyOffer.companyId}
                     className="flex w-full flex-col md:flex-row items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background mobile-padding shadow-sm"
-                    data-testid={`comparison-card-${comparison.id}`}
+                    data-testid={`company-card-${companyOffer.companyId}`}
                   >
                     <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4">
                       <div className="flex w-full items-start justify-between">
                         <span className="text-heading-3 font-heading-3 text-default-font">
-                          {comparison.company?.name || 'Ukendt selskab'}
+                          {companyOffer.company?.name || 'Ukendt selskab'}
                         </span>
                         <Badge variant="neutral">
-                          Modtaget den {new Date(comparison.createdAt).toLocaleDateString('da-DK')}
+                          Modtaget den {new Date(companyOffer.createdAt).toLocaleDateString('da-DK')}
                         </Badge>
                       </div>
                       <div className="flex w-full flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6">
                         <div className="flex w-full items-center justify-between">
                           <span className="text-body font-body text-subtext-color">
-                            Nuværende præmie
+                            Antal forsikringer
                           </span>
                           <span className="text-body font-body text-default-font">
-                            {formatCurrency(monthlyCurrent)}/måned
+                            {companyOffer.policyCount} {companyOffer.policyCount === 1 ? 'forsikring' : 'forsikringer'}
                           </span>
                         </div>
                         <div className="flex w-full items-center justify-between">
-                          <span className="text-body-bold font-body-bold text-brand-600">
-                            Nyt tilbud
+                          <span className="text-body font-body text-subtext-color">
+                            Sammenlignet
                           </span>
-                          <span className="text-body-bold font-body-bold text-brand-600">
-                            {formatCurrency(monthlyOffer)}/måned
+                          <span className="text-body font-body text-default-font">
+                            {companyOffer.policies.map((p: string) => policyTypeLabels[p] || p).join(', ')}
                           </span>
                         </div>
                         <div className="flex w-full items-center justify-between">
@@ -223,10 +252,10 @@ export default function OffersOverview() {
                           </span>
                         </div>
                         <div className="flex w-full items-center justify-between">
-                          <span className="text-body font-body text-brand-600">
+                          <span className="text-body-bold font-body-bold text-brand-600">
                             Årlig besparelse
                           </span>
-                          <span className="text-body font-body text-brand-600">
+                          <span className="text-body-bold font-body-bold text-brand-600">
                             {formatCurrency(yearlySavings)}
                           </span>
                         </div>
@@ -234,8 +263,8 @@ export default function OffersOverview() {
                       <Button
                         className="h-12 md:h-10 w-full md:w-auto touch-target"
                         iconRight={<FeatherArrowRight />}
-                        onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation(`/sammenligning/${userId}/${comparison.companyId}`)}
-                        data-testid={`button-view-comparison-${comparison.id}`}
+                        onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation(`/sammenligning/${userId}/${companyOffer.companyId}`)}
+                        data-testid={`button-view-comparison-${companyOffer.companyId}`}
                       >
                         Se sammenligning
                       </Button>
