@@ -1,23 +1,73 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { SidebarWithMinimalTextSections, Badge, Button } from "@/ui";
-import { FeatherCoins, FeatherRocket, FeatherUser, FeatherShield } from "@subframe/core";
+import { 
+  FeatherCoins, 
+  FeatherRocket, 
+  FeatherUser, 
+  FeatherShield,
+  FeatherHome,
+  FeatherBuilding,
+  FeatherCar,
+  FeatherPlane,
+  FeatherChevronDown,
+  FeatherChevronRight
+} from "@subframe/core";
 
 interface NavigationSidebarProps {
   userId: string;
 }
 
+const policyTypeLabels: { [key: string]: string } = {
+  indbo: "Indbo",
+  ulykke: "Ulykke",
+  hus: "Hus",
+  bil: "Bil",
+  rejse: "Rejse"
+};
+
+const policyTypeIcons: { [key: string]: any } = {
+  indbo: FeatherHome,
+  ulykke: FeatherShield,
+  hus: FeatherBuilding,
+  bil: FeatherCar,
+  rejse: FeatherPlane
+};
+
 export function NavigationSidebar({ userId }: NavigationSidebarProps) {
   const [location] = useLocation();
+  const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
 
   const { data, isLoading } = useQuery({
     queryKey: ["/api/nav-data", userId],
   });
 
   const navData = data as {
-    comparisons: Array<{ id: string; companyName: string; companyId: string }>;
+    companies: Array<{
+      companyId: string;
+      companyName: string;
+      policyTypes: string[];
+      hasCombinedView: boolean;
+    }>;
     pendingThreads: Array<{ id: string; companyName: string; companyId: string }>;
   } | undefined;
+
+  const toggleCompany = (companyId: string) => {
+    setExpandedCompanies(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(companyId)) {
+        newSet.delete(companyId);
+      } else {
+        newSet.add(companyId);
+      }
+      return newSet;
+    });
+  };
+
+  const isCompanyRoute = (companyId: string) => {
+    return location.includes(`/sammenligning/${userId}/${companyId}`);
+  };
 
   return (
     <SidebarWithMinimalTextSections
@@ -104,26 +154,76 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
           <div className="px-3 py-2 text-caption font-caption text-subtext-color" data-testid="nav-loading">
             Indlæser...
           </div>
-        ) : navData?.comparisons.length === 0 ? (
+        ) : !navData?.companies || navData.companies.length === 0 ? (
           <div className="px-3 py-2 text-caption font-caption text-subtext-color" data-testid="nav-no-comparisons">
             Ingen tilbud endnu
           </div>
         ) : (
-          navData?.comparisons.map((comparison) => (
-            <div key={comparison.id} className="flex w-full items-center justify-center gap-4 pb-1">
-              <Link href={`/comparison/${comparison.id}`} className="flex-1">
-                <SidebarWithMinimalTextSections.NavItem
-                  selected={location === `/comparison/${comparison.id}`}
-                  data-testid={`nav-comparison-${comparison.id}`}
-                >
-                  {comparison.companyName}
-                </SidebarWithMinimalTextSections.NavItem>
-              </Link>
-              <Badge variant="brand" icon={null} iconRight={null} data-testid={`badge-comparison-${comparison.id}`}>
-                Se tilbud
-              </Badge>
-            </div>
-          ))
+          navData.companies.map((company) => {
+            const isExpanded = expandedCompanies.has(company.companyId);
+            const isActive = isCompanyRoute(company.companyId);
+            
+            return (
+              <div key={company.companyId} className="flex flex-col w-full">
+                <div className="flex w-full items-center gap-2 pb-1">
+                  <button
+                    onClick={(e) => {
+                      e.preventDefault();
+                      toggleCompany(company.companyId);
+                    }}
+                    className="flex items-center justify-center p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded"
+                    data-testid={`toggle-company-${company.companyId}`}
+                  >
+                    {isExpanded ? (
+                      <FeatherChevronDown className="w-4 h-4 text-subtext-color" />
+                    ) : (
+                      <FeatherChevronRight className="w-4 h-4 text-subtext-color" />
+                    )}
+                  </button>
+                  <Link href={`/sammenligning/${userId}/${company.companyId}`} className="flex-1">
+                    <SidebarWithMinimalTextSections.NavItem
+                      selected={isActive}
+                      data-testid={`nav-company-${company.companyId}`}
+                    >
+                      {company.companyName}
+                    </SidebarWithMinimalTextSections.NavItem>
+                  </Link>
+                  <Badge variant="brand" icon={null} iconRight={null} data-testid={`badge-company-${company.companyId}`}>
+                    Se tilbud
+                  </Badge>
+                </div>
+                
+                {isExpanded && (
+                  <div className="flex flex-col pl-8 gap-1">
+                    {company.hasCombinedView && (
+                      <Link href={`/sammenligning/${userId}/${company.companyId}?tab=samlet`}>
+                        <SidebarWithMinimalTextSections.NavItem
+                          selected={isActive && (location.includes('tab=samlet') || !location.includes('tab='))}
+                          data-testid={`nav-policy-${company.companyId}-samlet`}
+                        >
+                          Samlet oversigt
+                        </SidebarWithMinimalTextSections.NavItem>
+                      </Link>
+                    )}
+                    {company.policyTypes.map((policyType) => {
+                      const Icon = policyTypeIcons[policyType];
+                      return (
+                        <Link key={policyType} href={`/sammenligning/${userId}/${company.companyId}?tab=${policyType}`}>
+                          <SidebarWithMinimalTextSections.NavItem
+                            icon={Icon ? <Icon /> : undefined}
+                            selected={isActive && location.includes(`tab=${policyType}`)}
+                            data-testid={`nav-policy-${company.companyId}-${policyType}`}
+                          >
+                            {policyTypeLabels[policyType] || policyType}
+                          </SidebarWithMinimalTextSections.NavItem>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </SidebarWithMinimalTextSections.NavSection>
 
