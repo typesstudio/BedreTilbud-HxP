@@ -6,6 +6,42 @@ BedreTilbud is a Danish insurance comparison platform aimed at users aged 50+. I
 
 ## Recent Changes (November 2025)
 
+### Health Check Debugging & 120-Month Chart Generation (Complete - Nov 9, 2025)
+Fixed health check analysis to consistently generate complete cumulative savings projections with 120 monthly data points:
+
+**Root Cause Identified**:
+- AI prompt was complete but OpenAI consistently generated only 12 chart data points instead of required 120
+- Missing selvrisiko formatting in health check output (showed "inkluderet" instead of "2.834 kr")
+- No validation or normalization of AI output before persisting to database
+
+**Deterministic Chart Generation**:
+- Implemented `generate120MonthChartData()` to create exactly 120 monthly data points from realistic annual savings
+- Added `normalizeCumulativeSavings()` to validate AI output and fill missing chartData deterministically
+- Backend now guarantees 120-point chart regardless of AI output quality (fail-safe design)
+
+**Enhanced AI Prompt**:
+- Updated `health-check/analysis.md` with explicit selvrisiko extraction rules
+- Added Danish thousand-separator formatting instructions (2834 → "2.834 kr")
+- Added complete cumulativeSavings JSON schema with all required fields
+
+**Debug Tooling**:
+- Created `GET /api/debug/ocr/:documentId` endpoint to inspect raw Mistral OCR markdown and parsed policies
+- Endpoint has proper authentication (requireAuth) and ownership validation
+- Created `regenerate-health-check.ts` script for testing health check analysis on existing policies
+
+**Test Results**:
+- ✅ Chart Data Points: 120 (was 12 before)
+- ✅ Potential Savings: Conservative 1.048 kr, Realistic 1.747 kr, Optimistic 2.514 kr/year
+- ✅ Cumulative Savings: 17.470 kr over 10 years
+- ✅ Selvrisiko Display: "2.834 kr" shown correctly in all coverage items
+- Architect-reviewed: Production-ready, meets determinism and security objectives
+
+**Files Modified**:
+- `server/services/insuranceCheckService.ts`: Added chart generation and normalization functions
+- `server/ai-prompts/health-check/analysis.md`: Enhanced selvrisiko extraction rules
+- `server/routes.ts`: Added debug OCR endpoint with authentication
+- `server/scripts/regenerate-health-check.ts`: Testing utility for health check regeneration
+
 ### Policy Similarity Detection & Comparison Validation (Complete - Nov 9, 2025)
 Implemented comprehensive solution to prevent comparing identical policies and ensure high-quality comparison outputs:
 
