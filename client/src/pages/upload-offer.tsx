@@ -3,12 +3,12 @@ import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { Badge } from "@/ui/components/Badge";
 import { Button } from "@/ui/components/Button";
 import { DropdownMenu } from "@/ui/components/DropdownMenu";
 import { IconButton } from "@/ui/components/IconButton";
 import { IconWithBackground } from "@/ui/components/IconWithBackground";
-import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
 import { FeatherArrowRight, FeatherChevronDown, FeatherFileText, FeatherPlus, FeatherShield, FeatherTrash, FeatherUploadCloud } from "@subframe/core";
 import * as SubframeCore from "@subframe/core";
 
@@ -161,7 +161,7 @@ export default function UploadOffer() {
   };
 
   return (
-    <DefaultPageLayout>
+    <AppLayoutWithNav userId={userId!}>
       <div className="container max-w-none flex h-full w-full flex-col items-center gap-6 bg-default-background py-12 mobile:flex-col mobile:flex-nowrap mobile:gap-4 mobile:px-4 mobile:py-6">
         <div className="flex w-full max-w-[768px] flex-col items-start gap-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4">
           {/* Header with progress stepper */}
@@ -359,6 +359,6 @@ export default function UploadOffer() {
           </div>
         </div>
       </div>
-    </DefaultPageLayout>
+    </AppLayoutWithNav>
   );
 }
