@@ -1159,6 +1159,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Debug endpoint for OCR extraction data
+  app.get("/api/debug/ocr/:documentId", requireAuth, async (req, res) => {
+    try {
+      const { documentId } = req.params;
+      const requestingUserId = req.headers['x-user-id'] as string;
+
+      // Get document
+      const document = await storage.getDocument(documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      // Check ownership
+      if (document.userId !== requestingUserId) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      // Get associated policies
+      const policies = await storage.getPoliciesByDocument(documentId);
+
+      // Get the markdown from OCR raw response
+      const ocrRawResponse = document.ocrRawResponse as any;
+      const extractedMarkdown = ocrRawResponse?.pages 
+        ? ocrRawResponse.pages.map((page: any) => page.markdown).join('\n\n---\n\n')
+        : 'No markdown available';
+
+      logger.info('[Debug OCR] Retrieved OCR data', { 
+        documentId, 
+        userId: requestingUserId,
+        policiesCount: policies.length,
+        markdownLength: extractedMarkdown.length
+      });
+
+      res.json({
+        document: {
+          id: document.id,
+          fileName: document.fileName,
+          documentType: document.documentType,
+          extractionStatus: document.extractionStatus,
+          totalPoliciesExtracted: document.totalPoliciesExtracted,
+          createdAt: document.createdAt
+        },
+        ocrData: {
+          extractedMarkdown,
+          markdownLength: extractedMarkdown.length,
+          pageCount: ocrRawResponse?.pages?.length || 0
+        },
+        policies: policies.map(p => ({
+          id: p.id,
+          policyType: p.policyType,
+          companyName: p.companyName,
+          premium: p.premium,
+          deductible: p.deductible,
+          policyNumber: p.policyNumber,
+          coverageDetails: p.coverageDetails,
+          healthCheckPayload: p.healthCheckPayload,
+          healthCheckStatus: p.healthCheckStatus
+        }))
+      });
+    } catch (error: any) {
+      logger.error('[Debug OCR] Failed to retrieve debug data', error, { 
+        documentId: req.params.documentId 
+      });
+      res.status(500).json({ message: error.message, stack: error.stack });
+    }
+  });
+
   // Gmail OAuth routes
   app.get("/auth/gmail", async (req, res) => {
     try {
