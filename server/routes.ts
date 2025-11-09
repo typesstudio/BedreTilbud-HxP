@@ -1209,10 +1209,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         policies: policies.map(p => ({
           id: p.id,
           policyType: p.policyType,
-          companyName: p.companyName,
+          companyId: p.companyId,
           premium: p.premium,
           deductible: p.deductible,
-          policyNumber: p.policyNumber,
+          isOwnPolicy: p.isOwnPolicy,
+          sourcePageRange: p.sourcePageRange,
           coverageDetails: p.coverageDetails,
           healthCheckPayload: p.healthCheckPayload,
           healthCheckStatus: p.healthCheckStatus
