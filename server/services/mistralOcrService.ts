@@ -146,13 +146,14 @@ export class MistralOCRService {
   }
 
   private async extractWithOpenAIVision(filePath: string): Promise<string> {
-    console.log(`[OpenAI Fallback] Starting PDF extraction using Responses API...`);
+    console.log(`[OpenAI Fallback] Starting PDF extraction using Assistants API...`);
     
     if (!openai) {
       throw new Error("OpenAI client not initialized - OPENAI_API_KEY not available");
     }
     
     let uploadedFileId: string | null = null;
+    let threadId: string | null = null;
     
     try {
       // Step 1: Upload PDF to OpenAI storage
@@ -167,48 +168,105 @@ export class MistralOCRService {
       uploadedFileId = uploadedFile.id;
       console.log(`[OpenAI Fallback] ✅ File uploaded: ${uploadedFileId}`);
       
-      // Step 2: Request structured text extraction via Responses API
-      console.log(`[OpenAI Fallback] Requesting text extraction via Responses API...`);
-      
-      // Note: The Responses API might not exist in the current OpenAI SDK
-      // Falling back to using Chat Completions with the Assistants API
-      console.log(`[OpenAI Fallback] Using Chat Completions API with vision model...`);
-      
-      // Try using gpt-4-turbo with vision capabilities
-      const response = await openai.chat.completions.create({
-        model: "gpt-4-turbo",  // Using GPT-4 Turbo with vision
-        messages: [
-          {
-            role: "user",
-            content: `I have uploaded a PDF file (file ID: ${uploadedFileId}). Please extract ALL text from this Danish insurance PDF document. Preserve exact formatting, tables, pricing patterns, and numerical values.
+      // Step 2: Create an assistant for OCR extraction
+      console.log(`[OpenAI Fallback] Creating assistant...`);
+      const assistant = await openai.beta.assistants.create({
+        name: "Insurance PDF OCR Extractor",
+        instructions: `You are an expert OCR system for Danish insurance documents. Extract ALL text from PDF files, preserving exact formatting, tables, and pricing patterns.
 
 CRITICAL INSTRUCTIONS:
 1. Include ALL policy sections (Fritidshusforsikring, Ulykkesforsikring, Indboforsikring)
-2. Preserve ALL Danish pricing patterns:
+2. Preserve ALL Danish pricing patterns with exact amounts:
    - "Din pris pr. år: X.XXX,XX kr"
    - "Månedlig pris er: X.XXX,XX kr"
    - "Årlig pris inklusiv: X.XXX,XX kr"
 3. For each policy type, FIND and INCLUDE the annual price even if the label is different
 4. Output as plain text with clear section breaks between policies
-5. Use markdown formatting for structure`
-          }
-        ],
-        max_tokens: 4096,
-        temperature: 0
+5. Use markdown formatting for structure`,
+        model: "gpt-4o-mini",
+        tools: [{ type: "file_search" }]
       });
       
-      // Step 3: Extract text from response
-      const extractedText = response.choices[0]?.message?.content || '';
+      console.log(`[OpenAI Fallback] ✅ Assistant created: ${assistant.id}`);
       
-      // Debug logging to understand what's being returned
-      console.log(`[OpenAI Fallback] Response type: ${typeof extractedText}`);
-      console.log(`[OpenAI Fallback] Response preview (first 500 chars): ${extractedText.substring(0, 500)}`);
+      // Step 3: Create a thread with the uploaded file
+      console.log(`[OpenAI Fallback] Creating thread with file attachment...`);
+      const thread = await openai.beta.threads.create({
+        messages: [
+          {
+            role: "user",
+            content: "Extract all text from the attached PDF file. Follow your instructions exactly.",
+            attachments: [
+              {
+                file_id: uploadedFileId,
+                tools: [{ type: "file_search" }]
+              }
+            ]
+          }
+        ]
+      });
       
-      if (!extractedText || typeof extractedText !== 'string' || extractedText.trim().length === 0) {
-        throw new Error("OpenAI returned empty or invalid response");
+      threadId = thread.id;
+      console.log(`[OpenAI Fallback] ✅ Thread created: ${threadId}`);
+      
+      // Step 4: Run the assistant
+      console.log(`[OpenAI Fallback] Starting assistant run...`);
+      let run = await openai.beta.threads.runs.create(threadId, {
+        assistant_id: assistant.id
+      });
+      
+      // Step 5: Poll until run completes
+      console.log(`[OpenAI Fallback] Polling run status...`);
+      let attempts = 0;
+      const maxAttempts = 60; // 60 attempts × 2 seconds = 2 minutes max
+      
+      while (run.status === 'queued' || run.status === 'in_progress') {
+        if (attempts >= maxAttempts) {
+          throw new Error(`Run timed out after ${maxAttempts * 2} seconds`);
+        }
+        
+        await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+        run = await openai.beta.threads.runs.retrieve(threadId!, run.id);
+        attempts++;
+        
+        if (attempts % 5 === 0) {
+          console.log(`[OpenAI Fallback] Run status: ${run.status} (${attempts * 2}s elapsed)`);
+        }
+      }
+      
+      console.log(`[OpenAI Fallback] Run completed with status: ${run.status}`);
+      
+      if (run.status !== 'completed') {
+        throw new Error(`Run failed with status: ${run.status}`);
+      }
+      
+      // Step 6: Retrieve messages from the thread
+      console.log(`[OpenAI Fallback] Retrieving extracted text...`);
+      const messages = await openai.beta.threads.messages.list(threadId);
+      
+      // Get the assistant's response (most recent message)
+      const assistantMessages = messages.data.filter(m => m.role === 'assistant');
+      if (assistantMessages.length === 0) {
+        throw new Error("No assistant response found");
+      }
+      
+      // Extract text content from the assistant's message
+      const textContents = assistantMessages[0].content.filter(c => c.type === 'text');
+      const extractedText = textContents.map(c => c.type === 'text' ? c.text.value : '').join('\n\n');
+      
+      if (!extractedText || extractedText.trim().length === 0) {
+        throw new Error("Assistant returned empty response");
       }
       
       console.log(`[OpenAI Fallback] ✅ Successfully extracted ${extractedText.length} characters`);
+      
+      // Step 7: Clean up assistant
+      try {
+        await openai.beta.assistants.delete(assistant.id);
+        console.log(`[OpenAI Fallback] ✅ Cleaned up assistant`);
+      } catch (cleanupError: any) {
+        console.warn(`[OpenAI Fallback] ⚠️ Failed to delete assistant: ${cleanupError.message}`);
+      }
       
       return extractedText;
       
@@ -216,13 +274,13 @@ CRITICAL INSTRUCTIONS:
       console.error(`[OpenAI Fallback] Extraction failed: ${error.message || error}`);
       throw new Error(`OpenAI fallback failed: ${error.message || error}`);
     } finally {
-      // Step 4: Clean up - delete the uploaded file (in finally block for guaranteed cleanup)
+      // Clean up resources
       if (uploadedFileId) {
         try {
           await openai.files.delete(uploadedFileId);
           console.log(`[OpenAI Fallback] ✅ Cleaned up uploaded file`);
         } catch (deleteError: any) {
-          console.warn(`[OpenAI Fallback] ⚠️ Failed to delete uploaded file: ${deleteError.message}`);
+          console.warn(`[OpenAI Fallback] ⚠️ Failed to delete file: ${deleteError.message}`);
         }
       }
     }
