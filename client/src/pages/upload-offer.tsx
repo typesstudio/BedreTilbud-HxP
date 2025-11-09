@@ -46,14 +46,34 @@ export default function UploadOffer() {
       const response = await apiRequest("POST", "/api/documents/upload", formData);
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (data: any[]) => {
       queryClient.invalidateQueries({ queryKey: ["/api/emails/threads", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/comparisons/user", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats", userId] });
-      toast({
-        title: "Tilbud uploadet",
-        description: "Dit tilbud er blevet behandlet og sammenlignet",
-      });
+      
+      const hasIdenticalPolicies = data.some((result: any) => result.identicalPoliciesDetected);
+      const hasComparisons = data.some((result: any) => result.comparisons && result.comparisons.length > 0);
+      
+      if (hasIdenticalPolicies && !hasComparisons) {
+        const identicalMessage = data.find((r: any) => r.identicalPolicyMessage)?.identicalPolicyMessage || 
+          "Tilbuddet ser ud til at være identisk med din nuværende police";
+        toast({
+          title: "Identisk police opdaget",
+          description: identicalMessage,
+          variant: "default",
+        });
+      } else if (hasComparisons) {
+        toast({
+          title: "Tilbud uploadet",
+          description: "Dit tilbud er blevet behandlet og sammenlignet",
+        });
+      } else {
+        toast({
+          title: "Tilbud uploadet",
+          description: "Dit tilbud er blevet behandlet",
+        });
+      }
+      
       setLocation("/offers");
     },
     onError: () => {

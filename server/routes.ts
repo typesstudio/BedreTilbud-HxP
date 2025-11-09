@@ -446,10 +446,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
               });
 
             } catch (matchingError: any) {
-              logger.error('[Upload] Policy matching failed', matchingError, {
-                documentId: document.id,
-                companyId: req.body.companyId
-              });
+              const errorMessage = matchingError instanceof Error ? matchingError.message : String(matchingError);
+              
+              if (errorMessage.includes('IDENTICAL_POLICIES')) {
+                logger.warn('[Upload] Identical policy detected during matching', {
+                  documentId: document.id,
+                  companyId: req.body.companyId,
+                  message: errorMessage
+                });
+                matchResult = {
+                  matchedComparisons: [],
+                  unmatchedHealthChecks: [],
+                  identicalPoliciesDetected: true,
+                  identicalPolicyMessage: errorMessage.replace('IDENTICAL_POLICIES: ', '')
+                };
+              } else {
+                logger.error('[Upload] Policy matching failed', matchingError, {
+                  documentId: document.id,
+                  companyId: req.body.companyId
+                });
+              }
               // Continue processing - don't fail upload if matching fails
             }
           }
@@ -515,7 +531,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             policies: createdPolicies,
             ...(matchResult && {
               comparisons: matchResult.matchedComparisons,
-              unmatchedPolicies: matchResult.unmatchedHealthChecks
+              unmatchedPolicies: matchResult.unmatchedHealthChecks,
+              identicalPoliciesDetected: (matchResult as any).identicalPoliciesDetected,
+              identicalPolicyMessage: (matchResult as any).identicalPolicyMessage
             })
           });
 

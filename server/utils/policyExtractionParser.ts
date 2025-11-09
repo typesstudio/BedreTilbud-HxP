@@ -69,13 +69,32 @@ export function convertToPolicyRecord(
   const deductibleValue = extracted.deductible;
   const deductible = deductibleValue !== null && deductibleValue !== undefined ? deductibleValue.toString() : null;
   
+  const validationIssues: string[] = [];
+  
   if (premiumValue === null || premiumValue === undefined || premiumValue === 0) {
-    console.warn(`[OCR Validation] ⚠️ Missing or zero premium for ${extracted.type}`, {
+    validationIssues.push("Missing or zero premium");
+  }
+  
+  if (!extracted.company || extracted.company.trim().length === 0) {
+    validationIssues.push("Missing company name");
+  }
+  
+  if (!extracted.coverages || extracted.coverages.length === 0) {
+    validationIssues.push("No coverages extracted");
+  }
+  
+  if (validationIssues.length > 0) {
+    console.warn(`[OCR Validation] ⚠️ Data quality issues for ${extracted.type}:`, {
       documentId,
       policyType,
-      company: extracted.company,
-      extractedPremium: extracted.premium,
-      pageRange: extracted.pageRange,
+      issues: validationIssues,
+      extractedData: {
+        premium: extracted.premium,
+        company: extracted.company,
+        coveragesCount: extracted.coverages?.length || 0,
+        benefitsCount: extracted.benefits?.length || 0,
+        pageRange: extracted.pageRange
+      },
       confidence
     });
   }
