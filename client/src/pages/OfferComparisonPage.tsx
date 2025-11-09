@@ -6,7 +6,8 @@ import {
   Button,
   IconWithBackground,
   ListingsTabs,
-  Table
+  Table,
+  AreaChart
 } from "@/ui";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import {
@@ -18,7 +19,9 @@ import {
   FeatherTrendingUp,
   FeatherTrendingDown,
   FeatherCheck,
-  FeatherAlertCircle
+  FeatherAlertCircle,
+  FeatherArrowUp,
+  FeatherPiggyBank
 } from "@subframe/core";
 
 const policyTypeLabels: { [key: string]: string } = {
@@ -61,6 +64,16 @@ export default function OfferComparisonPage() {
     setSelectedTab(getTabFromUrl());
   }, [location]);
 
+  const { data: comparisons, isLoading: comparisonsLoading } = useQuery<any[]>({
+    queryKey: ['/api/sammenligning', userId, companyId],
+    enabled: !!userId && !!companyId,
+  });
+
+  const { data: combinedData, isLoading: combinedLoading } = useQuery<any>({
+    queryKey: ['/api/sammenligning', userId, companyId, 'combined'],
+    enabled: !!userId && !!companyId,
+  });
+
   if (!userId || !companyId) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-default-background">
@@ -75,14 +88,6 @@ export default function OfferComparisonPage() {
   if (userId && localStorage.getItem('userId') !== userId) {
     localStorage.setItem('userId', userId);
   }
-
-  const { data: comparisons, isLoading: comparisonsLoading } = useQuery<any[]>({
-    queryKey: ['/api/sammenligning', userId, companyId],
-  });
-
-  const { data: combinedData, isLoading: combinedLoading } = useQuery<any>({
-    queryKey: ['/api/sammenligning', userId, companyId, 'combined'],
-  });
 
   const isLoading = comparisonsLoading || combinedLoading;
 
@@ -191,6 +196,75 @@ export default function OfferComparisonPage() {
                 Samlet vurdering
               </span>
             </div>
+          </div>
+        </div>
+
+        <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+          <div className="flex w-full items-center justify-between mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-2">
+            <div className="flex flex-col items-start gap-2">
+              <span className="text-heading-2 font-heading-2 text-default-font mobile:text-heading-3 mobile:font-heading-3">
+                Kumulativ besparelse
+              </span>
+              <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                Se hvor meget du sparer måned for måned
+              </span>
+            </div>
+            <Badge
+              className="mobile:self-start"
+              variant="success"
+              icon={<FeatherArrowUp />}
+            >
+              {formatCurrency(combinedData.totalSavings * 10)} over 10 år
+            </Badge>
+          </div>
+          <AreaChart
+            className="mobile:h-64 mobile:flex-none"
+            categories={["Besparelse"]}
+            data={[
+              { Year: "År 1", Besparelse: combinedData.totalSavings },
+              { Year: "År 2", Besparelse: combinedData.totalSavings * 2 },
+              { Year: "År 3", Besparelse: combinedData.totalSavings * 3 },
+              { Year: "År 4", Besparelse: combinedData.totalSavings * 4 },
+              { Year: "År 5", Besparelse: combinedData.totalSavings * 5 },
+              { Year: "År 6", Besparelse: combinedData.totalSavings * 6 },
+              { Year: "År 7", Besparelse: combinedData.totalSavings * 7 },
+              { Year: "År 8", Besparelse: combinedData.totalSavings * 8 },
+              { Year: "År 9", Besparelse: combinedData.totalSavings * 9 },
+              { Year: "År 10", Besparelse: combinedData.totalSavings * 10 },
+            ]}
+            index={"Year"}
+          />
+          <div className="flex w-full items-start gap-4 flex-wrap mobile:flex-row mobile:flex-wrap mobile:gap-3">
+            <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
+              <span className="text-caption font-caption text-subtext-color">
+                Månedlig besparelse
+              </span>
+              <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
+                {formatCurrency(Math.round(combinedData.totalSavings / 12))}
+              </span>
+            </div>
+            <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
+              <span className="text-caption font-caption text-subtext-color">
+                Total efter 12 måneder
+              </span>
+              <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
+                {formatCurrency(combinedData.totalSavings)} spart
+              </span>
+            </div>
+            <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
+              <span className="text-caption font-caption text-subtext-color">
+                Forventet efter 10 år
+              </span>
+              <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
+                {formatCurrency(combinedData.totalSavings * 10)} spart
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full items-center gap-2 rounded-md bg-success-50 px-4 py-3 mobile:items-start mobile:justify-start">
+            <FeatherPiggyBank className="text-body font-body text-success-700 mobile:mt-0.5" />
+            <span className="text-body font-body text-default-font mobile:text-caption mobile:font-caption">
+              Vi låser ind når priserne dykker og maksimerer din besparelse
+            </span>
           </div>
         </div>
 

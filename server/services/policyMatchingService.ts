@@ -328,8 +328,11 @@ export class PolicyMatchingService {
       const currentDoc = currentPolicy ? await this.storage.getDocument(currentPolicy.documentId) : null;
       const offerDoc = offerPolicy ? await this.storage.getDocument(offerPolicy.documentId) : null;
 
-      const currentPremium = (currentDoc?.ocrData as any)?.premium || 0;
-      const offerPremium = (offerDoc?.ocrData as any)?.premium || 0;
+      const currentOcrData = (currentDoc?.ocrData as any) || {};
+      const offerOcrData = (offerDoc?.ocrData as any) || {};
+      
+      const currentPremium = currentPolicy?.premium || currentOcrData.premium || currentOcrData.annualPremium || 0;
+      const offerPremium = offerPolicy?.premium || offerOcrData.premium || offerOcrData.annualPremium || 0;
 
       totalCurrentPremium += Number(currentPremium);
       totalOfferPremium += Number(offerPremium);
