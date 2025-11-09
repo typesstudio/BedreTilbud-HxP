@@ -1,0 +1,85 @@
+Add the following code to the page. If the code already exists, update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+<div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-4 mobile:py-4">
+  <div className="flex w-full items-center gap-3">
+    <IconWithBackground size="medium" icon={<FeatherUploadCloud />} />
+    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+      <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold">
+        Upload forsikringsdokumenter
+      </span>
+      <span className="text-caption font-caption text-subtext-color">
+        Tilføj police, tilbud eller andre relevante dokumenter
+      </span>
+    </div>
+  </div>
+  <div className="flex w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-brand-600 px-6 py-6 mobile:px-4 mobile:py-4">
+    <FeatherUploadCloud className="text-heading-1 font-heading-1 text-brand-700" />
+    <div className="flex flex-col items-center justify-center gap-1">
+      <span className="text-body font-body text-default-font text-center">
+        Klik for at vælge filer eller træk og slip
+      </span>
+      <span className="text-caption font-caption text-subtext-color text-center">
+        PDF, maks 10MB per fil
+      </span>
+    </div>
+  </div>
+  <div className="flex w-full flex-col items-start gap-3">
+    <span className="text-body-bold font-body-bold text-default-font">
+      Uploadede filer
+    </span>
+    <div className="flex w-full items-center gap-4 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+      <IconWithBackground
+        variant="success"
+        size="medium"
+        icon={<FeatherFileText />}
+      />
+      <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+        <span className="text-body-bold font-body-bold text-default-font">
+          forsikring_police_2024.pdf
+        </span>
+        <span className="text-caption font-caption text-subtext-color">
+          2.4 MB • Uploadet nu
+        </span>
+      </div>
+      <IconButton
+        icon={<FeatherTrash />}
+        onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+      />
+    </div>
+    <div className="flex w-full items-center gap-4 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+      <IconWithBackground
+        variant="success"
+        size="medium"
+        icon={<FeatherFileText />}
+      />
+      <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+        <span className="text-body-bold font-body-bold text-default-font">
+          tilbud_detaljer.pdf
+        </span>
+        <span className="text-caption font-caption text-subtext-color">
+          1.8 MB • Uploadet nu
+        </span>
+      </div>
+      <IconButton
+        icon={<FeatherTrash />}
+        onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+      />
+    </div>
+  </div>
+</div>
+
+```Be sure to import the components using the following code:
+  
+```tsx
+import React from "react";
+import { IconButton } from "@/ui/components/IconButton";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { FeatherFileText } from "@subframe/core";
+import { FeatherTrash } from "@subframe/core";
+import { FeatherUploadCloud } from "@subframe/core";
+```Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync IconWithBackground IconButton -p 34bd735365b5
+```
