@@ -48,10 +48,6 @@ DYNAMISK DÆKNINGSOPDAGELSE
   - “ikke inkluderet” hvis eksplicit udelukket eller klart mangler.
   - “ukendt” hvis tvetydigt eller kun markedsføring uden vilkår.
 - Tilføj attributter, hvis muligt: dækningssum/loft, selvrisiko, loft pr. hændelse/år, SLA/ventetid, geografi, centrale undtagelser (korte noter).
-- **VIGTIGT SELVRISIKO**: Når coverageDetails.coverages[] indeholder amount-værdier:
-  - Formater beløb med tusind-separator (2834 → "2.834 kr", 5000 → "5.000 kr")
-  - Vis i attributes.selvrisiko i stedet for bare "inkluderet"
-  - Eksempel: {"name": "Brand", "amount": 2834} → attributes: {"selvrisiko": "2.834 kr"}
 
 NØGLETAL (udfyld når fundet)
 - Bygningsdækning (kr)
