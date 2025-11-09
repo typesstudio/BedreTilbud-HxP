@@ -71,6 +71,33 @@ export default function OfferComparisonPage() {
     enabled: !!userId && !!companyId,
   });
 
+  const multiPolicyProjection = useMemo(() => {
+    if (!comparisons || comparisons.length === 0) return { data: [], categories: [] };
+    
+    const chartData: any[] = Array.from({ length: 120 }, (_, i) => {
+      const yearMilestone = (i + 1) % 12 === 0 ? ` (År ${(i + 1) / 12})` : '';
+      return { Måned: `${i + 1}${yearMilestone}` };
+    });
+    
+    const categories: string[] = [];
+    
+    comparisons.forEach((comparison: any) => {
+      const comparisonData = comparison.comparisonData || {};
+      const projection = comparisonData.projection || [];
+      const policyType = comparison.policyType || 'ukendt';
+      const categoryName = policyTypeLabels[policyType] || policyType;
+      
+      if (Array.isArray(projection) && projection.length === 120) {
+        categories.push(categoryName);
+        projection.forEach((entry: any, index: number) => {
+          chartData[index][categoryName] = Math.round(entry.cumulative || 0);
+        });
+      }
+    });
+    
+    return { data: chartData, categories };
+  }, [comparisons]);
+
   if (!userId || !companyId) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-default-background">
@@ -216,20 +243,11 @@ export default function OfferComparisonPage() {
           </div>
           <AreaChart
             className="mobile:h-64 mobile:flex-none"
-            categories={["Besparelse"]}
-            data={[
-              { Year: "År 1", Besparelse: combinedData.totalSavings },
-              { Year: "År 2", Besparelse: combinedData.totalSavings * 2 },
-              { Year: "År 3", Besparelse: combinedData.totalSavings * 3 },
-              { Year: "År 4", Besparelse: combinedData.totalSavings * 4 },
-              { Year: "År 5", Besparelse: combinedData.totalSavings * 5 },
-              { Year: "År 6", Besparelse: combinedData.totalSavings * 6 },
-              { Year: "År 7", Besparelse: combinedData.totalSavings * 7 },
-              { Year: "År 8", Besparelse: combinedData.totalSavings * 8 },
-              { Year: "År 9", Besparelse: combinedData.totalSavings * 9 },
-              { Year: "År 10", Besparelse: combinedData.totalSavings * 10 },
+            categories={multiPolicyProjection.categories.length > 0 ? multiPolicyProjection.categories : ["Besparelse"]}
+            data={multiPolicyProjection.data.length > 0 ? multiPolicyProjection.data : [
+              { Måned: "1", "Besparelse": 0 }
             ]}
-            index={"Year"}
+            index={"Måned"}
           />
           <div className="flex w-full items-start gap-4 flex-wrap mobile:flex-row mobile:flex-wrap mobile:gap-3">
             <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
