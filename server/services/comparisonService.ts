@@ -97,6 +97,58 @@ export interface ComparisonResult {
 }
 
 export class ComparisonService {
+  private validateComparisonCompleteness(result: any): void {
+    const issues: string[] = [];
+
+    if (!result.detailedComparison || !Array.isArray(result.detailedComparison)) {
+      issues.push("Missing detailedComparison array");
+    } else {
+      if (result.detailedComparison.length < 3) {
+        issues.push(`detailedComparison has only ${result.detailedComparison.length} categories (required: 3+)`);
+      }
+
+      const hasPrice = result.detailedComparison.some((cat: any) => 
+        cat.category?.toLowerCase().includes('pris') || 
+        cat.category?.toLowerCase().includes('gebyr')
+      );
+      const hasCoverage = result.detailedComparison.some((cat: any) => 
+        cat.category?.toLowerCase().includes('dækning')
+      );
+
+      if (!hasPrice) {
+        issues.push("Missing 'Pris og gebyrer' category in detailedComparison");
+      }
+      if (!hasCoverage) {
+        issues.push("Missing 'Dækning' category in detailedComparison");
+      }
+
+      result.detailedComparison.forEach((cat: any, idx: number) => {
+        if (!cat.rows || cat.rows.length === 0) {
+          issues.push(`Category '${cat.category || idx}' has no rows`);
+        }
+      });
+    }
+
+    if (!result.highlights || result.highlights.length < 3) {
+      issues.push(`highlights has only ${result.highlights?.length || 0} items (expected: 4-6)`);
+    }
+
+    if (!result.pros || result.pros.length === 0) {
+      issues.push("Missing pros array");
+    }
+
+    if (!result.cons || result.cons.length === 0) {
+      issues.push("Missing cons array");
+    }
+
+    if (issues.length > 0) {
+      console.warn(`[Comparison Validation] ⚠️ Completeness issues detected:\n  - ${issues.join('\n  - ')}`);
+      console.warn(`[Comparison Validation] Result may be incomplete, but returning as-is`);
+    } else {
+      console.log(`[Comparison Validation] ✅ Comparison result is complete`);
+    }
+  }
+
   async compareInsurancePolicies(
     currentPolicy: InsuranceData,
     offerPolicy: InsuranceData,
@@ -137,6 +189,9 @@ export class ComparisonService {
 
       logAIUsage('OpenAI-gpt-4o', 'policy-comparison', true);
       const result = JSON.parse(response.choices[0].message.content || "{}");
+      
+      this.validateComparisonCompleteness(result);
+      
       return result as ComparisonResult;
     } catch (error) {
       console.error("Comparison failed:", error);
