@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import {
   Badge,
   Button,
@@ -48,7 +48,18 @@ const iconMap: { [key: string]: any } = {
 
 export default function OfferComparisonPage() {
   const { userId, companyId } = useParams<{ userId: string; companyId: string }>();
-  const [selectedTab, setSelectedTab] = useState<string>("samlet");
+  const [location, setLocation] = useLocation();
+  
+  const getTabFromUrl = () => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('tab') || 'samlet';
+  };
+  
+  const [selectedTab, setSelectedTab] = useState<string>(getTabFromUrl());
+  
+  useEffect(() => {
+    setSelectedTab(getTabFromUrl());
+  }, [location]);
 
   if (!userId || !companyId) {
     return (
@@ -439,6 +450,11 @@ export default function OfferComparisonPage() {
     );
   };
 
+  const handleTabChange = (tabId: string) => {
+    const newUrl = `/sammenligning/${userId}/${companyId}?tab=${tabId}`;
+    setLocation(newUrl);
+  };
+
   return (
     <AppLayoutWithNav userId={userId}>
       <div className="flex flex-col h-full w-full">
@@ -451,7 +467,7 @@ export default function OfferComparisonPage() {
                   key={tab.id}
                   checked={selectedTab === tab.id}
                   icon={IconComponent ? <IconComponent /> : undefined}
-                  onClick={() => setSelectedTab(tab.id)}
+                  onClick={() => handleTabChange(tab.id)}
                 >
                   {tab.label}
                 </ListingsTabs.Item>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { SidebarWithMinimalTextSections, Badge, Button } from "@/ui";
@@ -52,6 +52,22 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
     }>;
     pendingThreads: Array<{ id: string; companyName: string; companyId: string }>;
   } | undefined;
+
+  useEffect(() => {
+    if (navData?.companies) {
+      const activeCompany = navData.companies.find(company => 
+        location.includes(`/sammenligning/${userId}/${company.companyId}`)
+      );
+      
+      if (activeCompany) {
+        setExpandedCompanies(prev => {
+          const newSet = new Set(prev);
+          newSet.add(activeCompany.companyId);
+          return newSet;
+        });
+      }
+    }
+  }, [location, navData, userId]);
 
   const toggleCompany = (companyId: string) => {
     setExpandedCompanies(prev => {
