@@ -6,6 +6,44 @@ BedreTilbud is a Danish insurance comparison platform aimed at users aged 50+. I
 
 ## Recent Changes (November 2025)
 
+### Policy Similarity Detection & Comparison Validation (Complete - Nov 9, 2025)
+Implemented comprehensive solution to prevent comparing identical policies and ensure high-quality comparison outputs:
+
+**Policy Similarity Detection**:
+- Added smart validation in `PolicyMatchingService.arePoliciesSimilar()` that only flags policies as identical when sufficient data exists
+- Requires at least 2 non-null fields to match before flagging as similar (prevents false positives with incomplete OCR)
+- Checks: policy number (exact match), premium (1% tolerance), deductible (<10 kr), company (fuzzy match including variations)
+- Throws `IDENTICAL_POLICIES:` error when detected, creating structured response for frontend
+
+**Comparison Output Validation**:
+- Added `ComparisonService.validateComparisonCompleteness()` to check AI output quality
+- Validates minimum requirements: 3+ detailedComparison categories, 3+ highlights, pros/cons arrays
+- Logs warnings for incomplete data but doesn't block operation (fail-safe design)
+
+**Enhanced OCR Validation**:
+- Expanded `convertToPolicyRecord()` validation to check premium, company, coverages
+- Improved logging with detailed extraction data and confidence scores for debugging
+
+**User-Facing Error Messages**:
+- Backend catches `IDENTICAL_POLICIES` errors and returns structured response with custom message
+- Frontend displays appropriate toast messages: "Identisk police opdaget" for identical policies, success for comparisons
+- Handles 3 scenarios: identical policies only, successful comparisons, generic upload
+
+**Comparison Prompt Enhancement**:
+- Updated `policy-comparison.md` with explicit requirements for comprehensive detailedComparison sections
+- Mandates minimum 3 categories: "Pris og gebyrer" (4+ rows), "Dækning" (5+ rows), "Tillægsdækninger"
+- Prevents empty or incomplete comparison outputs
+
+**Testing**: All 8 automated test cases pass, validating correct behavior for identical policies, different policies, missing data, and edge cases
+
+**Files Modified**:
+- `server/services/policyMatchingService.ts`: Added similarity detection logic
+- `server/services/comparisonService.ts`: Added validation method
+- `server/utils/policyExtractionParser.ts`: Enhanced OCR validation
+- `server/routes.ts`: Added error handling for identical policies
+- `client/src/pages/upload-offer.tsx`: Added user-facing messages
+- `server/ai-prompts/comparison/policy-comparison.md`: Enhanced requirements
+
 ### OCR Danish Number Format Improvements (Complete - Nov 9, 2025)
 Fixed critical OCR extraction issues for Danish insurance PDFs with comprehensive preprocessing and parsing improvements:
 
