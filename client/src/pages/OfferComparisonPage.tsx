@@ -269,23 +269,25 @@ export default function OfferComparisonPage() {
             <span className="text-heading-3 font-heading-3 text-default-font">Højdepunkter</span>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {combinedData.highlights.map((highlight: any, index: number) => {
-                const Icon = iconMap[highlight.icon] || FeatherCheck;
+                const variantColors: {[key: string]: string} = {
+                  success: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800',
+                  warning: 'bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800',
+                  error: 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800',
+                  info: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800'
+                };
+                const bgClass = variantColors[highlight.variant] || variantColors.info;
                 return (
-                  <div key={index} className="flex items-start gap-3 p-4 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
-                    <IconWithBackground
-                      variant={highlight.variant as any}
-                      size="medium"
-                    >
-                      <Icon className="text-default-font" />
-                    </IconWithBackground>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-body-bold font-body-bold text-default-font">
-                        {highlight.title}
-                      </span>
-                      <span className="text-caption font-caption text-subtext-color">
-                        {highlight.description}
-                      </span>
-                    </div>
+                  <div 
+                    key={index} 
+                    className={`flex flex-col gap-2 p-4 rounded-lg border ${bgClass}`}
+                    data-testid={`highlight-card-${index}`}
+                  >
+                    <span className="text-body-bold font-body-bold text-default-font">
+                      {highlight.title}
+                    </span>
+                    <span className="text-caption font-caption text-subtext-color">
+                      {highlight.description}
+                    </span>
                   </div>
                 );
               })}
@@ -437,23 +439,26 @@ export default function OfferComparisonPage() {
             </span>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {highlights.map((highlight: any, index: number) => {
-                const Icon = iconMap[highlight.icon] || FeatherCheck;
+                const variantColors: {[key: string]: string} = {
+                  success: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800',
+                  warning: 'bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800',
+                  error: 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800',
+                  info: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800'
+                };
+                const variant = highlight.variant || (isWorseOffer ? "error" : "success");
+                const bgClass = variantColors[variant] || variantColors.info;
                 return (
-                  <div key={index} className="flex items-start gap-3 p-4 bg-neutral-50 dark:bg-neutral-900 rounded-md border border-neutral-200 dark:border-neutral-700">
-                    <IconWithBackground
-                      variant={highlight.variant || (isWorseOffer ? "error" : "success")}
-                      size="medium"
-                    >
-                      <Icon className="text-default-font" />
-                    </IconWithBackground>
-                    <div className="flex flex-col gap-1">
-                      <span className="text-body-bold font-body-bold text-default-font">
-                        {highlight.title}
-                      </span>
-                      <span className="text-caption font-caption text-subtext-color">
-                        {highlight.description}
-                      </span>
-                    </div>
+                  <div 
+                    key={index} 
+                    className={`flex flex-col gap-2 p-4 rounded-md border ${bgClass}`}
+                    data-testid={`highlight-card-${index}`}
+                  >
+                    <span className="text-body-bold font-body-bold text-default-font">
+                      {highlight.title}
+                    </span>
+                    <span className="text-caption font-caption text-subtext-color">
+                      {highlight.description}
+                    </span>
                   </div>
                 );
               })}

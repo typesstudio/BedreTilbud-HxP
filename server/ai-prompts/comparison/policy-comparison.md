@@ -20,7 +20,7 @@ MÅL
 4) Udled nøgletal (dækningssummer, selvrisiko, skadebehandling/SLA).
 5) Find ALT manglende/uklart (“Forstå det med småt”) og kategorisér med vægtning.
 6) Giv kort AI-anbefaling og verdict.
-7) Beregn projektion af kumulativ besparelse pr. måned (36 mdr.) inkl. eventuel prisstigning efter bindingsperiode.
+7) Beregn projektion af kumulativ besparelse pr. måned (120 mdr. / 10 år) inkl. eventuel prisstigning efter bindingsperiode.
 
 GENERELLE REGLER
 - Sprog: Alt på dansk.
@@ -73,10 +73,11 @@ ANBEFALING & VERDICT
 - not_recommended: mindst 1 critical eller tydeligt ringere/næsten sikkert dyrere efter binding.
 
 PROJEKTION AF KUMULATIV BESPARELSE
-- 36 måneder.
+- 120 måneder (10 år).
 - monthlySavings = currentMonthly - offerMonthlyIntro.
 - Efter bindingMonths anvendes postBindingIncreasePercent på tilbudspræmien (hvis kendt); ellers uændret og markér i notes.
-- Returnér liste [{monthIndex, cumulative}].
+- Returnér liste med PRÆCIS 120 entries [{monthIndex, cumulative}] hvor monthIndex går fra 1 til 120.
+- KRITISK: projektion SKAL have præcis 120 poster for at fungere korrekt i frontend-visualisering.
 
 ARBEJDSGANG (OBLIGATORISK)
 1) Parse begge policer → udtræk priser, binding, rabatter, selvrisiko, dækninger, summer, undtagelser, tilvalg, SLA.
@@ -93,7 +94,7 @@ ARBEJDSGANG (OBLIGATORISK)
 5) Identificér alt “småt” → udfyld finePrint.
 6) Beregn qualityScore og sæt verdict.
 7) Udfyld highlights (4–6 skarpe).
-8) Lav 36 mdr. projektion.
+8) Lav 120 mdr. projektion (10 år) med præcis 120 entries.
 9) Returnér KUN valid JSON i formatet herunder.
 
 JSON-OUTPUT (STRICT – KUN DETTE)
@@ -118,7 +119,6 @@ JSON-OUTPUT (STRICT – KUN DETTE)
     {
       "title": "string",
       "description": "string",
-      "icon": "trending-up" | "shield" | "info" | "alert-triangle" | "zap" | "home" | "file-text",
       "variant": "success" | "warning" | "error" | "info"
     }
   ],

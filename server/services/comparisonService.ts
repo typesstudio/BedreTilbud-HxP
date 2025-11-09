@@ -51,8 +51,7 @@ export interface ComparisonResult {
   highlights: {
     title: string;
     description: string;
-    icon: string;
-    variant: "success" | "neutral" | "warning";
+    variant: "success" | "warning" | "error" | "info";
   }[];
   detailedComparison: {
     category: string;
@@ -139,6 +138,16 @@ export class ComparisonService {
 
     if (!result.cons || result.cons.length === 0) {
       issues.push("Missing cons array");
+    }
+
+    if (!result.projection || !Array.isArray(result.projection)) {
+      const error = "CRITICAL: Missing projection array - comparison cannot be displayed";
+      console.error(`[Comparison Validation] ${error}`);
+      throw new Error(error);
+    } else if (result.projection.length !== 120) {
+      const error = `CRITICAL: projection has ${result.projection.length} entries (required: exactly 120 for 10-year view)`;
+      console.error(`[Comparison Validation] ${error}`);
+      throw new Error(error);
     }
 
     if (issues.length > 0) {
