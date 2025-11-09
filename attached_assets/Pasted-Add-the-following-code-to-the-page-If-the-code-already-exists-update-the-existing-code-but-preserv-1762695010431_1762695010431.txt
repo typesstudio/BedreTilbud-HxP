@@ -1,0 +1,209 @@
+Add the following code to the page. If the code already exists, update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+<DefaultPageLayout>
+  <div className="container max-w-none flex h-full w-full flex-col items-center gap-6 bg-default-background py-12 mobile:flex-col mobile:flex-nowrap mobile:gap-4 mobile:px-4 mobile:py-6">
+    <div className="flex w-full max-w-[768px] flex-col items-start gap-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4">
+      <div className="flex w-full flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+        <div className="flex w-full flex-col items-start gap-2">
+          <span className="text-heading-1 font-heading-1 text-default-font mobile:text-heading-2 mobile:font-heading-2">
+            Upload eksisterende tilbud
+          </span>
+          <span className="text-body font-body text-subtext-color">
+            Del dit nuværende forsikringstilbud med os, så vi kan finde bedre
+            løsninger
+          </span>
+        </div>
+        <div className="flex w-full items-center gap-3 mobile:flex-wrap">
+          <div className="flex items-center gap-2">
+            <Badge>1</Badge>
+            <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+              Upload
+            </span>
+          </div>
+          <div className="flex h-px grow shrink-0 basis-0 flex-col items-center gap-2 bg-neutral-200" />
+          <div className="flex items-center gap-2">
+            <Badge variant="neutral">2</Badge>
+            <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+              Analyser
+            </span>
+          </div>
+          <div className="flex h-px grow shrink-0 basis-0 flex-col items-center gap-2 bg-neutral-200" />
+          <div className="flex items-center gap-2">
+            <Badge variant="neutral">3</Badge>
+            <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+              Sammenlign
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="flex w-full flex-col items-start gap-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4">
+        <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-4 mobile:py-4">
+          <div className="flex w-full items-center gap-3">
+            <IconWithBackground size="medium" icon={<FeatherShield />} />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold">
+                Vælg forsikringsselskab
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                Hvilket selskab er dit nuværende tilbud fra?
+              </span>
+            </div>
+          </div>
+          <SubframeCore.DropdownMenu.Root>
+            <SubframeCore.DropdownMenu.Trigger asChild={true}>
+              <Button
+                className="h-10 w-full flex-none"
+                variant="neutral-secondary"
+                size="large"
+                iconRight={<FeatherChevronDown />}
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+              >
+                Vælg forsikringsselskab
+              </Button>
+            </SubframeCore.DropdownMenu.Trigger>
+            <SubframeCore.DropdownMenu.Portal>
+              <SubframeCore.DropdownMenu.Content
+                side="bottom"
+                align="start"
+                sideOffset={4}
+                asChild={true}
+              >
+                <DropdownMenu>
+                  <DropdownMenu.DropdownItem icon={<FeatherShield />}>
+                    Tryg Forsikring
+                  </DropdownMenu.DropdownItem>
+                  <DropdownMenu.DropdownItem icon={<FeatherShield />}>
+                    Alm. Brand
+                  </DropdownMenu.DropdownItem>
+                  <DropdownMenu.DropdownItem icon={<FeatherShield />}>
+                    Codan Forsikring
+                  </DropdownMenu.DropdownItem>
+                  <DropdownMenu.DropdownItem icon={<FeatherShield />}>
+                    IF Forsikring
+                  </DropdownMenu.DropdownItem>
+                  <DropdownMenu.DropdownItem icon={<FeatherShield />}>
+                    Topdanmark
+                  </DropdownMenu.DropdownItem>
+                  <DropdownMenu.DropdownDivider />
+                  <DropdownMenu.DropdownItem icon={<FeatherPlus />}>
+                    Andet selskab
+                  </DropdownMenu.DropdownItem>
+                </DropdownMenu>
+              </SubframeCore.DropdownMenu.Content>
+            </SubframeCore.DropdownMenu.Portal>
+          </SubframeCore.DropdownMenu.Root>
+        </div>
+        <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-4 mobile:py-4">
+          <div className="flex w-full items-center gap-3">
+            <IconWithBackground size="medium" icon={<FeatherUploadCloud />} />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold">
+                Upload forsikringsdokumenter
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                Tilføj police, tilbud eller andre relevante dokumenter
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-brand-600 px-6 py-6 mobile:px-4 mobile:py-4">
+            <FeatherUploadCloud className="text-heading-1 font-heading-1 text-brand-700" />
+            <div className="flex flex-col items-center justify-center gap-1">
+              <span className="text-body font-body text-default-font text-center">
+                Klik for at vælge filer eller træk og slip
+              </span>
+              <span className="text-caption font-caption text-subtext-color text-center">
+                PDF, maks 10MB per fil
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full flex-col items-start gap-3">
+            <span className="text-body-bold font-body-bold text-default-font">
+              Uploadede filer
+            </span>
+            <div className="flex w-full items-center gap-4 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+              <IconWithBackground
+                variant="success"
+                size="medium"
+                icon={<FeatherFileText />}
+              />
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                <span className="text-body-bold font-body-bold text-default-font">
+                  forsikring_police_2024.pdf
+                </span>
+                <span className="text-caption font-caption text-subtext-color">
+                  2.4 MB • Uploadet nu
+                </span>
+              </div>
+              <IconButton
+                icon={<FeatherTrash />}
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+              />
+            </div>
+            <div className="flex w-full items-center gap-4 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+              <IconWithBackground
+                variant="success"
+                size="medium"
+                icon={<FeatherFileText />}
+              />
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                <span className="text-body-bold font-body-bold text-default-font">
+                  tilbud_detaljer.pdf
+                </span>
+                <span className="text-caption font-caption text-subtext-color">
+                  1.8 MB • Uploadet nu
+                </span>
+              </div>
+              <IconButton
+                icon={<FeatherTrash />}
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex w-full items-center justify-between border-t border-solid border-neutral-border mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:pt-4 mobile:pb-0">
+        <Button
+          className="h-10 w-auto flex-none mobile:h-10 mobile:w-full mobile:flex-none"
+          variant="neutral-secondary"
+          size="large"
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+        >
+          Annuller
+        </Button>
+        <Button
+          className="h-10 w-auto flex-none mobile:h-10 mobile:w-full mobile:flex-none"
+          size="large"
+          iconRight={<FeatherArrowRight />}
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+        >
+          Start forsikrings analyse
+        </Button>
+      </div>
+    </div>
+  </div>
+</DefaultPageLayout>
+
+```Be sure to import the components using the following code:
+  
+```tsx
+import React from "react";
+import { Badge } from "@/ui/components/Badge";
+import { Button } from "@/ui/components/Button";
+import { DropdownMenu } from "@/ui/components/DropdownMenu";
+import { IconButton } from "@/ui/components/IconButton";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import { FeatherArrowRight } from "@subframe/core";
+import { FeatherChevronDown } from "@subframe/core";
+import { FeatherFileText } from "@subframe/core";
+import { FeatherPlus } from "@subframe/core";
+import { FeatherShield } from "@subframe/core";
+import { FeatherTrash } from "@subframe/core";
+import { FeatherUploadCloud } from "@subframe/core";
+import * as SubframeCore from "@subframe/core";
+```Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync DefaultPageLayout Badge IconWithBackground DropdownMenu Button IconButton -p 34bd735365b5
+```
