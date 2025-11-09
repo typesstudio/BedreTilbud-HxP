@@ -44,6 +44,9 @@ const upload = multer({
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Instantiate shared service instances
+  const policyMatchingService = new PolicyMatchingService(storage, comparisonService);
+  
   // Health check endpoints
   // CSRF token endpoint
   app.get("/api/csrf-token", requireAuth, noCache, async (req, res) => {
@@ -375,6 +378,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const file of files) {
         let document;
+        let matchResult = null; // Declare per-file to avoid cross-contamination
+        
         try {
           // Extract insurance data using OCR - returns {policies, rawOcrResponse}
           logger.info('[Upload] Starting OCR extraction', { fileName: file.originalname, userId });
@@ -416,6 +421,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
               policyId: savedPolicy.id, 
               type: savedPolicy.policyType 
             });
+          }
+
+          // For offer uploads, run policy matching to create comparisons
+          if (documentType === 'offer' && req.body.companyId && createdPolicies.length > 0) {
+            try {
+              logger.info('[Upload] Starting policy matching for offer', {
+                documentId: document.id,
+                companyId: req.body.companyId,
+                policyCount: createdPolicies.length
+              });
+
+              matchResult = await policyMatchingService.matchAndCompareOfferPolicies(
+                userId,
+                req.body.companyId,
+                document.id,
+                createdPolicies
+              );
+
+              logger.info('[Upload] Policy matching completed', {
+                documentId: document.id,
+                matchedComparisons: matchResult.matchedComparisons.length,
+                unmatchedHealthChecks: matchResult.unmatchedHealthChecks.length
+              });
+
+            } catch (matchingError: any) {
+              logger.error('[Upload] Policy matching failed', matchingError, {
+                documentId: document.id,
+                companyId: req.body.companyId
+              });
+              // Continue processing - don't fail upload if matching fails
+            }
           }
 
           // Run all health checks in parallel
@@ -476,7 +512,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           documentsWithPolicies.push({
             document,
-            policies: createdPolicies
+            policies: createdPolicies,
+            ...(matchResult && {
+              comparisons: matchResult.matchedComparisons,
+              unmatchedPolicies: matchResult.unmatchedHealthChecks
+            })
           });
 
         } catch (error: any) {
@@ -821,8 +861,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Offer Comparison routes (Sammenligning)
-  const policyMatchingService = new PolicyMatchingService(storage, comparisonService);
-
   app.get("/api/sammenligning/:userId/:companyId", requireAuth, requireOwnership, async (req, res) => {
     try {
       const { userId, companyId } = req.params;
