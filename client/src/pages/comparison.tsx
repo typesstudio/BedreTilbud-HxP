@@ -8,6 +8,7 @@ import { AreaChart } from "../../../src/ui/components/AreaChart";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
+import { getVariantBackgroundClass } from "@/lib/variantColors";
 import { 
   FeatherArrowRight,
   FeatherArrowUp,
@@ -248,15 +249,10 @@ export default function Comparison() {
               </span>
               <div className="flex w-full items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
                 {highlights.slice(0, 4).map((highlight: any, index: number) => {
-                  const IconComponent = iconMap[highlight.icon] || FeatherCheck;
+                  const variant = highlight.variant || (isWorseOffer ? "error" : "success");
+                  const bgClass = getVariantBackgroundClass(variant);
                   return (
-                    <div key={index} className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4 mobile:flex-col mobile:flex-nowrap mobile:gap-2">
-                      <IconWithBackground
-                        variant={highlight.variant || (isWorseOffer ? "error" : "success")}
-                        size="medium"
-                        icon={<IconComponent />}
-                        square={true}
-                      />
+                    <div key={index} className={`flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border ${bgClass} px-4 py-4 mobile:flex-col mobile:flex-nowrap mobile:gap-2`}>
                       <div className="flex flex-col items-start gap-1">
                         <span className="text-body-bold font-body-bold text-default-font mobile:text-body-bold mobile:font-body-bold">
                           {highlight.title}

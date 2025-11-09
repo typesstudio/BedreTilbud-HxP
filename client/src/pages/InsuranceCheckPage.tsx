@@ -11,6 +11,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
+import { getVariantBackgroundClass } from "@/lib/variantColors";
 import { 
   FeatherHome,
   FeatherShield,
@@ -258,19 +259,13 @@ export default function InsuranceCheckPage() {
                   </span>
                   <div className="flex w-full items-start gap-4">
                     {healthCheckPayload.highlights.map((highlight: any, index: number) => {
-                      const IconComponent = iconMap[highlight.icon] || FeatherCheck;
+                      const bgClass = getVariantBackgroundClass(highlight.variant);
                       return (
                         <div
                           key={index}
-                          className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4"
+                          className={`flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border ${bgClass} px-4 py-4`}
                           data-testid={`highlight-${index}`}
                         >
-                          <IconWithBackground
-                            variant={highlight.variant as any}
-                            size="medium"
-                            icon={<IconComponent />}
-                            square={true}
-                          />
                           <div className="flex flex-col items-start gap-1">
                             <span className="text-body-bold font-body-bold text-default-font">
                               {highlight.title}

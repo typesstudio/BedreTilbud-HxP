@@ -10,6 +10,7 @@ import {
   AreaChart
 } from "@/ui";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
+import { getVariantBackgroundClass } from "@/lib/variantColors";
 import {
   FeatherHome,
   FeatherShield,
@@ -269,13 +270,7 @@ export default function OfferComparisonPage() {
             <span className="text-heading-3 font-heading-3 text-default-font">Højdepunkter</span>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {combinedData.highlights.map((highlight: any, index: number) => {
-                const variantColors: {[key: string]: string} = {
-                  success: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800',
-                  warning: 'bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800',
-                  error: 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800',
-                  info: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800'
-                };
-                const bgClass = variantColors[highlight.variant] || variantColors.info;
+                const bgClass = getVariantBackgroundClass(highlight.variant);
                 return (
                   <div 
                     key={index} 
@@ -439,14 +434,8 @@ export default function OfferComparisonPage() {
             </span>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {highlights.map((highlight: any, index: number) => {
-                const variantColors: {[key: string]: string} = {
-                  success: 'bg-green-50 dark:bg-green-950 border-green-200 dark:border-green-800',
-                  warning: 'bg-yellow-50 dark:bg-yellow-950 border-yellow-200 dark:border-yellow-800',
-                  error: 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800',
-                  info: 'bg-blue-50 dark:bg-blue-950 border-blue-200 dark:border-blue-800'
-                };
                 const variant = highlight.variant || (isWorseOffer ? "error" : "success");
-                const bgClass = variantColors[variant] || variantColors.info;
+                const bgClass = getVariantBackgroundClass(variant);
                 return (
                   <div 
                     key={index} 
