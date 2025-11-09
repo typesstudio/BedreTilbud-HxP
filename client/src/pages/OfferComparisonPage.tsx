@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useParams, useLocation } from "wouter";
+import { useParams, useLocation, useSearch } from "wouter";
 import {
   Badge,
   Button,
@@ -21,7 +21,8 @@ import {
   FeatherCheck,
   FeatherAlertCircle,
   FeatherArrowUp,
-  FeatherPiggyBank
+  FeatherPiggyBank,
+  FeatherStar
 } from "@subframe/core";
 
 const policyTypeLabels: { [key: string]: string } = {
@@ -52,17 +53,12 @@ const iconMap: { [key: string]: any } = {
 export default function OfferComparisonPage() {
   const { userId, companyId } = useParams<{ userId: string; companyId: string }>();
   const [location, setLocation] = useLocation();
+  const searchString = useSearch();
   
-  const getTabFromUrl = () => {
-    const params = new URLSearchParams(window.location.search);
+  const selectedTab = useMemo(() => {
+    const params = new URLSearchParams(searchString);
     return params.get('tab') || 'samlet';
-  };
-  
-  const [selectedTab, setSelectedTab] = useState<string>(getTabFromUrl());
-  
-  useEffect(() => {
-    setSelectedTab(getTabFromUrl());
-  }, [location]);
+  }, [searchString]);
 
   const { data: comparisons, isLoading: comparisonsLoading } = useQuery<any[]>({
     queryKey: ['/api/sammenligning', userId, companyId],
@@ -121,7 +117,7 @@ export default function OfferComparisonPage() {
       id: "samlet",
       label: "Samlet oversigt",
       count: availablePolicyTypes.length,
-      Icon: undefined
+      Icon: FeatherStar
     },
     ...availablePolicyTypes.map((type: string) => ({
       id: type,

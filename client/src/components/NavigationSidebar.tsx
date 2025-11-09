@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useLocation } from "wouter";
+import { Link, useLocation, useSearch } from "wouter";
 import { SidebarWithMinimalTextSections, Badge, Button } from "@/ui";
 import { 
   FeatherCoins, 
@@ -37,7 +37,13 @@ const policyTypeIcons: { [key: string]: any } = {
 
 export function NavigationSidebar({ userId }: NavigationSidebarProps) {
   const [location] = useLocation();
+  const searchString = useSearch();
   const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
+  
+  const currentTab = useMemo(() => {
+    const params = new URLSearchParams(searchString);
+    return params.get('tab') || 'samlet';
+  }, [searchString]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["/api/nav-data", userId],
@@ -214,7 +220,7 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
                     {company.hasCombinedView && (
                       <Link href={`/sammenligning/${userId}/${company.companyId}?tab=samlet`}>
                         <SidebarWithMinimalTextSections.NavItem
-                          selected={isActive && (location.includes('tab=samlet') || !location.includes('tab='))}
+                          selected={isActive && currentTab === 'samlet'}
                           data-testid={`nav-policy-${company.companyId}-samlet`}
                         >
                           Samlet oversigt
@@ -227,7 +233,7 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
                         <Link key={policyType} href={`/sammenligning/${userId}/${company.companyId}?tab=${policyType}`}>
                           <SidebarWithMinimalTextSections.NavItem
                             icon={Icon ? <Icon /> : undefined}
-                            selected={isActive && location.includes(`tab=${policyType}`)}
+                            selected={isActive && currentTab === policyType}
                             data-testid={`nav-policy-${company.companyId}-${policyType}`}
                           >
                             {policyTypeLabels[policyType] || policyType}
