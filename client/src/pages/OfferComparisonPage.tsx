@@ -10,6 +10,7 @@ import {
   AreaChart
 } from "@/ui";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
+import { AnnualSavingsCard } from "@/components/AnnualSavingsCard";
 import { getVariantBackgroundClass } from "@/lib/variantColors";
 import {
   FeatherHome,
@@ -394,56 +395,13 @@ export default function OfferComparisonPage() {
           </Badge>
         </div>
 
-        <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
-          <span className="text-heading-3 font-heading-3 text-default-font">
-            Årlig omkostning sammenligning
-          </span>
-          
-          <div className={`flex items-center justify-between rounded-lg border p-4 ${isWorseOffer ? 'border-error-200 bg-error-50 dark:bg-error-900' : 'border-success-200 bg-success-50 dark:bg-success-900'}`}>
-            <div className="flex items-center gap-3">
-              <IconWithBackground
-                variant={isWorseOffer ? "error" : "success"}
-                size="medium"
-              >
-                <FeatherTrendingUp className="text-default-font" />
-              </IconWithBackground>
-              <div className="flex flex-col gap-1">
-                <span className={`text-body-bold font-body-bold ${isWorseOffer ? 'text-error-700' : 'text-success-700'}`}>
-                  {isWorseOffer ? 'Dyrere tilbud' : 'Årlig besparelse'}
-                </span>
-                <span className={`text-caption font-caption ${isWorseOffer ? 'text-error-600' : 'text-success-600'}`}>
-                  {absoluteSavingsPercentage.toFixed(1)}% {isWorseOffer ? 'dyrere' : 'billigere'}
-                </span>
-              </div>
-            </div>
-            <span className={`text-heading-2 font-heading-2 ${isWorseOffer ? 'text-error-600' : 'text-success-600'}`}>
-              {formatCurrency(absoluteSavings)}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <span className="text-body-bold font-body-bold text-default-font">
-              Nuværende forsikring
-            </span>
-            <span className="text-heading-3 font-heading-3 text-default-font">
-              {formatCurrency(currentPremium)}/år
-            </span>
-          </div>
-
-          <div className="flex h-12 w-full rounded-lg bg-success-100 dark:bg-success-900 overflow-hidden">
-            <div
-              className={`flex h-12 items-center justify-between px-6 ${isWorseOffer ? 'bg-error-500' : 'bg-success-500'}`}
-              style={{ width: `${barWidthPercentage}%` }}
-            >
-              <span className="text-body-bold font-body-bold text-white">
-                Nyt tilbud
-              </span>
-              <span className="text-heading-3 font-heading-3 text-white">
-                {formatCurrency(offerPremium)}/år
-              </span>
-            </div>
-          </div>
-        </div>
+        <AnnualSavingsCard
+          annualSavings={savings}
+          savingsPercentage={savingsPercentage}
+          currentPremium={currentPremium}
+          offerPremium={offerPremium}
+          variant={isWorseOffer ? "error" : "success"}
+        />
 
         {highlights.length > 0 && (
           <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">

@@ -8,6 +8,7 @@ import { AreaChart } from "../../../src/ui/components/AreaChart";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
+import { AnnualSavingsCard } from "@/components/AnnualSavingsCard";
 import { getVariantBackgroundClass } from "@/lib/variantColors";
 import { 
   FeatherArrowRight,
@@ -190,56 +191,13 @@ export default function Comparison() {
           </div>
 
           {/* Annual Cost Comparison */}
-          <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-4 mobile:py-4">
-            <span className="text-heading-2 font-heading-2 text-default-font mobile:text-heading-3 mobile:font-heading-3">
-              Årlig omkostning sammenligning
-            </span>
-            <div className="flex w-full flex-col items-start gap-3">
-              <div className={`flex w-full items-center justify-between rounded-lg border border-solid px-6 py-4 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-2 mobile:px-4 mobile:py-3 ${isWorseOffer ? 'border-error-200 bg-error-50' : 'border-success-200 bg-success-50'}`}>
-                <div className="flex items-center gap-3">
-                  <IconWithBackground
-                    variant={isWorseOffer ? "error" : "success"}
-                    size="medium"
-                    icon={<FeatherPiggyBank />}
-                  />
-                  <div className="flex flex-col items-start gap-1">
-                    <span className={`text-body-bold font-body-bold ${isWorseOffer ? 'text-error-700' : 'text-success-700'} mobile:text-body-bold mobile:font-body-bold`}>
-                      {isWorseOffer ? 'Dyrere tilbud' : 'Din årlige besparelse'}
-                    </span>
-                    <span className={`text-body font-body ${isWorseOffer ? 'text-error-600' : 'text-success-600'} mobile:text-caption mobile:font-caption`}>
-                      {absoluteSavingsPercentage.toFixed(1)}% {isWorseOffer ? 'dyrere' : 'billigere'}
-                    </span>
-                  </div>
-                </div>
-                <span className={`text-heading-1 font-heading-1 ${isWorseOffer ? 'text-error-600' : 'text-success-600'} mobile:text-heading-2 mobile:font-heading-2 mobile:self-end`} data-testid="text-savings-amount">
-                  {formatCurrency(absoluteSavings)}
-                </span>
-              </div>
-              <div className="flex w-full items-center justify-between">
-                <span className="text-body-bold font-body-bold text-default-font mobile:text-body mobile:font-body">
-                  Nuværende forsikring
-                </span>
-                <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid="text-current-premium">
-                  {formatCurrency(currentPremium)}/år
-                </span>
-              </div>
-              <div className="flex h-12 w-full flex-none items-start rounded-lg bg-success-100 mobile:h-auto mobile:min-h-[48px] mobile:w-full mobile:flex-none">
-                <div 
-                  className={`flex h-12 items-center justify-center rounded-lg px-6 py-6 mobile:h-auto mobile:min-h-[48px] mobile:grow mobile:shrink-0 mobile:basis-0 mobile:px-4 mobile:py-3 ${isWorseOffer ? 'bg-error-500' : 'bg-success-500'}`}
-                  style={{ width: `${barWidthPercentage}%` }}
-                >
-                  <div className="flex grow shrink-0 basis-0 items-center justify-between mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1">
-                    <span className="text-body-bold font-body-bold text-white mobile:text-body mobile:font-body">
-                      Din nye forsikring
-                    </span>
-                    <span className="text-heading-3 font-heading-3 text-white mobile:text-body-bold mobile:font-body-bold" data-testid="text-offer-premium">
-                      {formatCurrency(offerPremium)}/år
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+          <AnnualSavingsCard
+            annualSavings={savings}
+            savingsPercentage={savingsPercentage}
+            currentPremium={currentPremium}
+            offerPremium={offerPremium}
+            variant={isWorseOffer ? "error" : "success"}
+          />
 
           {/* Highlights */}
           {highlights.length > 0 && (
