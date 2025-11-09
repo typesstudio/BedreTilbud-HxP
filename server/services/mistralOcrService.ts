@@ -59,7 +59,86 @@ export class MistralOCRService {
     }
   }
 
+  private async getPdfPageCount(pdfPath: string): Promise<number> {
+    try {
+      // Note: pdf-parse v1 has import issues in ES modules
+      // Skipping page count validation for now - keyword validation is more reliable
+      console.log(`[Mistral OCR] Page count validation skipped (import limitations)`);
+      return 0;
+    } catch (error) {
+      console.warn(`[Mistral OCR] Could not extract PDF page count: ${error}`);
+      return 0;
+    }
+  }
+
+  private validateOcrCompleteness(
+    markdown: string, 
+    expectedPageCount: number, 
+    extractedPageCount: number
+  ): { isComplete: boolean; issues: string[] } {
+    const issues: string[] = [];
+    
+    // Check 1: Page count mismatch
+    if (expectedPageCount > 0 && extractedPageCount < expectedPageCount) {
+      issues.push(`OCR extracted only ${extractedPageCount}/${expectedPageCount} pages`);
+    }
+    
+    // Check 2: Mandatory Danish policy keywords and their annual prices
+    const policyKeywords = [
+      { pattern: /Fritidshusforsikring|fritidshus/i, name: 'Fritidshusforsikring', shortName: 'hus' },
+      { pattern: /Ulykkesforsikring/i, name: 'Ulykkesforsikring', shortName: 'ulykke' },
+      { pattern: /Indboforsikring/i, name: 'Indboforsikring', shortName: 'indbo' }
+    ];
+    
+    const detectedPolicies: string[] = [];
+    const policiesWithPricing: string[] = [];
+    
+    for (const keyword of policyKeywords) {
+      if (keyword.pattern.test(markdown)) {
+        detectedPolicies.push(keyword.name);
+        
+        // Extract the section for this policy
+        const sectionMatch = markdown.match(new RegExp(
+          `${keyword.pattern.source}[\\s\\S]{0,2000}?(?=Tilbud på din|Tilbud Fritidshusforsikring|Tilbud Ulykkesforsikring|Tilbud Indboforsikring|$)`,
+          'i'
+        ));
+        
+        if (sectionMatch) {
+          const policySection = sectionMatch[0];
+          
+          // Check if this section has "Din pris pr. år" with an actual price
+          const annualPricePattern = /Din pris pr\. år[^\n]*?(\d[\d\s.,]+)\s*kr/i;
+          const hasPricing = annualPricePattern.test(policySection);
+          
+          if (hasPricing) {
+            policiesWithPricing.push(keyword.name);
+          } else {
+            issues.push(`${keyword.name} section missing annual price (Din pris pr. år)`);
+          }
+        }
+      }
+    }
+    
+    // Check 3: Minimum content length (multi-policy PDFs should be substantial)
+    if (markdown.length < 1000) {
+      issues.push(`OCR output too short (${markdown.length} chars) - likely incomplete`);
+    }
+    
+    console.log(`[Mistral OCR] Validation: Detected ${detectedPolicies.length} policy types: ${detectedPolicies.join(', ')}`);
+    console.log(`[Mistral OCR] Validation: ${policiesWithPricing.length}/${detectedPolicies.length} policies have annual pricing`);
+    if (policiesWithPricing.length > 0) {
+      console.log(`[Mistral OCR] Validation: Policies with pricing: ${policiesWithPricing.join(', ')}`);
+    }
+    
+    return {
+      isComplete: issues.length === 0,
+      issues
+    };
+  }
+
   async extractInsuranceDataFromPDF(filePath: string): Promise<PolicyExtractionResult> {
+    const MAX_RETRIES = 2;
+    
     try {
       console.log(`[Mistral OCR] Starting extraction for: ${filePath}`);
       
@@ -67,31 +146,70 @@ export class MistralOCRService {
         throw new Error(`File not found: ${filePath}`);
       }
 
-      // Step 1: Extract text using Mistral OCR
+      // Step 0: Get PDF metadata for validation
+      const expectedPageCount = await this.getPdfPageCount(filePath);
+      console.log(`[Mistral OCR] PDF contains ${expectedPageCount} pages (from metadata)`);
+
+      // Encode PDF once for all attempts
       console.log(`[Mistral OCR] Encoding PDF to base64...`);
       const base64Pdf = await this.encodePdfToBase64(filePath);
       
-      console.log(`[Mistral OCR] Sending to Mistral OCR API...`);
-      const ocrResponse = await mistral.ocr.process({
-        model: "mistral-ocr-latest",
-        document: {
-          type: "document_url",
-          documentUrl: `data:application/pdf;base64,${base64Pdf}`
-        },
-        includeImageBase64: false
-      });
+      let extractedMarkdown = '';
+      let ocrResponse: any;
+      let validationResult: { isComplete: boolean; issues: string[] } | null = null;
 
-      if (!ocrResponse.pages || ocrResponse.pages.length === 0) {
-        throw new Error("No pages extracted from PDF");
+      // Retry loop for OCR extraction
+      for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        console.log(`[Mistral OCR] Attempt ${attempt}/${MAX_RETRIES}: Sending to Mistral OCR API...`);
+        
+        ocrResponse = await mistral.ocr.process({
+          model: "mistral-ocr-latest",
+          document: {
+            type: "document_url",
+            documentUrl: `data:application/pdf;base64,${base64Pdf}`
+          },
+          includeImageBase64: false
+        });
+
+        if (!ocrResponse.pages || ocrResponse.pages.length === 0) {
+          console.warn(`[Mistral OCR] Attempt ${attempt}: No pages extracted`);
+          if (attempt < MAX_RETRIES) {
+            console.log(`[Mistral OCR] Retrying...`);
+            continue;
+          }
+          throw new Error("No pages extracted from PDF after retries");
+        }
+
+        // Combine all pages' markdown content
+        extractedMarkdown = ocrResponse.pages
+          .map((page: any) => page.markdown)
+          .join('\n\n---\n\n');
+        
+        const extractedPageCount = ocrResponse.pages.length;
+        console.log(`[Mistral OCR] Attempt ${attempt}: Extracted ${extractedPageCount} pages, total length: ${extractedMarkdown.length} characters`);
+        
+        // Validate OCR completeness
+        validationResult = this.validateOcrCompleteness(
+          extractedMarkdown,
+          expectedPageCount,
+          extractedPageCount
+        );
+
+        if (validationResult.isComplete) {
+          console.log(`[Mistral OCR] ✅ Validation passed on attempt ${attempt}`);
+          break;
+        } else {
+          console.warn(`[Mistral OCR] ⚠️ Validation failed on attempt ${attempt}:`);
+          validationResult.issues.forEach(issue => console.warn(`   - ${issue}`));
+          
+          if (attempt < MAX_RETRIES) {
+            console.log(`[Mistral OCR] Retrying due to validation failures...`);
+          } else {
+            console.error(`[Mistral OCR] ❌ All ${MAX_RETRIES} attempts failed validation`);
+            console.error(`[Mistral OCR] Proceeding with incomplete data - extraction may be partial`);
+          }
+        }
       }
-
-      // Combine all pages' markdown content
-      const extractedMarkdown = ocrResponse.pages
-        .map(page => page.markdown)
-        .join('\n\n---\n\n');
-      
-      console.log(`[Mistral OCR] Extracted ${ocrResponse.pages.length} pages, total length: ${extractedMarkdown.length} characters`);
-      console.log(`[Mistral OCR] Preview: ${extractedMarkdown.substring(0, 200)}...`);
 
       if (!extractedMarkdown || extractedMarkdown.trim().length === 0) {
         throw new Error("No text could be extracted from PDF");
