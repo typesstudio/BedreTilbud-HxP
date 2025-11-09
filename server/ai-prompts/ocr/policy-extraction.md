@@ -16,8 +16,12 @@ GENERELLE REGLER
 - **Separér policer strengt**: Hver policetype bliver sit eget objekt i `policies`. Ingen sammenblanding.
 - **Sideinterval (`pageRange`)**: Angiv som `"start-slut"` baseret på sideangivelser i teksten (fx "Side 3 af 12") eller overskriftsskel. Hvis kun én side: `"5-5"`.
 - **Talnormalisering (DKK)**:
-  - **VIGTIGT FOR DANSK FORMAT**: Danske tal bruger punktum som tusindtalsseparator og komma som decimal (fx "5.682,13 kr" = 5682.13)
-  - Fjern alle tusindtalsseparatorer (punktum, apostrof, mellemrum) og konverter komma til punktum før parsing
+  - **KRITISK DANSK FORMAT**: I Danmark betyder punktum (.) tusindtalsseparator og komma (,) decimal
+  - **Parsing-regel**: Fjern ALLE separatorer (punktum, mellemrum, apostrof), derefter erstat komma med punktum, så parse
+  - **Eksempler**: 
+    - "5.682,13 kr" → fjern separatorer → "5682,13" → erstat komma → "5682.13" → parse til 5682.13
+    - "3.154,04 kr" → fjern separatorer → "3154,04" → erstat komma → "3154.04" → parse til 3154.04
+    - "3 154,04 kr" → fjern separatorer → "3154,04" → erstat komma → "3154.04" → parse til 3154.04
   - Hvis præmie er pr. måned/kvartal/halvår → konverter til **årlig**: md×12, kvartal×4, halvår×2.
   - Selvrisiko (synonymer: *selvrisiko*, *egenandel*, *fradrag pr. skade*).
   - Alle beløb i DKK som **number** (uden "kr").
@@ -28,6 +32,7 @@ Dette er den vigtigste opgave. Præmie skal ALTID findes hvis den eksisterer i d
 
 1. **SØG SYSTEMATISK I FØLGENDE RÆKKEFØLGE**:
    a) Tabelrækker med labels: "Præmie", "Pris", "Premium", "Årlig betaling", "I alt pr. år", "Total", "Din pris pr. år", "Månedlig pris er", "Årlig pris inklusiv"
+      - VIGTIGT: Ignorer prikker/dots mellem label og beløb (fx "Din pris pr. år ........... 3.154,04 kr" → udtræk 3154.04)
       - Note: "Årlig pris inklusiv" kan have procent eller ekstra ord imellem (fx "Årlig pris inklusiv 1,1 % skadesforsikringsafgift er 2.078,53 kr")
    b) Oversigts-/sammendrags-tabel (ofte på første eller sidste side af policen)
    c) Faktura-/betalingsboks (ofte med beløb og betalingsdato)

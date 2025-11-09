@@ -97,12 +97,23 @@ export class MistralOCRService {
         throw new Error("No text could be extracted from PDF");
       }
 
+      // Preprocessing: Fix Danish pricing patterns split by dotted leaders and line breaks
+      // OCR often renders "Din pris pr. år ................ <br> 3.154,04 kr" with price on next line
+      // We need to merge them: "Din pris pr. år: 3.154,04 kr"
+      // Only match when there are dots (.) before <br> to avoid false matches
+      const preprocessedMarkdown = extractedMarkdown
+        .replace(/Din pris pr\. år[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Din pris pr. år: $1 kr')
+        .replace(/Månedlig pris er[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Månedlig pris er: $1 kr')
+        .replace(/Årlig pris inklusiv[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Årlig pris inklusiv: $1 kr');
+      
+      console.log('[Mistral OCR] Applied pricing pattern preprocessing (dotted leaders only)');
+
       // Step 2: Use Mistral Chat to structure the extracted markdown
       console.log(`[Mistral OCR] Sending to Mistral Chat for structured extraction...`);
       
       const systemPrompt = loadPrompt('ocr/policy-extraction');
       const userPrompt = replaceVariables(systemPrompt, {
-        extractedMarkdown
+        extractedMarkdown: preprocessedMarkdown
       });
       
       const chatResponse = await mistral.chat.complete({
