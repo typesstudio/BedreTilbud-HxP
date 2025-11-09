@@ -507,31 +507,37 @@ export default function InsuranceCheckPage() {
                     />
                   )}
                   <div className="flex w-full items-start gap-4 flex-wrap">
-                    <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
-                      <span className="text-caption font-caption text-subtext-color">
-                        Månedlig besparelse
-                      </span>
-                      <span className="text-heading-2 font-heading-2 text-success-600">
-                        {healthCheckPayload.cumulativeSavings.monthlyRange.min}-
-                        {healthCheckPayload.cumulativeSavings.monthlyRange.max} kr
-                      </span>
-                    </div>
-                    <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
-                      <span className="text-caption font-caption text-subtext-color">
-                        Total efter 12 måneder
-                      </span>
-                      <span className="text-heading-2 font-heading-2 text-success-600">
-                        {formatCurrency(healthCheckPayload.cumulativeSavings.after12Months)} spart
-                      </span>
-                    </div>
-                    <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
-                      <span className="text-caption font-caption text-subtext-color">
-                        Forventet efter 10 år
-                      </span>
-                      <span className="text-heading-2 font-heading-2 text-success-600">
-                        {formatCurrency(healthCheckPayload.cumulativeSavings.after10Years)} spart
-                      </span>
-                    </div>
+                    {healthCheckPayload.cumulativeSavings.monthlyRange && (
+                      <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                        <span className="text-caption font-caption text-subtext-color">
+                          Månedlig besparelse
+                        </span>
+                        <span className="text-heading-2 font-heading-2 text-success-600">
+                          {healthCheckPayload.cumulativeSavings.monthlyRange.min}-
+                          {healthCheckPayload.cumulativeSavings.monthlyRange.max} kr
+                        </span>
+                      </div>
+                    )}
+                    {healthCheckPayload.cumulativeSavings.after12Months && (
+                      <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                        <span className="text-caption font-caption text-subtext-color">
+                          Total efter 12 måneder
+                        </span>
+                        <span className="text-heading-2 font-heading-2 text-success-600">
+                          {formatCurrency(healthCheckPayload.cumulativeSavings.after12Months)} spart
+                        </span>
+                      </div>
+                    )}
+                    {healthCheckPayload.cumulativeSavings.after10Years && (
+                      <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                        <span className="text-caption font-caption text-subtext-color">
+                          Forventet efter 10 år
+                        </span>
+                        <span className="text-heading-2 font-heading-2 text-success-600">
+                          {formatCurrency(healthCheckPayload.cumulativeSavings.after10Years)} spart
+                        </span>
+                      </div>
+                    )}
                   </div>
                   <div className="flex w-full items-center gap-2 rounded-md bg-success-50 px-4 py-3">
                     <FeatherPiggyBank className="text-body font-body text-success-700" />

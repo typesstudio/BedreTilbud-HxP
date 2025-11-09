@@ -1,0 +1,15 @@
+Fejlbesked:
+
+TypeError: Cannot read properties of undefined (reading 'min')
+Se tekniske detaljer
+TypeError: Cannot read properties of undefined (reading 'min')
+    at InsuranceCheckPage (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/src/pages/InsuranceCheckPage.tsx:882:65)
+    at renderWithHooks (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=aaebeb6c:11548:26)
+    at updateFunctionComponent (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=aaebeb6c:14582:28)
+    at beginWork (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=aaebeb6c:15924:22)
+    at beginWork$1 (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=aaebeb6c:19753:22)
+    at performUnitOfWork (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=aaebeb6c:19198:20)
+    at workLoopSync (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=aaebeb6c:19137:13)
+    at renderRootSync (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=aaebeb6c:19116:15)
+    at recoverFromConcurrentError (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=aaebeb6c:18736:28)
+    at performSyncWorkOnRoot (https://daa7d0b2-1163-498d-8e03-41d6f833211c-00-1s75viomr4nn8.riker.replit.dev/@fs/home/runner/workspace/node_modules/.vite/deps/chunk-RPCDYKBN.js?v=aaebeb6c:18879:28)
