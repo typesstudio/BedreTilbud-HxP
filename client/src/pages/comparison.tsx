@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { useState } from "react";
+import { useState, Fragment } from "react";
 import { Badge } from "../../../src/ui/components/Badge";
 import { Button } from "../../../src/ui/components/Button";
 import { IconWithBackground } from "../../../src/ui/components/IconWithBackground";
@@ -301,15 +301,22 @@ export default function Comparison() {
                   </div>
                   
                   {detailedComparison.map((category: any, catIndex: number) => (
-                    <div key={catIndex} className="w-full">
+                    <Fragment key={`category-${catIndex}`}>
+                      {category.name && (
+                        <div className="flex w-full items-center gap-4 border-b-2 border-solid border-neutral-300 bg-neutral-100 dark:bg-neutral-700 py-3 px-2">
+                          <span className="text-body-bold font-body-bold text-default-font mobile:text-body-bold mobile:font-body-bold">
+                            {category.name}
+                          </span>
+                        </div>
+                      )}
                       {category.rows && category.rows.map((row: any, rowIndex: number) => (
                         <div key={`${catIndex}-${rowIndex}`} className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-4">
                           <div className="flex w-48 flex-none flex-col items-start gap-1 mobile:w-32">
-                            <span className="text-body-bold font-body-bold text-default-font mobile:text-body-bold mobile:font-body-bold">
+                            <span className="text-body font-body text-default-font mobile:text-body mobile:font-body">
                               {row.feature}
                             </span>
                             {row.description && (
-                              <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                              <span className="text-caption font-caption text-subtext-color mobile:text-caption mobile:font-caption">
                                 {row.description}
                               </span>
                             )}
@@ -334,7 +341,7 @@ export default function Comparison() {
                           </div>
                         </div>
                       ))}
-                    </div>
+                    </Fragment>
                   ))}
                 </div>
               </div>

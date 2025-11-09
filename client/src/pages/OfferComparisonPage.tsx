@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, Fragment } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation, useSearch } from "wouter";
 import {
@@ -471,40 +471,51 @@ export default function OfferComparisonPage() {
                 }
               >
                 {detailedComparison.map((category: any, catIndex: number) => (
-                  category.rows && category.rows.map((row: any, rowIndex: number) => (
-                    <Table.Row key={`${catIndex}-${rowIndex}`}>
-                      <Table.Cell>
-                        <div className="flex flex-col gap-1">
+                  <Fragment key={`category-${catIndex}`}>
+                    {category.name && (
+                      <Table.Row className="bg-neutral-50 dark:bg-neutral-700">
+                        <Table.Cell colSpan={3}>
                           <span className="text-body-bold font-body-bold text-default-font">
-                            {row.feature}
+                            {category.name}
                           </span>
-                          {row.description && (
-                            <span className="text-caption font-caption text-subtext-color">
-                              {row.description}
+                        </Table.Cell>
+                      </Table.Row>
+                    )}
+                    {category.rows && category.rows.map((row: any, rowIndex: number) => (
+                      <Table.Row key={`${catIndex}-${rowIndex}`}>
+                        <Table.Cell>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-body font-body text-default-font">
+                              {row.feature}
                             </span>
+                            {row.description && (
+                              <span className="text-caption font-caption text-subtext-color">
+                                {row.description}
+                              </span>
+                            )}
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell className="justify-center">
+                          {row.currentValue === 'inkluderet' || row.currentValue === true ? (
+                            <Badge variant="success">inkluderet</Badge>
+                          ) : row.currentValue === 'ikke inkluderet' || row.currentValue === false ? (
+                            <Badge variant="error">ikke inkluderet</Badge>
+                          ) : (
+                            <span className="text-body font-body text-default-font">{row.currentValue}</span>
                           )}
-                        </div>
-                      </Table.Cell>
-                      <Table.Cell className="justify-center">
-                        {row.currentValue === 'inkluderet' || row.currentValue === true ? (
-                          <Badge variant="success">inkluderet</Badge>
-                        ) : row.currentValue === 'ikke inkluderet' || row.currentValue === false ? (
-                          <Badge variant="neutral">ikke inkluderet</Badge>
-                        ) : (
-                          <span className="text-body font-body text-default-font">{row.currentValue}</span>
-                        )}
-                      </Table.Cell>
-                      <Table.Cell className="justify-center">
-                        {row.offerValue === 'inkluderet' || row.offerValue === true ? (
-                          <Badge variant="success">inkluderet</Badge>
-                        ) : row.offerValue === 'ikke inkluderet' || row.offerValue === false ? (
-                          <Badge variant="neutral">ikke inkluderet</Badge>
-                        ) : (
-                          <span className="text-body font-body text-default-font">{row.offerValue}</span>
-                        )}
-                      </Table.Cell>
-                    </Table.Row>
-                  ))
+                        </Table.Cell>
+                        <Table.Cell className="justify-center">
+                          {row.offerValue === 'inkluderet' || row.offerValue === true ? (
+                            <Badge variant="success">inkluderet</Badge>
+                          ) : row.offerValue === 'ikke inkluderet' || row.offerValue === false ? (
+                            <Badge variant="error">ikke inkluderet</Badge>
+                          ) : (
+                            <span className="text-body font-body text-default-font">{row.offerValue}</span>
+                          )}
+                        </Table.Cell>
+                      </Table.Row>
+                    ))}
+                  </Fragment>
                 ))}
               </Table>
             </div>
