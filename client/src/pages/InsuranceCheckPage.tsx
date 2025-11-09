@@ -369,7 +369,7 @@ export default function InsuranceCheckPage() {
               )}
 
               {/* 5. MANGLENDE INFORMATION */}
-              {healthCheckPayload.missingInformation && (
+              {healthCheckPayload.missingInformation && healthCheckPayload.missingInformation.categories && (
                 <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
                   <div className="flex w-full flex-col items-start gap-2">
                     <div className="flex w-full items-center justify-between">
@@ -386,7 +386,7 @@ export default function InsuranceCheckPage() {
                   </div>
                   <div className="flex w-full flex-col items-start gap-4">
                     {healthCheckPayload.missingInformation.categories.map((category: any, catIndex: number) => {
-                      const IconComponent = iconMap[category.icon] || FeatherHelpCircle;
+                      const IconComponent = iconMap[category?.icon] || FeatherHelpCircle;
                       return (
                         <div key={catIndex} className="flex w-full flex-col items-start gap-3">
                           <div className="flex w-full items-center gap-2">
