@@ -87,7 +87,12 @@ export interface IStorage {
 
   // Navigation Data
   getNavigationData(userId: string): Promise<{
-    comparisons: Array<Comparison & { companyName: string }>;
+    companies: Array<{
+      companyId: string;
+      companyName: string;
+      policyTypes: string[];
+      hasCombinedView: boolean;
+    }>;
     pendingThreads: Array<EmailThread & { companyName: string }>;
   }>;
 
@@ -562,17 +567,37 @@ export class MemStorage implements IStorage {
   }
 
   async getNavigationData(userId: string): Promise<{
-    comparisons: Array<Comparison & { companyName: string }>;
+    companies: Array<{
+      companyId: string;
+      companyName: string;
+      policyTypes: string[];
+      hasCombinedView: boolean;
+    }>;
     pendingThreads: Array<EmailThread & { companyName: string }>;
   }> {
     const userComparisons = Array.from(this.comparisons.values())
       .filter(c => c.userId === userId);
     
-    const comparisonsWithCompany = userComparisons.map(comparison => {
-      const company = this.companies.get(comparison.companyId || '');
+    const companyMap = new Map<string, Set<string>>();
+    
+    for (const comparison of userComparisons) {
+      const companyId = comparison.companyId || '';
+      if (!companyMap.has(companyId)) {
+        companyMap.set(companyId, new Set());
+      }
+      if (comparison.policyType) {
+        companyMap.get(companyId)!.add(comparison.policyType);
+      }
+    }
+    
+    const companies = Array.from(companyMap.entries()).map(([companyId, policyTypesSet]) => {
+      const company = this.companies.get(companyId);
+      const policyTypes = Array.from(policyTypesSet);
       return {
-        ...comparison,
-        companyName: company?.name || 'Unknown Company'
+        companyId,
+        companyName: company?.name || 'Unknown Company',
+        policyTypes,
+        hasCombinedView: policyTypes.length > 1
       };
     });
 
@@ -588,7 +613,7 @@ export class MemStorage implements IStorage {
     });
 
     return {
-      comparisons: comparisonsWithCompany,
+      companies,
       pendingThreads: threadsWithCompany
     };
   }
@@ -1099,7 +1124,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getNavigationData(userId: string): Promise<{
-    comparisons: Array<Comparison & { companyName: string }>;
+    companies: Array<{
+      companyId: string;
+      companyName: string;
+      policyTypes: string[];
+      hasCombinedView: boolean;
+    }>;
     pendingThreads: Array<EmailThread & { companyName: string }>;
   }> {
     const { db } = await import("./db");
@@ -1116,10 +1146,33 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(companies, eq(comparisons.companyId, companies.id))
       .where(eq(comparisons.userId, userId));
 
-    const comparisonsWithCompany = userComparisons.map(row => ({
-      ...row.comparison,
-      companyName: row.company?.name || 'Unknown Company'
-    }));
+    const companyMap = new Map<string, { name: string; policyTypes: Set<string> }>();
+    
+    for (const row of userComparisons) {
+      const companyId = row.comparison.companyId || '';
+      const companyName = row.company?.name || 'Unknown Company';
+      
+      if (!companyMap.has(companyId)) {
+        companyMap.set(companyId, {
+          name: companyName,
+          policyTypes: new Set()
+        });
+      }
+      
+      if (row.comparison.policyType) {
+        companyMap.get(companyId)!.policyTypes.add(row.comparison.policyType);
+      }
+    }
+    
+    const companiesData = Array.from(companyMap.entries()).map(([companyId, data]) => {
+      const policyTypes = Array.from(data.policyTypes);
+      return {
+        companyId,
+        companyName: data.name,
+        policyTypes,
+        hasCombinedView: policyTypes.length > 1
+      };
+    });
 
     // Fetch pending threads with company names using SQL join
     const userThreads = await db
@@ -1145,7 +1198,7 @@ export class DatabaseStorage implements IStorage {
     }));
 
     return {
-      comparisons: comparisonsWithCompany,
+      companies: companiesData,
       pendingThreads: threadsWithCompany
     };
   }
