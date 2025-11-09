@@ -1,22 +1,23 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { ArrowLeft, Upload } from "lucide-react";
-import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
+import { Badge } from "@/ui/components/Badge";
+import { Button } from "@/ui/components/Button";
+import { DropdownMenu } from "@/ui/components/DropdownMenu";
 import { IconButton } from "@/ui/components/IconButton";
 import { IconWithBackground } from "@/ui/components/IconWithBackground";
-import { FeatherFileText, FeatherTrash, FeatherUploadCloud } from "@subframe/core";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import { FeatherArrowRight, FeatherChevronDown, FeatherFileText, FeatherPlus, FeatherShield, FeatherTrash, FeatherUploadCloud } from "@subframe/core";
+import * as SubframeCore from "@subframe/core";
 
 export default function UploadOffer() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
   const userId = localStorage.getItem("userId");
   const [selectedCompany, setSelectedCompany] = useState("");
+  const [selectedCompanyName, setSelectedCompanyName] = useState("Vælg forsikringsselskab");
   const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -125,6 +126,11 @@ export default function UploadOffer() {
     return Math.round((bytes / Math.pow(k, i)) * 10) / 10 + ' ' + sizes[i];
   };
 
+  const handleCompanySelect = (companyId: string, companyName: string) => {
+    setSelectedCompany(companyId);
+    setSelectedCompanyName(companyName);
+  };
+
   const handleSubmit = () => {
     if (!selectedCompany) {
       toast({
@@ -150,149 +156,209 @@ export default function UploadOffer() {
     });
   };
 
+  const handleCancel = () => {
+    setLocation("/offers");
+  };
+
   return (
-    <AppLayoutWithNav userId={userId!}>
-      <main className="flex-1">
-        <section className="py-12 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-4xl mx-auto">
-            <Button
-              variant="ghost"
-              onClick={() => setLocation("/offers")}
-              className="mb-6 gap-2"
-              data-testid="button-back"
-            >
-              <ArrowLeft className="w-5 h-5" />
-              Tilbage til oversigt
-            </Button>
-
-            <div className="flex flex-col gap-6">
-              {/* Company Selection */}
-              <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:px-4 mobile:py-4">
-                <div className="flex w-full items-center gap-3">
-                  <IconWithBackground size="medium" icon={<FeatherUploadCloud />} />
-                  <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
-                    <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold">
-                      Vælg forsikringsselskab
-                    </span>
-                    <span className="text-caption font-caption text-subtext-color">
-                      Hvilket selskab kommer tilbuddet fra?
-                    </span>
-                  </div>
-                </div>
-                <Select value={selectedCompany} onValueChange={setSelectedCompany}>
-                  <SelectTrigger className="w-full text-lg p-6" data-testid="select-company">
-                    <SelectValue placeholder="Vælg forsikringsselskab" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(companies as any[]).map((company: any) => (
-                      <SelectItem key={company.id} value={company.id}>
-                        {company.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+    <DefaultPageLayout>
+      <div className="container max-w-none flex h-full w-full flex-col items-center gap-6 bg-default-background py-12 mobile:flex-col mobile:flex-nowrap mobile:gap-4 mobile:px-4 mobile:py-6">
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4">
+          {/* Header with progress stepper */}
+          <div className="flex w-full flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+            <div className="flex w-full flex-col items-start gap-2">
+              <span className="text-heading-1 font-heading-1 text-default-font mobile:text-heading-2 mobile:font-heading-2">
+                Upload eksisterende tilbud
+              </span>
+              <span className="text-body font-body text-subtext-color">
+                Del dit nuværende forsikringstilbud med os, så vi kan finde bedre løsninger
+              </span>
+            </div>
+            
+            {/* Progress stepper */}
+            <div className="flex w-full items-center gap-3 mobile:flex-wrap">
+              <div className="flex items-center gap-2">
+                <Badge data-testid="step-1">1</Badge>
+                <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                  Upload
+                </span>
               </div>
-
-              {/* File Upload */}
-              <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-4 mobile:py-4">
-                <div className="flex w-full items-center gap-3">
-                  <IconWithBackground size="medium" icon={<FeatherUploadCloud />} />
-                  <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
-                    <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold">
-                      Upload forsikringsdokumenter
-                    </span>
-                    <span className="text-caption font-caption text-subtext-color">
-                      Tilføj tilbud eller andre relevante dokumenter
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Hidden file input */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="application/pdf"
-                  multiple
-                  onChange={handleFileInputChange}
-                  className="hidden"
-                  data-testid="input-file"
-                />
-
-                {/* Drag and drop area */}
-                <div
-                  className="flex w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-brand-600 px-6 py-6 mobile:px-4 mobile:py-4 cursor-pointer hover:bg-brand-50 transition-colors"
-                  onClick={() => fileInputRef.current?.click()}
-                  onDragOver={handleDragOver}
-                  onDrop={handleDrop}
-                  data-testid="dropzone"
-                >
-                  <FeatherUploadCloud className="text-heading-1 font-heading-1 text-brand-700" />
-                  <div className="flex flex-col items-center justify-center gap-1">
-                    <span className="text-body font-body text-default-font text-center">
-                      Klik for at vælge filer eller træk og slip
-                    </span>
-                    <span className="text-caption font-caption text-subtext-color text-center">
-                      PDF, maks 10MB per fil
-                    </span>
-                  </div>
-                </div>
-
-                {/* Uploaded files list */}
-                {uploadedFiles.length > 0 && (
-                  <div className="flex w-full flex-col items-start gap-3">
-                    <span className="text-body-bold font-body-bold text-default-font">
-                      Uploadede filer ({uploadedFiles.length})
-                    </span>
-                    {uploadedFiles.map((file) => (
-                      <div
-                        key={file.id}
-                        className="flex w-full items-center gap-4 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4"
-                        data-testid={`file-item-${file.id}`}
-                      >
-                        <IconWithBackground
-                          variant="success"
-                          size="medium"
-                          icon={<FeatherFileText />}
-                        />
-                        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
-                          <span className="text-body-bold font-body-bold text-default-font">
-                            {file.fileName}
-                          </span>
-                          <span className="text-caption font-caption text-subtext-color">
-                            {formatFileSize(file.fileSize)} • Klar til upload
-                          </span>
-                        </div>
-                        <IconButton
-                          icon={<FeatherTrash />}
-                          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                            event.preventDefault();
-                            handleRemoveFile(file.id);
-                          }}
-                          data-testid={`button-remove-${file.id}`}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
+              <div className="flex h-px grow shrink-0 basis-0 flex-col items-center gap-2 bg-neutral-200" />
+              <div className="flex items-center gap-2">
+                <Badge variant="neutral" data-testid="step-2">2</Badge>
+                <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                  Analyser
+                </span>
               </div>
-
-              {/* Submit button */}
-              <div className="flex justify-end">
-                <Button
-                  onClick={handleSubmit}
-                  disabled={uploadMutation.isPending || !selectedCompany || pendingFiles.length === 0}
-                  size="lg"
-                  className="text-lg px-12 py-4 gap-2"
-                  data-testid="button-submit-offer"
-                >
-                  <Upload className="w-5 h-5" />
-                  {uploadMutation.isPending ? "Uploader..." : "Upload og sammenlign"}
-                </Button>
+              <div className="flex h-px grow shrink-0 basis-0 flex-col items-center gap-2 bg-neutral-200" />
+              <div className="flex items-center gap-2">
+                <Badge variant="neutral" data-testid="step-3">3</Badge>
+                <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                  Sammenlign
+                </span>
               </div>
             </div>
           </div>
-        </section>
-      </main>
-    </AppLayoutWithNav>
+
+          {/* Content */}
+          <div className="flex w-full flex-col items-start gap-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4">
+            {/* Company Selection */}
+            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-4 mobile:py-4">
+              <div className="flex w-full items-center gap-3">
+                <IconWithBackground size="medium" icon={<FeatherShield />} />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold">
+                    Vælg forsikringsselskab
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    Hvilket selskab er dit nuværende tilbud fra?
+                  </span>
+                </div>
+              </div>
+              
+              <SubframeCore.DropdownMenu.Root>
+                <SubframeCore.DropdownMenu.Trigger asChild={true}>
+                  <Button
+                    className="h-10 w-full flex-none"
+                    variant="neutral-secondary"
+                    size="large"
+                    iconRight={<FeatherChevronDown />}
+                    data-testid="select-company"
+                  >
+                    {selectedCompanyName}
+                  </Button>
+                </SubframeCore.DropdownMenu.Trigger>
+                <SubframeCore.DropdownMenu.Portal>
+                  <SubframeCore.DropdownMenu.Content
+                    side="bottom"
+                    align="start"
+                    sideOffset={4}
+                    asChild={true}
+                  >
+                    <DropdownMenu>
+                      {(companies as any[]).map((company: any) => (
+                        <DropdownMenu.DropdownItem
+                          key={company.id}
+                          icon={<FeatherShield />}
+                          onClick={() => handleCompanySelect(company.id, company.name)}
+                        >
+                          {company.name}
+                        </DropdownMenu.DropdownItem>
+                      ))}
+                    </DropdownMenu>
+                  </SubframeCore.DropdownMenu.Content>
+                </SubframeCore.DropdownMenu.Portal>
+              </SubframeCore.DropdownMenu.Root>
+            </div>
+
+            {/* File Upload */}
+            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-4 mobile:py-4">
+              <div className="flex w-full items-center gap-3">
+                <IconWithBackground size="medium" icon={<FeatherUploadCloud />} />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold">
+                    Upload forsikringsdokumenter
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    Tilføj police, tilbud eller andre relevante dokumenter
+                  </span>
+                </div>
+              </div>
+              
+              {/* Hidden file input */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf"
+                multiple
+                onChange={handleFileInputChange}
+                className="hidden"
+                data-testid="input-file"
+              />
+
+              {/* Drag and drop area */}
+              <div
+                className="flex w-full flex-col items-center justify-center gap-2 rounded-md border border-dashed border-brand-600 px-6 py-6 mobile:px-4 mobile:py-4 cursor-pointer hover:bg-brand-50 transition-colors"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={handleDragOver}
+                onDrop={handleDrop}
+                data-testid="dropzone"
+              >
+                <FeatherUploadCloud className="text-heading-1 font-heading-1 text-brand-700" />
+                <div className="flex flex-col items-center justify-center gap-1">
+                  <span className="text-body font-body text-default-font text-center">
+                    Klik for at vælge filer eller træk og slip
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color text-center">
+                    PDF, maks 10MB per fil
+                  </span>
+                </div>
+              </div>
+
+              {/* Uploaded files list */}
+              {uploadedFiles.length > 0 && (
+                <div className="flex w-full flex-col items-start gap-3">
+                  <span className="text-body-bold font-body-bold text-default-font">
+                    Uploadede filer
+                  </span>
+                  {uploadedFiles.map((file) => (
+                    <div
+                      key={file.id}
+                      className="flex w-full items-center gap-4 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4"
+                      data-testid={`file-item-${file.id}`}
+                    >
+                      <IconWithBackground
+                        variant="success"
+                        size="medium"
+                        icon={<FeatherFileText />}
+                      />
+                      <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                        <span className="text-body-bold font-body-bold text-default-font">
+                          {file.fileName}
+                        </span>
+                        <span className="text-caption font-caption text-subtext-color">
+                          {formatFileSize(file.fileSize)} • Uploadet nu
+                        </span>
+                      </div>
+                      <IconButton
+                        icon={<FeatherTrash />}
+                        onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                          event.preventDefault();
+                          handleRemoveFile(file.id);
+                        }}
+                        data-testid={`button-remove-${file.id}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex w-full items-center justify-between border-t border-solid border-neutral-border pt-6 mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:pt-4 mobile:pb-0">
+            <Button
+              className="h-10 w-auto flex-none mobile:h-10 mobile:w-full mobile:flex-none"
+              variant="neutral-secondary"
+              size="large"
+              onClick={handleCancel}
+              data-testid="button-cancel"
+            >
+              Annuller
+            </Button>
+            <Button
+              className="h-10 w-auto flex-none mobile:h-10 mobile:w-full mobile:flex-none"
+              size="large"
+              iconRight={<FeatherArrowRight />}
+              onClick={handleSubmit}
+              disabled={uploadMutation.isPending || !selectedCompany || pendingFiles.length === 0}
+              data-testid="button-submit-offer"
+            >
+              {uploadMutation.isPending ? "Uploader..." : "Start forsikrings analyse"}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </DefaultPageLayout>
   );
 }
