@@ -154,6 +154,7 @@ export class MistralOCRService {
     
     let uploadedFileId: string | null = null;
     let threadId: string | null = null;
+    let assistant: any = null;
     
     try {
       // Step 1: Upload PDF to OpenAI storage
@@ -170,7 +171,7 @@ export class MistralOCRService {
       
       // Step 2: Create an assistant for OCR extraction
       console.log(`[OpenAI Fallback] Creating assistant...`);
-      const assistant = await openai.beta.assistants.create({
+      assistant = await openai.beta.assistants.create({
         name: "Insurance PDF OCR Extractor",
         instructions: `You are an expert OCR system for Danish insurance documents. Extract ALL text from PDF files, preserving exact formatting, tables, and pricing patterns.
 
@@ -211,7 +212,7 @@ CRITICAL INSTRUCTIONS:
       
       // Step 4: Run the assistant
       console.log(`[OpenAI Fallback] Starting assistant run...`);
-      let run = await openai.beta.threads.runs.create(threadId, {
+      let run = await openai.beta.threads.runs.create(threadId!, {
         assistant_id: assistant.id
       });
       
@@ -226,7 +227,7 @@ CRITICAL INSTRUCTIONS:
         }
         
         await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-        run = await openai.beta.threads.runs.retrieve(threadId!, run.id);
+        run = await openai.beta.threads.runs.retrieve(run.id, { thread_id: threadId! });
         attempts++;
         
         if (attempts % 5 === 0) {
@@ -241,8 +242,10 @@ CRITICAL INSTRUCTIONS:
       }
       
       // Step 6: Retrieve messages from the thread
-      console.log(`[OpenAI Fallback] Retrieving extracted text...`);
-      const messages = await openai.beta.threads.messages.list(threadId);
+      console.log(`[OpenAI Fallback] Retrieving extracted text from thread ${threadId}...`);
+      
+      // Pass empty query object to avoid SDK parameter issues
+      const messages = await openai.beta.threads.messages.list(threadId!, {});
       
       // Get the assistant's response (most recent message)
       const assistantMessages = messages.data.filter(m => m.role === 'assistant');
@@ -260,27 +263,29 @@ CRITICAL INSTRUCTIONS:
       
       console.log(`[OpenAI Fallback] ✅ Successfully extracted ${extractedText.length} characters`);
       
-      // Step 7: Clean up assistant
-      try {
-        await openai.beta.assistants.delete(assistant.id);
-        console.log(`[OpenAI Fallback] ✅ Cleaned up assistant`);
-      } catch (cleanupError: any) {
-        console.warn(`[OpenAI Fallback] ⚠️ Failed to delete assistant: ${cleanupError.message}`);
-      }
-      
       return extractedText;
       
     } catch (error: any) {
       console.error(`[OpenAI Fallback] Extraction failed: ${error.message || error}`);
       throw new Error(`OpenAI fallback failed: ${error.message || error}`);
     } finally {
-      // Clean up resources
+      // Clean up resources (guaranteed cleanup even on errors)
       if (uploadedFileId) {
         try {
           await openai.files.delete(uploadedFileId);
           console.log(`[OpenAI Fallback] ✅ Cleaned up uploaded file`);
         } catch (deleteError: any) {
           console.warn(`[OpenAI Fallback] ⚠️ Failed to delete file: ${deleteError.message}`);
+        }
+      }
+      
+      // Clean up assistant if it was created
+      if (assistant?.id) {
+        try {
+          await openai.beta.assistants.delete(assistant.id);
+          console.log(`[OpenAI Fallback] ✅ Cleaned up assistant`);
+        } catch (cleanupError: any) {
+          console.warn(`[OpenAI Fallback] ⚠️ Failed to delete assistant: ${cleanupError.message}`);
         }
       }
     }
