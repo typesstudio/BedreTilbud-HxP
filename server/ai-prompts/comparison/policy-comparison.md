@@ -34,7 +34,7 @@ GENERELLE REGLER
 - Status-labels:
   - Dækning celler: "Pakket" (inkluderet), "Ikke inkluderet" (udeladt/mangler), "Ukendt" (tvetydigt).
   - Række-status: "improved" | "same" | "reduced" | "unknown".
-- Ikon/variant til UI: variant ∈ {success, warning, error, info, muted}.
+- Ikon/variant til UI: variant ∈ {success, warning, error, info}.
 - Severity: critical | important | question.
 - Kvalitetsscore (0–100): Start 70, minus 8/4/1 for hvert critical/important/question; clamp 0–100.
 
