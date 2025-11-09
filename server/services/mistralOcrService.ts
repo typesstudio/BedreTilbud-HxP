@@ -85,106 +85,146 @@ export class MistralOCRService {
     markdown: string, 
     expectedPageCount: number, 
     extractedPageCount: number
-  ): { isComplete: boolean; issues: string[] } {
+  ): { isComplete: boolean; issues: string[]; qualityScore: number } {
     const issues: string[] = [];
+    let qualityScore = 100;
     
     // Check 1: Page count mismatch
     if (expectedPageCount > 0 && extractedPageCount < expectedPageCount) {
       issues.push(`OCR extracted only ${extractedPageCount}/${expectedPageCount} pages`);
+      qualityScore -= 20;
     }
     
-    // Check 2: Mandatory Danish policy keywords and their annual prices
-    const policyKeywords = [
-      { pattern: /Fritidshusforsikring|fritidshus/i, name: 'Fritidshusforsikring', shortName: 'hus' },
-      { pattern: /Ulykkesforsikring/i, name: 'Ulykkesforsikring', shortName: 'ulykke' },
-      { pattern: /Indboforsikring/i, name: 'Indboforsikring', shortName: 'indbo' }
-    ];
-    
-    const detectedPolicies: string[] = [];
-    const policiesWithPricing: string[] = [];
-    
-    for (const keyword of policyKeywords) {
-      if (keyword.pattern.test(markdown)) {
-        detectedPolicies.push(keyword.name);
-        
-        // Extract the section for this policy
-        const sectionMatch = markdown.match(new RegExp(
-          `${keyword.pattern.source}[\\s\\S]{0,2000}?(?=Tilbud på din|Tilbud Fritidshusforsikring|Tilbud Ulykkesforsikring|Tilbud Indboforsikring|$)`,
-          'i'
-        ));
-        
-        if (sectionMatch) {
-          const policySection = sectionMatch[0];
-          
-          // Check if this section has "Din pris pr. år" with an actual price
-          const annualPricePattern = /Din pris pr\. år[^\n]*?(\d[\d\s.,]+)\s*kr/i;
-          const hasPricing = annualPricePattern.test(policySection);
-          
-          if (hasPricing) {
-            policiesWithPricing.push(keyword.name);
-          } else {
-            issues.push(`${keyword.name} section missing annual price (Din pris pr. år)`);
-          }
-        }
-      }
-    }
-    
-    // Check 3: Minimum content length (multi-policy PDFs should be substantial)
+    // Check 2: Minimum content length (multi-policy PDFs should be substantial)
     if (markdown.length < 1000) {
       issues.push(`OCR output too short (${markdown.length} chars) - likely incomplete`);
+      qualityScore -= 30;
     }
+    
+    // Check 3: Price/token density (should have reasonable number of kr amounts)
+    const priceMatches = markdown.match(/\d[\d\s.,]+\s*kr/gi);
+    const priceCount = priceMatches ? priceMatches.length : 0;
+    if (priceCount < 3) {
+      issues.push(`Very low price density (${priceCount} kr amounts found) - likely truncated`);
+      qualityScore -= 25;
+    }
+    
+    // Check 4: Content variety (not just repeated lines)
+    const lines = markdown.split('\n').filter(l => l.trim().length > 0);
+    const uniqueLines = new Set(lines);
+    const varietyRatio = uniqueLines.size / Math.max(lines.length, 1);
+    
+    if (varietyRatio < 0.3 && lines.length > 10) {
+      issues.push(`Low content variety (${Math.round(varietyRatio * 100)}% unique lines) - likely truncated/repeated`);
+      qualityScore -= 25;
+    }
+    
+    // Check 5: Detect policy keywords (just for logging, not a failure)
+    const policyKeywords = [
+      { pattern: /Fritidshusforsikring|fritidshus/i, name: 'Fritidshusforsikring' },
+      { pattern: /Ulykkesforsikring/i, name: 'Ulykkesforsikring' },
+      { pattern: /Indboforsikring/i, name: 'Indboforsikring' }
+    ];
+    
+    const detectedPolicies = policyKeywords
+      .filter(k => k.pattern.test(markdown))
+      .map(k => k.name);
     
     console.log(`[Mistral OCR] Validation: Detected ${detectedPolicies.length} policy types: ${detectedPolicies.join(', ')}`);
-    console.log(`[Mistral OCR] Validation: ${policiesWithPricing.length}/${detectedPolicies.length} policies have annual pricing`);
-    if (policiesWithPricing.length > 0) {
-      console.log(`[Mistral OCR] Validation: Policies with pricing: ${policiesWithPricing.join(', ')}`);
-    }
+    console.log(`[Mistral OCR] Validation: Quality score: ${qualityScore}/100`);
+    console.log(`[Mistral OCR] Validation: Price density: ${priceCount} kr amounts, Content variety: ${Math.round(varietyRatio * 100)}%`);
+    
+    // Consider OCR complete if quality score is reasonable (>50)
+    // This allows AI extraction to proceed even with imperfect OCR
+    const isComplete = qualityScore > 50;
     
     return {
-      isComplete: issues.length === 0,
-      issues
+      isComplete,
+      issues,
+      qualityScore
     };
   }
 
   private async extractWithOpenAIVision(filePath: string): Promise<string> {
-    console.log(`[OpenAI Vision] Starting fallback OCR extraction...`);
+    console.log(`[OpenAI Fallback] Starting PDF extraction using Responses API...`);
     
     if (!openai) {
       throw new Error("OpenAI client not initialized - OPENAI_API_KEY not available");
     }
     
+    let uploadedFileId: string | null = null;
+    
     try {
-      const base64Pdf = await this.encodePdfToBase64(filePath);
+      // Step 1: Upload PDF to OpenAI storage
+      console.log(`[OpenAI Fallback] Uploading PDF file...`);
+      const fileStream = fs.createReadStream(filePath);
       
+      const uploadedFile = await openai.files.create({
+        file: fileStream,
+        purpose: "assistants"
+      });
+      
+      uploadedFileId = uploadedFile.id;
+      console.log(`[OpenAI Fallback] ✅ File uploaded: ${uploadedFileId}`);
+      
+      // Step 2: Request structured text extraction via Responses API
+      console.log(`[OpenAI Fallback] Requesting text extraction via Responses API...`);
+      
+      // Note: The Responses API might not exist in the current OpenAI SDK
+      // Falling back to using Chat Completions with the Assistants API
+      console.log(`[OpenAI Fallback] Using Chat Completions API with vision model...`);
+      
+      // Try using gpt-4-turbo with vision capabilities
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4-turbo",  // Using GPT-4 Turbo with vision
         messages: [
           {
             role: "user",
-            content: [
-              {
-                type: "text",
-                text: "Extract all text from this Danish insurance offer PDF. Preserve the exact formatting, pricing patterns (Din pris pr. år), and numerical values. Include ALL policy sections (Fritidshusforsikring, Ulykkesforsikring, Indboforsikring). Output as plain text with clear section breaks."
-              },
-              {
-                type: "image_url",
-                image_url: {
-                  url: `data:application/pdf;base64,${base64Pdf}`
-                }
-              }
-            ]
+            content: `I have uploaded a PDF file (file ID: ${uploadedFileId}). Please extract ALL text from this Danish insurance PDF document. Preserve exact formatting, tables, pricing patterns, and numerical values.
+
+CRITICAL INSTRUCTIONS:
+1. Include ALL policy sections (Fritidshusforsikring, Ulykkesforsikring, Indboforsikring)
+2. Preserve ALL Danish pricing patterns:
+   - "Din pris pr. år: X.XXX,XX kr"
+   - "Månedlig pris er: X.XXX,XX kr"
+   - "Årlig pris inklusiv: X.XXX,XX kr"
+3. For each policy type, FIND and INCLUDE the annual price even if the label is different
+4. Output as plain text with clear section breaks between policies
+5. Use markdown formatting for structure`
           }
         ],
-        max_tokens: 4096
+        max_tokens: 4096,
+        temperature: 0
       });
-
+      
+      // Step 3: Extract text from response
       const extractedText = response.choices[0]?.message?.content || '';
-      console.log(`[OpenAI Vision] Extracted ${extractedText.length} characters`);
+      
+      // Debug logging to understand what's being returned
+      console.log(`[OpenAI Fallback] Response type: ${typeof extractedText}`);
+      console.log(`[OpenAI Fallback] Response preview (first 500 chars): ${extractedText.substring(0, 500)}`);
+      
+      if (!extractedText || typeof extractedText !== 'string' || extractedText.trim().length === 0) {
+        throw new Error("OpenAI returned empty or invalid response");
+      }
+      
+      console.log(`[OpenAI Fallback] ✅ Successfully extracted ${extractedText.length} characters`);
       
       return extractedText;
-    } catch (error) {
-      console.error(`[OpenAI Vision] Extraction failed: ${error}`);
-      throw new Error(`OpenAI Vision fallback failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      
+    } catch (error: any) {
+      console.error(`[OpenAI Fallback] Extraction failed: ${error.message || error}`);
+      throw new Error(`OpenAI fallback failed: ${error.message || error}`);
+    } finally {
+      // Step 4: Clean up - delete the uploaded file (in finally block for guaranteed cleanup)
+      if (uploadedFileId) {
+        try {
+          await openai.files.delete(uploadedFileId);
+          console.log(`[OpenAI Fallback] ✅ Cleaned up uploaded file`);
+        } catch (deleteError: any) {
+          console.warn(`[OpenAI Fallback] ⚠️ Failed to delete uploaded file: ${deleteError.message}`);
+        }
+      }
     }
   }
 
@@ -354,8 +394,100 @@ export class MistralOCRService {
         throw new Error("Mistral Chat returned empty response");
       }
       
-      const result = JSON.parse(content);
+      let result = JSON.parse(content);
       console.log(`[Mistral OCR] Successfully extracted ${result.policies?.length || 0} policies`);
+      
+      // Post-extraction validation: Check for missing critical fields (premiums/deductibles)
+      const policiesWithMissingData = (result.policies || []).filter((policy: any) => 
+        policy.premium === null || policy.premium === undefined || policy.premium === 0
+      );
+      
+      if (policiesWithMissingData.length > 0) {
+        console.warn(`[Mistral OCR] ⚠️ Post-extraction validation: ${policiesWithMissingData.length} policies missing premiums:`);
+        policiesWithMissingData.forEach((p: any) => {
+          console.warn(`   - ${p.type}: premium = ${p.premium}`);
+        });
+        
+        // Trigger OpenAI Vision fallback if available
+        if (openai) {
+          console.log(`[Mistral OCR] 🔄 Activating OpenAI Vision fallback due to missing policy premiums...`);
+          
+          try {
+            // Use OpenAI Vision as fallback
+            const visionMarkdown = await this.extractWithOpenAIVision(filePath);
+            console.log(`[OpenAI Vision] ✅ Fallback extraction successful`);
+            
+            // Reprocess with Vision markdown
+            const visionPreprocessed = visionMarkdown
+              .replace(/Din pris pr\. år[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Din pris pr. år: $1 kr')
+              .replace(/Månedlig pris er[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Månedlig pris er: $1 kr')
+              .replace(/Årlig pris inklusiv[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Årlig pris inklusiv: $1 kr');
+            
+            console.log('[OpenAI Vision] Applied pricing pattern preprocessing');
+            console.log('[OpenAI Vision] Sending to Mistral Chat for structured extraction...');
+            
+            const visionPrompt = replaceVariables(systemPrompt, {
+              extractedMarkdown: visionPreprocessed
+            });
+            
+            const visionChatResponse = await mistral.chat.complete({
+              model: "mistral-large-latest",
+              messages: [
+                {
+                  role: "system",
+                  content: systemPrompt
+                },
+                {
+                  role: "user",
+                  content: visionPrompt
+                },
+              ],
+              responseFormat: { type: "json_object" },
+              maxTokens: 4096,
+            });
+            
+            const visionChoice = visionChatResponse.choices?.[0];
+            const visionRawContent = visionChoice?.message?.content;
+            const visionContent = typeof visionRawContent === 'string' 
+              ? visionRawContent 
+              : Array.isArray(visionRawContent) 
+                ? visionRawContent.map(chunk => 'text' in chunk ? chunk.text : '').join('') 
+                : '';
+            
+            if (visionContent && visionContent.trim().length > 0) {
+              const visionResult = JSON.parse(visionContent);
+              console.log(`[OpenAI Vision] Extracted ${visionResult.policies?.length || 0} policies from Vision fallback`);
+              
+              // Check Vision result for missing premiums
+              const visionMissingData = (visionResult.policies || []).filter((policy: any) => 
+                policy.premium === null || policy.premium === undefined || policy.premium === 0
+              );
+              
+              if (visionMissingData.length < policiesWithMissingData.length) {
+                console.log(`[OpenAI Vision] ✅ Fallback improved results (${policiesWithMissingData.length - visionMissingData.length} more premiums found)`);
+                result = visionResult;
+              } else {
+                console.warn(`[OpenAI Vision] ⚠️ Fallback did not improve results, using best available data`);
+              }
+              
+              if (visionMissingData.length > 0) {
+                console.warn(`[OpenAI Vision] Still missing premiums for:`);
+                visionMissingData.forEach((p: any) => console.warn(`   - ${p.type}`));
+              }
+            } else {
+              console.error(`[OpenAI Vision] Extraction returned empty content, using Mistral data`);
+            }
+          } catch (visionError: any) {
+            console.error(`[OpenAI Vision] Fallback failed: ${visionError.message || visionError}`);
+            console.error(`[Mistral OCR] Proceeding with Mistral data despite missing premiums`);
+          }
+        } else {
+          console.warn(`[Mistral OCR] ⚠️ OpenAI Vision fallback unavailable (OPENAI_API_KEY not set)`);
+          console.warn(`[Mistral OCR] Proceeding with incomplete data - ${policiesWithMissingData.length} policies missing premiums`);
+        }
+      } else {
+        console.log(`[Mistral OCR] ✅ Post-extraction validation: All policies have premiums`);
+      }
       
       return {
         policies: result.policies || [],

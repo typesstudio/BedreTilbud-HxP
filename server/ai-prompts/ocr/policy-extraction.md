@@ -30,15 +30,44 @@ GENERELLE REGLER
 **KRITISK: PRÆMIE-UDTRÆKNINGSSTRATEGI (ALTID FØLG DENNE)**
 Dette er den vigtigste opgave. Præmie skal ALTID findes hvis den eksisterer i dokumentet.
 
+**VIGTIG: Søg i HELE policens tekstsektion, ikke kun specifikke labels!**
+
 1. **SØG SYSTEMATISK I FØLGENDE RÆKKEFØLGE**:
-   a) Tabelrækker med labels: "Præmie", "Pris", "Premium", "Årlig betaling", "I alt pr. år", "Total", "Din pris pr. år", "Månedlig pris er", "Årlig pris inklusiv"
+   a) **PRIMARY: Eksplicitte pris-labels** (tabelrækker med labels):
+      - "Præmie", "Pris", "Premium", "Årlig betaling", "I alt pr. år", "Total"
+      - "Din pris pr. år", "Månedlig pris er", "Årlig pris inklusiv"
       - VIGTIGT: Ignorer prikker/dots mellem label og beløb (fx "Din pris pr. år ........... 3.154,04 kr" → udtræk 3154.04)
-      - Note: "Årlig pris inklusiv" kan have procent eller ekstra ord imellem (fx "Årlig pris inklusiv 1,1 % skadesforsikringsafgift er 2.078,53 kr")
-   b) Oversigts-/sammendrags-tabel (ofte på første eller sidste side af policen)
-   c) Faktura-/betalingsboks (ofte med beløb og betalingsdato)
-   d) Multi-police tabel (match præmie til policetype via række-navn eller kolonne)
-   e) Side-footer med "Din pris", "Samlet pris", "Årlig præmie"
-   f) Tekstafsnit med sætninger som "Du betaler X kr om året", "Præmien udgør", "Prisen er"
+      - Note: "Årlig pris inklusiv" kan have procent eller ekstra ord imellem
+   
+   b) **SECONDARY: Dæknings-oversigtstabeller** (ofte indeholder totalpris):
+      - Scan tabeller med dækninger (fx "Indboforsikring", "Brand", "Vandskade")
+      - Kig efter kolonner med "Beløb", "Sum", "Dækning", eller bare kr-værdier
+      - Identificer den STØRSTE kr-værdi i tabellen (ofte totalpræmien)
+      - Match værdi til kontekst (fx samme række som policetypens navn)
+   
+   c) **TERTIARY: Find ALLE kr-beløb i policens tekstsektion**:
+      - Scan HELE policens tekst for ALLE mønstre som "X.XXX,XX kr" eller "X XXX,XX kr"
+      - Ignorer små beløb (<500 kr) medmindre det er den eneste værdi
+      - Vælg det mest sandsynlige årlige præmie-beløb baseret på:
+        * Kontekst omkring beløbet (nærhed til ord som "pris", "præmie", "betaling")
+        * Størrelse (typisk 1.000-50.000 kr/år for private forsikringer)
+        * Placering (ofte i oversigt, sammendrag, eller tæt på policetype-overskrift)
+   
+   d) **Oversigts-/sammendrags-tabel** (ofte på første eller sidste side):
+      - Kig efter sammendragsbokse med flere policer
+      - Match pris til den korrekte policetype
+   
+   e) **Faktura-/betalingsboks**:
+      - Ofte med beløb og betalingsdato
+      - Kan indeholde totalpris for alle policer - match til korrekt type
+   
+   f) **Multi-police tabel**:
+      - Match præmie til policetype via række-navn eller kolonne
+      - Brug kolonneoverskrifter og række-labels til at matche
+   
+   g) **Side-footer eller tekstafsnit**:
+      - "Din pris", "Samlet pris", "Årlig præmie"
+      - Sætninger som "Du betaler X kr om året", "Præmien udgør", "Prisen er"
    
 2. **ALDRIG GÆT ELLER ANTAG**:
    - Hvis du IKKE finder præmie efter at have søgt alle steder → sæt `null` (IKKE 0)
@@ -75,13 +104,28 @@ Dette er den vigtigste opgave. Præmie skal ALTID findes hvis den eksisterer i d
 
 EKSTRATIONSSTRATEGI (OBLIGATORISK)
 1) Segmentér dokumentet i afsnit pr. policetype vha. overskrifter, sektionstitler, tabelrammer og gentagne labels (fx "Dækning", "Præmie", "Selvrisiko", "Gyldighed", "Policenr.").
+
 2) For hvert segment:
-   - **FØRST: Find præmie vha. den systematiske søgestrategi ovenfor** (tjek alle 6 steder!)
+   - **FØRST: Find præmie vha. den systematiske søgestrategi ovenfor**:
+     * Tjek ALLE 7 steder (a-g) i rækkefølge
+     * Hvis PRIMARY labels mangler → scan HELE policens tekstsektion for kr-beløb
+     * Kig i dækningstabeller, sammendrag, og OVERALT i policens tekst
+     * Brug kontekst (størrelse, placering, nærhed til nøgleord) til at identificere præmien
    - Find selskab, policenummer, gyldighed, selvrisiko.
    - Udtræk dækningsrækker og tilvalg til `coverages` og `benefits`.
    - Fastlæg `pageRange`.
-3) Normalisér værdier og udfyld felter. Brug `null` når usikkert – **aldrig** tekst i talfelter.
-4) Saml alle objekter i `policies` og valider JSON.
+
+3) **VIGTIG: Hvis "Din pris pr. år" label mangler**:
+   - Scan HELE policens sektion for ALLE kr-beløb
+   - Kig specielt i:
+     * Dæknings-oversigtstabeller (typisk indeholder totalpris)
+     * Sammendrags-sektioner
+     * Tæt på policetype-overskrift
+   - Brug logik til at vælge det rigtige beløb (størrelse, kontekst, placering)
+
+4) Normalisér værdier og udfyld felter. Brug `null` når usikkert – **aldrig** tekst i talfelter.
+
+5) Saml alle objekter i `policies` og valider JSON.
 
 OUTPUTFORMAT (STRICT – returnér kun dette JSON-skema)
 {
