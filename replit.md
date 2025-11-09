@@ -6,6 +6,31 @@ BedreTilbud is a Danish insurance comparison platform aimed at users aged 50+. I
 
 ## Recent Changes (November 2025)
 
+### OCR Danish Number Format Improvements (Complete - Nov 9, 2025)
+Fixed critical OCR extraction issues for Danish insurance PDFs with comprehensive preprocessing and parsing improvements:
+
+**Key Improvements**:
+- **Danish Number Parsing**: Added explicit normalization rules to handle Danish number format (period as thousands separator, comma as decimal)
+  - Parser removes ALL separators (dots, spaces, apostrophes), then replaces comma with period before parsing
+  - Examples: "5.682,13 kr" → 5682.13, "3.154,04 kr" → 3154.04, "31 260 kr" → 31260
+- **Dotted Leader Preprocessing**: Fixed pricing patterns split by line breaks in OCR markdown
+  - Merges patterns like "Din pris pr. år ................ <br> 3.154,04 kr" → "Din pris pr. år: 3.154,04 kr"
+  - Conservative regex (\.{3,}) only matches actual dotted leaders to prevent false matches
+  - Handles three Danish pricing patterns: "Din pris pr. år", "Månedlig pris er", "Årlig pris inklusiv"
+
+**Files Modified**:
+- `server/ai-prompts/ocr/policy-extraction.md`: Added Danish number format parsing instructions with examples
+- `server/services/mistralOcrService.ts`: Implemented OCR markdown preprocessing before AI structured extraction
+
+**Testing & Debugging Tools**:
+- `server/scripts/debug-ocr-markdown.ts`: Created debug script for investigating raw OCR markdown output
+- `server/scripts/reprocess-svphil.ts`: End-to-end validation script for multi-policy extraction
+
+**Test Results**:
+- ✅ Fritidshusforsikring (hus): 5623.47 kr extracted correctly
+- ✅ Ulykkesforsikring (ulykke): 995.10 kr extracted correctly
+- Architect-reviewed: Production-ready, no regressions
+
 ### Multi-Policy Comparison Feature (Complete - Nov 8, 2025)
 Implemented automatic 1:1 policy matching and tabbed comparison interface for offers with multiple policies:
 
