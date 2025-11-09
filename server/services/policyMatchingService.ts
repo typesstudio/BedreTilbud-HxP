@@ -120,6 +120,84 @@ export class PolicyMatchingService {
     return { matched: matchedList, unmatched: unmatchedList };
   }
 
+  private arePoliciesSimilar(currentPolicy: Policy, offerPolicy: Policy): boolean {
+    const currentData = currentPolicy.coverageDetails as any;
+    const offerData = offerPolicy.coverageDetails as any;
+
+    if (!currentData || !offerData) return false;
+
+    if (currentData.policyNumber && offerData.policyNumber && currentData.policyNumber === offerData.policyNumber) {
+      console.log(`[Policy Matching] ⚠️ Policies have identical policy numbers - same policy`, {
+        policyNumber: currentData.policyNumber
+      });
+      return true;
+    }
+
+    const hasPremiumData = currentPolicy.premium && offerPolicy.premium;
+    const hasDeductibleData = currentPolicy.deductible && offerPolicy.deductible;
+    const hasCompanyData = currentData.company && offerData.company;
+
+    if (!hasPremiumData && !hasDeductibleData && !hasCompanyData) {
+      console.log(`[Policy Matching] ℹ️ Insufficient data for similarity check - allowing comparison`);
+      return false;
+    }
+
+    let matchCount = 0;
+    let checkCount = 0;
+
+    if (hasPremiumData) {
+      checkCount++;
+      const currentPremium = parseFloat(currentPolicy.premium!.toString());
+      const offerPremium = parseFloat(offerPolicy.premium!.toString());
+      const premiumDiff = Math.abs(currentPremium - offerPremium);
+      const premiumTolerance = Math.max(currentPremium, offerPremium) * 0.01;
+      
+      if (premiumDiff <= premiumTolerance) {
+        matchCount++;
+        console.log(`[Policy Matching] ℹ️ Premium match detected`, {
+          current: currentPremium,
+          offer: offerPremium,
+          diff: premiumDiff
+        });
+      }
+    }
+
+    if (hasDeductibleData) {
+      checkCount++;
+      const currentDeductible = parseFloat(currentPolicy.deductible!.toString());
+      const offerDeductible = parseFloat(offerPolicy.deductible!.toString());
+      
+      if (Math.abs(currentDeductible - offerDeductible) < 10) {
+        matchCount++;
+      }
+    }
+
+    if (hasCompanyData) {
+      checkCount++;
+      const currentCompany = currentData.company.toLowerCase().trim();
+      const offerCompany = offerData.company.toLowerCase().trim();
+      
+      if (currentCompany === offerCompany || 
+          currentCompany.includes(offerCompany) || 
+          offerCompany.includes(currentCompany)) {
+        matchCount++;
+      }
+    }
+
+    if (matchCount === checkCount && checkCount >= 2) {
+      console.log(`[Policy Matching] ⚠️ Policies are highly similar`, {
+        matchCount,
+        checkCount,
+        hasPremiumData,
+        hasDeductibleData,
+        hasCompanyData
+      });
+      return true;
+    }
+
+    return false;
+  }
+
   private async createComparisonForPair(
     userId: string,
     companyId: string,
@@ -134,6 +212,11 @@ export class PolicyMatchingService {
 
     if (!currentData || !offerData) {
       throw new Error(`Missing coverage details for ${policyType} comparison`);
+    }
+
+    if (this.arePoliciesSimilar(currentPolicy, offerPolicy)) {
+      console.log(`[Policy Matching] ⚠️ Skipping comparison - policies are identical or too similar`);
+      throw new Error(`IDENTICAL_POLICIES: The offer for ${policyType} appears to be the same as your current policy`);
     }
 
     const comparisonResult = await this.comparisonService.compareInsurancePolicies(

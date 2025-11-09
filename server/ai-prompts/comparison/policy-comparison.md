@@ -82,7 +82,14 @@ ARBEJDSGANG (OBLIGATORISK)
 1) Parse begge policer → udtræk priser, binding, rabatter, selvrisiko, dækninger, summer, undtagelser, tilvalg, SLA.
 2) Opdag/normalisér features → byg UNION → status/attributter.
 3) Beregn pricing + besparelse (annual/percentage).
-4) Udfyld coverageMatrix og detailedComparison (prioritér forskelle først).
+4) Udfyld coverageMatrix og detailedComparison:
+   - KRAV: detailedComparison SKAL have MINIMUM 3 kategorier
+   - OBLIGATORISK kategori 1: "Pris og gebyrer" med MINIMUM 4 rækker (månedlig præmie, årlig præmie, selvrisiko, binding)
+   - OBLIGATORISK kategori 2: "Dækning" med ALLE features fra coverageMatrix (MINIMUM 5 rækker)
+   - OBLIGATORISK kategori 3: "Tillægsdækninger" med alle benefits og tilvalg
+   - For hver række: beregn konkret difference (fx "+500 kr", "-10%", "Ingen ændring")
+\nVIGTIG: detailedComparison må ALDRIG være tom eller have under 3 kategorier. Selv hvis policies er identiske, skal alle kategorier være fyldt med konkrete værdier.
+   - Prioritér forskelle først, men medtag også uændrede features for komplethed
 5) Identificér alt “småt” → udfyld finePrint.
 6) Beregn qualityScore og sæt verdict.
 7) Udfyld highlights (4–6 skarpe).
