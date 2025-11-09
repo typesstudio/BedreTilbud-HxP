@@ -59,6 +59,48 @@ export interface PolicyExtractionResult {
 }
 
 export class MistralOCRService {
+  private preprocessDanishPricing(markdown: string): string {
+    // Step 1: Fix Danish pricing patterns split by dotted leaders and line breaks
+    // OCR often renders "Din pris pr. år ................ <br> 3.154,04 kr" with price on next line
+    let processed = markdown
+      .replace(/Din pris pr\. år[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Din pris pr. år: $1 kr')
+      .replace(/Månedlig pris er[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Månedlig pris er: $1 kr')
+      .replace(/Årlig pris inklusiv[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Årlig pris inklusiv: $1 kr');
+    
+    console.log('[Mistral OCR] Applied pricing pattern preprocessing (dotted leaders)');
+
+    // Step 2: Convert monthly premiums to annual premiums
+    // Indbo PDFs often show "Din pris pr. måned: 337,50 kr" which needs to be converted to annual
+    // Handle both inline and line-break separated amounts
+    const monthlyPatterns = [
+      /Din pris pr\. måned[:\s]*(?:<br>)?\s*(\d[\d\s.,]*)\s*kr/gi,
+      /Månedlig pris er[:\s]*(?:<br>)?\s*(\d[\d\s.,]*)\s*kr/gi,
+      /Din pris pr\. md[:\s]*(?:<br>)?\s*(\d[\d\s.,]*)\s*kr/gi
+    ];
+    
+    for (const pattern of monthlyPatterns) {
+      processed = processed.replace(pattern, (match, priceStr) => {
+        // Normalize Danish number format: remove separators, replace comma with period
+        const normalized = priceStr.replace(/[\s.']/g, '').replace(',', '.');
+        const monthlyPrice = parseFloat(normalized);
+        
+        if (!isNaN(monthlyPrice) && monthlyPrice > 0) {
+          const annualPrice = monthlyPrice * 12;
+          // Format with comma decimal (Danish format)
+          const formattedAnnual = annualPrice.toFixed(2).replace('.', ',');
+          console.log(`[Mistral OCR] Converted monthly premium: ${priceStr} kr/måned → ${formattedAnnual} kr/år (${annualPrice})`);
+          return `Din pris pr. år: ${formattedAnnual} kr`;
+        }
+        
+        console.warn(`[Mistral OCR] Failed to parse monthly premium: ${priceStr}`);
+        return match; // Return original if parsing fails
+      });
+    }
+    
+    console.log('[Mistral OCR] Applied monthly-to-annual conversion preprocessing');
+    return processed;
+  }
+
   private async encodePdfToBase64(pdfPath: string): Promise<string> {
     try {
       const pdfBuffer = fs.readFileSync(pdfPath);
@@ -401,16 +443,8 @@ CRITICAL INSTRUCTIONS:
         throw new Error("No text could be extracted from PDF");
       }
 
-      // Preprocessing: Fix Danish pricing patterns split by dotted leaders and line breaks
-      // OCR often renders "Din pris pr. år ................ <br> 3.154,04 kr" with price on next line
-      // We need to merge them: "Din pris pr. år: 3.154,04 kr"
-      // Only match when there are dots (.) before <br> to avoid false matches
-      const preprocessedMarkdown = extractedMarkdown
-        .replace(/Din pris pr\. år[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Din pris pr. år: $1 kr')
-        .replace(/Månedlig pris er[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Månedlig pris er: $1 kr')
-        .replace(/Årlig pris inklusiv[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Årlig pris inklusiv: $1 kr');
-      
-      console.log('[Mistral OCR] Applied pricing pattern preprocessing (dotted leaders only)');
+      // Apply Danish pricing preprocessing (dotted leaders + monthly-to-annual conversion)
+      const preprocessedMarkdown = this.preprocessDanishPricing(extractedMarkdown);
 
       // Step 2: Use Mistral Chat to structure the extracted markdown
       console.log(`[Mistral OCR] Sending to Mistral Chat for structured extraction...`);
@@ -480,13 +514,8 @@ CRITICAL INSTRUCTIONS:
             const visionMarkdown = await this.extractWithOpenAIVision(filePath);
             console.log(`[OpenAI Vision] ✅ Fallback extraction successful`);
             
-            // Reprocess with Vision markdown
-            const visionPreprocessed = visionMarkdown
-              .replace(/Din pris pr\. år[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Din pris pr. år: $1 kr')
-              .replace(/Månedlig pris er[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Månedlig pris er: $1 kr')
-              .replace(/Årlig pris inklusiv[^\n<]*?\.{3,}[^\n<]*?<br>\s*(\d[\d\s.,]*)\s*kr/gi, 'Årlig pris inklusiv: $1 kr');
-            
-            console.log('[OpenAI Vision] Applied pricing pattern preprocessing');
+            // Apply Danish pricing preprocessing (shared helper - includes monthly-to-annual conversion)
+            const visionPreprocessed = this.preprocessDanishPricing(visionMarkdown);
             console.log('[OpenAI Vision] Sending to Mistral Chat for structured extraction...');
             
             const visionPrompt = replaceVariables(systemPrompt, {
