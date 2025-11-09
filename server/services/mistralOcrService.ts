@@ -1,4 +1,5 @@
 import { Mistral } from '@mistralai/mistralai';
+import OpenAI from 'openai';
 import fs from 'fs';
 import { loadPrompt, replaceVariables } from '../ai-prompts/utils/promptLoader';
 
@@ -9,6 +10,15 @@ if (!process.env.MISTRAL_API_KEY) {
 const mistral = new Mistral({ 
   apiKey: process.env.MISTRAL_API_KEY
 });
+
+// OpenAI is optional - used as fallback when available
+const openai = process.env.OPENAI_API_KEY
+  ? new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      timeout: 60000,
+      maxRetries: 2
+    })
+  : null;
 
 export interface InsuranceData {
   companyName: string;
@@ -136,6 +146,48 @@ export class MistralOCRService {
     };
   }
 
+  private async extractWithOpenAIVision(filePath: string): Promise<string> {
+    console.log(`[OpenAI Vision] Starting fallback OCR extraction...`);
+    
+    if (!openai) {
+      throw new Error("OpenAI client not initialized - OPENAI_API_KEY not available");
+    }
+    
+    try {
+      const base64Pdf = await this.encodePdfToBase64(filePath);
+      
+      const response = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "Extract all text from this Danish insurance offer PDF. Preserve the exact formatting, pricing patterns (Din pris pr. år), and numerical values. Include ALL policy sections (Fritidshusforsikring, Ulykkesforsikring, Indboforsikring). Output as plain text with clear section breaks."
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: `data:application/pdf;base64,${base64Pdf}`
+                }
+              }
+            ]
+          }
+        ],
+        max_tokens: 4096
+      });
+
+      const extractedText = response.choices[0]?.message?.content || '';
+      console.log(`[OpenAI Vision] Extracted ${extractedText.length} characters`);
+      
+      return extractedText;
+    } catch (error) {
+      console.error(`[OpenAI Vision] Extraction failed: ${error}`);
+      throw new Error(`OpenAI Vision fallback failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
   async extractInsuranceDataFromPDF(filePath: string): Promise<PolicyExtractionResult> {
     const MAX_RETRIES = 2;
     
@@ -206,7 +258,38 @@ export class MistralOCRService {
             console.log(`[Mistral OCR] Retrying due to validation failures...`);
           } else {
             console.error(`[Mistral OCR] ❌ All ${MAX_RETRIES} attempts failed validation`);
-            console.error(`[Mistral OCR] Proceeding with incomplete data - extraction may be partial`);
+            
+            // Try OpenAI Vision fallback if available
+            if (openai) {
+              console.log(`[Mistral OCR] 🔄 Activating OpenAI Vision API fallback...`);
+              
+              try {
+                // Use OpenAI Vision as fallback
+                extractedMarkdown = await this.extractWithOpenAIVision(filePath);
+                console.log(`[OpenAI Vision] ✅ Fallback extraction successful`);
+                
+                // Revalidate with OpenAI Vision output
+                validationResult = this.validateOcrCompleteness(
+                  extractedMarkdown,
+                  expectedPageCount,
+                  0 // OpenAI Vision doesn't return page count
+                );
+                
+                if (validationResult.isComplete) {
+                  console.log(`[OpenAI Vision] ✅ Validation passed after fallback`);
+                } else {
+                  console.warn(`[OpenAI Vision] ⚠️ Validation still has issues after fallback:`);
+                  validationResult.issues.forEach(issue => console.warn(`   - ${issue}`));
+                  console.log(`[OpenAI Vision] Proceeding with best available data`);
+                }
+              } catch (fallbackError) {
+                console.error(`[OpenAI Vision] Fallback failed: ${fallbackError}`);
+                console.error(`[Mistral OCR] Proceeding with Mistral data despite validation issues`);
+              }
+            } else {
+              console.warn(`[Mistral OCR] ⚠️ OpenAI Vision fallback unavailable (OPENAI_API_KEY not set)`);
+              console.warn(`[Mistral OCR] Proceeding with incomplete Mistral data`);
+            }
           }
         }
       }
