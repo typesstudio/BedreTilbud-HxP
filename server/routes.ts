@@ -402,6 +402,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
             policyCount: policies.length 
           });
 
+          // NEW EXTRACTION PIPELINE (parallel with legacy flow)
+          // Run orchestrator to create OfferSnapshots alongside legacy policies
+          if (process.env.ENABLE_NEW_EXTRACTION === 'true') {
+            logger.info('[Upload] Running new extraction orchestrator', { documentId: document.id });
+            try {
+              const { ExtractionOrchestratorService } = await import('./services/extractionOrchestratorService');
+              const orchestrator = new ExtractionOrchestratorService(storage);
+              const orchestratorResult = await orchestrator.processDocument(document.id);
+              
+              if (orchestratorResult.success) {
+                logger.info('[Upload] Orchestrator success', {
+                  documentId: document.id,
+                  snapshotsCreated: orchestratorResult.snapshots.length,
+                  stages: orchestratorResult.stages.map(s => `${s.name}:${s.status}`)
+                });
+              } else {
+                logger.error('[Upload] Orchestrator failed', new Error(orchestratorResult.error || 'Unknown error'), {
+                  documentId: document.id
+                });
+              }
+            } catch (orchestratorError: any) {
+              logger.error('[Upload] Orchestrator exception', orchestratorError, { documentId: document.id });
+              // Don't fail the upload if orchestrator fails
+            }
+          }
+
           // Process each policy
           const createdPolicies = [];
           for (const extractedPolicy of policies) {
@@ -1221,6 +1247,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       logger.error('[Debug OCR] Failed to retrieve debug data', error, { 
+        documentId: req.params.documentId 
+      });
+      res.status(500).json({ message: error.message, stack: error.stack });
+    }
+  });
+
+  // Debug endpoint for extraction stages (OfferSnapshots)
+  app.get("/api/debug/extraction-stages/:documentId", requireAuth, async (req, res) => {
+    try {
+      const { documentId } = req.params;
+      const requestingUserId = req.headers['x-user-id'] as string;
+
+      // Get document
+      const document = await storage.getDocument(documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      // Check ownership
+      if (document.userId !== requestingUserId) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      // Get OfferSnapshots for this document
+      const snapshots = await storage.getOfferSnapshotsByDocument(documentId);
+
+      // Get legacy policies for comparison
+      const policies = await storage.getPoliciesByDocument(documentId);
+
+      logger.info('[Debug Extraction] Retrieved extraction data', { 
+        documentId, 
+        userId: requestingUserId,
+        snapshotsCount: snapshots.length,
+        policiesCount: policies.length
+      });
+
+      res.json({
+        document: {
+          id: document.id,
+          fileName: document.fileName,
+          documentType: document.documentType,
+          extractionStatus: document.extractionStatus,
+          totalPoliciesExtracted: document.totalPoliciesExtracted,
+          createdAt: document.createdAt
+        },
+        newPipeline: {
+          enabled: process.env.ENABLE_NEW_EXTRACTION === 'true',
+          snapshots: snapshots.map(s => ({
+            id: s.id,
+            policyType: s.policyType,
+            companyId: s.companyId,
+            premium: s.premium,
+            deductible: s.deductible,
+            extractionVersion: s.extractionVersion,
+            extractorModel: s.extractorModel,
+            extractorProvider: s.extractorProvider,
+            confidenceScore: s.confidenceScore,
+            validationStatus: s.validationStatus,
+            validationErrors: s.validationErrors,
+            sourcePageRange: s.sourcePageRange,
+            coverageDetails: s.coverageDetails,
+            createdAt: s.createdAt
+          }))
+        },
+        legacyPipeline: {
+          policies: policies.map(p => ({
+            id: p.id,
+            policyType: p.policyType,
+            companyId: p.companyId,
+            premium: p.premium,
+            deductible: p.deductible,
+            sourcePageRange: p.sourcePageRange,
+            coverageDetails: p.coverageDetails
+          }))
+        },
+        comparison: {
+          newSnapshotCount: snapshots.length,
+          legacyPolicyCount: policies.length,
+          delta: snapshots.length - policies.length
+        }
+      });
+    } catch (error: any) {
+      logger.error('[Debug Extraction] Failed to retrieve debug data', error, { 
         documentId: req.params.documentId 
       });
       res.status(500).json({ message: error.message, stack: error.stack });

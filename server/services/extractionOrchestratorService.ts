@@ -344,7 +344,7 @@ export class ExtractionOrchestratorService {
   private async resolveCompanyName(companyName: string): Promise<string | null> {
     try {
       // Get all companies
-      const companies = await this.storage.getCompanies();
+      const companies = await this.storage.getActiveCompanies();
       
       if (companies.length === 0) {
         console.log(`[Orchestrator] No companies in database, cannot resolve "${companyName}"`);

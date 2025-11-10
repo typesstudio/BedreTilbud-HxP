@@ -28,7 +28,7 @@ async function viewSnapshots() {
   console.log(`📄 Documents with snapshots: ${byDocument.size}\n`);
 
   // Display each document's snapshots
-  for (const [documentId, docSnapshots] of byDocument.entries()) {
+  for (const [documentId, docSnapshots] of Array.from(byDocument.entries())) {
     const document = await storage.getDocument(documentId);
     
     console.log("━".repeat(80));
