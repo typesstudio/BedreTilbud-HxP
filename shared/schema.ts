@@ -169,6 +169,47 @@ export const policies = pgTable("policies", {
   userIdIsOwnIdx: index("policies_user_id_is_own_idx").on(table.userId, table.isOwnPolicy),
 }));
 
+export const offerSnapshots = pgTable("offer_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id").references(() => documents.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  policyId: varchar("policy_id").references(() => policies.id), // Link to created policy if applicable
+  
+  // Policy data (normalized and validated)
+  policyType: text("policy_type").notNull(), // "indbo", "ulykke", "hus", "bil", "rejse", "other"
+  companyId: varchar("company_id").references(() => companies.id),
+  premium: numeric("premium", { precision: 10, scale: 2 }), // Annual premium in DKK (normalized)
+  deductible: numeric("deductible", { precision: 10, scale: 2 }), // Deductible in DKK (normalized)
+  coverageDetails: json("coverage_details").notNull(), // Structured coverage data
+  
+  // Extraction provenance
+  extractionVersion: text("extraction_version").notNull(), // "v1", "v2", etc. for tracking schema changes
+  extractorModel: text("extractor_model").notNull(), // "mistral-large-latest", "gpt-4o-mini", etc.
+  extractorProvider: text("extractor_provider").notNull(), // "mistral", "openai"
+  
+  // Quality metrics
+  confidenceScore: integer("confidence_score"), // 0-100 overall extraction confidence
+  validationStatus: text("validation_status").notNull().default("pending"), // "pending", "validated", "failed", "manual_review"
+  validationErrors: json("validation_errors"), // Array of validation error objects
+  
+  // Source traceability
+  sourcePageRange: text("source_page_range"), // e.g., "1-3" from PDF
+  rawExtractedData: json("raw_extracted_data"), // Original AI output before normalization
+  
+  // Audit trail
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  documentIdIdx: index("offer_snapshots_document_id_idx").on(table.documentId),
+  userIdIdx: index("offer_snapshots_user_id_idx").on(table.userId),
+  policyIdIdx: index("offer_snapshots_policy_id_idx").on(table.policyId),
+  extractionVersionIdx: index("offer_snapshots_extraction_version_idx").on(table.extractionVersion),
+  validationStatusIdx: index("offer_snapshots_validation_status_idx").on(table.validationStatus),
+  // Composite indexes for common queries
+  documentIdTypeIdx: index("offer_snapshots_document_id_type_idx").on(table.documentId, table.policyType),
+  userIdTypeIdx: index("offer_snapshots_user_id_type_idx").on(table.userId, table.policyType),
+}));
+
 export const onboardingProgress = pgTable("onboarding_progress", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   email: text("email").notNull(),
@@ -234,6 +275,12 @@ export const insertPolicySchema = createInsertSchema(policies).omit({
   updatedAt: true,
 });
 
+export const insertOfferSnapshotSchema = createInsertSchema(offerSnapshots).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -251,5 +298,7 @@ export type HouseholdMember = typeof householdMembers.$inferSelect;
 export type InsertHouseholdMember = z.infer<typeof insertHouseholdMemberSchema>;
 export type Policy = typeof policies.$inferSelect;
 export type InsertPolicy = z.infer<typeof insertPolicySchema>;
+export type OfferSnapshot = typeof offerSnapshots.$inferSelect;
+export type InsertOfferSnapshot = z.infer<typeof insertOfferSnapshotSchema>;
 export type OnboardingProgress = typeof onboardingProgress.$inferSelect;
 export type InsertOnboardingProgress = z.infer<typeof insertOnboardingProgressSchema>;
