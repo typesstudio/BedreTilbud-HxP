@@ -234,15 +234,42 @@ export class ExtractionOrchestratorService {
     try {
       console.log(`[Orchestrator] Stage 3: Running structured extraction (OpenAI)...`);
       
-      // TODO: Implement OpenAI structured extraction
-      // For now, return empty to validate the pipeline structure
+      // Use OpenAI extraction service
+      const { OpenAIExtractionService } = await import("./openaiExtractionService");
+      const extractionService = new OpenAIExtractionService(this.storage);
+      
+      // Extract policies from OCR markdown
+      const result = await extractionService.extractPoliciesFromMarkdown(
+        ocrOutput.markdown,
+        "" // documentId not needed for extraction
+      );
+      
+      if (!result.success) {
+        throw new Error(`OpenAI extraction failed: ${result.error}`);
+      }
+      
+      // Convert to StructuredPolicy format
+      const policies: StructuredPolicy[] = result.policies.map(p => ({
+        policyType: p.policyType,
+        companyName: p.companyName,
+        premium: p.premium,
+        deductible: p.deductible,
+        coverageDetails: p.coverageDetails,
+        sourcePageRange: p.sourcePageRange,
+        confidence: p.confidence,
+      }));
+      
       stage.status = "completed";
       stage.completedAt = new Date();
-      stage.output = { policiesExtracted: 0 };
+      stage.output = { 
+        policiesExtracted: policies.length,
+        processingTimeMs: result.processingTimeMs,
+        model: result.model
+      };
       
-      console.log(`[Orchestrator] Extraction completed: 0 policies (TODO: implement)`);
+      console.log(`[Orchestrator] Extraction completed: ${policies.length} policies in ${result.processingTimeMs}ms`);
       
-      return [];
+      return policies;
     } catch (error) {
       stage.status = "failed";
       stage.completedAt = new Date();
@@ -267,19 +294,22 @@ export class ExtractionOrchestratorService {
       const snapshots: OfferSnapshot[] = [];
       
       for (const policy of policies) {
+        // Resolve company name to ID
+        const companyId = await this.resolveCompanyName(policy.companyName);
+        
         const insertData: InsertOfferSnapshot = {
           documentId: document.id,
           userId: document.userId,
           policyId: null, // Will be linked later during matching
           policyType: policy.policyType,
-          companyId: null, // TODO: Resolve from company name
+          companyId: companyId,
           premium: policy.premium !== null ? policy.premium.toString() : null,
           deductible: policy.deductible !== null ? policy.deductible.toString() : null,
           coverageDetails: policy.coverageDetails,
           extractionVersion: this.version,
           extractorModel: "gpt-4o-mini",
           extractorProvider: "openai",
-          confidenceScore: policy.confidence,
+          confidenceScore: Math.round(policy.confidence * 100), // Convert 0.0-1.0 to 0-100
           validationStatus: validationResult.isValid ? "validated" : "needs_review",
           validationErrors: validationResult.errors.length > 0 
             ? validationResult.errors 
@@ -308,6 +338,44 @@ export class ExtractionOrchestratorService {
       stage.completedAt = new Date();
       stage.error = error instanceof Error ? error.message : String(error);
       throw error;
+    }
+  }
+
+  private async resolveCompanyName(companyName: string): Promise<string | null> {
+    try {
+      // Get all companies
+      const companies = await this.storage.getCompanies();
+      
+      if (companies.length === 0) {
+        console.log(`[Orchestrator] No companies in database, cannot resolve "${companyName}"`);
+        return null;
+      }
+
+      const normalized = companyName.toLowerCase().trim();
+      
+      // Try exact match first
+      for (const company of companies) {
+        if (company.name.toLowerCase().trim() === normalized) {
+          console.log(`[Orchestrator] Exact match: "${companyName}" → ${company.id}`);
+          return company.id;
+        }
+      }
+
+      // Try fuzzy match (contains)
+      for (const company of companies) {
+        const companyLower = company.name.toLowerCase();
+        if (companyLower.includes(normalized) || normalized.includes(companyLower)) {
+          console.log(`[Orchestrator] Fuzzy match: "${companyName}" → ${company.name} (${company.id})`);
+          return company.id;
+        }
+      }
+
+      console.log(`[Orchestrator] No match found for company "${companyName}"`);
+      return null;
+      
+    } catch (error) {
+      console.error(`[Orchestrator] Error resolving company name:`, error);
+      return null;
     }
   }
 }

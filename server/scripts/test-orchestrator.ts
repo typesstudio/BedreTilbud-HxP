@@ -15,8 +15,8 @@ async function testOrchestrator() {
 
   const testDoc = documents[0];
   console.log(`📄 Testing with document: ${testDoc.id}`);
-  console.log(`   File: ${testDoc.filename}`);
-  console.log(`   Uploaded: ${testDoc.uploadedAt}\n`);
+  console.log(`   File: ${testDoc.fileName}`);
+  console.log(`   Created: ${testDoc.createdAt}\n`);
 
   // Initialize orchestrator
   const orchestrator = new ExtractionOrchestratorService(storage);
