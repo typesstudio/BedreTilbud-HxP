@@ -15,6 +15,8 @@ import {
   type InsertHouseholdMember,
   type Policy,
   type InsertPolicy,
+  type OfferSnapshot,
+  type InsertOfferSnapshot,
   type OnboardingProgress,
   type InsertOnboardingProgress
 } from "@shared/schema";
@@ -85,6 +87,14 @@ export interface IStorage {
   deletePolicy(id: string): Promise<void>;
   detectDuplicatePolicies(userId: string, policyType: string, companyId: string | null, premium: number | null): Promise<Policy[]>;
 
+  // Offer Snapshots
+  getOfferSnapshot(id: string): Promise<OfferSnapshot | undefined>;
+  getOfferSnapshotsByDocument(documentId: string): Promise<OfferSnapshot[]>;
+  getOfferSnapshotsByUser(userId: string, validationStatus?: string): Promise<OfferSnapshot[]>;
+  getOfferSnapshotByPolicy(policyId: string): Promise<OfferSnapshot | undefined>;
+  createOfferSnapshot(snapshot: InsertOfferSnapshot): Promise<OfferSnapshot>;
+  updateOfferSnapshot(id: string, updates: Partial<InsertOfferSnapshot>): Promise<OfferSnapshot>;
+
   // Navigation Data
   getNavigationData(userId: string): Promise<{
     companies: Array<{
@@ -111,6 +121,7 @@ export class MemStorage implements IStorage {
   private comparisons: Map<string, Comparison> = new Map();
   private householdMembers: Map<string, HouseholdMember> = new Map();
   private policies: Map<string, Policy> = new Map();
+  private offerSnapshots: Map<string, OfferSnapshot> = new Map();
   private onboardingProgress: Map<string, OnboardingProgress> = new Map();
 
   constructor() {
@@ -564,6 +575,62 @@ export class MemStorage implements IStorage {
       return true;
     });
     return policies;
+  }
+
+  // Offer Snapshots
+  async getOfferSnapshot(id: string): Promise<OfferSnapshot | undefined> {
+    return this.offerSnapshots.get(id);
+  }
+
+  async getOfferSnapshotsByDocument(documentId: string): Promise<OfferSnapshot[]> {
+    return Array.from(this.offerSnapshots.values()).filter(s => s.documentId === documentId);
+  }
+
+  async getOfferSnapshotsByUser(userId: string, validationStatus?: string): Promise<OfferSnapshot[]> {
+    return Array.from(this.offerSnapshots.values()).filter(s => 
+      s.userId === userId && 
+      (validationStatus ? s.validationStatus === validationStatus : true)
+    );
+  }
+
+  async getOfferSnapshotByPolicy(policyId: string): Promise<OfferSnapshot | undefined> {
+    return Array.from(this.offerSnapshots.values()).find(s => s.policyId === policyId);
+  }
+
+  async createOfferSnapshot(insertSnapshot: InsertOfferSnapshot): Promise<OfferSnapshot> {
+    const id = randomUUID();
+    const snapshot: OfferSnapshot = {
+      id,
+      documentId: insertSnapshot.documentId,
+      userId: insertSnapshot.userId,
+      policyId: insertSnapshot.policyId ?? null,
+      policyType: insertSnapshot.policyType,
+      companyId: insertSnapshot.companyId ?? null,
+      premium: insertSnapshot.premium ?? null,
+      deductible: insertSnapshot.deductible ?? null,
+      coverageDetails: insertSnapshot.coverageDetails,
+      extractionVersion: insertSnapshot.extractionVersion,
+      extractorModel: insertSnapshot.extractorModel,
+      extractorProvider: insertSnapshot.extractorProvider,
+      confidenceScore: insertSnapshot.confidenceScore ?? null,
+      validationStatus: insertSnapshot.validationStatus ?? "pending",
+      validationErrors: insertSnapshot.validationErrors ?? null,
+      sourcePageRange: insertSnapshot.sourcePageRange ?? null,
+      rawExtractedData: insertSnapshot.rawExtractedData ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.offerSnapshots.set(id, snapshot);
+    return snapshot;
+  }
+
+  async updateOfferSnapshot(id: string, updates: Partial<InsertOfferSnapshot>): Promise<OfferSnapshot> {
+    const existing = this.offerSnapshots.get(id);
+    if (!existing) throw new Error("OfferSnapshot not found");
+    
+    const updated: OfferSnapshot = { ...existing, ...updates, updatedAt: new Date() };
+    this.offerSnapshots.set(id, updated);
+    return updated;
   }
 
   async getNavigationData(userId: string): Promise<{
@@ -1121,6 +1188,61 @@ export class DatabaseStorage implements IStorage {
     }
     
     return db.select().from(policies).where(and(...conditions));
+  }
+
+  // Offer Snapshots
+  async getOfferSnapshot(id: string): Promise<OfferSnapshot | undefined> {
+    const { db } = await import("./db");
+    const { offerSnapshots } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [snapshot] = await db.select().from(offerSnapshots).where(eq(offerSnapshots.id, id));
+    return snapshot || undefined;
+  }
+
+  async getOfferSnapshotsByDocument(documentId: string): Promise<OfferSnapshot[]> {
+    const { db } = await import("./db");
+    const { offerSnapshots } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    return db.select().from(offerSnapshots).where(eq(offerSnapshots.documentId, documentId));
+  }
+
+  async getOfferSnapshotsByUser(userId: string, validationStatus?: string): Promise<OfferSnapshot[]> {
+    const { db } = await import("./db");
+    const { offerSnapshots } = await import("@shared/schema");
+    const { eq, and } = await import("drizzle-orm");
+    
+    const conditions = [eq(offerSnapshots.userId, userId)];
+    if (validationStatus) {
+      conditions.push(eq(offerSnapshots.validationStatus, validationStatus));
+    }
+    
+    return db.select().from(offerSnapshots).where(conditions.length > 1 ? and(...conditions) : conditions[0]);
+  }
+
+  async getOfferSnapshotByPolicy(policyId: string): Promise<OfferSnapshot | undefined> {
+    const { db } = await import("./db");
+    const { offerSnapshots } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [snapshot] = await db.select().from(offerSnapshots).where(eq(offerSnapshots.policyId, policyId));
+    return snapshot || undefined;
+  }
+
+  async createOfferSnapshot(insertSnapshot: InsertOfferSnapshot): Promise<OfferSnapshot> {
+    const { db } = await import("./db");
+    const { offerSnapshots } = await import("@shared/schema");
+    const [snapshot] = await db.insert(offerSnapshots).values(insertSnapshot).returning();
+    return snapshot;
+  }
+
+  async updateOfferSnapshot(id: string, updates: Partial<InsertOfferSnapshot>): Promise<OfferSnapshot> {
+    const { db } = await import("./db");
+    const { offerSnapshots } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [snapshot] = await db.update(offerSnapshots)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(offerSnapshots.id, id))
+      .returning();
+    return snapshot;
   }
 
   async getNavigationData(userId: string): Promise<{
