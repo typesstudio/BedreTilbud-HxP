@@ -1,5 +1,42 @@
 import OpenAI from "openai";
+import { z } from "zod";
 import type { IStorage } from "../storage";
+import type { PolicySegment } from "./policySegmentationService";
+import {
+  getStepProfile,
+  getModelMetadata,
+  calculateCost,
+  logAiInvocation,
+  type ModelId
+} from "../config/aiModels";
+
+const coverageSchema = z.object({
+  name: z.string(),
+  limit: z.string().nullable(),
+  deductible: z.string().nullable()
+});
+
+const additionalCoverageSchema = z.object({
+  name: z.string(),
+  included: z.boolean()
+});
+
+const extractedPolicySchema = z.object({
+  policyType: z.string(),
+  companyName: z.string(),
+  premium: z.number().nullable(),
+  deductible: z.number().nullable(),
+  coverageDetails: z.object({
+    mainCoverages: z.array(coverageSchema),
+    additionalCoverages: z.array(additionalCoverageSchema)
+  }),
+  sourcePageRange: z.string().nullable(),
+  confidence: z.number().min(0).max(1)
+});
+
+const segmentExtractionResponseSchema = z.object({
+  policy: extractedPolicySchema
+});
 
 interface ExtractedPolicyData {
   policyType: string;
@@ -33,13 +70,197 @@ interface ExtractionResult {
 export class OpenAIExtractionService {
   private openai: OpenAI;
   private storage: IStorage;
-  private model = "gpt-4o-mini";
+  private model = "gpt-4o-mini"; // Legacy default
 
   constructor(storage: IStorage) {
     this.storage = storage;
     this.openai = new OpenAI({
       apiKey: process.env.OPENAI_API_KEY,
     });
+  }
+
+  async extractPolicyFromSegment(
+    segment: PolicySegment,
+    documentId: string,
+    overrideModelId?: ModelId
+  ): Promise<ExtractedPolicyData> {
+    const startTime = Date.now();
+    const stepProfile = getStepProfile('structuredExtraction');
+    const modelId = overrideModelId || stepProfile.modelId;
+
+    console.log(`[OpenAI Extraction] Extracting ${segment.policyType} using ${modelId}`);
+
+    try {
+      const systemPrompt = this.buildSegmentSystemPrompt();
+      const userPrompt = this.buildSegmentUserPrompt(segment);
+
+      const completion = await this.openai.chat.completions.create({
+        model: modelId,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        response_format: { type: "json_object" },
+        temperature: stepProfile.temperature || 0,
+        max_tokens: stepProfile.maxTokens
+      });
+
+      const responseText = completion.choices[0]?.message?.content;
+      if (!responseText) {
+        throw new Error("No response from OpenAI");
+      }
+
+      let validated;
+      try {
+        const rawParsed = JSON.parse(responseText);
+        validated = segmentExtractionResponseSchema.parse(rawParsed);
+      } catch (validationError: any) {
+        console.error('[OpenAI Extraction] Validation failed:', validationError);
+        throw new Error(`Invalid extraction format: ${validationError.message}`);
+      }
+
+      const policy = this.normalizeExtractedPolicies([validated.policy])[0];
+
+      const inputTokens = completion.usage?.prompt_tokens || 0;
+      const outputTokens = completion.usage?.completion_tokens || 0;
+      const totalTokens = completion.usage?.total_tokens || 0;
+      const costUsd = calculateCost(modelId, inputTokens, outputTokens);
+      const latencyMs = Date.now() - startTime;
+
+      logAiInvocation({
+        step: 'structuredExtraction',
+        documentId,
+        modelId,
+        inputTokens,
+        outputTokens,
+        totalTokens,
+        costUsd,
+        latencyMs,
+        success: true,
+        confidenceScore: policy.confidence,
+        timestamp: new Date()
+      });
+
+      console.log(
+        `[OpenAI Extraction] ✓ ${segment.policyType} extracted | ` +
+        `Confidence: ${(policy.confidence * 100).toFixed(1)}% | ` +
+        `Cost: $${costUsd.toFixed(4)} | ${latencyMs}ms`
+      );
+
+      return policy;
+
+    } catch (error: any) {
+      const latencyMs = Date.now() - startTime;
+      
+      logAiInvocation({
+        step: 'structuredExtraction',
+        documentId,
+        modelId,
+        inputTokens: 0,
+        outputTokens: 0,
+        totalTokens: 0,
+        costUsd: 0,
+        latencyMs,
+        success: false,
+        errorMessage: error.message,
+        timestamp: new Date()
+      });
+
+      console.error(`[OpenAI Extraction] Error extracting ${segment.policyType}:`, error);
+      throw new Error(`Extraction failed for ${segment.policyType}: ${error.message}`);
+    }
+  }
+
+  private buildSegmentSystemPrompt(): string {
+    return `Du er en ekspert i dansk forsikringsanalyse. Din opgave er at strukturere data fra EN ENKELT forsikringspolice der allerede er identificeret og segmenteret.
+
+VIGTIGE REGLER:
+1. Du får præ-segmenteret tekst for ÉN SPECIFIK forsikring
+2. Udtræk ALT relevant information fra denne forsikring
+3. Dansk tal format: "5.682,13 kr" = 5682.13 (punktum=tusinder, komma=decimal)
+4. Hvis et felt ikke findes, brug null (ikke tom string eller 0)
+5. Confidence: 0.9+ = komplet data, 0.7-0.9 = godt, <0.7 = mangelfuldt
+
+DANSK TERMINOLOGI:
+- Selvrisiko = deductible
+- Dækning = coverage
+- Forsikringssum = coverage limit
+- Præmie/pris = premium
+- Tilvalg = optional coverage
+- Grunddækning = main coverage
+
+JSON SCHEMA:
+{
+  "policy": {
+    "policyType": "string (hus|ulykke|bil|indbo|rejse|liv|sundhed)",
+    "companyName": "string",
+    "premium": number (årlig præmie i DKK),
+    "deductible": number (selvrisiko i DKK),
+    "coverageDetails": {
+      "mainCoverages": [
+        {
+          "name": "string (f.eks. 'Brand', 'Personskade', 'Bygning')",
+          "limit": "string (f.eks. '5 mio. kr', '410.901 kr')",
+          "deductible": "string (f.eks. '2.834 kr', 'Ingen', '0 kr')"
+        }
+      ],
+      "additionalCoverages": [
+        {
+          "name": "string (f.eks. 'Udvidet vand', 'Cykel', 'Retshjælp')",
+          "included": boolean
+        }
+      ]
+    },
+    "sourcePageRange": "string (f.eks. '1-3', '1', null hvis ukendt)",
+    "confidence": number (0.0-1.0, baseret på datakomplethed)
+  }
+}
+
+EKSTRACTIONSSTRATEGI:
+1. Find årlig pris (søg efter "årlig pris", "pris pr. år", månedlig * 12)
+2. Find selvrisiko (søg efter "selvrisiko", "egen risiko")
+3. Identificer alle grunddækninger fra tabeller
+4. Identificer tilvalg (markeret som "mulige tilvalg", "kan vælges til")
+5. Vurder confidence baseret på hvor komplet dataen er`;
+  }
+
+  private buildSegmentUserPrompt(segment: PolicySegment): string {
+    const preExtracted = {
+      policyType: segment.policyType,
+      policySubtype: segment.policySubtype || null,
+      annualPrice: segment.metadata.extractedFields.annualPrice || null,
+      monthlyPrice: segment.metadata.extractedFields.monthlyPrice || null,
+      insuranceCompany: segment.metadata.extractedFields.insuranceCompany || null,
+      policyNumber: segment.metadata.extractedFields.policyNumber || null,
+      coverageAddress: segment.metadata.extractedFields.coverageAddress || null,
+      pageSpan: segment.metadata.pageSpan || null,
+      notableSections: segment.metadata.notableSections,
+      confidence: segment.metadata.confidence
+    };
+
+    return `Strukturer følgende forsikringsdata. Dette er allerede identificeret som en ${segment.policyType} forsikring.
+
+PRÆ-EKSTRAHEREDE FELTER (BRUG DISSE DIREKTE hvis de er tilgængelige):
+\`\`\`json
+${JSON.stringify(preExtracted, null, 2)}
+\`\`\`
+
+VIGTIG: 
+- Hvis annualPrice er sat, brug den DIREKTE som premium
+- Hvis monthlyPrice er sat men ikke annualPrice, beregn: monthlyPrice * 12
+- Hvis insuranceCompany er sat, brug den DIREKTE som companyName
+- Hvis pageSpan er sat, brug den DIREKTE som sourcePageRange
+- Hvis confidence er sat, START med den værdi og juster baseret på datakomplethed
+
+FULD TEKST FOR DENNE FORSIKRING:
+${segment.rawContent}
+
+OPGAVE:
+Lav en struktureret JSON af denne forsikring med ALT relevant information.
+PRIORITER præ-ekstraherede værdier fra JSON ovenfor - kopiér dem direkte!
+Find manglende/supplerende information i den fulde tekst.
+Dansk tal format: "5.682,13 kr" → 5682.13
+Returner KUN valid JSON i det krævede format.`;
   }
 
   async extractPoliciesFromMarkdown(

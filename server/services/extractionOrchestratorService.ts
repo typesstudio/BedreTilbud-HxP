@@ -42,10 +42,13 @@ interface StructuredPolicy {
 
 export class ExtractionOrchestratorService {
   private storage: IStorage;
-  private version = "2.0.0";
+  private version = "2.1.0"; // Updated for two-step pipeline
+  private useTwoStepPipeline: boolean;
 
   constructor(storage: IStorage) {
     this.storage = storage;
+    this.useTwoStepPipeline = process.env.ENABLE_TWO_STEP_EXTRACTION === 'true';
+    console.log(`[Orchestrator] Two-step pipeline: ${this.useTwoStepPipeline ? 'ENABLED' : 'DISABLED'}`);
   }
 
   async processDocument(
@@ -110,14 +113,41 @@ export class ExtractionOrchestratorService {
         options.skipValidation
       );
 
-      // Stage 3: Structured Extraction (OpenAI)
-      const extractionStage = this.createStage("structured_extraction");
-      stages.push(extractionStage);
-      const extractedPolicies = await this.runExtractionStage(
-        ocrOutput,
-        validationResult,
-        extractionStage
-      );
+      // Stage 3: Structured Extraction
+      let extractedPolicies: StructuredPolicy[];
+      
+      if (this.useTwoStepPipeline) {
+        // NEW 2-STEP PIPELINE: Segmentation → Extraction
+        console.log(`[Orchestrator] Using NEW two-step extraction pipeline`);
+        
+        // Stage 3a: Policy Segmentation
+        const segmentationStage = this.createStage("policy_segmentation");
+        stages.push(segmentationStage);
+        const segments = await this.runSegmentationStage(
+          ocrOutput,
+          documentId,
+          segmentationStage
+        );
+        
+        // Stage 3b: Segment-based Extraction
+        const extractionStage = this.createStage("segment_extraction");
+        stages.push(extractionStage);
+        extractedPolicies = await this.runSegmentExtractionStage(
+          segments,
+          documentId,
+          extractionStage
+        );
+      } else {
+        // LEGACY PIPELINE: Direct extraction from full OCR
+        console.log(`[Orchestrator] Using LEGACY single-step extraction pipeline`);
+        const extractionStage = this.createStage("structured_extraction");
+        stages.push(extractionStage);
+        extractedPolicies = await this.runExtractionStage(
+          ocrOutput,
+          validationResult,
+          extractionStage
+        );
+      }
 
       // Stage 4: Create OfferSnapshots
       const snapshotStage = this.createStage("snapshot_creation");
@@ -370,6 +400,164 @@ export class ExtractionOrchestratorService {
       stage.status = "failed";
       stage.completedAt = new Date();
       stage.error = error instanceof Error ? error.message : String(error);
+      throw error;
+    }
+  }
+
+  private async runSegmentationStage(
+    ocrOutput: OcrOutput,
+    documentId: string,
+    stage: ExtractionStage
+  ): Promise<any[]> {
+    stage.status = "running";
+    stage.startedAt = new Date();
+    
+    try {
+      console.log(`[Orchestrator] Stage 3a: Running policy segmentation...`);
+      
+      // Validate OCR output before segmentation
+      if (!ocrOutput.markdown || ocrOutput.markdown.length < 100) {
+        throw new Error('OCR output too short for meaningful segmentation');
+      }
+      
+      const { segmentPoliciesWithFallback } = await import("./policySegmentationService");
+      
+      const result = await segmentPoliciesWithFallback(
+        ocrOutput.markdown,
+        documentId
+      );
+      
+      // CRITICAL: Validate we have at least one segment
+      if (!result.segments || result.segments.length === 0) {
+        throw new Error(
+          `Segmentation failed to identify any policies. ` +
+          `This may indicate: (1) document is not an insurance policy, ` +
+          `(2) OCR quality too low, or (3) AI model failure. ` +
+          `Processing notes: ${result.summary.processingNotes || 'none'}`
+        );
+      }
+      
+      stage.status = "completed";
+      stage.completedAt = new Date();
+      stage.output = { 
+        segmentsFound: result.summary.totalPolicies,
+        policyTypes: result.summary.policyTypes,
+        overallConfidence: result.summary.overallConfidence,
+        modelUsed: result.metadata.modelUsed,
+        tokensUsed: result.metadata.tokensUsed,
+        costUsd: result.metadata.costUsd,
+        latencyMs: result.metadata.latencyMs
+      };
+      
+      console.log(
+        `[Orchestrator] Segmentation completed: ${result.summary.totalPolicies} policies found | ` +
+        `Types: [${result.summary.policyTypes.join(', ')}] | ` +
+        `Confidence: ${(result.summary.overallConfidence * 100).toFixed(1)}% | ` +
+        `Cost: $${result.metadata.costUsd.toFixed(4)} | ${result.metadata.latencyMs}ms`
+      );
+      
+      return result.segments;
+    } catch (error) {
+      stage.status = "failed";
+      stage.completedAt = new Date();
+      stage.error = error instanceof Error ? error.message : String(error);
+      console.error(`[Orchestrator] Segmentation failed:`, error);
+      throw error;
+    }
+  }
+
+  private async runSegmentExtractionStage(
+    segments: any[],
+    documentId: string,
+    stage: ExtractionStage
+  ): Promise<StructuredPolicy[]> {
+    stage.status = "running";
+    stage.startedAt = new Date();
+    
+    try {
+      // CRITICAL: Validate segments exist before processing
+      if (!segments || segments.length === 0) {
+        stage.status = "failed";
+        stage.completedAt = new Date();
+        stage.error = 'No segments provided to extraction stage';
+        stage.output = { 
+          segmentsProcessed: 0,
+          policiesExtracted: 0,
+          successCount: 0,
+          failureCount: 0
+        };
+        throw new Error('Cannot run extraction: no segments provided (segmentation may have failed)');
+      }
+      
+      console.log(`[Orchestrator] Stage 3b: Running segment-based extraction...`);
+      console.log(`[Orchestrator] Processing ${segments.length} segments...`);
+      
+      const { OpenAIExtractionService } = await import("./openaiExtractionService");
+      const extractionService = new OpenAIExtractionService(this.storage);
+      
+      const policies: StructuredPolicy[] = [];
+      const extractionMetrics = {
+        totalCost: 0,
+        totalLatency: 0,
+        successCount: 0,
+        failureCount: 0,
+        errors: [] as string[]
+      };
+      
+      for (const segment of segments) {
+        try {
+          const extracted = await extractionService.extractPolicyFromSegment(
+            segment,
+            documentId
+          );
+          
+          policies.push(extracted);
+          extractionMetrics.successCount++;
+          
+        } catch (error: any) {
+          const errorMsg = `${segment.policyType}: ${error.message}`;
+          console.error(`[Orchestrator] Failed to extract ${segment.policyType}:`, error.message);
+          extractionMetrics.failureCount++;
+          extractionMetrics.errors.push(errorMsg);
+        }
+      }
+      
+      stage.status = "completed";
+      stage.completedAt = new Date();
+      stage.output = { 
+        segmentsProcessed: segments.length,
+        policiesExtracted: policies.length,
+        successCount: extractionMetrics.successCount,
+        failureCount: extractionMetrics.failureCount,
+        errors: extractionMetrics.errors
+      };
+      
+      console.log(
+        `[Orchestrator] Segment extraction completed: ${policies.length}/${segments.length} policies extracted | ` +
+        `Success: ${extractionMetrics.successCount}, Failures: ${extractionMetrics.failureCount}`
+      );
+      
+      // CRITICAL: Fail if ALL extractions failed
+      if (policies.length === 0) {
+        throw new Error(
+          `All ${segments.length} segment extractions failed. Errors: ${extractionMetrics.errors.join('; ')}`
+        );
+      }
+      
+      // WARN: Partial success (some policies extracted)
+      if (extractionMetrics.failureCount > 0) {
+        console.warn(
+          `[Orchestrator] Partial extraction success: ${extractionMetrics.failureCount}/${segments.length} segments failed. ` +
+          `Continuing with ${policies.length} successfully extracted policies.`
+        );
+      }
+      
+      return policies;
+    } catch (error) {
+      stage.status = "failed";
+      stage.completedAt = new Date();
+      stage.error = error instanceof Error ? error.message : String(error);
+      console.error(`[Orchestrator] Segment extraction stage failed:`, error);
       throw error;
     }
   }
