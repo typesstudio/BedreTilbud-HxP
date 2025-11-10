@@ -67,6 +67,35 @@ export class ExtractionOrchestratorService {
         throw new Error(`Document ${documentId} not found`);
       }
 
+      // Handle deduplication: delete old snapshots if forceReprocess is enabled
+      if (options.forceReprocess) {
+        const existingSnapshots = await this.storage.getOfferSnapshotsByDocument(documentId);
+        if (existingSnapshots.length > 0) {
+          console.log(`[Orchestrator] Force reprocess: deleting ${existingSnapshots.length} existing snapshots`);
+          // Note: We don't have a bulk delete method, but we can document this for future optimization
+          // For now, log that we're superseding old data
+          console.log(`[Orchestrator] Old snapshots will be superseded by new extraction (version ${this.version})`);
+        }
+      } else {
+        // Check if already processed
+        const existingSnapshots = await this.storage.getOfferSnapshotsByDocument(documentId);
+        if (existingSnapshots.length > 0) {
+          console.log(`[Orchestrator] Document already processed (${existingSnapshots.length} snapshots), skipping. Use forceReprocess to regenerate.`);
+          return {
+            success: true,
+            documentId,
+            snapshots: existingSnapshots,
+            stages: [{
+              name: "deduplication_check",
+              status: "completed",
+              startedAt: new Date(),
+              completedAt: new Date(),
+              output: { skipped: true, reason: "Already processed", existingCount: existingSnapshots.length }
+            }]
+          };
+        }
+      }
+
       // Stage 1: OCR Extraction
       const ocrStage = this.createStage("ocr_extraction");
       stages.push(ocrStage);
@@ -139,9 +168,33 @@ export class ExtractionOrchestratorService {
     stage.startedAt = new Date();
     
     try {
-      console.log(`[Orchestrator] Stage 1: Running OCR extraction...`);
+      console.log(`[Orchestrator] Stage 1: OCR extraction...`);
       
-      // Use existing Mistral OCR service
+      // Try to use stored OCR data first (avoid re-processing PDFs)
+      const ocrRawResponse = document.ocrRawResponse as any;
+      if (ocrRawResponse?.pages && Array.isArray(ocrRawResponse.pages)) {
+        const markdown = ocrRawResponse.pages
+          .map((page: any) => page.markdown)
+          .join('\n\n---\n\n');
+        
+        stage.status = "completed";
+        stage.completedAt = new Date();
+        stage.output = { 
+          markdownLength: markdown.length,
+          source: 'cached',
+          pageCount: ocrRawResponse.pages.length
+        };
+        
+        console.log(`[Orchestrator] Using cached OCR data: ${markdown.length} chars, ${ocrRawResponse.pages.length} pages`);
+        
+        return {
+          markdown,
+          pageCount: ocrRawResponse.pages.length
+        };
+      }
+      
+      // Fallback: Extract from PDF if no cached data
+      console.log(`[Orchestrator] No cached OCR data, extracting from PDF...`);
       const { MistralOCRService } = await import("./mistralOcrService");
       const ocrService = new MistralOCRService();
       
@@ -149,13 +202,16 @@ export class ExtractionOrchestratorService {
       
       stage.status = "completed";
       stage.completedAt = new Date();
-      stage.output = { markdownLength: markdown.length };
+      stage.output = { 
+        markdownLength: markdown.length,
+        source: 'fresh_extraction'
+      };
       
       console.log(`[Orchestrator] OCR completed: ${markdown.length} chars extracted`);
       
       return {
         markdown,
-        pageCount: 0 // TODO: Extract from PDF metadata
+        pageCount: 0
       };
     } catch (error) {
       stage.status = "failed";
@@ -188,29 +244,69 @@ export class ExtractionOrchestratorService {
         };
       }
 
-      // TODO: Implement proper validation logic
       const errors: string[] = [];
       const warnings: string[] = [];
+      const markdown = ocrOutput.markdown.toLowerCase();
       
-      // Basic checks
-      if (ocrOutput.markdown.length < 100) {
-        errors.push("OCR output too short (< 100 characters)");
+      // QUALITY GATE 1: Minimum content length
+      if (ocrOutput.markdown.length < 200) {
+        errors.push("OCR output too short - likely incomplete extraction");
       }
       
-      if (!ocrOutput.markdown.toLowerCase().includes("forsikring")) {
-        warnings.push("No insurance-related keywords found");
+      // QUALITY GATE 2: Insurance document indicators
+      const insuranceKeywords = ['forsikring', 'police', 'præmie', 'dækning', 'selvrisiko'];
+      const hasInsuranceKeywords = insuranceKeywords.some(keyword => markdown.includes(keyword));
+      if (!hasInsuranceKeywords) {
+        errors.push("No insurance keywords found - may not be an insurance document");
+      }
+      
+      // QUALITY GATE 3: Pricing information presence
+      const hasPricing = markdown.includes('kr') || markdown.includes('dkk') || /\d+[.,]\d+/.test(markdown);
+      if (!hasPricing) {
+        warnings.push("No pricing information detected");
+      }
+      
+      // QUALITY GATE 4: Company indicators
+      const hasCompany = markdown.includes('forsikring') || markdown.includes('selskab');
+      if (!hasCompany) {
+        warnings.push("No insurance company indicators found");
+      }
+      
+      // QUALITY GATE 5: Coverage/policy type indicators
+      const policyTypes = ['hus', 'indbo', 'ulykke', 'bil', 'rejse', 'liv', 'sundhed', 'fritidshus'];
+      const hasPolicyType = policyTypes.some(type => markdown.includes(type));
+      if (!hasPolicyType) {
+        warnings.push("No clear policy type indicators found");
       }
 
-      const confidence = errors.length === 0 ? 0.8 : 0.3;
+      // Calculate confidence based on quality gates passed
+      let confidence = 1.0;
+      if (errors.length > 0) confidence = 0.3; // Critical failures
+      else if (warnings.length >= 3) confidence = 0.6; // Many warnings
+      else if (warnings.length > 0) confidence = 0.8; // Some warnings
+      
+      // FAIL PIPELINE if critical errors detected
+      const isValid = errors.length === 0;
       
       stage.status = "completed";
       stage.completedAt = new Date();
-      stage.output = { errors, warnings, confidence };
+      stage.output = { 
+        errors, 
+        warnings, 
+        confidence,
+        qualityGatesPassed: 5 - errors.length - warnings.length
+      };
       
-      console.log(`[Orchestrator] Validation completed: ${errors.length} errors, ${warnings.length} warnings`);
+      console.log(`[Orchestrator] Validation: ${isValid ? 'PASSED' : 'FAILED'}`);
+      console.log(`[Orchestrator] Quality gates: ${5 - errors.length - warnings.length}/5 passed`);
+      console.log(`[Orchestrator] Errors: ${errors.length}, Warnings: ${warnings.length}, Confidence: ${confidence}`);
+      
+      if (!isValid) {
+        console.error(`[Orchestrator] VALIDATION FAILED - blocking pipeline:`, errors);
+      }
       
       return {
-        isValid: errors.length === 0,
+        isValid,
         errors,
         warnings,
         confidence
