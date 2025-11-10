@@ -346,47 +346,62 @@ export class EmailService {
             });
             
             if (attachment.data.data && part.filename.toLowerCase().endsWith('.pdf')) {
-              // Save PDF and process with OCR
+              // Save PDF and process with NEW 2-step pipeline
               const fileName = `attachment_${Date.now()}_${part.filename}`;
               const filePath = path.join('uploads', fileName);
               
               fs.writeFileSync(filePath, Buffer.from(attachment.data.data, 'base64'));
               
-              // Extract insurance data
-              const insuranceData = await ocrService.extractInsuranceDataFromPDF(filePath);
-              
-              // Create document record
+              // Create document placeholder
               const document = await storage.createDocument({
                 userId: existingThread.userId,
                 fileName,
                 filePath,
                 fileSize: Buffer.from(attachment.data.data, 'base64').length,
-                ocrData: insuranceData,
+                ocrRawResponse: null, // Will be populated by orchestrator
+                extractionStatus: 'processing',
                 documentType: 'offer',
                 companyId: existingThread.companyId
               });
               documentsCreated++;
               
-              console.log(`[Email] Document created, processing policies`, { documentId: document.id, policyCount: insuranceData.policies?.length || 0 });
+              console.log(`[Email] Document created, running new 2-step extraction pipeline`, { documentId: document.id });
+              
+              // Run NEW extraction pipeline (OCR → Segmentation → Per-segment Extraction)
+              const { ExtractionOrchestratorService } = await import('./extractionOrchestratorService');
+              const orchestrator = new ExtractionOrchestratorService(storage);
+              const orchestratorResult = await orchestrator.processDocument(document.id);
+              
+              if (!orchestratorResult.success) {
+                console.error(`[Email] Extraction pipeline failed:`, orchestratorResult.error);
+                throw new Error(orchestratorResult.error || 'Extraction pipeline failed');
+              }
+              
+              console.log(`[Email] Extraction pipeline completed`, { 
+                documentId: document.id, 
+                snapshotsCreated: orchestratorResult.snapshots.length,
+                pipelineVersion: '2.1.0'
+              });
 
-              // Create policy records from extracted data
+              // Create policy records from OfferSnapshots
               const offerPolicies: any[] = [];
-              if (insuranceData.policies && Array.isArray(insuranceData.policies)) {
-                for (const policyData of insuranceData.policies) {
-                  const normalizedType = parsePolicyType(policyData.type);
-                  const policy = await storage.createPolicy({
-                    documentId: document.id,
-                    userId: existingThread.userId ?? '',
-                    companyId: existingThread.companyId ?? null,
-                    policyType: normalizedType,
-                    premium: policyData.premium?.toString(),
-                    deductible: policyData.deductible?.toString(),
-                    coverageDetails: policyData,
-                    isOwnPolicy: false
-                  });
-                  offerPolicies.push(policy);
-                  console.log(`[Email] Policy created`, { policyId: policy.id, originalType: policyData.type, normalizedType });
-                }
+              for (const snapshot of orchestratorResult.snapshots) {
+                const policy = await storage.createPolicy({
+                  documentId: document.id,
+                  userId: existingThread.userId ?? '',
+                  companyId: snapshot.companyId || existingThread.companyId || null,
+                  policyType: snapshot.policyType,
+                  premium: snapshot.premium,
+                  deductible: snapshot.deductible,
+                  coverageDetails: snapshot.coverageDetails as any,
+                  isOwnPolicy: false
+                });
+                offerPolicies.push(policy);
+                console.log(`[Email] Policy created from snapshot`, { 
+                  policyId: policy.id, 
+                  type: snapshot.policyType,
+                  snapshotId: snapshot.id
+                });
               }
 
               // Use PolicyMatchingService to create comparisons

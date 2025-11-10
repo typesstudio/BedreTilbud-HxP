@@ -697,23 +697,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const doc of docsToReprocess) {
         try {
-          console.log(`[Reprocess] Processing document: ${doc.fileName}`);
-          const { policies, rawOcrResponse } = await ocrService.extractInsuranceDataFromPDF(doc.filePath);
+          console.log(`[Reprocess] Processing document with new 2-step pipeline: ${doc.fileName}`);
           
-          // Update document with new OCR data
+          // Run NEW extraction pipeline (OCR → Segmentation → Per-segment Extraction)
+          const { ExtractionOrchestratorService } = await import('./services/extractionOrchestratorService');
+          const orchestrator = new ExtractionOrchestratorService(storage);
+          const orchestratorResult = await orchestrator.processDocument(doc.id);
+          
+          if (!orchestratorResult.success) {
+            throw new Error(orchestratorResult.error || 'Extraction pipeline failed');
+          }
+          
+          console.log(`[Reprocess] Extraction completed: ${orchestratorResult.snapshots.length} policies found`);
+          
+          // Update document with completed status
           await db
             .update(documentsTable)
             .set({ 
-              ocrRawResponse: rawOcrResponse,
               extractionStatus: 'completed',
-              totalPoliciesExtracted: policies.length
+              totalPoliciesExtracted: orchestratorResult.snapshots.length
             })
             .where(eq(documentsTable.id, doc.id));
 
-          reprocessedDocs.push({ id: doc.id, fileName: doc.fileName, status: 'success', policiesExtracted: policies.length });
-
-          // Note: Comparison logic removed as it's deprecated in favor of multi-policy extraction
-          // If comparison is needed, it should be reimplemented using the new policy structure
+          reprocessedDocs.push({ 
+            id: doc.id, 
+            fileName: doc.fileName, 
+            status: 'success', 
+            policiesExtracted: orchestratorResult.snapshots.length,
+            pipelineVersion: '2.1.0'
+          });
         } catch (error: any) {
           console.error(`[Reprocess] Failed to process ${doc.fileName}:`, error);
           reprocessedDocs.push({ id: doc.id, fileName: doc.fileName, status: 'failed', error: error.message });
