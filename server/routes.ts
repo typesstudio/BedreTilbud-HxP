@@ -378,112 +378,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       for (const file of files) {
         let document;
-        let matchResult = null; // Declare per-file to avoid cross-contamination
+        let matchResult = null;
         
         try {
-          // Extract insurance data using OCR - returns {policies, rawOcrResponse}
-          logger.info('[Upload] Starting OCR extraction', { fileName: file.originalname, userId });
-          const { policies, rawOcrResponse } = await ocrService.extractInsuranceDataFromPDF(file.path);
+          // NEW 2-STEP PIPELINE (v2.1.0): Create document first, then run orchestrator
+          logger.info('[Upload] Starting new 2-step extraction pipeline', { 
+            fileName: file.originalname, 
+            userId 
+          });
           
-          // Create document with processing status
+          // Create document placeholder (orchestrator will populate OCR data)
           document = await storage.createDocument({
             userId,
             fileName: file.originalname,
             filePath: file.path,
             fileSize: file.size,
-            ocrRawResponse: rawOcrResponse,
+            ocrRawResponse: null, // Will be populated by orchestrator
             extractionStatus: 'processing',
             documentType,
             companyId: documentType === 'offer' ? req.body.companyId : undefined
           });
 
-          logger.info('[Upload] Document created, processing policies', { 
-            documentId: document.id, 
-            policyCount: policies.length 
+          logger.info('[Upload] Document created, running extraction orchestrator', { 
+            documentId: document.id
           });
 
-          // NEW EXTRACTION PIPELINE (parallel with legacy flow)
-          // Run orchestrator to create OfferSnapshots alongside legacy policies
-          if (process.env.ENABLE_NEW_EXTRACTION === 'true') {
-            logger.info('[Upload] Running new extraction orchestrator', { documentId: document.id });
-            try {
-              const { ExtractionOrchestratorService } = await import('./services/extractionOrchestratorService');
-              const orchestrator = new ExtractionOrchestratorService(storage);
-              const orchestratorResult = await orchestrator.processDocument(document.id);
-              
-              if (orchestratorResult.success) {
-                logger.info('[Upload] Orchestrator success', {
-                  documentId: document.id,
-                  snapshotsCreated: orchestratorResult.snapshots.length,
-                  stages: orchestratorResult.stages.map(s => `${s.name}:${s.status}`)
-                });
-
-                // AUTO HEALTH CHECK for 'current' documents
-                if (documentType === 'current' && orchestratorResult.snapshots.length > 0) {
-                  try {
-                    // Use the snapshot with highest confidence score
-                    const bestSnapshot = orchestratorResult.snapshots.reduce((best, current) => 
-                      (current.confidenceScore || 0) > (best.confidenceScore || 0) ? current : best
-                    );
-
-                    logger.info('[Upload] Auto health check starting for current document', {
-                      documentId: document.id,
-                      snapshotId: bestSnapshot.id,
-                      confidence: bestSnapshot.confidenceScore
-                    });
-
-                    const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(bestSnapshot);
-
-                    // Persist the health check result
-                    await storage.createHealthCheck({
-                      documentId: document.id,
-                      userId,
-                      dataSource: 'OfferSnapshot',
-                      confidenceScore: bestSnapshot.confidenceScore || null,
-                      result: healthCheckResult as any
-                    });
-
-                    logger.info('[Upload] Auto health check completed', {
-                      documentId: document.id,
-                      score: healthCheckResult.overallScore,
-                      savings: healthCheckResult.potentialSavings.realistic
-                    });
-                  } catch (healthCheckError: any) {
-                    logger.error('[Upload] Auto health check failed', healthCheckError, { 
-                      documentId: document.id 
-                    });
-                    // Don't fail the upload if health check fails
-                  }
-                }
-              } else {
-                logger.error('[Upload] Orchestrator failed', new Error(orchestratorResult.error || 'Unknown error'), {
-                  documentId: document.id
-                });
-              }
-            } catch (orchestratorError: any) {
-              logger.error('[Upload] Orchestrator exception', orchestratorError, { documentId: document.id });
-              // Don't fail the upload if orchestrator fails
-            }
+          // Run NEW extraction pipeline (OCR → Segmentation → Per-segment Extraction)
+          const { ExtractionOrchestratorService } = await import('./services/extractionOrchestratorService');
+          const orchestrator = new ExtractionOrchestratorService(storage);
+          const orchestratorResult = await orchestrator.processDocument(document.id);
+          
+          if (!orchestratorResult.success) {
+            throw new Error(orchestratorResult.error || 'Extraction pipeline failed');
           }
 
-          // Process each policy
-          const createdPolicies = [];
-          for (const extractedPolicy of policies) {
-            // Convert to policy record
-            const policyRecord = convertToPolicyRecord(
-              extractedPolicy,
-              document.id,
-              userId,
-              req.body.companyId
-            );
+          logger.info('[Upload] Extraction pipeline completed', {
+            documentId: document.id,
+            snapshotsCreated: orchestratorResult.snapshots.length,
+            pipelineVersion: '2.1.0',
+            stages: orchestratorResult.stages.map(s => `${s.name}:${s.status}`)
+          });
 
-            // Save policy
+          // Create legacy policies from OfferSnapshots for backward compatibility
+          const createdPolicies = [];
+          for (const snapshot of orchestratorResult.snapshots) {
+            const policyRecord = {
+              userId,
+              documentId: document.id,
+              policyType: snapshot.policyType,
+              premium: snapshot.premium || null, // Already a string from DB
+              deductible: snapshot.deductible || null, // Already a string from DB
+              coverageDetails: snapshot.coverageDetails as any, // JSON from DB
+              companyId: snapshot.companyId || (documentType === 'offer' ? req.body.companyId : undefined)
+            };
+
             const savedPolicy = await storage.createPolicy(policyRecord);
             createdPolicies.push(savedPolicy);
 
-            logger.info('[Upload] Policy created', { 
+            logger.info('[Upload] Legacy policy created from snapshot', { 
               policyId: savedPolicy.id, 
-              type: savedPolicy.policyType 
+              type: savedPolicy.policyType,
+              snapshotId: snapshot.id
             });
           }
 
@@ -580,17 +535,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await Promise.all(healthCheckPromises);
 
           // Update document with completed status AND ocrData for backward compatibility
-          // Store the first extracted policy in ocrData for the analyze endpoint
-          const firstPolicy = policies.length > 0 ? policies[0] : null;
+          // Create ocrData from first snapshot for analyze endpoint compatibility
+          const firstSnapshot = orchestratorResult.snapshots.length > 0 ? orchestratorResult.snapshots[0] : null;
+          const ocrData = firstSnapshot ? {
+            type: firstSnapshot.policyType,
+            company: firstSnapshot.companyId,
+            premium: firstSnapshot.premium ? parseFloat(firstSnapshot.premium) : null,
+            deductible: firstSnapshot.deductible ? parseFloat(firstSnapshot.deductible) : null,
+            coverages: firstSnapshot.coverageDetails
+          } : null;
+
           await storage.updateDocument(document.id, {
             extractionStatus: 'completed',
-            totalPoliciesExtracted: policies.length,
-            ocrData: firstPolicy // Populate ocrData for analyze endpoint compatibility
+            totalPoliciesExtracted: orchestratorResult.snapshots.length,
+            ocrData // Populate ocrData for analyze endpoint compatibility
           });
 
           logger.info('[Upload] Document processing completed', { 
             documentId: document.id, 
-            policiesExtracted: policies.length 
+            policiesExtracted: orchestratorResult.snapshots.length 
           });
 
           documentsWithPolicies.push({

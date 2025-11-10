@@ -1,0 +1,196 @@
+Fedt – så laver vi det som om dit Privatsikring-tilbud skulle “lægges ned” i det UI du viser 👆
+
+Jeg tager dine tre faktiske forsikringer (Indbo, Fritidshus, Ulykke) og kører dem igennem samme logik: hero-tal øverst, highlights, “hvad er inkluderet”, nøgle-sammenligning og “manglende info”. Alt er kun baseret på dét, der faktisk står i dit PDF-tilbud – hvor der mangler noget, markerer jeg det som “manglende”.
+
+Jeg skriver det, så du ret nemt kan smide det i frontend som sektioner.
+
+---
+
+## 1) Indbo
+
+**Årlig potentiel besparelse**
+
+* Kan ikke beregnes ud fra tilbuddet alene (der står kun pris hos Privatsikring).
+* Registreret årlig pris: **2.078,53 kr.**
+* * 40 kr. stormflod/stormfald
+* * 9,90 kr. pr. BS-betaling
+
+### Højdepunkter hvor anbefalingen er bedre
+
+* ✅ Ansvar inkluderet (0 kr. selvrisiko)
+* ✅ Pludselig skade inkluderet (1.417 kr. selvrisiko)
+* ✅ Retshjælp inkluderet (10 % / min. 2.500 kr.)
+* ✅ Elskade inkluderet (1.417 kr. selvrisiko)
+* 🟠 Cykel, elektronik, briller = **kun som tilvalg**
+* 🟠 Loft på enkelte genstande
+
+### Hvad er inkluderet
+
+| Dækning         | Status     | Note / sum                                     |
+| --------------- | ---------- | ---------------------------------------------- |
+| Ansvar          | Inkluderet | 0 kr. selvrisiko (dog 1.499 kr. i særtilfælde) |
+| Indbo           | Inkluderet | Selvrisiko 1.417 kr.                           |
+| Pludselig skade | Inkluderet | Selvrisiko 1.417 kr.                           |
+| Elskade         | Inkluderet | Selvrisiko 1.417 kr.                           |
+| Retshjælp       | Inkluderet | 10 % / min. 2.500 kr.                          |
+| Skybrud         | Inkluderet | Men forhøjet selvrisiko 5.000 kr.              |
+| Krisehjælp      | Inkluderet | jf. produktblad                                |
+
+**Særlige summer (fra tilbuddet):**
+
+* Maks. pr. enkelt genstand: **66.595 kr.**
+* Maks. samlinger/design: **121.854 kr.**
+* Maks. særlige private værdigenstande: **121.854 kr.**
+
+### Nøgletal-sammenligning
+
+(alt kun ift. det vi VED – vi har ikke “konkurrenten”)
+
+* **Selvrisiko standard:** 1.417 kr. (indbo) → på skybrud 5.000 kr.
+* **Ansvar:** 0 kr. selvrisiko (godt)
+* **Retshjælp:** relativt standard (10 % / min. 2.500 kr.)
+* **Genstandsmaks:** 66.595 kr. → god at vise i UI som “kan være lavt ved dyrt design”
+
+### Manglende information (indbo)
+
+1. **Prisændringer efter bindingsperiode / indeks**
+
+   * De skriver: “Prisen bliver hvert år indeksreguleret” – men ikke procent.
+2. **Rabatstruktur ved flere forsikringer**
+
+   * Du er Pluskunde, men der står ikke eksakt trappemodel.
+3. **Cykeldækning**
+
+   * Kun tilvalg – ingen sum angivet her.
+4. **Elektronik uden for hjemmet**
+
+   * Ikke specificeret – kun at elektronik kan tilkøbes.
+5. **Udvidet vand**
+
+   * Kan tilkøbes, men vilkår ikke specificeret.
+6. **Særlige fradrag/udtag ved kælder/loft**
+
+   * De nævner loft- og kælderrum, men ingen detaljeret tabel.
+7. **Hvilke tilvalg kan fjernes uden at miste Plus-fordele**
+
+   * Ikke beskrevet.
+
+---
+
+## 2) Fritidshus
+
+**Årlig pris (oplyst):** **8.734,59 kr.**
+
+* 40 kr. stormflod/stormfald
+* 9,90 kr. pr. BS-betaling
+  Adresse: **Kornvænget 19, 3230 Græsted**
+  Hus: 71 m², stråtag, mursten, varmepumpe.
+
+### Højdepunkter
+
+* ✅ Brand og kasko er med som grunddækning
+* ✅ Hus- og grundejeransvar med høje summer (10 mio. person / 2 mio. ting)
+* ✅ Retshjælp 225.000 kr.
+* ✅ Indbo i fritidshus med selvrisiko 1.417 kr.
+* 🟠 Stråtag → derfor ekstra vigtigt med besigtigelse (nævnt)
+* 🟠 Flere tilvalg ikke valgt (udvidet vand, ferieudlejning, udvidet indbo)
+
+### Hvad er inkluderet
+
+| Dækning                 | Status     | Note / sum                                 |
+| ----------------------- | ---------- | ------------------------------------------ |
+| Brand                   | Inkluderet | Selvrisiko 2.834 kr.                       |
+| Kasko                   | Inkluderet | Selvrisiko 2.834 kr. (skybrud 5.000 kr.)   |
+| Hus- og grundejeransvar | Inkluderet | 10.000.000 kr. person / 2.000.000 kr. ting |
+| Retshjælp               | Inkluderet | 225.000 kr.                                |
+| Glas og sanitet         | Inkluderet | 0 kr. selvrisiko                           |
+| Insekt / svamp / råd    | Inkluderet | Selvrisiko 2.834 kr.                       |
+| Skjulte rør og kabler   | Inkluderet | Selvrisiko 2.834 kr.                       |
+| Stikledning             | Inkluderet | Selvrisiko 2.834 kr.                       |
+| Indbo (fritidshus)      | Inkluderet | Selvrisiko 1.417 kr.                       |
+
+**Værdier der er gode at vise i UI:**
+
+* Bygning / kasko-niveau: **410.901 kr.** (kan vises som “bygningserstatning”)
+* Lovliggørelse: op til 10 %
+* Solceller: **184.197 kr.**
+* Udsmykning: **410.901 kr.**
+
+### Nøgletal-sammenligning
+
+* **Selvrisiko standard bygningsskader:** 2.834 kr.
+* **Skybrud:** 5.000 kr.
+* **Ansvar:** meget høje summer (10 mio.)
+* **Indbo i fritidshus:** 1.417 kr. selvrisiko + lave maks.-summer → vis som “kan kræve tilvalg udvidet indbo”.
+
+### Manglende information (fritidshus)
+
+1. Om ferieudlejning er ønsket – den står kun som mulighed.
+2. Om udvidet vand ønskes (regn ind, kloakopstigning).
+3. Om besigtigelse faktisk er godkendt – tilbuddet er “under forudsætning af”.
+4. Præcis vurdering af haveanlæg og udhuse (de nævner, men ikke detaljeret).
+5. Om stråtag giver præmietillæg (det står ikke eksplicit i tilbuddet).
+
+---
+
+## 3) Ulykke
+
+**Årlig pris:** **1.059,58 kr.**
+Dækker: Philip, f. 28.05.1991, heltidsdækning.
+
+### Højdepunkter
+
+* ✅ Dækker hele døgnet
+* ✅ Invaliditet fra 5 % (lav indtrædelsesgrænse)
+* ✅ Dobbelterstatning ved varigt mén fra 30 %
+* ✅ Tandskade inkl. tyggeskader (det er faktisk lidt premium)
+* ✅ Krisehjælp 25.505 kr.
+
+### Hvad er inkluderet
+
+| Dækning                     | Status     | Note                        |
+| --------------------------- | ---------- | --------------------------- |
+| Invaliditet ved ulykke      | Inkluderet | fra 5 %                     |
+| Dobbelterstatning           | Inkluderet | fra 30 % varigt mén         |
+| Behandlingsudgifter         | Inkluderet | jf. produktblad             |
+| Tandskade inkl. tyggeskader | Inkluderet | ikke alle selskaber har den |
+| Krisehjælp                  | Inkluderet | 25.505 kr.                  |
+
+### Mulige tilvalg (ikke valgt men vist i materialet)
+
+* Faginvaliditet
+* Strakserstatning / udvidet strakserstatning
+* Overfald
+* Dødsfald
+* Farlig sport
+* Udvidet kørsel
+
+### Manglende information (ulykke)
+
+1. Valgt ménerstatningssum (de skriver ikke det konkrete beløb på invaliditetssummen – kun at der er dobbelterstatning)
+2. Om dødsfald ønskes
+3. Om farlig sport ønskes
+4. Om han vil have overfaldsdækning
+
+---
+
+## 4) Meta / tværgående (til “Manglende information”-boksen)
+
+Disse går igen på tværs af alle tre og kan stå som 10-12 punkter ligesom i dit UI:
+
+1. **Prisstruktur / betalingsfrekvens** – der står BS og månedlig, men ikke alle mulige intervaller.
+2. **Rabat for flere forsikringer (Pluskunde)** – kun omtalt, ikke tabelleret.
+3. **Kan jeg vælge lavere selvrisiko?** – ikke prissat.
+4. **Tilvalgsliste med priser** – de viser kun, at de findes.
+5. **Elektronik uden for hjemmet (indbo)** – ikke specificeret.
+6. **Ferieudlejning (fritidshus)** – ikke valgt.
+7. **Udvidet vand (hus + indbo)** – ikke valgt.
+8. **SLA for skadebehandling** – ikke angivet.
+9. **Storm / oversvømmelse undtagelser** – kun kort nævnt via skybrud-selvrisiko.
+10. **Eksakt indeksprocent for 2026+** – ikke angivet.
+11. **Opsigelse af nuværende selskaber** – kræver dine policenumre.
+12. **Garantifondsbidrag fra 1.1.2025** – nævnt, men ikke foldet ind i total.
+
+---
+
+Hvis du vil have det som ren JSON til dit UI (fx `indbo`, `fritidshus`, `ulykke`, `missing`), siger du bare til, så skriver jeg det i én blok – men strukturen ovenfor er allerede matchet til det screenshot du viste: hero → highlights → inkluderet → nøgletal → manglende info → (evt. graf).
