@@ -228,6 +228,20 @@ export const onboardingProgress = pgTable("onboarding_progress", {
   userIdIdx: index("onboarding_progress_user_id_idx").on(table.userId),
 }));
 
+export const healthChecks = pgTable("health_checks", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id").references(() => documents.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  dataSource: text("data_source").notNull(), // "OfferSnapshot", "Policy", "ocrData"
+  confidenceScore: integer("confidence_score"), // 0-100 if from OfferSnapshot
+  result: json("result").notNull(), // HealthCheckResult object
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  documentIdIdx: index("health_checks_document_id_idx").on(table.documentId),
+  userIdIdx: index("health_checks_user_id_idx").on(table.userId),
+  userIdCreatedIdx: index("health_checks_user_id_created_idx").on(table.userId, table.createdAt),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -281,6 +295,11 @@ export const insertOfferSnapshotSchema = createInsertSchema(offerSnapshots).omit
   updatedAt: true,
 });
 
+export const insertHealthCheckSchema = createInsertSchema(healthChecks).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -302,3 +321,5 @@ export type OfferSnapshot = typeof offerSnapshots.$inferSelect;
 export type InsertOfferSnapshot = z.infer<typeof insertOfferSnapshotSchema>;
 export type OnboardingProgress = typeof onboardingProgress.$inferSelect;
 export type InsertOnboardingProgress = z.infer<typeof insertOnboardingProgressSchema>;
+export type HealthCheck = typeof healthChecks.$inferSelect;
+export type InsertHealthCheck = z.infer<typeof insertHealthCheckSchema>;

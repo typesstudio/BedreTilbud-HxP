@@ -72,6 +72,28 @@ export default function InsuranceCheck() {
   });
   const userDocuments = userDocumentsResponse?.data || [];
 
+  // Helper function to load existing health check
+  const loadHealthCheck = async (documentId: string) => {
+    try {
+      const response = await fetch(`/api/health-checks/document/${documentId}`, {
+        headers: {
+          "X-User-ID": userId!,
+        },
+        credentials: "include",
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        setHealthCheckResult(data.healthCheck);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.log('[Insurance Check] No existing health check found, will analyze');
+      return false;
+    }
+  };
+
   // Upload document mutation
   const uploadMutation = useMutation({
     mutationFn: async (files: File[]) => {
@@ -86,13 +108,24 @@ export default function InsuranceCheck() {
       const response = await apiRequest("POST", "/api/documents/upload", formData);
       return response.json();
     },
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
       setIsUploading(false);
       if (data.documents && data.documents.length > 0) {
         const doc = data.documents[0];
         setUploadedDocument(doc);
-        // Automatically analyze after upload
-        analyzeMutation.mutate(doc.id);
+        
+        // Check if health check already exists (auto-generated during upload)
+        const hasHealthCheck = await loadHealthCheck(doc.id);
+        
+        // If no health check exists, trigger analysis
+        if (!hasHealthCheck) {
+          analyzeMutation.mutate(doc.id);
+        } else {
+          toast({
+            title: "Analyse fundet",
+            description: "Din forsikring er allerede blevet analyseret",
+          });
+        }
       }
     },
     onError: () => {
@@ -209,14 +242,17 @@ export default function InsuranceCheck() {
                       </div>
                       <Button
                         size="small"
-                        onClick={() => {
+                        onClick={async () => {
                           setUploadedDocument(doc);
-                          analyzeMutation.mutate(doc.id);
+                          const hasHealthCheck = await loadHealthCheck(doc.id);
+                          if (!hasHealthCheck) {
+                            analyzeMutation.mutate(doc.id);
+                          }
                         }}
                         disabled={isAnalyzing}
                         data-testid={`button-analyze-${doc.id}`}
                       >
-                        {isAnalyzing ? "Analyserer..." : "Analyser nu"}
+                        {isAnalyzing ? "Analyserer..." : "Vis analyse"}
                       </Button>
                     </div>
                   ))}

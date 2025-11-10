@@ -17,6 +17,8 @@ import {
   type InsertPolicy,
   type OfferSnapshot,
   type InsertOfferSnapshot,
+  type HealthCheck,
+  type InsertHealthCheck,
   type OnboardingProgress,
   type InsertOnboardingProgress
 } from "@shared/schema";
@@ -95,6 +97,13 @@ export interface IStorage {
   createOfferSnapshot(snapshot: InsertOfferSnapshot): Promise<OfferSnapshot>;
   updateOfferSnapshot(id: string, updates: Partial<InsertOfferSnapshot>): Promise<OfferSnapshot>;
 
+  // Health Checks
+  getHealthCheck(id: string): Promise<HealthCheck | undefined>;
+  getHealthChecksByDocument(documentId: string): Promise<HealthCheck[]>;
+  getLatestHealthCheckByDocument(documentId: string): Promise<HealthCheck | undefined>;
+  getHealthChecksByUser(userId: string, limit?: number, offset?: number): Promise<HealthCheck[]>;
+  createHealthCheck(healthCheck: InsertHealthCheck): Promise<HealthCheck>;
+
   // Navigation Data
   getNavigationData(userId: string): Promise<{
     companies: Array<{
@@ -122,6 +131,7 @@ export class MemStorage implements IStorage {
   private householdMembers: Map<string, HouseholdMember> = new Map();
   private policies: Map<string, Policy> = new Map();
   private offerSnapshots: Map<string, OfferSnapshot> = new Map();
+  private healthChecks: Map<string, HealthCheck> = new Map();
   private onboardingProgress: Map<string, OnboardingProgress> = new Map();
 
   constructor() {
@@ -631,6 +641,44 @@ export class MemStorage implements IStorage {
     const updated: OfferSnapshot = { ...existing, ...updates, updatedAt: new Date() };
     this.offerSnapshots.set(id, updated);
     return updated;
+  }
+
+  // Health Checks
+  async getHealthCheck(id: string): Promise<HealthCheck | undefined> {
+    return this.healthChecks.get(id);
+  }
+
+  async getHealthChecksByDocument(documentId: string): Promise<HealthCheck[]> {
+    return Array.from(this.healthChecks.values())
+      .filter(hc => hc.documentId === documentId)
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+  }
+
+  async getLatestHealthCheckByDocument(documentId: string): Promise<HealthCheck | undefined> {
+    const healthChecks = await this.getHealthChecksByDocument(documentId);
+    return healthChecks[0];
+  }
+
+  async getHealthChecksByUser(userId: string, limit = 50, offset = 0): Promise<HealthCheck[]> {
+    const userHealthChecks = Array.from(this.healthChecks.values())
+      .filter(hc => hc.userId === userId)
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+    return userHealthChecks.slice(offset, offset + limit);
+  }
+
+  async createHealthCheck(insertHealthCheck: InsertHealthCheck): Promise<HealthCheck> {
+    const id = randomUUID();
+    const healthCheck: HealthCheck = {
+      id,
+      documentId: insertHealthCheck.documentId,
+      userId: insertHealthCheck.userId,
+      dataSource: insertHealthCheck.dataSource,
+      confidenceScore: insertHealthCheck.confidenceScore ?? null,
+      result: insertHealthCheck.result,
+      createdAt: new Date(),
+    };
+    this.healthChecks.set(id, healthCheck);
+    return healthCheck;
   }
 
   async getNavigationData(userId: string): Promise<{
@@ -1243,6 +1291,56 @@ export class DatabaseStorage implements IStorage {
       .where(eq(offerSnapshots.id, id))
       .returning();
     return snapshot;
+  }
+
+  // Health Checks
+  async getHealthCheck(id: string): Promise<HealthCheck | undefined> {
+    const { db } = await import("./db");
+    const { healthChecks } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [healthCheck] = await db.select().from(healthChecks).where(eq(healthChecks.id, id));
+    return healthCheck || undefined;
+  }
+
+  async getHealthChecksByDocument(documentId: string): Promise<HealthCheck[]> {
+    const { db } = await import("./db");
+    const { healthChecks } = await import("@shared/schema");
+    const { eq, desc } = await import("drizzle-orm");
+    return db.select()
+      .from(healthChecks)
+      .where(eq(healthChecks.documentId, documentId))
+      .orderBy(desc(healthChecks.createdAt));
+  }
+
+  async getLatestHealthCheckByDocument(documentId: string): Promise<HealthCheck | undefined> {
+    const { db } = await import("./db");
+    const { healthChecks } = await import("@shared/schema");
+    const { eq, desc } = await import("drizzle-orm");
+    const [healthCheck] = await db.select()
+      .from(healthChecks)
+      .where(eq(healthChecks.documentId, documentId))
+      .orderBy(desc(healthChecks.createdAt))
+      .limit(1);
+    return healthCheck || undefined;
+  }
+
+  async getHealthChecksByUser(userId: string, limit = 50, offset = 0): Promise<HealthCheck[]> {
+    const { db } = await import("./db");
+    const { healthChecks } = await import("@shared/schema");
+    const { eq, desc } = await import("drizzle-orm");
+    return db.select()
+      .from(healthChecks)
+      .where(eq(healthChecks.userId, userId))
+      .orderBy(desc(healthChecks.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async createHealthCheck(insertHealthCheck: InsertHealthCheck): Promise<HealthCheck> {
+    const { db } = await import("./db");
+    const { healthChecks } = await import("@shared/schema");
+    const [healthCheck] = await db.insert(healthChecks).values(insertHealthCheck).returning();
+    return healthCheck;
   }
 
   async getNavigationData(userId: string): Promise<{

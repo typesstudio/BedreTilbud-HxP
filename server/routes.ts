@@ -417,6 +417,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   snapshotsCreated: orchestratorResult.snapshots.length,
                   stages: orchestratorResult.stages.map(s => `${s.name}:${s.status}`)
                 });
+
+                // AUTO HEALTH CHECK for 'current' documents
+                if (documentType === 'current' && orchestratorResult.snapshots.length > 0) {
+                  try {
+                    // Use the snapshot with highest confidence score
+                    const bestSnapshot = orchestratorResult.snapshots.reduce((best, current) => 
+                      (current.confidenceScore || 0) > (best.confidenceScore || 0) ? current : best
+                    );
+
+                    logger.info('[Upload] Auto health check starting for current document', {
+                      documentId: document.id,
+                      snapshotId: bestSnapshot.id,
+                      confidence: bestSnapshot.confidenceScore
+                    });
+
+                    const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(bestSnapshot);
+
+                    // Persist the health check result
+                    await storage.createHealthCheck({
+                      documentId: document.id,
+                      userId,
+                      dataSource: 'OfferSnapshot',
+                      confidenceScore: bestSnapshot.confidenceScore || null,
+                      result: healthCheckResult as any
+                    });
+
+                    logger.info('[Upload] Auto health check completed', {
+                      documentId: document.id,
+                      score: healthCheckResult.overallScore,
+                      savings: healthCheckResult.potentialSavings.realistic
+                    });
+                  } catch (healthCheckError: any) {
+                    logger.error('[Upload] Auto health check failed', healthCheckError, { 
+                      documentId: document.id 
+                    });
+                    // Don't fail the upload if health check fails
+                  }
+                }
               } else {
                 logger.error('[Upload] Orchestrator failed', new Error(orchestratorResult.error || 'Unknown error'), {
                   documentId: document.id
@@ -541,10 +579,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           await Promise.all(healthCheckPromises);
 
-          // Update document with completed status
+          // Update document with completed status AND ocrData for backward compatibility
+          // Store the first extracted policy in ocrData for the analyze endpoint
+          const firstPolicy = policies.length > 0 ? policies[0] : null;
           await storage.updateDocument(document.id, {
             extractionStatus: 'completed',
-            totalPoliciesExtracted: policies.length
+            totalPoliciesExtracted: policies.length,
+            ocrData: firstPolicy // Populate ocrData for analyze endpoint compatibility
           });
 
           logger.info('[Upload] Document processing completed', { 
@@ -1727,29 +1768,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Insurance Health Check routes
-  app.post("/api/insurance-check/analyze", aiLimiter, requireAuth, async (req, res) => {
+  app.get("/api/health-checks/document/:documentId", requireAuth, async (req, res) => {
     try {
-      // Validate request body
-      const { documentId } = validationSchemas.validateBody(validationSchemas.insuranceCheckAnalyzeSchema)(req.body);
+      const { documentId } = req.params;
+      const userId = req.headers['x-user-id'] as string;
 
-      // Get the document with OCR data
+      // SECURITY: Verify document ownership before returning health check
       const document = await storage.getDocument(documentId);
       if (!document) {
         return res.status(404).json({ message: "Document not found" });
       }
 
-      if (!document.ocrData) {
-        return res.status(400).json({ message: "Document has no OCR data. Please process the document first." });
+      if (document.userId !== userId) {
+        auditLog('unauthorized_health_check_access_attempt', userId, `Attempted to access health check for document ${documentId}`);
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+      
+      // Get the latest health check for this document
+      const healthCheck = await storage.getLatestHealthCheckByDocument(documentId);
+      
+      if (!healthCheck) {
+        return res.status(404).json({ message: "No health check found for this document" });
+      }
+
+      res.json({
+        success: true,
+        healthCheck: healthCheck.result,
+        dataSource: healthCheck.dataSource,
+        confidenceScore: healthCheck.confidenceScore,
+        createdAt: healthCheck.createdAt
+      });
+    } catch (error: any) {
+      console.error('[Health Check] Error fetching health check:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/insurance-check/analyze", aiLimiter, requireAuth, async (req, res) => {
+    try {
+      // Validate request body
+      const { documentId } = validationSchemas.validateBody(validationSchemas.insuranceCheckAnalyzeSchema)(req.body);
+
+      // Get the document
+      const document = await storage.getDocument(documentId);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      // Priority: OfferSnapshot (validated) > Policy > ocrData (legacy)
+      let dataToAnalyze: any = null;
+      let dataSource = 'unknown';
+      let confidenceScore = 0;
+
+      // Try OfferSnapshots first (validated, high-confidence data)
+      const snapshots = await storage.getOfferSnapshotsByDocument(documentId);
+      if (snapshots && snapshots.length > 0) {
+        // Use the snapshot with highest confidence score
+        const bestSnapshot = snapshots.reduce((best, current) => 
+          (current.confidenceScore || 0) > (best.confidenceScore || 0) ? current : best
+        );
+        dataToAnalyze = bestSnapshot;
+        dataSource = 'OfferSnapshot';
+        confidenceScore = bestSnapshot.confidenceScore || 0;
+        
+        logger.info('[Insurance Check] Using OfferSnapshot', {
+          documentId,
+          snapshotId: bestSnapshot.id,
+          confidence: confidenceScore,
+          validationStatus: bestSnapshot.validationStatus
+        });
+      } 
+      // Fallback to ocrData (legacy)
+      else if (document.ocrData) {
+        dataToAnalyze = document.ocrData;
+        dataSource = 'ocrData';
+        
+        logger.info('[Insurance Check] Using legacy ocrData', {
+          documentId,
+          policyType: (document.ocrData as any).policyType
+        });
+      }
+
+      // Ensure we have data to analyze
+      if (!dataToAnalyze) {
+        return res.status(400).json({ 
+          message: "Document has no analyzable data. Please ensure the document was processed successfully." 
+        });
       }
 
       console.log('[Insurance Check] Analyzing document:', {
         documentId,
         fileName: document.fileName,
-        policyType: (document.ocrData as any).policyType
+        dataSource,
+        confidenceScore,
+        policyType: dataToAnalyze.policyType
       });
 
       // Perform health check analysis
-      const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(document.ocrData as any);
+      const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(dataToAnalyze);
 
       console.log('[Insurance Check] Analysis complete:', {
         score: healthCheckResult.overallScore,
@@ -1762,8 +1878,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         document: {
           id: document.id,
           fileName: document.fileName,
-          policyType: (document.ocrData as any).policyType
+          policyType: dataToAnalyze.policyType
         },
+        dataSource,
+        confidenceScore,
         healthCheck: healthCheckResult
       });
     } catch (error: any) {
