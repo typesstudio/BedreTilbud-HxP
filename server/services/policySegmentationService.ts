@@ -10,17 +10,17 @@ import {
 
 const policySegmentSchema = z.object({
   policyType: z.string(),
-  policySubtype: z.string().optional(),
+  policySubtype: z.string().nullish(),
   rawContent: z.string(),
   metadata: z.object({
-    pageSpan: z.string().optional(),
+    pageSpan: z.string().nullish(),
     confidence: z.number().min(0).max(1),
     extractedFields: z.object({
-      annualPrice: z.number().optional(),
-      monthlyPrice: z.number().optional(),
-      insuranceCompany: z.string().optional(),
-      policyNumber: z.string().optional(),
-      coverageAddress: z.string().optional()
+      annualPrice: z.number().nullish(),
+      monthlyPrice: z.number().nullish(),
+      insuranceCompany: z.string().nullish(),
+      policyNumber: z.string().nullish(),
+      coverageAddress: z.string().nullish()
     }),
     notableSections: z.array(z.string())
   })
@@ -42,17 +42,17 @@ const openai = new OpenAI({
 
 export interface PolicySegment {
   policyType: string;
-  policySubtype?: string;
+  policySubtype?: string | null;
   rawContent: string;
   metadata: {
-    pageSpan?: string;
+    pageSpan?: string | null;
     confidence: number;
     extractedFields: {
-      annualPrice?: number;
-      monthlyPrice?: number;
-      insuranceCompany?: string;
-      policyNumber?: string;
-      coverageAddress?: string;
+      annualPrice?: number | null;
+      monthlyPrice?: number | null;
+      insuranceCompany?: string | null;
+      policyNumber?: string | null;
+      coverageAddress?: string | null;
     };
     notableSections: string[];
   };

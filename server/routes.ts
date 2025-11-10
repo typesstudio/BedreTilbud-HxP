@@ -672,6 +672,130 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Migrate documents with OfferSnapshots but no Policies
+  app.post("/api/documents/migrate-snapshots/:userId", requireAuth, async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { documents: documentsTable, offerSnapshots: snapshotsTable, policies: policiesTable } = await import("@shared/schema");
+      const { eq, sql, inArray } = await import("drizzle-orm");
+
+      const userId = req.params.userId;
+
+      // Find documents with OfferSnapshots but no Policies
+      const documentsWithSnapshots = await db
+        .select({ documentId: snapshotsTable.documentId })
+        .from(snapshotsTable)
+        .where(eq(snapshotsTable.userId, userId))
+        .groupBy(snapshotsTable.documentId);
+
+      const documentIds = documentsWithSnapshots.map(d => d.documentId).filter(Boolean) as string[];
+
+      if (documentIds.length === 0) {
+        return res.json({ message: 'No documents with snapshots found', migratedDocuments: [] });
+      }
+
+      // Find which documents have NO policies
+      const documentsWithPolicies = await db
+        .select({ documentId: policiesTable.documentId })
+        .from(policiesTable)
+        .where(inArray(policiesTable.documentId, documentIds))
+        .groupBy(policiesTable.documentId);
+
+      const documentIdsWithPolicies = documentsWithPolicies.map(d => d.documentId);
+      const documentIdsToMigrate = documentIds.filter(id => !documentIdsWithPolicies.includes(id));
+
+      console.log(`[Migration] Found ${documentIdsToMigrate.length} documents needing migration`);
+
+      const migratedDocs = [];
+
+      for (const documentId of documentIdsToMigrate) {
+        try {
+          // Get document info
+          const document = await db
+            .select()
+            .from(documentsTable)
+            .where(eq(documentsTable.id, documentId))
+            .limit(1);
+
+          if (document.length === 0) continue;
+
+          const doc = document[0];
+
+          // Get all snapshots for this document
+          const snapshots = await db
+            .select()
+            .from(snapshotsTable)
+            .where(eq(snapshotsTable.documentId, documentId));
+
+          console.log(`[Migration] Creating ${snapshots.length} policies for document ${doc.fileName}`);
+
+          const createdPolicies = [];
+          for (const snapshot of snapshots) {
+            const policyRecord = {
+              userId,
+              documentId: doc.id,
+              policyType: snapshot.policyType,
+              premium: snapshot.premium || null,
+              deductible: snapshot.deductible || null,
+              coverageDetails: snapshot.coverageDetails as any,
+              companyId: snapshot.companyId || doc.companyId
+            };
+
+            const savedPolicy = await storage.createPolicy(policyRecord);
+            createdPolicies.push(savedPolicy);
+
+            console.log(`[Migration] Policy created from snapshot`, { 
+              policyId: savedPolicy.id, 
+              type: savedPolicy.policyType
+            });
+          }
+
+          // Run health checks for current documents
+          if (doc.documentType === 'current' && createdPolicies.length > 0) {
+            console.log(`[Migration] Running health checks for ${createdPolicies.length} policies`);
+            
+            const healthCheckPromises = createdPolicies.map(async (policy) => {
+              try {
+                const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(policy);
+                await storage.updatePolicyHealthCheck(policy.id, {
+                  status: 'completed',
+                  payload: healthCheckResult,
+                  savingsAnnual: healthCheckResult.annualSavings?.amount || 0
+                });
+                console.log(`[Migration] Health check completed for policy ${policy.id}`);
+                return { policyId: policy.id, success: true };
+              } catch (error) {
+                console.error(`[Migration] Health check failed for policy ${policy.id}:`, error);
+                return { policyId: policy.id, success: false };
+              }
+            });
+
+            const healthCheckResults = await Promise.all(healthCheckPromises);
+            const successCount = healthCheckResults.filter(r => r.success).length;
+            console.log(`[Migration] Health checks completed: ${successCount}/${createdPolicies.length} successful`);
+          }
+
+          migratedDocs.push({ 
+            id: doc.id, 
+            fileName: doc.fileName, 
+            status: 'success',
+            policiesCreated: createdPolicies.length
+          });
+        } catch (error: any) {
+          console.error(`[Migration] Failed to migrate document ${documentId}:`, error);
+          migratedDocs.push({ id: documentId, status: 'failed', error: error.message });
+        }
+      }
+
+      res.json({
+        message: `Migrated ${migratedDocs.length} documents`,
+        migratedDocuments: migratedDocs
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Reprocess documents with empty OCR data
   app.post("/api/documents/reprocess/:userId", requireAuth, async (req, res) => {
     try {
@@ -718,6 +842,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
               totalPoliciesExtracted: orchestratorResult.snapshots.length
             })
             .where(eq(documentsTable.id, doc.id));
+
+          // Create legacy policies from OfferSnapshots
+          const createdPolicies = [];
+          if (!doc.userId) {
+            console.error(`[Reprocess] Document ${doc.id} has no userId, skipping policy creation`);
+          } else {
+            for (const snapshot of orchestratorResult.snapshots) {
+              const policyRecord = {
+                userId: doc.userId,
+                documentId: doc.id,
+                policyType: snapshot.policyType,
+                premium: snapshot.premium || null,
+                deductible: snapshot.deductible || null,
+                coverageDetails: snapshot.coverageDetails as any,
+                companyId: snapshot.companyId || doc.companyId
+              };
+
+              const savedPolicy = await storage.createPolicy(policyRecord);
+              createdPolicies.push(savedPolicy);
+
+              console.log(`[Reprocess] Legacy policy created from snapshot`, { 
+                policyId: savedPolicy.id, 
+                type: savedPolicy.policyType,
+                snapshotId: snapshot.id
+              });
+            }
+          }
+
+          // Run health checks for current documents
+          if (doc.documentType === 'current' && createdPolicies.length > 0) {
+            console.log(`[Reprocess] Running health checks for ${createdPolicies.length} policies`);
+            
+            const healthCheckPromises = createdPolicies.map(async (policy) => {
+              try {
+                const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(policy);
+                await storage.updatePolicyHealthCheck(policy.id, {
+                  status: 'completed',
+                  payload: healthCheckResult,
+                  savingsAnnual: healthCheckResult.annualSavings?.amount || 0
+                });
+                console.log(`[Reprocess] Health check completed for policy ${policy.id}`);
+                return { policyId: policy.id, success: true };
+              } catch (error) {
+                console.error(`[Reprocess] Health check failed for policy ${policy.id}:`, error);
+                return { policyId: policy.id, success: false };
+              }
+            });
+
+            const healthCheckResults = await Promise.all(healthCheckPromises);
+            const successCount = healthCheckResults.filter(r => r.success).length;
+            console.log(`[Reprocess] Health checks completed: ${successCount}/${createdPolicies.length} successful`);
+          }
 
           reprocessedDocs.push({ 
             id: doc.id, 
