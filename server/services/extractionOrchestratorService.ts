@@ -47,8 +47,9 @@ export class ExtractionOrchestratorService {
 
   constructor(storage: IStorage) {
     this.storage = storage;
-    this.useTwoStepPipeline = process.env.ENABLE_TWO_STEP_EXTRACTION === 'true';
-    console.log(`[Orchestrator] Two-step pipeline: ${this.useTwoStepPipeline ? 'ENABLED' : 'DISABLED'}`);
+    // Default to NEW two-step pipeline (better quality). Set ENABLE_TWO_STEP_EXTRACTION=false to use legacy.
+    this.useTwoStepPipeline = process.env.ENABLE_TWO_STEP_EXTRACTION !== 'false';
+    console.log(`[Orchestrator] Two-step pipeline: ${this.useTwoStepPipeline ? 'ENABLED (v2.1.0)' : 'DISABLED (legacy v2.0.0)'}`);
   }
 
   async processDocument(
