@@ -1,8 +1,11 @@
 import OpenAI from "openai";
 import { InsuranceData } from "./mistralOcrService";
-import { Policy } from "../../shared/schema";
+import { Policy, offerSnapshots } from "../../shared/schema";
 import { retryAICall } from "../utils/retry";
 import { loadPrompt, replaceVariables } from "../ai-prompts/utils/promptLoader";
+
+// Type for OfferSnapshot select
+type OfferSnapshot = typeof offerSnapshots.$inferSelect;
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
@@ -172,16 +175,31 @@ function normalizeCumulativeSavings(
 }
 
 class InsuranceCheckService {
-  async analyzeInsuranceHealth(policy: Policy): Promise<HealthCheckResult> {
+  /**
+   * Analyzes insurance health using OfferSnapshot (validated, normalized data).
+   * Supports both legacy Policy and new OfferSnapshot objects for backward compatibility.
+   */
+  async analyzeInsuranceHealth(input: Policy | OfferSnapshot): Promise<HealthCheckResult> {
     try {
-      const coverageDetails = policy.coverageDetails as any;
-      const policyType = policy.policyType || 'home';
+      // Determine if input is OfferSnapshot or legacy Policy
+      const isOfferSnapshot = 'extractionVersion' in input;
+      
+      const coverageDetails = input.coverageDetails as any;
+      const policyType = input.policyType || 'home';
+      const premium = isOfferSnapshot 
+        ? (input as OfferSnapshot).premium 
+        : (input as Policy).premium;
+      const deductible = isOfferSnapshot
+        ? (input as OfferSnapshot).deductible
+        : (input as Policy).deductible;
+      
+      console.log(`[Health Check] Using ${isOfferSnapshot ? 'OfferSnapshot' : 'Legacy Policy'} (confidence: ${isOfferSnapshot ? (input as OfferSnapshot).confidenceScore : 'N/A'}%)`);
       
       const promptTemplate = loadPrompt('health-check/analysis');
       const prompt = replaceVariables(promptTemplate, {
         policyType,
-        premium: policy.premium || 'N/A',
-        deductible: policy.deductible || 'N/A',
+        premium: premium || 'N/A',
+        deductible: deductible || 'N/A',
         coverageDetails: JSON.stringify(coverageDetails, null, 2)
       });
 
@@ -208,9 +226,10 @@ class InsuranceCheckService {
       const aiOutput = JSON.parse(response.choices[0].message.content || "{}");
       
       // Extract realistic savings from AI output (fallback to conservative estimate)
+      const premiumNumber = Number(premium) || 0;
       const realisticSavings = aiOutput.potentialSavings?.realistic || 
                                 aiOutput.annualSavings?.amount ||
-                                Math.round((policy.premium || 0) * 0.15);
+                                Math.round(premiumNumber * 0.15);
       
       // Validate and normalize cumulativeSavings to guarantee 120 chart data points
       const normalizedCumulativeSavings = normalizeCumulativeSavings(aiOutput, realisticSavings);

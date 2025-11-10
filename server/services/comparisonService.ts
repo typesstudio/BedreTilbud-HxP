@@ -4,6 +4,10 @@ import { mistralTextService } from "./mistralTextService";
 import { retryAICall } from "../utils/retry";
 import { sanitizePrompt, detectInjection, validateAIOutput } from "../utils/aiSanitization";
 import { loadPrompt, replaceVariables } from "../ai-prompts/utils/promptLoader";
+import { offerSnapshots } from "../../shared/schema";
+
+// Type for OfferSnapshot select
+type OfferSnapshot = typeof offerSnapshots.$inferSelect;
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
@@ -158,9 +162,13 @@ export class ComparisonService {
     }
   }
 
+  /**
+   * Compares insurance policies using OfferSnapshots (validated, normalized data).
+   * Supports both legacy InsuranceData and new OfferSnapshot objects for backward compatibility.
+   */
   async compareInsurancePolicies(
-    currentPolicy: InsuranceData,
-    offerPolicy: InsuranceData,
+    currentPolicy: InsuranceData | OfferSnapshot,
+    offerPolicy: InsuranceData | OfferSnapshot,
     userPreferences?: {
       housingType?: string;
       hasCar?: boolean;
@@ -169,6 +177,17 @@ export class ComparisonService {
     }
   ): Promise<ComparisonResult> {
     try {
+      // Determine if inputs are OfferSnapshots or legacy InsuranceData
+      const isCurrentSnapshot = 'extractionVersion' in currentPolicy;
+      const isOfferSnapshot = 'extractionVersion' in offerPolicy;
+      
+      console.log(`[Comparison] Current: ${isCurrentSnapshot ? 'OfferSnapshot' : 'InsuranceData'}, Offer: ${isOfferSnapshot ? 'OfferSnapshot' : 'InsuranceData'}`);
+      if (isCurrentSnapshot && isOfferSnapshot) {
+        const currentConf = (currentPolicy as OfferSnapshot).confidenceScore;
+        const offerConf = (offerPolicy as OfferSnapshot).confidenceScore;
+        console.log(`[Comparison] Confidence scores: Current ${currentConf}%, Offer ${offerConf}%`);
+      }
+      
       const promptTemplate = loadPrompt('comparison/policy-comparison');
       const prompt = replaceVariables(promptTemplate, {
         currentPolicy: JSON.stringify(currentPolicy, null, 2),
