@@ -238,22 +238,24 @@ export default function InsuranceCheckPage() {
           {selectedPolicy && healthCheckPayload && (
             <>
               {/* 1. ÅRLIG POTENTIEL BESPARELSE */}
-              {healthCheckPayload.annualSavings && (
+              {healthCheckPayload.potentialSavings && (
                 <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
                   <span className="text-heading-2 font-heading-2 text-default-font">
                     Årlig potentiel besparelse
                   </span>
                   <div className="flex w-full items-center justify-between rounded-lg border border-solid border-success-200 bg-success-50 px-6 py-4">
                     <span className="text-heading-1 font-heading-1 text-success-600">
-                      {formatCurrency(healthCheckPayload.annualSavings.amount)}
+                      {formatCurrency(healthCheckPayload.potentialSavings.realistic)} kr
                     </span>
                     <div className="flex flex-col items-start gap-1">
                       <span className="text-body-bold font-body-bold text-success-700">
-                        {healthCheckPayload.annualSavings.explanation}
+                        {healthCheckPayload.potentialSavings.explanation}
                       </span>
-                      <span className="text-caption font-caption text-success-600">
-                        {healthCheckPayload.annualSavings.percentageLower}% lavere omkostning
-                      </span>
+                      {selectedPolicy.annualPremium && healthCheckPayload.potentialSavings.realistic && (
+                        <span className="text-caption font-caption text-success-600">
+                          {Math.round((healthCheckPayload.potentialSavings.realistic / selectedPolicy.annualPremium) * 100)}% lavere omkostning
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
