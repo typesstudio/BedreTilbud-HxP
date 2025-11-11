@@ -631,6 +631,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/documents/:id/extraction-stages", requireAuth, async (req, res) => {
+    try {
+      const document = await storage.getDocument(req.params.id);
+      
+      // 404 if document doesn't exist
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+      
+      // 409 if extraction is in-progress (any state other than completed or failed)
+      const terminalStates = ['completed', 'failed'];
+      if (document.extractionStatus && !terminalStates.includes(document.extractionStatus)) {
+        return res.status(409).json({ 
+          message: "Extraction pipeline is currently running for this document",
+          status: document.extractionStatus
+        });
+      }
+      
+      // 204 if document exists but has no extraction_stages yet
+      if (!document.extractionStages) {
+        return res.status(204).send();
+      }
+      
+      // Extract validation errors from stage3 metadata if present
+      const stages = document.extractionStages as any;
+      const validationErrors = stages?.stage3_extraction?.metadata?.errors || [];
+      
+      // Return document context + extraction stages with validation structure
+      res.json({
+        documentId: document.id,
+        fileName: document.fileName,
+        createdAt: document.createdAt,
+        totalPoliciesExtracted: document.totalPoliciesExtracted || 0,
+        validation: {
+          status: document.extractionStatus || 'unknown',
+          errors: validationErrors
+        },
+        stages: document.extractionStages
+      });
+    } catch (error: any) {
+      logger.error('[Extraction Stages] Failed to fetch extraction stages', error, { 
+        documentId: req.params.id 
+      });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.delete("/api/documents/:id", requireAuth, requireCSRFToken, async (req, res) => {
     try {
       const document = await storage.getDocument(req.params.id);

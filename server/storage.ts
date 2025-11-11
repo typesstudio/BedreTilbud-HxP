@@ -43,6 +43,7 @@ export interface IStorage {
   countUserDocuments(userId: string, documentType?: string): Promise<number>;
   createDocument(document: InsertDocument): Promise<Document>;
   updateDocument(id: string, updates: Partial<InsertDocument>): Promise<Document>;
+  updateDocumentExtractionStages(id: string, stagesData: any): Promise<void>;
   deleteDocument(id: string): Promise<void>;
 
   // Email Threads
@@ -303,6 +304,7 @@ export class MemStorage implements IStorage {
       totalPoliciesExtracted: insertDocument.totalPoliciesExtracted ?? null,
       documentType: insertDocument.documentType ?? null,
       companyId: insertDocument.companyId ?? null,
+      extractionStages: null, // Will be populated by extraction pipeline
       createdAt: new Date() 
     };
     this.documents.set(id, document);
@@ -316,6 +318,14 @@ export class MemStorage implements IStorage {
     const updated: Document = { ...existing, ...updates };
     this.documents.set(id, updated);
     return updated;
+  }
+
+  async updateDocumentExtractionStages(id: string, stagesData: any): Promise<void> {
+    const existing = this.documents.get(id);
+    if (!existing) throw new Error("Document not found");
+    // Update in place (extractionStages is part of Document type)
+    const updated: Document = { ...existing, extractionStages: stagesData };
+    this.documents.set(id, updated);
   }
 
   async deleteDocument(id: string): Promise<void> {
@@ -904,6 +914,14 @@ export class DatabaseStorage implements IStorage {
     if (!doc) throw new Error("Document not found");
     apiCache.invalidate(`/api/documents/`);
     return doc;
+  }
+
+  async updateDocumentExtractionStages(id: string, stagesData: any): Promise<void> {
+    const { db } = await import("./db");
+    const { documents } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    await db.update(documents).set({ extractionStages: stagesData }).where(eq(documents.id, id));
+    // Don't invalidate cache - this is debug data
   }
 
   async deleteDocument(id: string): Promise<void> {

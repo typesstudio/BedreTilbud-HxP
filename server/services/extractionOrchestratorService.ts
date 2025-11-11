@@ -40,16 +40,63 @@ interface StructuredPolicy {
   confidence: number;
 }
 
+interface ExtractionStagesData {
+  stage1_ocr?: {
+    rawOutput: string;
+    timestamp: string;
+    metadata: {
+      source: string;
+      markdownLength: number;
+      pageCount: number;
+      latencyMs: number;
+    };
+  };
+  stage2_segmentation?: {
+    rawOutput: any[];
+    timestamp: string;
+    metadata: {
+      segmentCount: number;
+      modelUsed: string;
+      tokensUsed: number;
+      costUsd: number;
+      latencyMs: number;
+      confidenceScores: number[];
+    };
+  };
+  stage3_extraction?: {
+    rawOutput: StructuredPolicy[];
+    timestamp: string;
+    metadata: {
+      policyCount: number;
+      latencyMs: number;
+      successCount: number;
+      failureCount: number;
+      errors?: string[];
+    };
+  };
+}
+
 export class ExtractionOrchestratorService {
   private storage: IStorage;
   private version = "2.1.0"; // Updated for two-step pipeline
   private useTwoStepPipeline: boolean;
+  private extractionStagesData: ExtractionStagesData = {}; // Accumulate stage data
 
   constructor(storage: IStorage) {
     this.storage = storage;
     // Default to NEW two-step pipeline (better quality). Set ENABLE_TWO_STEP_EXTRACTION=false to use legacy.
     this.useTwoStepPipeline = process.env.ENABLE_TWO_STEP_EXTRACTION !== 'false';
     console.log(`[Orchestrator] Two-step pipeline: ${this.useTwoStepPipeline ? 'ENABLED (v2.1.0)' : 'DISABLED (legacy v2.0.0)'}`);
+  }
+
+  private async persistStageData(documentId: string): Promise<void> {
+    try {
+      await this.storage.updateDocumentExtractionStages(documentId, this.extractionStagesData);
+      console.log(`[Orchestrator] Persisted stage data to database (docId: ${documentId})`);
+    } catch (error) {
+      console.error(`[Orchestrator] Failed to persist stage data for ${documentId}:`, error);
+      // Don't throw - this is debug data, shouldn't break the pipeline
+    }
   }
 
   async processDocument(
@@ -60,6 +107,9 @@ export class ExtractionOrchestratorService {
     } = {}
   ): Promise<ExtractionResult> {
     const stages: ExtractionStage[] = [];
+    
+    // CRITICAL: Reset extraction stages data to prevent cross-run leakage
+    this.extractionStagesData = {};
     
     console.log(`[Orchestrator] Starting extraction pipeline for document ${documentId}`);
     console.log(`[Orchestrator] Options:`, options);
@@ -203,46 +253,59 @@ export class ExtractionOrchestratorService {
       
       // Try to use stored OCR data first (avoid re-processing PDFs)
       const ocrRawResponse = document.ocrRawResponse as any;
+      let markdown: string;
+      let pageCount: number;
+      let source: string;
+      
       if (ocrRawResponse?.pages && Array.isArray(ocrRawResponse.pages)) {
-        const markdown = ocrRawResponse.pages
+        markdown = ocrRawResponse.pages
           .map((page: any) => page.markdown)
           .join('\n\n---\n\n');
+        pageCount = ocrRawResponse.pages.length;
+        source = 'cached';
         
-        stage.status = "completed";
-        stage.completedAt = new Date();
-        stage.output = { 
-          markdownLength: markdown.length,
-          source: 'cached',
-          pageCount: ocrRawResponse.pages.length
-        };
+        console.log(`[Orchestrator] Using cached OCR data: ${markdown.length} chars, ${pageCount} pages`);
+      } else {
+        // Fallback: Extract from PDF if no cached data
+        console.log(`[Orchestrator] No cached OCR data, extracting from PDF...`);
+        const { MistralOCRService } = await import("./mistralOcrService");
+        const ocrService = new MistralOCRService();
         
-        console.log(`[Orchestrator] Using cached OCR data: ${markdown.length} chars, ${ocrRawResponse.pages.length} pages`);
+        markdown = await ocrService.extractTextFromPDF(document.filePath);
+        pageCount = 0;
+        source = 'fresh_extraction';
         
-        return {
-          markdown,
-          pageCount: ocrRawResponse.pages.length
-        };
+        console.log(`[Orchestrator] OCR completed: ${markdown.length} chars extracted`);
       }
-      
-      // Fallback: Extract from PDF if no cached data
-      console.log(`[Orchestrator] No cached OCR data, extracting from PDF...`);
-      const { MistralOCRService } = await import("./mistralOcrService");
-      const ocrService = new MistralOCRService();
-      
-      const markdown = await ocrService.extractTextFromPDF(document.filePath);
       
       stage.status = "completed";
       stage.completedAt = new Date();
+      const latencyMs = stage.completedAt.getTime() - stage.startedAt!.getTime();
+      
       stage.output = { 
         markdownLength: markdown.length,
-        source: 'fresh_extraction'
+        source,
+        pageCount
       };
       
-      console.log(`[Orchestrator] OCR completed: ${markdown.length} chars extracted`);
+      // PERSIST STAGE 1 DATA
+      this.extractionStagesData.stage1_ocr = {
+        rawOutput: markdown,
+        timestamp: stage.completedAt.toISOString(),
+        metadata: {
+          source,
+          markdownLength: markdown.length,
+          pageCount,
+          latencyMs
+        }
+      };
+      
+      await this.persistStageData(document.id);
+      console.log(`[Orchestrator] Stage 1 data persisted (${markdown.length} chars)`);
       
       return {
         markdown,
-        pageCount: 0
+        pageCount
       };
     } catch (error) {
       stage.status = "failed";
@@ -457,6 +520,23 @@ export class ExtractionOrchestratorService {
         `Cost: $${result.metadata.costUsd.toFixed(4)} | ${result.metadata.latencyMs}ms`
       );
       
+      // PERSIST STAGE 2 DATA
+      this.extractionStagesData.stage2_segmentation = {
+        rawOutput: result.segments,
+        timestamp: stage.completedAt.toISOString(),
+        metadata: {
+          segmentCount: result.summary.totalPolicies,
+          modelUsed: result.metadata.modelUsed,
+          tokensUsed: result.metadata.tokensUsed,
+          costUsd: result.metadata.costUsd,
+          latencyMs: result.metadata.latencyMs,
+          confidenceScores: result.segments.map(s => s.metadata.confidence)
+        }
+      };
+      
+      await this.persistStageData(documentId);
+      console.log(`[Orchestrator] Stage 2 data persisted (${result.summary.totalPolicies} segments)`);
+      
       return result.segments;
     } catch (error) {
       stage.status = "failed";
@@ -537,6 +617,23 @@ export class ExtractionOrchestratorService {
         `[Orchestrator] Segment extraction completed: ${policies.length}/${segments.length} policies extracted | ` +
         `Success: ${extractionMetrics.successCount}, Failures: ${extractionMetrics.failureCount}`
       );
+      
+      // PERSIST STAGE 3 DATA (even on partial failures)
+      const latencyMs = stage.completedAt.getTime() - stage.startedAt!.getTime();
+      this.extractionStagesData.stage3_extraction = {
+        rawOutput: policies, // Successfully extracted policies
+        timestamp: stage.completedAt.toISOString(),
+        metadata: {
+          policyCount: policies.length,
+          latencyMs,
+          successCount: extractionMetrics.successCount,
+          failureCount: extractionMetrics.failureCount,
+          errors: extractionMetrics.errors.length > 0 ? extractionMetrics.errors : undefined
+        }
+      };
+      
+      await this.persistStageData(documentId);
+      console.log(`[Orchestrator] Stage 3 data persisted (${policies.length} policies, ${extractionMetrics.failureCount} failures)`);
       
       // CRITICAL: Fail if ALL extractions failed
       if (policies.length === 0) {
