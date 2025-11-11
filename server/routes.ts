@@ -489,23 +489,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
 
-          // Run all health checks in parallel
-          logger.info('[Upload] Running health checks in parallel', { policyCount: createdPolicies.length });
+          // NEW: Run HealthCheckOrchestrator for ALL documents (current + offer)
+          // This creates health_checks table records for frontend consumption
+          const { HealthCheckOrchestrator } = await import('./services/healthCheckOrchestrator');
+          const healthCheckOrchestrator = new HealthCheckOrchestrator(storage);
+          
+          const healthCheckSource = documentType === 'offer' ? 'offer_upload' : 'current_upload';
+          const healthCheckResult = await healthCheckOrchestrator.runForDocument(
+            document.id,
+            {
+              source: healthCheckSource,
+              userId,
+              forceRerun: false
+            }
+          );
+
+          logger.info('[Upload] Health check orchestration completed', {
+            documentId: document.id,
+            source: healthCheckSource,
+            success: healthCheckResult.success,
+            healthChecksCreated: healthCheckResult.healthChecksCreated,
+            healthChecksFailed: healthCheckResult.healthChecksFailed,
+            skipped: healthCheckResult.skipped
+          });
+
+          // Legacy: Also update policies table for backward compatibility
           const healthCheckPromises = createdPolicies.map(async (policy) => {
             try {
-              logger.info('[AI Usage] OpenAI-gpt-4o-mini - insurance-health-check - Starting', { 
+              logger.info('[Upload] Updating legacy policy health check', { 
                 policyId: policy.id 
               });
               
               const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(policy);
-              
-              logger.info('[AI Usage] OpenAI-gpt-4o-mini - insurance-health-check - Success', { 
-                policyId: policy.id,
-                score: healthCheckResult.overallScore,
-                savings: healthCheckResult.annualSavings?.amount || 0
-              });
 
-              // Update policy with health check data
+              // Update policy with health check data (legacy support)
               await storage.updatePolicyHealthCheck(policy.id, {
                 status: 'completed',
                 payload: healthCheckResult,
@@ -514,10 +531,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
               return { policyId: policy.id, success: true };
             } catch (error: any) {
-              logger.error('[Upload] Health check failed for policy', error instanceof Error ? error : new Error(String(error)), { 
-                policyId: policy.id 
-              });
-              logger.info('[AI Usage] OpenAI-gpt-4o-mini - insurance-health-check - Failed', { 
+              logger.error('[Upload] Legacy health check update failed for policy', error instanceof Error ? error : new Error(String(error)), { 
                 policyId: policy.id 
               });
               
