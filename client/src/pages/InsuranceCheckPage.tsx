@@ -6,7 +6,8 @@ import {
   Button, 
   IconWithBackground, 
   ListingsTabs,
-  AreaChart
+  AreaChart,
+  Table
 } from "@/ui";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -115,15 +116,15 @@ export default function InsuranceCheckPage() {
     type => policiesData && policiesData[type as keyof PolicyGroup]?.length > 0
   );
 
-  const [selectedType, setSelectedType] = useState<string>('indbo');
+  const [selectedType, setSelectedType] = useState<string>('samlet');
 
   useEffect(() => {
-    if (availableTypes.length > 0 && !availableTypes.includes(selectedType)) {
-      setSelectedType(availableTypes[0]);
+    if (availableTypes.length > 0 && selectedType !== 'samlet' && !availableTypes.includes(selectedType)) {
+      setSelectedType('samlet');
     }
   }, [availableTypes, selectedType]);
 
-  const selectedPolicies = policiesData?.[selectedType as keyof PolicyGroup] || [];
+  const selectedPolicies = selectedType === 'samlet' ? [] : (policiesData?.[selectedType as keyof PolicyGroup] || []);
   const selectedPolicy = selectedPolicies[0];
 
   const formatCurrency = (amount: number | null | undefined) => {
@@ -187,10 +188,22 @@ export default function InsuranceCheckPage() {
             </Button>
           </div>
 
-          {/* ListingsTabs Navigation - Only show tabs for insurance types with data */}
+          {/* ListingsTabs Navigation - Always show Samlet first, then tabs for insurance types with data */}
           <div className="flex w-full flex-col items-start gap-2 border-b border-solid border-neutral-border bg-default-background sticky top-0 z-20">
             <div className="flex w-full items-center gap-2 overflow-x-auto">
               <ListingsTabs>
+                {/* Samlet (Overview) Tab - Always first */}
+                <ListingsTabs.Item
+                  key="samlet"
+                  checked={selectedType === 'samlet'}
+                  icon={<FeatherSquare />}
+                  onClick={() => setSelectedType('samlet')}
+                  data-testid="tab-samlet"
+                >
+                  Samlet
+                </ListingsTabs.Item>
+                
+                {/* Individual Policy Type Tabs */}
                 {(['indbo', 'ulykke', 'hus', 'bil', 'rejse'] as const)
                   .filter((type) => (policiesData?.[type]?.length ?? 0) > 0)
                   .map((type) => {
@@ -212,8 +225,86 @@ export default function InsuranceCheckPage() {
             </div>
           </div>
 
+          {/* SAMLET (OVERVIEW) VIEW */}
+          {selectedType === 'samlet' && policiesData && (
+            <div className="flex w-full flex-col items-start gap-4">
+              <span className="text-heading-2 font-heading-2 text-default-font">
+                Hurtig oversigt
+              </span>
+              <div className="flex w-full flex-col items-start rounded-lg border border-solid border-neutral-border bg-default-background overflow-x-auto">
+                <Table
+                  header={
+                    <Table.HeaderRow>
+                      <Table.HeaderCell>Kategori</Table.HeaderCell>
+                      <Table.HeaderCell>Årlig præmie</Table.HeaderCell>
+                      <Table.HeaderCell>Sundhedsscore</Table.HeaderCell>
+                      <Table.HeaderCell>Potentiel besparelse</Table.HeaderCell>
+                      <Table.HeaderCell>Handling</Table.HeaderCell>
+                    </Table.HeaderRow>
+                  }
+                >
+                  {(['indbo', 'hus', 'ulykke', 'bil', 'rejse'] as const).map((policyType) => {
+                    const policies = policiesData[policyType] || [];
+                    const hasPolicies = policies.length > 0;
+                    const policy = policies[0];
+                    const healthCheck = policy?.healthCheckPayload;
+                    const IconComponent = policyTypeIcons[policyType];
+                    
+                    return (
+                      <Table.Row key={policyType}>
+                        <Table.Cell>
+                          <div className="flex items-center gap-2">
+                            <IconWithBackground 
+                              size="small" 
+                              icon={<IconComponent />}
+                              variant={hasPolicies ? undefined : 'warning'}
+                            />
+                            <span className={`whitespace-nowrap text-body-bold font-body-bold ${hasPolicies ? 'text-default-font' : 'text-subtext-color'}`}>
+                              {policyTypeLabels[policyType]}
+                            </span>
+                          </div>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <span className={`whitespace-nowrap text-body font-body ${hasPolicies ? 'text-default-font' : 'text-subtext-color'}`}>
+                            {hasPolicies && policy.annualPremium != null
+                              ? `${formatCurrency(policy.annualPremium)}`
+                              : 'Afventer'}
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <span className={`whitespace-nowrap text-body font-body ${hasPolicies ? 'text-default-font' : 'text-subtext-color'}`}>
+                            {hasPolicies && healthCheck?.overallScore != null
+                              ? `${healthCheck.overallScore}/10`
+                              : 'Afventer'}
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <span className={`whitespace-nowrap text-body-bold font-body-bold ${hasPolicies && healthCheck?.potentialSavings?.realistic != null ? 'text-success-600' : 'text-subtext-color'}`}>
+                            {hasPolicies && healthCheck?.potentialSavings?.realistic != null
+                              ? `${formatCurrency(healthCheck.potentialSavings.realistic)}`
+                              : '—'}
+                          </span>
+                        </Table.Cell>
+                        <Table.Cell>
+                          <Button
+                            variant={hasPolicies ? 'brand-tertiary' : 'neutral-tertiary'}
+                            size="small"
+                            onClick={() => hasPolicies && setSelectedType(policyType)}
+                            data-testid={`button-view-${policyType}`}
+                          >
+                            {hasPolicies ? 'Se detaljer' : 'Afventer'}
+                          </Button>
+                        </Table.Cell>
+                      </Table.Row>
+                    );
+                  })}
+                </Table>
+              </div>
+            </div>
+          )}
+
           {/* Empty State */}
-          {selectedPolicies.length === 0 && (() => {
+          {selectedType !== 'samlet' && selectedPolicies.length === 0 && (() => {
             const EmptyIcon = policyTypeIcons[selectedType] || FeatherShield;
             return (
               <div className="flex w-full flex-col items-center gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-12">
