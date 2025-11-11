@@ -1,0 +1,60 @@
+Add the following code to the page. If the code already exists, update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+<div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-4 mobile:py-4">
+  <span className="text-heading-2 font-heading-2 text-default-font mobile:text-heading-3 mobile:font-heading-3">
+    Årlig omkostning sammenligning
+  </span>
+  <div className="flex w-full items-center justify-between rounded-lg border border-solid border-success-200 bg-success-50 px-6 py-4 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-2 mobile:px-4 mobile:py-3">
+    <span className="text-heading-1 font-heading-1 text-success-600 mobile:text-heading-2 mobile:font-heading-2 mobile:self-end">
+      3.252 kr
+    </span>
+    <div className="flex items-center gap-3">
+      <IconWithBackground
+        variant="success"
+        size="medium"
+        icon={<FeatherPiggyBank />}
+      />
+      <div className="flex flex-col items-start gap-1">
+        <span className="text-body-bold font-body-bold text-success-700">
+          Din årlige besparelse
+        </span>
+        <span className="text-caption font-caption text-success-600">
+          20.5% lavere omkostning
+        </span>
+      </div>
+    </div>
+  </div>
+  <div className="flex w-full items-center gap-4">
+    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+      <span className="text-caption font-caption text-subtext-color">
+        Nuværende (Alm. Brand)
+      </span>
+      <span className="text-heading-2 font-heading-2 text-default-font">
+        15.828 kr
+      </span>
+    </div>
+    <FeatherArrowRight className="text-heading-2 font-heading-2 text-success-600" />
+    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-success-50 px-4 py-4">
+      <span className="text-caption font-caption text-success-600">
+        Ny pris (Tryg)
+      </span>
+      <span className="text-heading-2 font-heading-2 text-success-700">
+        12.576 kr
+      </span>
+    </div>
+  </div>
+</div>
+
+```Be sure to import the components using the following code:
+  
+```tsx
+import React from "react";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { FeatherArrowRight } from "@subframe/core";
+import { FeatherPiggyBank } from "@subframe/core";
+```Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync IconWithBackground -p 34bd735365b5
+```
