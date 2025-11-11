@@ -218,7 +218,7 @@ class InsuranceCheckService {
             }
           ],
           response_format: { type: "json_object" },
-          max_completion_tokens: 4096,
+          max_completion_tokens: 8000,
         });
       }, 'insurance-health-check');
 
