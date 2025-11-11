@@ -1,0 +1,218 @@
+Add the following code to the page. If the code already exists, update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+<div className="flex w-full flex-col items-start gap-4">
+  <span className="text-heading-2 font-heading-2 text-default-font">
+    Hurtig sammenligning
+  </span>
+  <div className="flex w-full flex-col items-start rounded-lg border border-solid border-neutral-border bg-default-background overflow-x-auto">
+    <Table
+      header={
+        <Table.HeaderRow>
+          <Table.HeaderCell>Kategori</Table.HeaderCell>
+          <Table.HeaderCell>Nuværende</Table.HeaderCell>
+          <Table.HeaderCell>Tilbud</Table.HeaderCell>
+          <Table.HeaderCell>Besparelse</Table.HeaderCell>
+          <Table.HeaderCell>Status</Table.HeaderCell>
+        </Table.HeaderRow>
+      }
+    >
+      <Table.Row>
+        <Table.Cell>
+          <div className="flex items-center gap-2">
+            <IconWithBackground size="small" icon={<FeatherHome />} />
+            <span className="whitespace-nowrap text-body-bold font-body-bold text-default-font">
+              Indbo
+            </span>
+          </div>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body font-body text-default-font">
+            1.203 kr
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body font-body text-default-font">
+            3.400 kr
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body-bold font-body-bold text-success-600">
+            1.200 kr
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <Button
+            variant="brand-tertiary"
+            size="small"
+            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+          >
+            Se detaljer
+          </Button>
+        </Table.Cell>
+      </Table.Row>
+      <Table.Row>
+        <Table.Cell>
+          <div className="flex items-center gap-2">
+            <IconWithBackground size="small" icon={<FeatherCar />} />
+            <span className="whitespace-nowrap text-body-bold font-body-bold text-default-font">
+              Bil
+            </span>
+          </div>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body font-body text-default-font">
+            600 kr
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body font-body text-default-font">
+            300 kr
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body-bold font-body-bold text-success-600">
+            3.200 kr
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <Button
+            variant="brand-tertiary"
+            size="small"
+            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+          >
+            Se detaljer
+          </Button>
+        </Table.Cell>
+      </Table.Row>
+      <Table.Row>
+        <Table.Cell>
+          <div className="flex items-center gap-2">
+            <IconWithBackground size="small" icon={<FeatherBuilding />} />
+            <span className="whitespace-nowrap text-body-bold font-body-bold text-default-font">
+              Hus
+            </span>
+          </div>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body font-body text-default-font">
+            950 kr
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body font-body text-default-font">
+            600 kr
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body-bold font-body-bold text-success-600">
+            2.800 kr
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <Button
+            variant="brand-tertiary"
+            size="small"
+            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+          >
+            Se detaljer
+          </Button>
+        </Table.Cell>
+      </Table.Row>
+      <Table.Row>
+        <Table.Cell>
+          <div className="flex items-center gap-2">
+            <IconWithBackground
+              variant="warning"
+              size="small"
+              icon={<FeatherShield />}
+            />
+            <span className="whitespace-nowrap text-body-bold font-body-bold text-subtext-color">
+              Ulykke
+            </span>
+          </div>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body font-body text-subtext-color">
+            Afventer
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body font-body text-subtext-color">
+            Afventer
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body font-body text-subtext-color">
+            —
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <Button
+            variant="neutral-tertiary"
+            size="small"
+            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+          >
+            Afventer
+          </Button>
+        </Table.Cell>
+      </Table.Row>
+      <Table.Row>
+        <Table.Cell>
+          <div className="flex items-center gap-2">
+            <IconWithBackground
+              variant="warning"
+              size="small"
+              icon={<FeatherPlane />}
+            />
+            <span className="whitespace-nowrap text-body-bold font-body-bold text-subtext-color">
+              Rejse
+            </span>
+          </div>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body font-body text-subtext-color">
+            Afventer
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body font-body text-subtext-color">
+            Afventer
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <span className="whitespace-nowrap text-body font-body text-subtext-color">
+            —
+          </span>
+        </Table.Cell>
+        <Table.Cell>
+          <Button
+            variant="neutral-tertiary"
+            size="small"
+            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+          >
+            Afventer
+          </Button>
+        </Table.Cell>
+      </Table.Row>
+    </Table>
+  </div>
+</div>
+
+```Be sure to import the components using the following code:
+  
+```tsx
+import React from "react";
+import { Button } from "@/ui/components/Button";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { Table } from "@/ui/components/Table";
+import { FeatherBuilding } from "@subframe/core";
+import { FeatherCar } from "@subframe/core";
+import { FeatherHome } from "@subframe/core";
+import { FeatherPlane } from "@subframe/core";
+import { FeatherShield } from "@subframe/core";
+```Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync Table IconWithBackground Button -p 34bd735365b5
+```
