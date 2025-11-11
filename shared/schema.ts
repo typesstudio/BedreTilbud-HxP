@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, json, boolean, integer, numeric, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, json, jsonb, boolean, integer, numeric, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -48,6 +48,7 @@ export const documents = pgTable("documents", {
   totalPoliciesExtracted: integer("total_policies_extracted").default(0),
   documentType: text("document_type"), // "current" or "offer"
   companyId: varchar("company_id").references(() => companies.id),
+  extractionStages: jsonb("extraction_stages"), // Debug data: { stage1_ocr, stage2_segmentation, stage3_extraction }
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   userIdIdx: index("documents_user_id_idx").on(table.userId),
