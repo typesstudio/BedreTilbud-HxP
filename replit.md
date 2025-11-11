@@ -23,6 +23,7 @@ The backend is built with Node.js and Express.js, exposing a RESTful API. Key se
 - **AI Response Service**: Automatically responds to company replies using a hybrid AI strategy.
 - **Storage Adapter**: Abstracts data persistence using Drizzle ORM with Neon Serverless PostgreSQL.
 - **Insurance Health Check Service**: Analyzes single policies for health scores, potential savings, and recommendations.
+- **Health Check Orchestrator**: NEW (Nov 2025) - Automatically creates health checks for all offer_snapshots in a document. Ensures health checks are stored in both the health_checks table (for frontend access) and policies table (for legacy compatibility). Runs automatically on document upload and email offer processing.
 
 ### Extraction Pipeline Architecture
 
