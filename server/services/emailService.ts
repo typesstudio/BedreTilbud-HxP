@@ -419,6 +419,27 @@ export class EmailService {
                   healthChecksCreated: matchResult.unmatchedHealthChecks.length
                 });
               }
+
+              // NEW: Run HealthCheckOrchestrator to create health_checks table records
+              // This ensures frontend can retrieve health checks via /api/health-checks/document/:documentId
+              const { HealthCheckOrchestrator } = await import('./healthCheckOrchestrator');
+              const healthCheckOrchestrator = new HealthCheckOrchestrator(storage);
+              
+              const healthCheckResult = await healthCheckOrchestrator.runForDocument(
+                document.id,
+                {
+                  source: 'email_offer',
+                  userId: existingThread.userId ?? '',
+                  forceRerun: false
+                }
+              );
+
+              console.log(`[Email] Health check orchestration completed`, {
+                documentId: document.id,
+                success: healthCheckResult.success,
+                healthChecksCreated: healthCheckResult.healthChecksCreated,
+                healthChecksFailed: healthCheckResult.healthChecksFailed
+              });
               
               attachments.push({ fileName, filePath });
             }
