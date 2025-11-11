@@ -24,6 +24,7 @@ import {
   FeatherDroplet,
   FeatherAlertCircle,
   FeatherCheck,
+  FeatherCheckCircle,
   FeatherDollarSign,
   FeatherHelpCircle,
   FeatherClock,
@@ -31,7 +32,10 @@ import {
   FeatherSquare,
   FeatherArrowRight,
   FeatherArrowUp,
-  FeatherSend
+  FeatherSend,
+  FeatherZap,
+  FeatherStar,
+  FeatherHeadphones
 } from "@subframe/core";
 import type { Policy } from "@shared/schema";
 
@@ -48,9 +52,13 @@ const iconMap: { [key: string]: any } = {
   "help-circle": FeatherHelpCircle,
   "alert-circle": FeatherAlertCircle,
   "check": FeatherCheck,
+  "check-circle": FeatherCheckCircle,
   "building": FeatherBuilding,
   "car": FeatherCar,
-  "plane": FeatherPlane
+  "plane": FeatherPlane,
+  "zap": FeatherZap,
+  "star": FeatherStar,
+  "headphones": FeatherHeadphones
 };
 
 const policyTypeLabels: { [key: string]: string } = {
@@ -251,27 +259,32 @@ export default function InsuranceCheckPage() {
                 </div>
               )}
 
-              {/* 2. HØJDEPUNKTER HVOR ANBEFALINGEN ER BEDRE */}
-              {healthCheckPayload.highlights && healthCheckPayload.highlights.length > 0 && (
+              {/* 2. DINE FORSIKRINGSFORDELE */}
+              {healthCheckPayload.policyBenefits && healthCheckPayload.policyBenefits.length > 0 && (
                 <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
                   <span className="text-heading-3 font-heading-3 text-default-font">
-                    Højdepunkter hvor anbefalingen er bedre
+                    Dine forsikringsfordele
                   </span>
                   <div className="flex w-full items-start gap-4">
-                    {healthCheckPayload.highlights.map((highlight: any, index: number) => {
-                      const bgClass = getVariantBackgroundClass(highlight.variant);
+                    {healthCheckPayload.policyBenefits.map((benefit: any, index: number) => {
+                      const IconComponent = iconMap[benefit.icon] || FeatherShield;
                       return (
                         <div
                           key={index}
-                          className={`flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border ${bgClass} px-4 py-4`}
-                          data-testid={`highlight-${index}`}
+                          className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4"
+                          data-testid={`benefit-${index}`}
                         >
+                          <IconWithBackground
+                            size="medium"
+                            icon={<IconComponent />}
+                            square={true}
+                          />
                           <div className="flex flex-col items-start gap-1">
                             <span className="text-body-bold font-body-bold text-default-font">
-                              {highlight.title}
+                              {benefit.title}
                             </span>
                             <span className="text-caption font-caption text-subtext-color">
-                              {highlight.description}
+                              {benefit.description}
                             </span>
                           </div>
                         </div>
@@ -327,39 +340,32 @@ export default function InsuranceCheckPage() {
                 </div>
               )}
 
-              {/* 4. NØGLETAL SAMMENLIGNING */}
-              {healthCheckPayload.keyFigures && healthCheckPayload.keyFigures.length > 0 && (
+              {/* 4. DIN FORSIKRINGSOVERSIGT */}
+              {healthCheckPayload.policyOverview && healthCheckPayload.policyOverview.length > 0 && (
                 <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
                   <span className="text-heading-3 font-heading-3 text-default-font">
-                    Nøgletal sammenligning
+                    Din forsikringsoversigt
                   </span>
                   <div className="flex w-full items-start gap-4 flex-wrap">
-                    {healthCheckPayload.keyFigures.map((figure: any, index: number) => {
-                      const IconComponent = iconMap[figure.icon] || FeatherHome;
+                    {healthCheckPayload.policyOverview.map((item: any, index: number) => {
+                      const IconComponent = iconMap[item.icon] || FeatherHome;
                       return (
                         <div
                           key={index}
                           className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-center gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4"
-                          data-testid={`key-figure-${index}`}
+                          data-testid={`overview-${index}`}
                         >
                           <IconWithBackground
-                            variant={figure.variant as any}
-                            size="large"
+                            size="medium"
                             icon={<IconComponent />}
                           />
                           <div className="flex w-full flex-col items-center gap-1">
-                            <span className="text-caption-bold font-caption-bold text-subtext-color">
-                              {figure.label}
+                            <span className="text-caption font-caption text-subtext-color">
+                              {item.label}
                             </span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-heading-2 font-heading-2 text-neutral-500">
-                                {figure.currentValue}
-                              </span>
-                              <FeatherArrowRight className="text-heading-3 font-heading-3 text-success-600" />
-                              <span className="text-heading-2 font-heading-2 text-success-600">
-                                {figure.newValue}
-                              </span>
-                            </div>
+                            <span className="text-heading-1 font-heading-1 text-default-font">
+                              {item.value}
+                            </span>
                           </div>
                         </div>
                       );
