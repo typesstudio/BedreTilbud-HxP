@@ -104,6 +104,7 @@ export interface IStorage {
   getLatestHealthCheckByDocument(documentId: string): Promise<HealthCheck | undefined>;
   getHealthChecksByUser(userId: string, limit?: number, offset?: number): Promise<HealthCheck[]>;
   createHealthCheck(healthCheck: InsertHealthCheck): Promise<HealthCheck>;
+  deleteHealthCheck(id: string): Promise<void>;
 
   // Navigation Data
   getNavigationData(userId: string): Promise<{
@@ -689,6 +690,10 @@ export class MemStorage implements IStorage {
     };
     this.healthChecks.set(id, healthCheck);
     return healthCheck;
+  }
+
+  async deleteHealthCheck(id: string): Promise<void> {
+    this.healthChecks.delete(id);
   }
 
   async getNavigationData(userId: string): Promise<{
@@ -1359,6 +1364,13 @@ export class DatabaseStorage implements IStorage {
     const { healthChecks } = await import("@shared/schema");
     const [healthCheck] = await db.insert(healthChecks).values(insertHealthCheck).returning();
     return healthCheck;
+  }
+
+  async deleteHealthCheck(id: string): Promise<void> {
+    const { db } = await import("./db");
+    const { healthChecks } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    await db.delete(healthChecks).where(eq(healthChecks.id, id));
   }
 
   async getNavigationData(userId: string): Promise<{

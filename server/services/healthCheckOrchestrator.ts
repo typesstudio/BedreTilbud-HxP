@@ -1,0 +1,221 @@
+import type { IStorage } from "../storage";
+import type { OfferSnapshot, InsertHealthCheck } from "@shared/schema";
+import { insuranceCheckService } from "./insuranceCheckService";
+
+interface HealthCheckOptions {
+  source: 'current_upload' | 'offer_upload' | 'email_offer' | 'onboarding';
+  userId: string;
+  forceRerun?: boolean;
+}
+
+interface HealthCheckOrchestrationResult {
+  success: boolean;
+  documentId: string;
+  healthChecksCreated: number;
+  healthChecksFailed: number;
+  skipped: boolean;
+  skipReason?: string;
+  errors: string[];
+}
+
+/**
+ * HealthCheckOrchestrator
+ * 
+ * Document-agnostic service that creates health checks for uploaded insurance documents.
+ * Works with OfferSnapshots to analyze insurance quality and potential savings.
+ * 
+ * Invoked after extraction pipeline completes for:
+ * - Current insurance uploads (profile, onboarding)
+ * - Offer documents (manual upload, email)
+ * 
+ * Ensures idempotency by checking if health checks already exist.
+ */
+export class HealthCheckOrchestrator {
+  private storage: IStorage;
+
+  constructor(storage: IStorage) {
+    this.storage = storage;
+  }
+
+  /**
+   * Run health checks for all OfferSnapshots in a document
+   * 
+   * @param documentId - Document ID to process
+   * @param options - Source type, userId, and whether to force rerun
+   * @returns Result object with success status and statistics
+   */
+  async runForDocument(
+    documentId: string,
+    options: HealthCheckOptions
+  ): Promise<HealthCheckOrchestrationResult> {
+    const { source, userId, forceRerun = false } = options;
+    
+    console.log(`[HealthCheckOrchestrator] Starting health checks for document ${documentId}`, {
+      source,
+      userId,
+      forceRerun
+    });
+
+    try {
+      // 1. Load document metadata
+      const document = await this.storage.getDocument(documentId);
+      if (!document) {
+        throw new Error(`Document ${documentId} not found`);
+      }
+
+      // 2. Check if already processed (idempotency)
+      if (!forceRerun) {
+        const existingHealthChecks = await this.storage.getHealthChecksByDocument(documentId);
+        if (existingHealthChecks.length > 0) {
+          console.log(`[HealthCheckOrchestrator] Document already has ${existingHealthChecks.length} health checks, skipping`);
+          return {
+            success: true,
+            documentId,
+            healthChecksCreated: 0,
+            healthChecksFailed: 0,
+            skipped: true,
+            skipReason: `Already processed (${existingHealthChecks.length} health checks exist)`,
+            errors: []
+          };
+        }
+      }
+
+      // 3. Load OfferSnapshots from document
+      const snapshots = await this.storage.getOfferSnapshotsByDocument(documentId);
+      
+      if (snapshots.length === 0) {
+        console.log(`[HealthCheckOrchestrator] No snapshots found for document ${documentId}`);
+        return {
+          success: true,
+          documentId,
+          healthChecksCreated: 0,
+          healthChecksFailed: 0,
+          skipped: true,
+          skipReason: 'No snapshots found in document',
+          errors: []
+        };
+      }
+
+      console.log(`[HealthCheckOrchestrator] Found ${snapshots.length} snapshots, running health checks...`);
+
+      // 4. Run health checks for each snapshot in parallel
+      const results = await Promise.allSettled(
+        snapshots.map(snapshot => this.createHealthCheckForSnapshot(
+          snapshot,
+          documentId,
+          userId,
+          source
+        ))
+      );
+
+      // 5. Aggregate results
+      const successful = results.filter(r => r.status === 'fulfilled').length;
+      const failed = results.filter(r => r.status === 'rejected').length;
+      const errors = results
+        .filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+        .map(r => r.reason instanceof Error ? r.reason.message : String(r.reason));
+
+      console.log(`[HealthCheckOrchestrator] Health checks completed for document ${documentId}`, {
+        total: snapshots.length,
+        successful,
+        failed
+      });
+
+      return {
+        success: failed === 0,
+        documentId,
+        healthChecksCreated: successful,
+        healthChecksFailed: failed,
+        skipped: false,
+        errors
+      };
+
+    } catch (error) {
+      console.error(`[HealthCheckOrchestrator] Failed to run health checks for document ${documentId}:`, error);
+      return {
+        success: false,
+        documentId,
+        healthChecksCreated: 0,
+        healthChecksFailed: 0,
+        skipped: false,
+        errors: [error instanceof Error ? error.message : String(error)]
+      };
+    }
+  }
+
+  /**
+   * Create a health check for a single OfferSnapshot
+   * 
+   * @param snapshot - OfferSnapshot to analyze
+   * @param documentId - Document ID
+   * @param userId - User ID
+   * @param source - Source type for tracking
+   */
+  private async createHealthCheckForSnapshot(
+    snapshot: OfferSnapshot,
+    documentId: string,
+    userId: string,
+    source: string
+  ): Promise<void> {
+    try {
+      console.log(`[HealthCheckOrchestrator] Analyzing snapshot ${snapshot.id} (${snapshot.policyType})`);
+
+      // Run AI-powered health check analysis
+      // insuranceCheckService.analyzeInsuranceHealth accepts both Policy and OfferSnapshot
+      const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(snapshot);
+
+      // Prepare health check record for database
+      const healthCheckData: InsertHealthCheck = {
+        documentId,
+        userId,
+        dataSource: 'OfferSnapshot', // Indicates this came from extraction pipeline
+        confidenceScore: snapshot.confidenceScore, // Use extraction confidence score
+        result: healthCheckResult // Full AI analysis result
+      };
+
+      // Persist to database
+      const savedHealthCheck = await this.storage.createHealthCheck(healthCheckData);
+
+      console.log(`[HealthCheckOrchestrator] ✅ Health check created`, {
+        healthCheckId: savedHealthCheck.id,
+        snapshotId: snapshot.id,
+        policyType: snapshot.policyType,
+        potentialSavings: healthCheckResult.potentialSavings?.realistic || 0
+      });
+
+    } catch (error) {
+      console.error(`[HealthCheckOrchestrator] ❌ Failed to create health check for snapshot ${snapshot.id}:`, error);
+      throw error; // Re-throw to be caught by Promise.allSettled
+    }
+  }
+
+  /**
+   * Delete existing health checks for a document (useful for reprocessing)
+   * 
+   * @param documentId - Document ID
+   */
+  async deleteHealthChecksForDocument(documentId: string): Promise<number> {
+    try {
+      const existingHealthChecks = await this.storage.getHealthChecksByDocument(documentId);
+      
+      if (existingHealthChecks.length === 0) {
+        console.log(`[HealthCheckOrchestrator] No health checks to delete for document ${documentId}`);
+        return 0;
+      }
+
+      console.log(`[HealthCheckOrchestrator] Deleting ${existingHealthChecks.length} existing health checks for document ${documentId}`);
+      
+      // Delete each health check
+      for (const healthCheck of existingHealthChecks) {
+        await this.storage.deleteHealthCheck(healthCheck.id);
+      }
+
+      console.log(`[HealthCheckOrchestrator] ✅ Deleted ${existingHealthChecks.length} health checks`);
+      return existingHealthChecks.length;
+
+    } catch (error) {
+      console.error(`[HealthCheckOrchestrator] Failed to delete health checks for document ${documentId}:`, error);
+      throw error;
+    }
+  }
+}
