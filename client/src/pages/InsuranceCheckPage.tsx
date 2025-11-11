@@ -226,12 +226,192 @@ export default function InsuranceCheckPage() {
           </div>
 
           {/* SAMLET (OVERVIEW) VIEW */}
-          {selectedType === 'samlet' && policiesData && (
-            <div className="flex w-full flex-col items-start gap-4">
-              <span className="text-heading-2 font-heading-2 text-default-font">
-                Hurtig oversigt
-              </span>
-              <div className="flex w-full flex-col items-start rounded-lg border border-solid border-neutral-border bg-default-background overflow-x-auto">
+          {selectedType === 'samlet' && policiesData && (() => {
+            // Aggregate data from all policies
+            const allPolicies = Object.values(policiesData).flat();
+            const totalAnnualPremium = allPolicies.reduce((sum, p) => sum + (p.annualPremium || 0), 0);
+            const totalSavings = allPolicies.reduce((sum, p) => 
+              sum + (p.healthCheckPayload?.potentialSavings?.realistic || 0), 0
+            );
+            const savingsPercentage = totalAnnualPremium > 0 
+              ? Math.round((totalSavings / totalAnnualPremium) * 100) 
+              : 0;
+            
+            // Aggregate cumulative savings
+            const allChartData = allPolicies
+              .map(p => p.healthCheckPayload?.cumulativeSavings?.chartData)
+              .filter(Boolean);
+            
+            const combinedChartData = allChartData.length > 0
+              ? allChartData[0].map((_, index) => ({
+                  month: `Måned ${index + 1}`,
+                  savings: allChartData.reduce((sum, data) => sum + (data[index]?.savings || 0), 0)
+                }))
+              : [];
+            
+            const totalAfter12Months = allPolicies.reduce((sum, p) => 
+              sum + (p.healthCheckPayload?.cumulativeSavings?.after12Months || 0), 0
+            );
+            const totalAfter10Years = allPolicies.reduce((sum, p) => 
+              sum + (p.healthCheckPayload?.cumulativeSavings?.after10Years || 0), 0
+            );
+            
+            const monthlyMin = allPolicies.reduce((sum, p) => 
+              sum + (p.healthCheckPayload?.cumulativeSavings?.monthlyRange?.min || 0), 0
+            );
+            const monthlyMax = allPolicies.reduce((sum, p) => 
+              sum + (p.healthCheckPayload?.cumulativeSavings?.monthlyRange?.max || 0), 0
+            );
+            
+            // Collect all coverages from all policies
+            const allCoverages: any[] = [];
+            allPolicies.forEach(policy => {
+              if (policy.healthCheckPayload?.whatsIncluded) {
+                policy.healthCheckPayload.whatsIncluded.forEach((coverage: any) => {
+                  allCoverages.push({
+                    ...coverage,
+                    policyType: policy.policyType
+                  });
+                });
+              }
+            });
+            
+            return (
+              <div className="flex w-full flex-col items-start gap-6">
+                {/* 1. TOTAL SAVINGS SUMMARY */}
+                {totalSavings > 0 && (
+                  <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+                    <span className="text-heading-2 font-heading-2 text-default-font">
+                      Samlet årlig besparelse
+                    </span>
+                    <div className="flex w-full items-center justify-between rounded-lg border border-solid border-success-200 bg-success-50 px-6 py-4">
+                      <span className="text-heading-1 font-heading-1 text-success-600">
+                        {formatCurrency(totalSavings)} kr
+                      </span>
+                      <div className="flex items-center gap-3">
+                        <IconWithBackground
+                          variant="success"
+                          size="medium"
+                          icon={<FeatherPiggyBank />}
+                        />
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="text-body-bold font-body-bold text-success-700">
+                            Din samlede årlige besparelse
+                          </span>
+                          <span className="text-caption font-caption text-success-600">
+                            {savingsPercentage}% lavere omkostning
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* 2. COMBINED WHAT'S INCLUDED */}
+                {allCoverages.length > 0 && (
+                  <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
+                    <span className="text-heading-3 font-heading-3 text-default-font">
+                      Hvad er inkluderet i dine forsikringer
+                    </span>
+                    <div className="flex w-full flex-col items-start overflow-x-auto">
+                      <div className="flex w-full min-w-[576px] items-center gap-4 border-b-2 border-solid border-neutral-300 bg-neutral-50 pb-3 sticky top-0 z-10">
+                        <div className="flex w-48 flex-none flex-col items-start">
+                          <span className="text-caption-bold font-caption-bold text-subtext-color">
+                            Dækning
+                          </span>
+                        </div>
+                        <div className="flex grow shrink-0 basis-0 flex-col items-center">
+                          <span className="text-body-bold font-body-bold text-default-font">
+                            Status
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex w-full min-w-[576px] flex-col items-start">
+                        {allCoverages.slice(0, 8).map((item: any, index: number) => (
+                          <div
+                            key={index}
+                            className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-4"
+                            data-testid={`combined-coverage-${index}`}
+                          >
+                            <div className="flex w-48 flex-none flex-col items-start gap-1">
+                              <span className="text-body-bold font-body-bold text-default-font">
+                                {item.coverage}
+                              </span>
+                              <span className="text-caption font-caption text-subtext-color">
+                                {item.description}
+                              </span>
+                            </div>
+                            <div className="flex grow shrink-0 basis-0 items-center justify-center">
+                              <Badge variant={item.status === 'success' ? 'success' : 'neutral'}>
+                                {item.attributes?.sum || item.value}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* 3. CUMULATIVE SAVINGS CHART */}
+                {combinedChartData.length > 0 && (
+                  <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+                    <div className="flex w-full items-center justify-between">
+                      <div className="flex flex-col items-start gap-2">
+                        <span className="text-heading-2 font-heading-2 text-default-font">
+                          Kumulativ besparelse
+                        </span>
+                        <span className="text-body font-body text-subtext-color">
+                          Se hvor meget du sparer måned for måned
+                        </span>
+                      </div>
+                      <Badge variant="success" icon={<FeatherArrowUp />}>
+                        {formatCurrency(totalAfter10Years)} kr over 10 år
+                      </Badge>
+                    </div>
+                    <AreaChart
+                      categories={["Besparelse"]}
+                      data={combinedChartData.map(d => ({
+                        month: d.month,
+                        Besparelse: d.savings
+                      }))}
+                      index="month"
+                    />
+                    <div className="flex w-full items-start gap-4 flex-wrap">
+                      <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                        <span className="text-caption font-caption text-subtext-color">
+                          Månedlig besparelse
+                        </span>
+                        <span className="text-heading-2 font-heading-2 text-success-600">
+                          {formatCurrency(monthlyMin)}-{formatCurrency(monthlyMax)} kr
+                        </span>
+                      </div>
+                      <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                        <span className="text-caption font-caption text-subtext-color">
+                          Total efter 12 måneder
+                        </span>
+                        <span className="text-heading-2 font-heading-2 text-success-600">
+                          {formatCurrency(totalAfter12Months)} kr spart
+                        </span>
+                      </div>
+                      <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4">
+                        <span className="text-caption font-caption text-subtext-color">
+                          Forventet efter 10 år
+                        </span>
+                        <span className="text-heading-2 font-heading-2 text-success-600">
+                          {formatCurrency(totalAfter10Years)} kr spart
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* 4. HURTIG OVERSIGT TABLE */}
+                <div className="flex w-full flex-col items-start gap-4">
+                  <span className="text-heading-2 font-heading-2 text-default-font">
+                    Hurtig oversigt
+                  </span>
+                  <div className="flex w-full flex-col items-start rounded-lg border border-solid border-neutral-border bg-default-background overflow-x-auto">
                 <Table
                   header={
                     <Table.HeaderRow>
@@ -299,9 +479,11 @@ export default function InsuranceCheckPage() {
                     );
                   })}
                 </Table>
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Empty State */}
           {selectedType !== 'samlet' && selectedPolicies.length === 0 && (() => {
