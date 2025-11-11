@@ -48,6 +48,50 @@ The backend is built with Node.js and Express.js, exposing a RESTful API. Key se
 
 File uploads handled by Multer (PDFs up to 10MB). Database uses Drizzle ORM with PostgreSQL (UUIDs, JSON columns, optimized indexing). Security: input validation, RBAC, rate limiting, PII-redacting logging. Reliability: AI retry logic, distributed locking, structured validation with Zod.
 
+### Extraction Stages Debugging System (NEW - Nov 2025)
+
+**Purpose:** Provides complete visibility into extraction pipeline intermediate outputs for quality monitoring and optimization.
+
+**Architecture:**
+- Persists OCR, Segmentation, and Extraction outputs to `documents.extraction_stages` (jsonb column)
+- Each stage captures: rawOutput, timestamp, metadata (tokens, cost, latency, confidence)
+- API endpoint: `GET /api/documents/:id/extraction-stages` for debugging access
+- Zero cross-document data leakage (extractionStagesData reset per processDocument call)
+
+**Stage Data Structure:**
+```json
+{
+  "stage1_ocr": {
+    "rawOutput": "markdown text...",
+    "timestamp": "ISO 8601",
+    "metadata": { "source", "markdownLength", "pageCount", "latencyMs" }
+  },
+  "stage2_segmentation": {
+    "rawOutput": [PolicySegment, ...],
+    "timestamp": "ISO 8601",
+    "metadata": { "segmentCount", "modelUsed", "tokensUsed", "costUsd", "latencyMs", "confidenceScores" }
+  },
+  "stage3_extraction": {
+    "rawOutput": [StructuredPolicy, ...],
+    "timestamp": "ISO 8601",
+    "metadata": { "policyCount", "latencyMs", "successCount", "failureCount", "errors" }
+  }
+}
+```
+
+**API Response Codes:**
+- **404**: Document not found
+- **409**: Extraction in progress (non-terminal status)
+- **204**: Document exists but no stages captured yet
+- **200**: Success (returns documentId, fileName, validation, stages)
+
+**Testing Results (Nov 2025):**
+- ✅ Benchmark document 399a9364 tested: 100% benchmark parity
+- ✅ All critical values extracted (Indbo: 66,595/121,854 kr, Fritidshus: Kornvænget/410,901 kr, Ulykke: dobbelterstatning 30%)
+- ✅ No significant missing data patterns detected
+- ✅ Performance: ~55s total (OCR 4s, Segmentation 41s, Extraction 9s), ~$0.13/document
+- ✅ Production-ready with comprehensive test documentation (EXTRACTION_STAGES_TEST_RESULTS.md)
+
 ## AI Model Configuration
 
 The platform uses a centralized model configuration system (`server/config/aiModels.ts`) that enables easy model switching and cost tracking:
