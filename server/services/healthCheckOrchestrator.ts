@@ -173,7 +173,7 @@ export class HealthCheckOrchestrator {
         result: healthCheckResult // Full AI analysis result
       };
 
-      // Persist to database
+      // Persist to database (health_checks table)
       const savedHealthCheck = await this.storage.createHealthCheck(healthCheckData);
 
       console.log(`[HealthCheckOrchestrator] ✅ Health check created`, {
@@ -182,6 +182,36 @@ export class HealthCheckOrchestrator {
         policyType: snapshot.policyType,
         potentialSavings: healthCheckResult.potentialSavings?.realistic || 0
       });
+
+      // ALSO update policies table for backward compatibility with InsuranceCheckPage
+      // The /forsikringstjek page reads healthCheckStatus/healthCheckPayload from policies table
+      try {
+        const policiesFromDocument = await this.storage.getPoliciesByDocument(documentId);
+        
+        // Match snapshot to policy by policyType and isOwnPolicy flag
+        const isCurrentDoc = source === 'current_upload';
+        const matchingPolicies = policiesFromDocument.filter(p => 
+          p.policyType === snapshot.policyType && 
+          p.isOwnPolicy === isCurrentDoc
+        );
+
+        for (const policy of matchingPolicies) {
+          await this.storage.updatePolicyHealthCheck(policy.id, {
+            status: "completed",
+            payload: healthCheckResult,
+            savingsAnnual: healthCheckResult.potentialSavings?.realistic || 0
+          });
+          
+          console.log(`[HealthCheckOrchestrator] Updated policy ${policy.id} with health check data (savings: ${healthCheckResult.potentialSavings?.realistic || 0}kr)`);
+        }
+        
+        if (matchingPolicies.length === 0) {
+          console.warn(`[HealthCheckOrchestrator] No matching policy found for snapshot ${snapshot.id} (type: ${snapshot.policyType}, isOwn: ${isCurrentDoc})`);
+        }
+      } catch (policyUpdateError) {
+        // Don't fail the entire operation if policy update fails
+        console.warn(`[HealthCheckOrchestrator] Failed to update policies table:`, policyUpdateError);
+      }
 
     } catch (error) {
       console.error(`[HealthCheckOrchestrator] ❌ Failed to create health check for snapshot ${snapshot.id}:`, error);
