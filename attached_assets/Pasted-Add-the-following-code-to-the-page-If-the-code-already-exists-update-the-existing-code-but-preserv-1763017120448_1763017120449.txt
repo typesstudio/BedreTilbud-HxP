@@ -1,0 +1,139 @@
+Add the following code to the page. If the code already exists, update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+<div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
+  <span className="text-heading-3 font-heading-3 text-default-font">
+    Hvad er inkluderet
+  </span>
+  <div className="flex w-full flex-col items-start overflow-x-auto">
+    <div className="flex w-full min-w-[576px] items-center gap-4 border-b-2 border-solid border-neutral-300 bg-neutral-50 pb-3 sticky top-0 z-10">
+      <div className="flex w-48 flex-none flex-col items-start">
+        <span className="text-caption-bold font-caption-bold text-subtext-color">
+          Dækning
+        </span>
+      </div>
+      <div className="flex grow shrink-0 basis-0 flex-col items-center">
+        <span className="text-body-bold font-body-bold text-default-font">
+          Tryg
+        </span>
+      </div>
+    </div>
+    <div className="flex w-full min-w-[576px] flex-col items-start">
+      <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-4">
+        <div className="flex w-48 flex-none flex-col items-start gap-1">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Brand
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Dækker brandskader
+          </span>
+        </div>
+        <div className="flex grow shrink-0 basis-0 items-center justify-center">
+          <Badge variant="success">inkluderet</Badge>
+        </div>
+      </div>
+      <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-4">
+        <div className="flex w-48 flex-none flex-col items-start gap-1">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Kasko
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Storm og indbrud
+          </span>
+        </div>
+        <div className="flex grow shrink-0 basis-0 items-center justify-center">
+          <Badge variant="success">inkluderet</Badge>
+        </div>
+      </div>
+      <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-4">
+        <div className="flex w-48 flex-none flex-col items-start gap-1">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Hus og grundejeransvar
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            12.000.000 kr
+          </span>
+        </div>
+        <div className="flex grow shrink-0 basis-0 items-center justify-center">
+          <Badge variant="success">inkluderet</Badge>
+        </div>
+      </div>
+      <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-4">
+        <div className="flex w-48 flex-none flex-col items-start gap-1">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Retshjælp
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Sagsomkostninger
+          </span>
+        </div>
+        <div className="flex grow shrink-0 basis-0 items-center justify-center">
+          <Badge variant="success">225.000 kr</Badge>
+        </div>
+      </div>
+      <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-4">
+        <div className="flex w-48 flex-none flex-col items-start gap-1">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Indbo
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Privat ejendele
+          </span>
+        </div>
+        <div className="flex grow shrink-0 basis-0 items-center justify-center">
+          <Badge variant="success">225.000 kr</Badge>
+        </div>
+      </div>
+      <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-4">
+        <div className="flex w-48 flex-none flex-col items-start gap-1">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Invaliditet
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Ved ulykke
+          </span>
+        </div>
+        <div className="flex grow shrink-0 basis-0 items-center justify-center">
+          <Badge variant="success">225.000 kr</Badge>
+        </div>
+      </div>
+      <div className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-4">
+        <div className="flex w-48 flex-none flex-col items-start gap-1">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Bygningsbrand
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Forsikringssum
+          </span>
+        </div>
+        <div className="flex grow shrink-0 basis-0 items-center justify-center">
+          <Badge variant="success">225.000 kr</Badge>
+        </div>
+      </div>
+      <div className="flex w-full items-center gap-4 py-4">
+        <div className="flex w-48 flex-none flex-col items-start gap-1">
+          <span className="text-body-bold font-body-bold text-default-font">
+            Anden bygningsskade
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Ekstra dækning
+          </span>
+        </div>
+        <div className="flex grow shrink-0 basis-0 items-center justify-center">
+          <Badge variant="success">225.000 kr</Badge>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+```Be sure to import the components using the following code:
+  
+```tsx
+import React from "react";
+import { Badge } from "@/ui/components/Badge";
+```Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync Badge -p 34bd735365b5
+```
