@@ -115,33 +115,6 @@ STEP 5: Tilføj attributes
 - sla: Service level hvis kendt
 - noter: Specielle bemærkninger (fx "skybrud 5.000 kr", "inkl. dobbelterstatning")
 
-FORSIKRINGSOVERSIGT (policyOverview)
-**VIGTIGT: Vis KUN faktiske værdier fra policen - INGEN benchmarks eller sammenligninger!**
-
-Udtræk 3 nøgletal fra policen:
-1. **Bygningsdækning** (kun for hus) eller **Dækningssum** (andre typer)
-   - Værdi: Find faktisk dækningssum fra coverageDetails
-   - Eksempel: "3.0M kr" (formatér med M for millioner hvis > 1.000.000)
-   
-2. **Selvrisiko**
-   - Værdi: Primær selvrisiko fra policen (brug deductible eller find fra coverages)
-   - Eksempel: "2.000 kr", "2.834 kr"
-   
-3. **Skadebehandling**
-   - Værdi: SLA/behandlingstid hvis kendt, ellers "ukendt"
-   - Eksempel: "24 timer", "1-3 dage", "ukendt"
-
-**Format:**
-```
-{
-  "label": "Bygningsdækning" | "Selvrisiko" | "Skadebehandling",
-  "value": "string (faktisk værdi fra policen)",
-  "icon": "home" | "shield" | "clock"
-}
-```
-
-**INGEN benchmarkValue, INGEN variant, INGEN sammenligninger!**
-
 MANGLENDE INFORMATION (FORSTÅ DET MED SMÅT)
 - Pris & Økonomi: gebyrer, indeksregulering, rabatbetingelser, binding/intropris, betalingsgebyr.
 - Dækning: uklare definitioner (fx nyværdi/pludselig skade), undtagelser (skjulte rør, oversvømmelse/skybrud, sikringskrav), loft pr. genstand/rum/år, alderstillæg/fradrag.
@@ -238,13 +211,6 @@ OUTPUT (STRICT JSON – intet udenfor). Følg præcist skema og felttyper:
         "sla": "string | null",
         "noter": "string | null"
       }
-    }
-  ],
-  "policyOverview": [
-    {
-      "label": "string (fx Bygningsdækning, Selvrisiko, Skadebehandling)",
-      "value": "string (faktisk værdi fra policen)",
-      "icon": "home" | "shield" | "clock" | "dollar-sign" | "file-text"
     }
   ],
   "missingInformation": [

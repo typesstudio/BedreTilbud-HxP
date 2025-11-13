@@ -775,41 +775,7 @@ export default function InsuranceCheckPage() {
                 </div>
               )}
 
-              {/* 4. DIN FORSIKRINGSOVERSIGT */}
-              {healthCheckPayload.policyOverview && healthCheckPayload.policyOverview.length > 0 && (
-                <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
-                  <span className="text-heading-3 font-heading-3 text-default-font">
-                    Din forsikringsoversigt
-                  </span>
-                  <div className="flex w-full items-start gap-4 flex-wrap">
-                    {healthCheckPayload.policyOverview.map((item: any, index: number) => {
-                      const IconComponent = iconMap[item.icon] || FeatherHome;
-                      return (
-                        <div
-                          key={index}
-                          className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-center gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4"
-                          data-testid={`overview-${index}`}
-                        >
-                          <IconWithBackground
-                            size="medium"
-                            icon={<IconComponent />}
-                          />
-                          <div className="flex w-full flex-col items-center gap-1">
-                            <span className="text-caption font-caption text-subtext-color">
-                              {item.label}
-                            </span>
-                            <span className="text-heading-1 font-heading-1 text-default-font">
-                              {item.value}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* 5. MANGLENDE INFORMATION */}
+              {/* 4. MANGLENDE INFORMATION */}
               {healthCheckPayload.missingInformation && healthCheckPayload.missingInformation.categories && (
                 <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
                   <div className="flex w-full flex-col items-start gap-2">
