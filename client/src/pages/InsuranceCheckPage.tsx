@@ -684,7 +684,17 @@ export default function InsuranceCheckPage() {
                           </div>
                           <div className="flex grow shrink-0 basis-0 items-center justify-center">
                             <Badge variant={item.status === 'success' ? 'success' : 'neutral'}>
-                              {item.value}
+                              {(() => {
+                                if (item.value === "ikke inkluderet") {
+                                  return "ikke inkluderet";
+                                } else if (item.attributes?.selvrisiko) {
+                                  return `Selvrisiko: ${item.attributes.selvrisiko}`;
+                                } else if (item.attributes?.sum) {
+                                  return item.attributes.sum;
+                                } else {
+                                  return "inkluderet";
+                                }
+                              })()}
                             </Badge>
                           </div>
                         </div>

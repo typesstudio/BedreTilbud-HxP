@@ -109,8 +109,14 @@ STEP 4: Bestem UI variant
 - neutral: Normale dækninger uden klare fordele/ulemper
 
 STEP 5: Tilføj attributes
+**KRITISK: selvrisiko SKAL ALTID udfyldes når der er selvrisiko data!**
 - sum: Coverage limit/loft (fx "62.344 kr", "410.901 kr", "10.000.000 kr person")
-- selvrisiko: Deductible amount (fx "2.834 kr", "5.000 kr", "0 kr", "10% (min. 2.500 kr)")
+- selvrisiko: **OBLIGATORISK** - Deductible amount (fx "2.834 kr", "5.000 kr", "0 kr", "10% (min. 2.500 kr)")
+  * Hvis selvrisiko er 0 kr: skriv "0 kr"
+  * Hvis selvrisiko findes i coverageDetails: kopier præcist med tusind-separatorer (fx "2.834 kr", "5.000 kr")
+  * Hvis selvrisiko er en procent: inkludér præcis tekst (fx "10% (min. 2.500 kr)")
+  * Hvis selvrisiko ikke er kendt: sæt til null
+  * **VIGTIGT**: selvrisiko vises FREMTRÆDENDE i UI badges - sikr korrekt formatering!
 - loft: Maksimum pr. genstand/hændelse hvis relevant
 - sla: Service level hvis kendt
 - noter: Specielle bemærkninger (fx "skybrud 5.000 kr", "inkl. dobbelterstatning")
