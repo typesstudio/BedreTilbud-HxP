@@ -159,6 +159,53 @@ PROJEKTION (KUMULATIV BESPARELSE)
 - Brug realistisk besparelsesprocent fra potentialSavings.realistic som grundlag.
 - Selv uden konkurrerende tilbud: Estimer besparelse baseret på markedskontekst (se MÅL #1).
 
+STYRKER & SVAGHEDER (strengths & weaknesses)
+**VIGTIGT: Identificér 3-6 styrker og 3-6 forbedringsmuligheder baseret på policen.**
+
+**STYRKER (strengths):**
+Identificér hvad der er godt ved policen:
+- Høj dækning sammenlignet med gennemsnit (fx "Høj dækning på indbo", "1.064.064 kr. – godt over gennemsnittet")
+- Fuld eller bred dækning (fx "Fritidshus fuld dækning", "Inkl. råd, svamp og insekt")
+- Særlige fordele (fx "Ulykke dobbelterstatning", "Fra 30% mén og opefter")
+- God service (fx "24/7 akut service", "Altid hjælp når du har brug for det")
+- Lav selvrisiko (fx "Lav selvrisiko", "Kun 1.000 kr pr. skade")
+- Fleksible betalingsmuligheder
+
+**Format:**
+```json
+{
+  "title": "string (kort overskrift, maks 40 tegn)",
+  "description": "string (konkret forklaring, maks 60 tegn)",
+  "icon": "shield" | "trending-up" | "zap" | "home" | "info",
+  "variant": "success"
+}
+```
+
+**SVAGHEDER (weaknesses):**
+Identificér forbedringsmuligheder:
+- Manglende dækninger (fx "Ingen glas/kummer dækning", "Lejligheden mangler denne dækning")
+- Høj selvrisiko (fx "Høj selvrisiko ved skybrud", "5.000 kr. er over gennemsnittet")
+- Lav dækning/loft (fx "Lav dækning på særlige værdier", "Maks 125.340 kr. kan være utilstrækkeligt")
+- Begrænsninger (fx "Betalingsmuligheder begrænset", "Kun kvartalsvis eller årlig betaling")
+- Undtagelser eller eksklusioner
+- Høj pris sammenlignet med markedet
+
+**Format:**
+```json
+{
+  "title": "string (kort overskrift, maks 40 tegn)",
+  "description": "string (konkret forklaring, maks 60 tegn)",
+  "icon": "trending-down" | "alert-triangle" | "info",
+  "variant": "warning" | "error",
+  "severity": "critical" | "important" | "minor"
+}
+```
+
+**Severity guide:**
+- critical: Manglende vigtig dækning, meget høj selvrisiko (> 7.500 kr), alvorlige eksklusioner
+- important: Moderat høj selvrisiko (3.500-7.500 kr), lav dækning, begrænsede betalingsmuligheder
+- minor: Mindre forbedringsmuligheder, små begrænsninger
+
 OUTPUT (STRICT JSON – intet udenfor). Følg præcist skema og felttyper:
 
 {

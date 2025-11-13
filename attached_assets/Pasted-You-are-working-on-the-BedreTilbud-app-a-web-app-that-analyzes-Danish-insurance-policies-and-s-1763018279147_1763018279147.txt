@@ -1,0 +1,111 @@
+You are working on the **BedreTilbud** app – a web app that analyzes Danish insurance policies and shows an easy-to-understand report for users 50+.
+
+The app already has:
+- An **AI analysis step** that takes a parsed insurance policy JSON (from OCR) and produces a health check / “Hvad er inkluderet” data.
+- A **policy detail page** that shows “Hvad er inkluderet” (coverage table etc.).
+- A **Subframe UI component** for a two-column “Styrker & svagheder” layout (left = green strengths, right = orange improvement opportunities). This component is already in the codebase; you should wire data into it.
+
+We now want to extend the analysis + frontend so that every policy gets a clear list of **what’s good** and **what’s not so good** about the insurance, shown in the new “Styrker & svagheder” section directly under “Hvad er inkluderet”.
+
+---
+
+## Goal
+
+1. **Backend / AI output**:  
+   Update the existing policy analysis so that, for each policy, it outputs a structured `strengths` and `improvements` list, ready to render in the UI.
+
+2. **Frontend / UI**:  
+   Use the existing Subframe component to display these lists in a section like this:
+
+- Left column: “Styrker”
+  - Example items:
+    - **Høj dækning på indbo**  
+      `1.064.064 kr. – godt over gennemsnittet`
+    - **Fritidshus fuld dækning**  
+      `Inkl. råd, svamp og insekt`
+
+- Right column: “Forbedringsmuligheder”
+  - Example items:
+    - **Ingen glas/kummer dækning**  
+      `Lejligheden mangler denne dækning`
+    - **Høj selvrisiko ved skybrud**  
+      `5.000 kr. er over gennemsnittet`
+
+---
+
+## Data model for the AI analysis
+
+### 1. Extend the analysis JSON
+
+Find the place where the AI analysis for a **single policy** is defined (the prompt / schema used when we call the LLM for policy health check).  
+Search for things like `healthCheck`, `hvad er inkluderet`, `policyAnalysis`, or similar and update the schema.
+
+Add a `healthCheck` block like this (or extend the existing one in a backwards-compatible way):
+
+```jsonc
+{
+  "healthCheck": {
+    "overallVerdict": "Kort sætning, fx 'Overordnet rigtig god dækning til prisen'",
+    "score": 0-100,
+    "strengths": [
+      {
+        "id": "string-identifier",
+        "title": "Kort styrke-overskrift i én linje",
+        "subtitle": "Kort forklaring, max 1 linje",
+        "category": "coverage | deductible | service | payment | other",
+        "impact": "low | medium | high"
+      }
+    ],
+    "improvements": [
+      {
+        "id": "string-identifier",
+        "title": "Kort forbedrings-overskrift i én linje",
+        "subtitle": "Kort forklaring, max 1 linje – gerne konkret",
+        "category": "missingCoverage | lowCoverage | highDeductible | exclusions | payment | other",
+        "impact": "low | medium | high"
+      }
+    ]
+  }
+}
+Important:
+
+title must be ultra short and scannable for a 50+ user (max ~40 chars).
+
+subtitle must be a concrete, human sentence, not a bullet list.
+
+Generate 3–6 strengths and 3–6 improvements per policy if possible.
+
+If something does not apply (e.g. no obvious improvements), return an empty array for that list.
+
+2. Update the AI prompt text
+In the analysis prompt file (e.g. ai/policyHealthCheckPrompt.ts or similar):
+
+Clearly instruct the model to:
+
+Read the policy JSON (coverages, deductibles, limits, payment terms, services, exclusions).
+
+Identify:
+
+Styrker: where coverage is high, risk is well covered, service is strong, or terms are flexible.
+
+Forbedringsmuligheder: missing or low coverage, high deductibles, bad payment options, or important exclusions.
+
+Always fill in the healthCheck.strengths and healthCheck.improvements arrays as above.
+
+Include 2–3 Danish examples in the prompt that resemble:
+
+Strength example:
+
+title: "Høj dækning på indbo"
+
+subtitle: "1.064.064 kr. – godt over gennemsnittet"
+
+Improvement example:
+
+title: "Ingen glas/kummer dækning"
+
+subtitle: "Lejligheden mangler denne dækning"
+
+Make sure the final instruction in the prompt clearly says:
+
+“Return ONLY valid JSON matching the schema. Do not include explanations outside the JSON.”

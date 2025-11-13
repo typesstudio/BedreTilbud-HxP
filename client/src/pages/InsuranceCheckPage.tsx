@@ -36,7 +36,8 @@ import {
   FeatherSend,
   FeatherZap,
   FeatherStar,
-  FeatherHeadphones
+  FeatherHeadphones,
+  FeatherAlertTriangle
 } from "@subframe/core";
 import type { Policy } from "@shared/schema";
 
@@ -52,6 +53,7 @@ const iconMap: { [key: string]: any } = {
   "dollar-sign": FeatherDollarSign,
   "help-circle": FeatherHelpCircle,
   "alert-circle": FeatherAlertCircle,
+  "alert-triangle": FeatherAlertTriangle,
   "check": FeatherCheck,
   "check-circle": FeatherCheckCircle,
   "building": FeatherBuilding,
@@ -59,7 +61,8 @@ const iconMap: { [key: string]: any } = {
   "plane": FeatherPlane,
   "zap": FeatherZap,
   "star": FeatherStar,
-  "headphones": FeatherHeadphones
+  "headphones": FeatherHeadphones,
+  "info": FeatherHelpCircle
 };
 
 const policyTypeLabels: { [key: string]: string } = {
@@ -687,6 +690,87 @@ export default function InsuranceCheckPage() {
                         </div>
                       ))}
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 3.5 STYRKER & SVAGHEDER */}
+              {((healthCheckPayload?.strengths && healthCheckPayload.strengths.length > 0) || 
+                (healthCheckPayload?.weaknesses && healthCheckPayload.weaknesses.length > 0)) && (
+                <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+                  <span className="text-heading-2 font-heading-2 text-default-font">
+                    Styrker &amp; svagheder
+                  </span>
+                  <div className="flex w-full items-start gap-4">
+                    {/* STYRKER (Strengths) */}
+                    {healthCheckPayload?.strengths && healthCheckPayload.strengths.length > 0 && (
+                      <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3">
+                        <div className="flex items-center gap-2">
+                          <IconWithBackground
+                            variant="success"
+                            size="small"
+                            icon={<FeatherCheckCircle />}
+                          />
+                          <span className="text-body-bold font-body-bold text-success-700">
+                            Styrker
+                          </span>
+                        </div>
+                        <div className="flex w-full flex-col items-start gap-2">
+                          {healthCheckPayload.strengths.map((strength: any, index: number) => (
+                            <div
+                              key={index}
+                              className="flex w-full items-start gap-2 rounded-md border border-solid border-success-200 bg-success-50 px-3 py-3"
+                              data-testid={`strength-${index}`}
+                            >
+                              <FeatherCheck className="text-body font-body text-success-600 mt-0.5" />
+                              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                                <span className="text-body-bold font-body-bold text-default-font">
+                                  {strength.title}
+                                </span>
+                                <span className="text-caption font-caption text-subtext-color">
+                                  {strength.description}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* FORBEDRINGSMULIGHEDER (Weaknesses) */}
+                    {healthCheckPayload?.weaknesses && healthCheckPayload.weaknesses.length > 0 && (
+                      <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3">
+                        <div className="flex items-center gap-2">
+                          <IconWithBackground
+                            variant="warning"
+                            size="small"
+                            icon={<FeatherAlertTriangle />}
+                          />
+                          <span className="text-body-bold font-body-bold text-warning-700">
+                            Forbedringsmuligheder
+                          </span>
+                        </div>
+                        <div className="flex w-full flex-col items-start gap-2">
+                          {healthCheckPayload.weaknesses.map((weakness: any, index: number) => (
+                            <div
+                              key={index}
+                              className="flex w-full items-start gap-2 rounded-md border border-solid border-warning-200 bg-warning-50 px-3 py-3"
+                              data-testid={`weakness-${index}`}
+                            >
+                              <FeatherAlertCircle className="text-body font-body text-warning-600 mt-0.5" />
+                              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                                <span className="text-body-bold font-body-bold text-default-font">
+                                  {weakness.title}
+                                </span>
+                                <span className="text-caption font-caption text-subtext-color">
+                                  {weakness.description}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
