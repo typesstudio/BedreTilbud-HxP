@@ -181,22 +181,34 @@ export class ComparisonOrchestrator {
     const allPolicies: any[] = [];
     
     for (const doc of documents) {
+      // Fetch snapshots and health checks once per document
       const snapshots = await this.storage.getOfferSnapshotsByDocument(doc.id);
+      let healthChecks = await this.storage.getHealthChecksByDocument(doc.id);
       
-      for (const snapshot of snapshots) {
-        // Get health check for this snapshot
-        const healthChecks = await this.storage.getHealthChecksByDocument(doc.id);
-        const healthCheck = healthChecks.find(hc => hc.offerSnapshotId === snapshot.id);
+      // Dedupe health checks by ID (handle double-runs) and sort by createdAt
+      const uniqueHealthChecks = Array.from(
+        new Map(healthChecks.map(hc => [hc.id, hc])).values()
+      ).sort((a, b) => {
+        const aTime = new Date(a.createdAt).getTime();
+        const bTime = new Date(b.createdAt).getTime();
+        return aTime - bTime; // Earliest first
+      });
+      
+      // Match snapshots to health checks by creation order
+      // Snapshots are created in sequence, health checks run in same order
+      for (let i = 0; i < snapshots.length; i++) {
+        const snapshot = snapshots[i];
+        const healthCheck = uniqueHealthChecks[i]; // Match by sorted index
         
         if (!healthCheck) {
           console.warn(`[ComparisonOrchestrator] No health check for snapshot ${snapshot.id}, skipping`);
           continue;
         }
         
-        // Parse health check payload
-        const healthCheckData = typeof healthCheck.payload === 'string' 
-          ? JSON.parse(healthCheck.payload)
-          : healthCheck.payload;
+        // Parse health check result (stored as JSON in 'result' field, not 'payload')
+        const healthCheckData = typeof healthCheck.result === 'string' 
+          ? JSON.parse(healthCheck.result)
+          : healthCheck.result;
         
         allPolicies.push({
           snapshotId: snapshot.id,
@@ -204,6 +216,7 @@ export class ComparisonOrchestrator {
           companyId: snapshot.companyId,
           premium: snapshot.premium,
           healthCheck: healthCheckData,
+          structuredPolicy: snapshot.structuredPolicy,
           documentId: doc.id
         });
       }
@@ -222,22 +235,40 @@ export class ComparisonOrchestrator {
     const allPolicies: any[] = [];
     
     for (const doc of documents) {
+      // Fetch snapshots and health checks once per document
       const snapshots = await this.storage.getOfferSnapshotsByDocument(doc.id);
+      let healthChecks = await this.storage.getHealthChecksByDocument(doc.id);
       
-      for (const snapshot of snapshots) {
-        // Get health check for this snapshot
-        const healthChecks = await this.storage.getHealthChecksByDocument(doc.id);
-        const healthCheck = healthChecks.find(hc => hc.offerSnapshotId === snapshot.id);
+      // Dedupe health checks by ID (handle double-runs) and sort by createdAt
+      const uniqueHealthChecks = Array.from(
+        new Map(healthChecks.map(hc => [hc.id, hc])).values()
+      ).sort((a, b) => {
+        const aTime = new Date(a.createdAt).getTime();
+        const bTime = new Date(b.createdAt).getTime();
+        return aTime - bTime; // Earliest first
+      });
+      
+      // Match snapshots to health checks by creation order
+      // Snapshots are created in sequence, health checks run in same order
+      for (let i = 0; i < snapshots.length; i++) {
+        const snapshot = snapshots[i];
+        const healthCheck = uniqueHealthChecks[i]; // Match by sorted index
         
         if (!healthCheck) {
           console.warn(`[ComparisonOrchestrator] No health check for snapshot ${snapshot.id}, skipping`);
           continue;
         }
         
-        // Parse health check payload
-        const healthCheckData = typeof healthCheck.payload === 'string' 
-          ? JSON.parse(healthCheck.payload)
-          : healthCheck.payload;
+        // Parse health check result (stored as JSON in 'result' field, not 'payload')
+        const healthCheckData = typeof healthCheck.result === 'string' 
+          ? JSON.parse(healthCheck.result)
+          : healthCheck.result;
+        
+        // Extract offer number from structuredPolicy if available
+        const structuredPolicyData = typeof snapshot.structuredPolicy === 'string'
+          ? JSON.parse(snapshot.structuredPolicy)
+          : snapshot.structuredPolicy;
+        const offerNumber = structuredPolicyData?.offerNumber || structuredPolicyData?.policyNumber;
         
         allPolicies.push({
           snapshotId: snapshot.id,
@@ -245,8 +276,9 @@ export class ComparisonOrchestrator {
           companyId: snapshot.companyId,
           premium: snapshot.premium,
           healthCheck: healthCheckData,
+          structuredPolicy: snapshot.structuredPolicy,
           documentId: doc.id,
-          offerNumber: snapshot.coverageDetails?.offerNumber
+          offerNumber
         });
       }
     }
@@ -293,7 +325,7 @@ export class ComparisonOrchestrator {
     }
     
     // Populate each pair with relevant policies
-    for (const [pairKey, pair] of pairs.entries()) {
+    for (const [pairKey, pair] of Array.from(pairs.entries())) {
       pair.currentPolicies = currentPolicies.filter(p => (p.companyId || 'unknown') === pair.currentCompany);
       pair.offerPolicies = offerPolicies.filter(p => (p.companyId || 'unknown') === pair.offerCompany);
     }
@@ -366,11 +398,24 @@ export class ComparisonOrchestrator {
       }
 
       // Phase 4: Generate comparison JSON using AI
-      const comparisonResult = await comparisonAgentService.generateComparison(
-        matchingResult.pairs,
-        currentPolicies,
-        offerPolicies
-      );
+      const comparisonResult = await comparisonAgentService.generateComparison({
+        context: {
+          currentCompany,
+          offerCompany,
+          currency: 'DKK'
+        },
+        policyPairs: matchingResult.pairs.map(pair => {
+          const currentPolicy = currentPolicies.find(p => p.snapshotId === pair.currentId);
+          const offerPolicy = offerPolicies.find(p => p.snapshotId === pair.offerId);
+          
+          return {
+            currentPolicyId: pair.currentId,
+            offerPolicyId: pair.offerId,
+            currentPolicy,
+            offerPolicy
+          };
+        })
+      });
 
       // Update record with completed status and result
       await this.storage.updateCompanyComparisonStatus(

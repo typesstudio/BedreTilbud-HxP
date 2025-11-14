@@ -7,6 +7,8 @@ const __dirname = path.dirname(__filename);
 
 type PromptName = 
   | 'comparison/policy-comparison'
+  | 'comparison/system'
+  | 'comparison/user'
   | 'emails/personalized-inquiry'
   | 'emails/auto-response'
   | 'emails/missing-info'
@@ -21,6 +23,8 @@ const PROMPTS_DIR = path.join(__dirname, '..');
 
 const FALLBACK_PROMPTS: Record<PromptName, string> = {
   'comparison/policy-comparison': `You are an expert Danish insurance advisor analyzing insurance policies. Compare these two policies thoroughly.`,
+  'comparison/system': `You are an expert Danish insurance analyst. Compare insurance policies systematically, preserving exact deductible values and providing clear savings analysis in Danish.`,
+  'comparison/user': `Generate a comprehensive comparison between the current and offer insurance policies. Return valid JSON matching the ComparisonResult schema.`,
   'emails/personalized-inquiry': `You are a professional insurance broker writing on behalf of clients. Write clear, polite emails in Danish that get results.`,
   'emails/auto-response': `You are writing auto-responses for insurance inquiries. Be professional, polite, and ask intelligent follow-up questions.`,
   'emails/missing-info': `You are a professional insurance broker writing follow-up emails in Danish. Be polite, clear, and professional.`,

@@ -442,54 +442,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             });
           }
 
-          // For offer uploads, run policy matching to create comparisons
-          if (documentType === 'offer' && req.body.companyId && createdPolicies.length > 0) {
-            try {
-              logger.info('[Upload] Starting policy matching for offer', {
-                documentId: document.id,
-                companyId: req.body.companyId,
-                policyCount: createdPolicies.length
-              });
+          // LEGACY SYSTEM DISABLED: Old policy matching removed in favor of new Phase 3→4 pipeline
+          // The new ComparisonOrchestrator runs after health checks complete (see below)
 
-              matchResult = await policyMatchingService.matchAndCompareOfferPolicies(
-                userId,
-                req.body.companyId,
-                document.id,
-                createdPolicies
-              );
-
-              logger.info('[Upload] Policy matching completed', {
-                documentId: document.id,
-                matchedComparisons: matchResult.matchedComparisons.length,
-                unmatchedHealthChecks: matchResult.unmatchedHealthChecks.length
-              });
-
-            } catch (matchingError: any) {
-              const errorMessage = matchingError instanceof Error ? matchingError.message : String(matchingError);
-              
-              if (errorMessage.includes('IDENTICAL_POLICIES')) {
-                logger.warn('[Upload] Identical policy detected during matching', {
-                  documentId: document.id,
-                  companyId: req.body.companyId,
-                  message: errorMessage
-                });
-                matchResult = {
-                  matchedComparisons: [],
-                  unmatchedHealthChecks: [],
-                  identicalPoliciesDetected: true,
-                  identicalPolicyMessage: errorMessage.replace('IDENTICAL_POLICIES: ', '')
-                };
-              } else {
-                logger.error('[Upload] Policy matching failed', matchingError, {
-                  documentId: document.id,
-                  companyId: req.body.companyId
-                });
-              }
-              // Continue processing - don't fail upload if matching fails
-            }
-          }
-
-          // NEW: Run HealthCheckOrchestrator for ALL documents (current + offer)
+          // Run HealthCheckOrchestrator for ALL documents (current + offer)
           // This creates health_checks table records for frontend consumption
           const { HealthCheckOrchestrator } = await import('./services/healthCheckOrchestrator');
           const healthCheckOrchestrator = new HealthCheckOrchestrator(storage);
@@ -548,6 +504,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           await Promise.all(healthCheckPromises);
 
+          // NEW: Run ComparisonOrchestrator for offer documents (Phase 3→4 pipeline)
+          // This runs AFTER health checks complete (required for Phase 2 data)
+          if (documentType === 'offer' && healthCheckResult.success && healthCheckResult.healthChecksCreated > 0) {
+            try {
+              logger.info('[Upload] Triggering new comparison pipeline for offer', {
+                documentId: document.id,
+                userId,
+                healthChecksCreated: healthCheckResult.healthChecksCreated
+              });
+
+              const { ComparisonOrchestrator } = await import('./services/comparisonOrchestrator');
+              const comparisonOrchestrator = new ComparisonOrchestrator(storage);
+              
+              const comparisonResult = await comparisonOrchestrator.runForUser({
+                userId,
+                forceRerun: false
+              });
+
+              logger.info('[Upload] Comparison pipeline completed', {
+                documentId: document.id,
+                comparisonsCreated: comparisonResult.comparisonsCreated,
+                comparisonsFailed: comparisonResult.comparisonsFailed,
+                skipped: comparisonResult.skipped,
+                skipReason: comparisonResult.skipReason
+              });
+
+            } catch (comparisonError: any) {
+              logger.error('[Upload] Comparison pipeline failed', comparisonError instanceof Error ? comparisonError : new Error(String(comparisonError)), {
+                documentId: document.id,
+                userId
+              });
+              // Don't fail the upload if comparison fails - user can manually trigger later
+            }
+          }
+
           // Update document with completed status AND ocrData for backward compatibility
           // Create ocrData from first snapshot for analyze endpoint compatibility
           const firstSnapshot = orchestratorResult.snapshots.length > 0 ? orchestratorResult.snapshots[0] : null;
@@ -573,12 +564,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           documentsWithPolicies.push({
             document,
             policies: createdPolicies,
-            ...(matchResult && {
-              comparisons: matchResult.matchedComparisons,
-              unmatchedPolicies: matchResult.unmatchedHealthChecks,
-              identicalPoliciesDetected: (matchResult as any).identicalPoliciesDetected,
-              identicalPolicyMessage: (matchResult as any).identicalPolicyMessage
-            })
+            healthChecksCreated: healthCheckResult.healthChecksCreated,
+            healthChecksFailed: healthCheckResult.healthChecksFailed
           });
 
         } catch (error: any) {

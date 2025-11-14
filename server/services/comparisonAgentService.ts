@@ -85,8 +85,8 @@ export class ComparisonAgentService {
   private userPromptTemplate: string;
 
   constructor() {
-    this.systemPrompt = loadPrompt("comparison/system.md");
-    this.userPromptTemplate = loadPrompt("comparison/user.md");
+    this.systemPrompt = loadPrompt("comparison/system");
+    this.userPromptTemplate = loadPrompt("comparison/user");
   }
 
   async generateComparison(input: ComparisonAgentInput): Promise<ComparisonResult> {
