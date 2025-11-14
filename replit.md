@@ -49,6 +49,64 @@ The backend is built with Node.js and Express.js, exposing a RESTful API. Key se
 
 File uploads handled by Multer (PDFs up to 10MB). Database uses Drizzle ORM with PostgreSQL (UUIDs, JSON columns, optimized indexing). Security: input validation, RBAC, rate limiting, PII-redacting logging. Reliability: AI retry logic, distributed locking, structured validation with Zod.
 
+### Two-Phase Health Check Architecture (NEW - Nov 2025)
+
+**Problem Solved:** Deterministic selvrisiko (deductible) display in UI badges. Previous single-phase health checks had non-deterministic coverage mapping, causing selvrisiko data to be lost or inconsistently displayed despite being present in extraction output.
+
+**Architecture:**
+
+**Phase 1: PolicyExtractor** (`server/services/policyExtractorService.ts`)
+- **Purpose**: Pure extraction - OCR markdown → structured policy JSON
+- **Input**: Raw OCR markdown text
+- **Output**: Structured policy with mainCoverages/additionalCoverages arrays
+- **Storage**: Saved to `offer_snapshots.structuredPolicy` (JSONB field)
+- **Model**: `gpt-4o` for high-quality extraction
+- **Key Feature**: Preserves exact deductible/limit strings from OCR (e.g., "2.834 kr", "5.000 kr") with thousand separators intact
+
+**Phase 2: HealthCheckAnalyst** (`server/services/insuranceCheckService.ts`)
+- **Purpose**: 1:1 coverage mapping with MANDATORY selvrisiko population
+- **Input**: Structured policy from Phase 1 (or legacy coverageDetails)
+- **Output**: HealthCheckResult with complete whatsIncluded array
+- **Model**: `gpt-4o` for analysis
+- **Key Features**:
+  - Deterministic 1:1 mapping: mainCoverages.length + additionalCoverages.length === whatsIncluded.length
+  - Selvrisiko MUST be populated when coverage.deductible exists
+  - UI variant assignment based on deductible value (success/warning/error)
+  - Length validation prevents data loss
+
+**Feature Flag:**
+```bash
+ENABLE_TWO_PHASE_HEALTHCHECK=true  # Enable two-phase architecture
+```
+
+**Pipeline Flow:**
+1. Document upload → OCR extraction → Policy extraction → OfferSnapshots created
+2. **If ENABLE_TWO_PHASE_HEALTHCHECK=true**:
+   - Run PolicyExtractor on OCR markdown
+   - Store structured policy in `offer_snapshots.structuredPolicy`
+   - Health check reads structuredPolicy and uses Phase 2 prompt
+3. **Else (legacy)**:
+   - Health check uses coverageDetails directly
+
+**Benefits:**
+- ✅ **Deterministic mapping**: No coverage data loss
+- ✅ **Reprocessable**: Phase 2 can be rerun without re-extracting (uses stored structuredPolicy)
+- ✅ **Testable**: Each phase independently validated
+- ✅ **Cost-efficient**: Failed Phase 2 doesn't require expensive OCR re-run
+- ✅ **Production-ready**: Gradual rollout via feature flag
+
+**Validation:**
+- Phase 1: `coverageValidator.validatePolicy()` ensures all required fields present
+- Phase 2: Length validation (whatsIncluded.length === totalCoverages)
+- Fallback: If Phase 1 fails, falls back to legacy single-phase behavior
+
+**Reprocessing:**
+Use `server/scripts/reprocess-with-two-phase.ts` to backfill existing policies:
+1. Reads stored OCR markdown from `offer_snapshots.rawExtractedData`
+2. Runs Phase 1 PolicyExtractor
+3. Updates `structuredPolicy` field
+4. Regenerates health checks with Phase 2
+
 ### Extraction Stages Debugging System (NEW - Nov 2025)
 
 **Purpose:** Provides complete visibility into extraction pipeline intermediate outputs for quality monitoring and optimization.
