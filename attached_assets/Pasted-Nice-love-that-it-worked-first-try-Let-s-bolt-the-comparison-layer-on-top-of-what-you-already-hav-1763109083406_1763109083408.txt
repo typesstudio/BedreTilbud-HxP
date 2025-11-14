@@ -1,0 +1,734 @@
+Nice – love that it worked first try. Let’s bolt the comparison layer on top of what you already have.
+
+I’ll do the same style as before:
+
+1. **Overall architecture (phases)**
+2. **Data contracts** (what you pass between services)
+3. **Matching logic (1:1: bil–bil, hus–hus…)**
+4. **Comparison JSON schema** (for “Samlet” + per-policy tabs)
+5. **Prompts** for the comparison agent (system + user templates)
+6. **Implementation notes / gotchas**
+
+No questions needed – I’ll make sane defaults you can tweak.
+
+---
+
+## 1. Architecture for comparison
+
+You already have:
+
+* **Phase 1 – OCR → Policy JSON** (`PolicyExtractor`)
+* **Phase 2 – Policy JSON → HealthCheck JSON** (`HealthCheckAnalyst`)
+
+Now add:
+
+3. **Phase 3 – Matching (backend or light AI)**
+
+   * Take all policies for:
+
+     * `side = "current"` (user’s existing)
+     * `side = "offer"` (company offer)
+   * Create **pairs** by `policyType` (hus, indbo, ulykke, bil, rejse).
+   * Output a clean list of **matched pairs**.
+
+4. **Phase 4 – ComparisonAgent (AI)**
+
+   * Input: list of policy pairs, each with:
+
+     * `policyType`
+     * `current` (company, premium, healthCheck, coverageDetails)
+     * `offer` (same)
+   * Output: single **Comparison JSON** powering:
+
+     * **Samlet** tab (total savings, main highlights, cumulative chart, “Forstå det med småt”)
+     * **Per-policy tabs** (Indbo, Hus, Ulykke, Bil, Rejse) with:
+
+       * Annual cost comparison
+       * Highlights where offer is better/worse
+       * Detailed coverage table (inkluderet/ikke inkluderet + beløb)
+       * Missing info questions (mainly for offer)
+
+Visually it keeps your existing components; we just feed them more structured data.
+
+---
+
+## 2. Data contracts
+
+### 2.1 Upstream (already exist, just making it explicit)
+
+Per policy (output from Phase 2 / HealthCheckAnalyst):
+
+```json
+{
+  "policyId": "uuid-or-db-id",
+  "side": "current",             // or "offer"
+  "company": "Alm. Brand",
+  "policyType": "hus",
+  "annualPremium": 15828,
+  "healthCheck": { /* EXACTLY the JSON we defined earlier */ },
+  "coverageDetails": { /* same object used as input to HealthCheckAnalyst */ }
+}
+```
+
+We’ll use **two bits** for comparison:
+
+* `annualPremium`
+* `healthCheck.whatsIncluded` (we designed it to be 1:1 coverage list)
+* optionally `healthCheck.strengths` / `weaknesses` and `missingInformation`.
+
+---
+
+### 2.2 Matched pairs (Phase 3 output)
+
+Backend (or matching agent) returns:
+
+```json
+{
+  "currentCompany": "Alm. Brand",
+  "offerCompany": "Tryg",
+  "pairs": [
+    {
+      "policyType": "hus",
+      "label": "Hus",
+      "currentPolicyId": "c-hus-1",
+      "offerPolicyId": "o-hus-1"
+    },
+    {
+      "policyType": "indbo",
+      "label": "Indbo",
+      "currentPolicyId": "c-indbo-1",
+      "offerPolicyId": "o-indbo-1"
+    },
+    {
+      "policyType": "ulykke",
+      "label": "Ulykke",
+      "currentPolicyId": "c-ulykke-1",
+      "offerPolicyId": "o-ulykke-1"
+    }
+  ]
+}
+```
+
+You then join this with your stored policies and call the **ComparisonAgent** with a full payload per pair.
+
+---
+
+### 2.3 Input to ComparisonAgent
+
+One call per company comparison (can contain multiple policies):
+
+```json
+{
+  "context": {
+    "currentCompany": "Alm. Brand",
+    "offerCompany": "Tryg",
+    "currency": "DKK"
+  },
+  "policyPairs": [
+    {
+      "policyType": "hus",
+      "label": "Hus",
+      "current": {
+        "policyId": "c-hus-1",
+        "annualPremium": 8734.59,
+        "healthCheck": { /* full health-check JSON */ }
+      },
+      "offer": {
+        "policyId": "o-hus-1",
+        "annualPremium": 6270.00,
+        "healthCheck": { /* full health-check JSON */ }
+      }
+    },
+    {
+      "policyType": "indbo",
+      "label": "Indbo",
+      "current": {
+        "policyId": "c-indbo-1",
+        "annualPremium": 3500.00,
+        "healthCheck": { }
+      },
+      "offer": {
+        "policyId": "o-indbo-1",
+        "annualPremium": 2800.00,
+        "healthCheck": { }
+      }
+    }
+    // ... more types
+  ]
+}
+```
+
+The agent will mostly use:
+
+* `annualPremium`
+* `healthCheck.whatsIncluded`
+* `healthCheck.missingInformation`
+* `healthCheck.strengths` / `weaknesses`
+* `healthCheck.potentialSavings` (optional)
+
+---
+
+## 3. 1:1 policy matching logic (Phase 3)
+
+You can do this in backend code (recommended) and only use AI as a fallback.
+
+### 3.1 Simple deterministic matcher
+
+Pseudo-logic:
+
+```ts
+for each currentPolicy in currentPolicies:
+  candidates = offerPolicies.filter(p => p.policyType === currentPolicy.policyType)
+
+  if candidates.length === 1:
+    match(currentPolicy, candidates[0])
+
+  else if candidates.length > 1:
+    // try address/person heuristics:
+    best = candidate with highest score:
+      +1 if same address
+      +1 if same insured person name
+      +1 if same offerNumber or policyName substring
+    match(currentPolicy, best)
+```
+
+If you have more policies on offer side than current side, some remain unmatched (you can still show them as “extra offer policies”).
+
+Keep this outside AI if at all possible – easier to test.
+
+---
+
+## 4. Comparison JSON schema (output from ComparisonAgent)
+
+High-level:
+
+```json
+{
+  "overall": { ... },              // Samlet tab
+  "policyComparisons": [ ... ],    // One per policyType (Hus, Indbo, Ulykke, …)
+  "cumulativeSavings": { ... },    // 10-års graf for Samlet
+  "meta": {
+    "currentCompany": "Alm. Brand",
+    "offerCompany": "Tryg"
+  }
+}
+```
+
+### 4.1 `overall` (Samlet top cards + highlights)
+
+```json
+"overall": {
+  "totalCurrentAnnualPremium": 15828,
+  "totalOfferAnnualPremium": 12576,
+  "annualSavings": 3252,
+  "annualSavingsPercent": 20.5,
+  "explanation": "Samlet prisforskelle på alle matchede policer.",
+  "perPolicySummary": [
+    {
+      "policyType": "hus",
+      "label": "Hus",
+      "currentAnnualPremium": 8735,
+      "offerAnnualPremium": 6270,
+      "annualSavings": 2465,
+      "annualSavingsPercent": 28.2
+    },
+    {
+      "policyType": "indbo",
+      "label": "Indbo",
+      "currentAnnualPremium": 3500,
+      "offerAnnualPremium": 2800,
+      "annualSavings": 700,
+      "annualSavingsPercent": 20.0
+    }
+  ],
+  "globalHighlights": [
+    {
+      "title": "Højere dækningssum",
+      "description": "+500.000 kr på bygning samlet",
+      "icon": "trending-up",
+      "variant": "success",
+      "category": "coverage"
+    },
+    {
+      "title": "Lavere selvrisiko",
+      "description": "Ca. 1.000 kr lavere pr. skade",
+      "icon": "shield",
+      "variant": "success",
+      "category": "deductible"
+    },
+    {
+      "title": "Ekstra services",
+      "description": "Vejhjælp og lækagesensor inkluderet",
+      "icon": "zap",
+      "variant": "success",
+      "category": "feature"
+    }
+  ]
+}
+```
+
+This feeds:
+
+* Big green card: `annualSavings`
+* Two white cards: current vs new price
+* “Højdepunkter hvor anbefalingen er bedre” cards: `globalHighlights`.
+
+---
+
+### 4.2 `policyComparisons[]` (per tab: Hus / Indbo / Ulykke / …)
+
+Each item powers the detailed tab like in your screenshot.
+
+```json
+{
+  "policyType": "hus",
+  "label": "Hus",
+  "currentCompany": "Alm. Brand",
+  "offerCompany": "Tryg",
+
+  "costSummary": {
+    "currentAnnualPremium": 8735,
+    "offerAnnualPremium": 6270,
+    "annualSavings": 2465,
+    "annualSavingsPercent": 28.2
+  },
+
+  "highlights": [
+    {
+      "title": "Højere dækningssum",
+      "description": "+500.000 kr på bygning",
+      "icon": "trending-up",
+      "variant": "success",
+      "category": "coverage"
+    },
+    {
+      "title": "Lavere selvrisiko",
+      "description": "1.000 kr mindre ved skade",
+      "icon": "shield",
+      "variant": "success",
+      "category": "deductible"
+    },
+    {
+      "title": "Vejhjælp inkluderet",
+      "description": "24/7 i Norden",
+      "icon": "car",
+      "variant": "success",
+      "category": "feature"
+    },
+    {
+      "title": "Smart lækagesensor",
+      "description": "Hardware inkluderet fra dag ét",
+      "icon": "droplet",
+      "variant": "success",
+      "category": "feature"
+    }
+  ],
+
+  "coverageComparison": {
+    "rows": [
+      {
+        "coverage": "Brand",
+        "description": "Dækker brandskader",
+        "current": {
+          "value": "inkluderet",
+          "limit": "225.000 kr",
+          "selvrisiko": "2.834 kr",
+          "status": "success"      // same palette as before
+        },
+        "offer": {
+          "value": "ikke inkluderet",
+          "limit": null,
+          "selvrisiko": null,
+          "status": "error"
+        },
+        "note": null
+      },
+      {
+        "coverage": "Kasko",
+        "description": "Storm og indbrud",
+        "current": {
+          "value": "inkluderet",
+          "limit": null,
+          "selvrisiko": "2.834 kr",
+          "status": "success"
+        },
+        "offer": {
+          "value": "ikke inkluderet",
+          "limit": null,
+          "selvrisiko": null,
+          "status": "error"
+        },
+        "note": null
+      }
+      // ... one row per coverage key
+    ]
+  },
+
+  "missingInformation": [
+    {
+      "severity": "critical",
+      "question": "Kan I give mig en skriftlig garanti for præmieudviklingen efter bindingsperioden?",
+      "explanation": "Vigtigt for at forstå fremtidige prisstigninger på tilbuddet."
+    },
+    {
+      "severity": "important",
+      "question": "Hvad er præcise udbetalingsgrænser for vandskader i kælder?",
+      "explanation": "Kritisk hvis huset har kælder eller lavtliggende rum."
+    }
+  ],
+
+  "recommendations": [
+    "Forhandl lavere selvrisiko på skybrud fra 5.000 kr til 3.000 kr.",
+    "Sørg for skriftlig bekræftelse af rabatter og deres varighed.",
+    "Tilføj glas/kummer-dækning hvis du ønsker fuld husdækning."
+  ]
+}
+```
+
+You can reuse:
+
+* Same **badge component** as in health-check (`value + color status`).
+* Same **missing info cards**.
+* Same **recommendation list** component.
+
+---
+
+### 4.3 `cumulativeSavings` (Samlet chart)
+
+Exactly same semantics as health-check, just on total savings:
+
+```json
+"cumulativeSavings": {
+  "totalOver10Years": 34400,
+  "monthlyRange": {
+    "min": 270,
+    "max": 300
+  },
+  "after12Months": 3420,
+  "after10Years": 34400,
+  "chartData": [
+    { "month": "Måned 1", "savings": 285 },
+    { "month": "Måned 2", "savings": 570 },
+    ...
+    { "month": "Måned 120", "savings": 34400 }
+  ]
+}
+```
+
+In UI:
+
+* Monthly range card
+* 12 mdr card
+* 10-års card
+* Area chart.
+
+---
+
+## 5. ComparisonAgent prompts
+
+### 5.1 SYSTEM message
+
+```text
+SYSTEM – BedreTilbud PolicyComparisonAnalyst (DK)
+
+Du er en dansk forsikringsanalytiker.
+
+Du modtager allerede analyserede policer fra to selskaber:
+- currentCompany (kundens nuværende selskab)
+- offerCompany (nyt tilbud)
+
+Dit job er at sammenligne dem 1:1 pr. policetype og lave et JSON-output, 
+som matcher vores UI for "Tryg sammenligning":
+
+- Samlet årlig omkostning (totalpriser + årlig besparelse)
+- Højdepunkter hvor anbefalingen er bedre
+- Detaljeret sammenligningstabel per policetype
+- Forstå det med småt (manglende info for tilbuddet)
+- Kumulativ besparelse over 10 år
+
+KRITISKE REGLER
+
+- Svar KUN med gyldig JSON – ingen forklarende tekst.
+- Sprog: ALT på dansk.
+- Du må KUN bruge de data, der findes i inputtet.
+- Sammenlign altid hus med hus, indbo med indbo, ulykke med ulykke, bil med bil osv.
+- Brug healthCheck.whatsIncluded som eneste kilde til dækninger.
+- For hver dækning skal du forsøge at matche samme type på tværs af selskaber
+  (fx "Brand" hos begge).
+- Hvis en dækning kun findes hos det ene selskab, skal den vises som "ikke inkluderet"
+  hos det andet.
+```
+
+---
+
+### 5.2 USER template
+
+```text
+USER – BedreTilbud PolicyComparisonAnalyst
+
+INPUT
+
+Du får policies for to selskaber i dette format:
+
+{
+  "context": {
+    "currentCompany": "string",
+    "offerCompany": "string",
+    "currency": "DKK"
+  },
+  "policyPairs": [
+    {
+      "policyType": "hus" | "indbo" | "ulykke" | "bil" | "rejse" | "andet",
+      "label": "Hus",
+      "current": {
+        "policyId": "string",
+        "annualPremium": number,
+        "healthCheck": { ... }
+      },
+      "offer": {
+        "policyId": "string",
+        "annualPremium": number,
+        "healthCheck": { ... }
+      }
+    }
+  ]
+}
+
+healthCheck-objekterne har bla.:
+
+- whatsIncluded: liste over dækninger  
+  [{
+    "coverage": "Brand",
+    "description": "Dækning mod brandskader",
+    "value": "inkluderet" | "ikke inkluderet" | "ukendt",
+    "status": "success" | "neutral" | "warning" | "error",
+    "attributes": {
+      "sum": "string | null",
+      "selvrisiko": "string | null",
+      "loft": "string | null",
+      "sla": "string | null",
+      "noter": "string | null"
+    }
+  }]
+
+- missingInformation: relevante spørgsmål kunden bør stille
+- strengths / weaknesses: styrker og svagheder ved policen
+- potentialSavings: estimeret besparelse i kr
+
+OPGAVE
+
+1) Beregn årlige totalpriser og besparelse (Samlet)
+- totalCurrentAnnualPremium = sum af annualPremium for alle policyPairs.current.
+- totalOfferAnnualPremium   = sum af annualPremium for alle policyPairs.offer.
+- annualSavings = totalCurrentAnnualPremium - totalOfferAnnualPremium (kan være negativ).
+- annualSavingsPercent = annualSavings / totalCurrentAnnualPremium * 100 (afrundet til 1 decimal).
+
+2) Lav per-policy costSummary
+- For hver policyPair:
+  - currentAnnualPremium = current.annualPremium
+  - offerAnnualPremium = offer.annualPremium
+  - annualSavings = currentAnnualPremium - offerAnnualPremium
+  - annualSavingsPercent = annualSavings / currentAnnualPremium * 100
+
+3) Byg globale highlights (overall.globalHighlights)
+- Vælg 3–6 stærke forskelle til Samlet-sektionen.
+- Brug især:
+  - store præmieforskelle
+  - tydelige dækninger, som kun findes hos tilbuddet
+  - forbedret selvrisiko
+- Format:
+
+{
+  "title": "kort titel",
+  "description": "kort forklaring",
+  "icon": "trending-up" | "shield" | "zap" | "car" | "droplet" | "info",
+  "variant": "success" | "warning",
+  "category": "coverage" | "price" | "deductible" | "feature"
+}
+
+4) Byg coverageComparison pr. policetype (policyComparisons[].coverageComparison.rows)
+
+ALGORITME FOR MATCH AF DÆKNINGER
+
+For et policyPair:
+
+- currentList = current.healthCheck.whatsIncluded
+- offerList   = offer.healthCheck.whatsIncluded
+
+1. Normalisér dækningsnavne:
+   - til lowercase
+   - fjern specialtegn, punktum, komma, parenteser
+   - trim whitespace
+2. Lav et sæt af alle unikke normaliserede navne på tværs af current og offer.
+3. For hver normaliserede nøgle:
+   - find bedste match i currentList (samme normaliserede navn, eller tætteste substring)
+   - find bedste match i offerList på samme måde
+4. Konstruer en række:
+
+{
+  "coverage": "visningslabel (fra current eller offer)",
+  "description": "kort dansk beskrivelse (hvis tom → lav en kort generisk)",
+  "current": {
+    "value": "inkluderet/ikke inkluderet/ukendt (fra current, ellers 'ikke inkluderet')",
+    "limit": "current.attributes.sum eller null",
+    "selvrisiko": "current.attributes.selvrisiko eller null",
+    "status": "current.status eller 'neutral'"
+  },
+  "offer": {
+    "value": "... tilsvarende for offer ...",
+    "limit": "...",
+    "selvrisiko": "...",
+    "status": "..."
+  },
+  "note": "kort kommentar hvis forskel er vigtig, fx 'Tilbuddet har 500.000 kr højere sum' ellers null"
+}
+
+Hvis en dækning kun findes hos current → offer.value = "ikke inkluderet" og status = "error".
+Hvis den kun findes hos offer   → current.value = "ikke inkluderet" og status = "warning".
+
+Rækkefølge:
+- Hoveddækninger først (Brand, Kasko, Ansvar, Indbo osv.).
+- Herefter tilvalg/ekstra dækninger.
+
+5) Højdepunkter pr. policetype (policyComparisons[].highlights)
+
+- Udvælg 3–6 vigtigste forskelle for netop denne policetype:
+  - størst besparelse
+  - tydelige nye dækninger hos tilbuddet
+  - væsentligt lavere eller højere selvrisiko
+- Brug samme format som globalHighlights.
+
+6) missingInformation pr. policetype
+
+- Start med offer.healthCheck.missingInformation (tilbuddet er det, kunden skal udfordre).
+- Filtrér/omskriv til 3–7 vigtigste spørgsmål.
+- Format:
+
+{
+  "severity": "critical" | "important" | "question",
+  "question": "konkret spørgsmål på dansk",
+  "explanation": "hvorfor dette er vigtigt"
+}
+
+7) recommendations pr. policetype
+
+- 3–5 konkrete, handlingsorienterede anbefalinger.
+- Brug faktiske tal og forskelle hvor muligt.
+- Fx:
+  - "Forhandl selvrisiko på skybrud ned fra 5.000 kr til 3.000 kr."
+  - "Overvej tilvalg af glas og sanitet for at matche nuværende dækning."
+
+8) kumulativ besparelse (Samlet)
+
+- Brug annualSavings (på Samlet-niveau).
+- Hvis annualSavings ≤ 0:
+  - håndtér det som negativ besparelse (vises stadig i data).
+- otherwise:
+  - monthlyAverage = annualSavings / 12
+  - monthlyRange.min = round(monthlyAverage * 0.9)
+  - monthlyRange.max = round(monthlyAverage * 1.1)
+  - after12Months = round(monthlyAverage * 12)
+  - after10Years  = round(monthlyAverage * 120)
+  - totalOver10Years = after10Years
+
+- chartData:
+  - 120 punkter:
+    - "Måned 1" → round(monthlyAverage * 1)
+    - ...
+    - "Måned 120" → round(monthlyAverage * 120)
+
+SLUTLIGT OUTPUT
+
+Returnér et JSON-objekt med præcis denne struktur:
+
+{
+  "overall": {
+    "totalCurrentAnnualPremium": number,
+    "totalOfferAnnualPremium": number,
+    "annualSavings": number,
+    "annualSavingsPercent": number,
+    "explanation": "string",
+    "perPolicySummary": [
+      {
+        "policyType": "string",
+        "label": "string",
+        "currentAnnualPremium": number,
+        "offerAnnualPremium": number,
+        "annualSavings": number,
+        "annualSavingsPercent": number
+      }
+    ],
+    "globalHighlights": [ /* se format ovenfor */ ]
+  },
+  "policyComparisons": [
+    {
+      "policyType": "string",
+      "label": "string",
+      "currentCompany": "string",
+      "offerCompany": "string",
+      "costSummary": {
+        "currentAnnualPremium": number,
+        "offerAnnualPremium": number,
+        "annualSavings": number,
+        "annualSavingsPercent": number
+      },
+      "highlights": [ /* pr policetype */ ],
+      "coverageComparison": {
+        "rows": [ /* dækning-rækker som angivet ovenfor */ ]
+      },
+      "missingInformation": [ /* se format ovenfor */ ],
+      "recommendations": [ "string", "string" ]
+    }
+  ],
+  "cumulativeSavings": {
+    "totalOver10Years": number,
+    "monthlyRange": { "min": number, "max": number },
+    "after12Months": number,
+    "after10Years": number,
+    "chartData": [
+      { "month": "Måned 1", "savings": number },
+      { "month": "Måned 2", "savings": number }
+      /* ... Måned 120 ... */
+    ]
+  },
+  "meta": {
+    "currentCompany": "string",
+    "offerCompany": "string"
+  }
+}
+
+Returnér KUN dette JSON-objekt – ingen ekstra tekst.
+```
+
+---
+
+## 6. Implementation notes & wiring
+
+* **DB side**
+
+  * Store:
+
+    * `policies` (side, company, policyType, annualPremium, coverageDetails, healthCheckJSON)
+    * `comparisons` (per company pair, with the ComparisonAgent output)
+  * For “Samlet” tab, you just pull the Comparison JSON.
+
+* **Frontend**
+
+  * Reuse:
+
+    * `AnnualSavingsCard` → `overall.annualSavings`
+    * `CurrentVsOfferCards` → `overall.totalCurrentAnnualPremium` / `totalOfferAnnualPremium`
+    * `HighlightsRow` → `overall.globalHighlights` (Samlet) or `policyComparisons[x].highlights` (per tab)
+    * `CoverageTable` → `policyComparisons[x].coverageComparison.rows`
+    * `MissingInfoList` → `policyComparisons[x].missingInformation`
+    * `RecommendationsList` → `policyComparisons[x].recommendations`
+    * `CumulativeChart` → `cumulativeSavings`
+
+* **1:1 guarantee**
+
+  * Because we base comparison on **healthCheck.whatsIncluded**, which you already forced to be a full 1:1 mapping from `coverageDetails`, you get:
+
+    * **Policy-level 1:1** via `policyPairs`.
+    * **Coverage-level 1:1-ish** via the normalised name union.
+
+If you want, next step we can do a **worked example**: you give me two health-check JSONs (current vs Tryg), and I’ll run through what the comparison JSON would look like so you can wire it in Subframe/React.
