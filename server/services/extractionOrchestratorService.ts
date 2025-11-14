@@ -80,13 +80,17 @@ export class ExtractionOrchestratorService {
   private storage: IStorage;
   private version = "2.1.0"; // Updated for two-step pipeline
   private useTwoStepPipeline: boolean;
+  private useTwoPhaseHealthCheck: boolean;
   private extractionStagesData: ExtractionStagesData = {}; // Accumulate stage data
 
   constructor(storage: IStorage) {
     this.storage = storage;
     // Default to NEW two-step pipeline (better quality). Set ENABLE_TWO_STEP_EXTRACTION=false to use legacy.
     this.useTwoStepPipeline = process.env.ENABLE_TWO_STEP_EXTRACTION !== 'false';
+    // Enable two-phase health check architecture (Phase 1: PolicyExtractor, Phase 2: HealthCheckAnalyst)
+    this.useTwoPhaseHealthCheck = process.env.ENABLE_TWO_PHASE_HEALTHCHECK === 'true';
     console.log(`[Orchestrator] Two-step pipeline: ${this.useTwoStepPipeline ? 'ENABLED (v2.1.0)' : 'DISABLED (legacy v2.0.0)'}`);
+    console.log(`[Orchestrator] Two-phase health check: ${this.useTwoPhaseHealthCheck ? 'ENABLED' : 'DISABLED'}`);
   }
 
   private async persistStageData(documentId: string): Promise<void> {
@@ -212,6 +216,17 @@ export class ExtractionOrchestratorService {
       );
 
       console.log(`[Orchestrator] Successfully created ${snapshots.length} OfferSnapshots`);
+
+      // Stage 5 (Optional): Phase 1 PolicyExtractor for Two-Phase Health Check
+      if (this.useTwoPhaseHealthCheck) {
+        const policyExtractorStage = this.createStage("phase1_policy_extractor");
+        stages.push(policyExtractorStage);
+        await this.runPolicyExtractorStage(
+          snapshots,
+          ocrOutput,
+          policyExtractorStage
+        );
+      }
 
       return {
         success: true,
@@ -720,6 +735,76 @@ export class ExtractionOrchestratorService {
       stage.completedAt = new Date();
       stage.error = error instanceof Error ? error.message : String(error);
       throw error;
+    }
+  }
+
+  /**
+   * Phase 1: PolicyExtractor Stage (Two-Phase Health Check Architecture)
+   * 
+   * Runs after offer_snapshots are created. Extracts structured policy JSON
+   * from OCR markdown and stores it in offer_snapshots.structuredPolicy.
+   * 
+   * This enables Phase 2 (HealthCheckAnalyst) to use deterministic 1:1 coverage mapping.
+   */
+  private async runPolicyExtractorStage(
+    snapshots: OfferSnapshot[],
+    ocrOutput: OcrOutput,
+    stage: ExtractionStage
+  ): Promise<void> {
+    stage.status = "running";
+    stage.startedAt = new Date();
+
+    try {
+      console.log(`[Orchestrator] Stage 5 (Phase 1): Running PolicyExtractor for ${snapshots.length} snapshots...`);
+
+      const { policyExtractorService } = await import("./policyExtractorService");
+      const { coverageValidator } = await import("../utils/coverageValidator");
+
+      // Run Phase 1 extraction on OCR markdown
+      const extractionResult = await policyExtractorService.extractPolicies(ocrOutput.markdown);
+
+      // Validate extraction quality
+      const validation = coverageValidator.validateExtractionResult(extractionResult.policies);
+      
+      if (!validation.isValid) {
+        console.warn(`[Orchestrator] Phase 1 validation failed:`, validation.errors);
+        throw new Error(`Phase 1 validation failed: ${validation.errors.join(', ')}`);
+      }
+
+      if (validation.warnings.length > 0) {
+        console.warn(`[Orchestrator] Phase 1 warnings:`, validation.warnings);
+      }
+
+      // Match extracted policies to snapshots by policy type
+      // Assumption: policies are in same order as snapshots (both created from same extraction)
+      for (let i = 0; i < Math.min(snapshots.length, extractionResult.policies.length); i++) {
+        const snapshot = snapshots[i];
+        const structuredPolicy = extractionResult.policies[i];
+
+        console.log(`[Orchestrator] Updating snapshot ${snapshot.id} with structured policy (${structuredPolicy.policyType})`);
+
+        // Update snapshot with structured policy
+        await this.storage.updateOfferSnapshot(snapshot.id, {
+          structuredPolicy: structuredPolicy as any
+        });
+      }
+
+      stage.status = "completed";
+      stage.completedAt = new Date();
+      stage.output = {
+        policiesExtracted: extractionResult.policies.length,
+        snapshotsUpdated: Math.min(snapshots.length, extractionResult.policies.length),
+        validationWarnings: validation.warnings
+      };
+
+      console.log(`[Orchestrator] Phase 1 completed: ${extractionResult.policies.length} policies extracted, ${validation.warnings.length} warnings`);
+
+    } catch (error) {
+      stage.status = "failed";
+      stage.completedAt = new Date();
+      stage.error = error instanceof Error ? error.message : String(error);
+      console.error(`[Orchestrator] Phase 1 PolicyExtractor failed:`, error);
+      // Don't throw - allow pipeline to complete without Phase 1 (falls back to legacy)
     }
   }
 
