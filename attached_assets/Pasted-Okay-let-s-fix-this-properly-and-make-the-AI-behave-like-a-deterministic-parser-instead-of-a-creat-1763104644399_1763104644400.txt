@@ -1,0 +1,583 @@
+Okay, let’s fix this properly and make the AI behave like a deterministic parser instead of a “creative” advisor.
+
+I’ll give you:
+
+Architecture: how to split this into phases so nothing gets lost
+
+Phase 1 prompt: RAW Mistral OCR → structured policy JSON (incl. coverageDetails)
+
+Phase 2 prompt: structured policy JSON → your health-check JSON (updated so whatsIncluded is 1:1 and attributes.selvrisiko is ALWAYS set when it exists)
+
+You can copy-paste these directly into Replit / your backend.
+
+1. Recommended architecture
+
+Right now you’re trying to go almost directly:
+
+OCR text → Health-check JSON (with savings, strengths, weaknesses, etc.)
+
+That’s where stuff gets dropped.
+
+Much more robust:
+
+OCR (Mistral)
+
+Already done: you get pages[] with Markdown text.
+
+Phase 1 – “PolicyExtractor” (LLM A – can be GPT / Mistral)
+
+Input: raw OCR (pages[])
+
+Output: clean policy JSON with:
+
+policyType (hus | indbo | ulykke | ...)
+
+annualPremium
+
+coverageDetails.mainCoverages[] and additionalCoverages[]
+
+This step is pure extraction, no opinions.
+
+Phase 2 – “HealthCheckAnalyst” (LLM B – ideally GPT-4/5-level)
+
+Input: the structured policy JSON from Phase 1
+
+Output: exactly your UI JSON (savings, strengths, weaknesses, whatsIncluded, etc.)
+
+Here we force a mechanical mapping from coverageDetails → whatsIncluded.
+
+If you want to, you can run both phases on GPT; but the mental split makes them far easier to debug and test.
+
+2. Phase 1 – OCR → structured policy JSON
+2.1 JSON output format for Phase 1
+
+I’d standardise on this:
+
+{
+  "policies": [
+    {
+      "policyType": "hus",
+      "policyName": "Privatsikring Fritidshus",
+      "company": "Privatsikring",
+      "offerNumber": "9146390436",
+      "address": "Kornvænget 19, 3230 Græsted",
+      "annualPremium": 8734.59,
+      "defaultDeductible": null,
+      "coverageDetails": {
+        "mainCoverages": [
+          {
+            "name": "Brand",
+            "limit": "62.344 kr",
+            "deductible": "2.834 kr",
+            "included": true,
+            "sourceTable": "dækning-selvrisiko"
+          }
+          // ... one row per coverage
+        ],
+        "additionalCoverages": [
+          // use this e.g. for tilvalg, ekstra dækninger osv.
+        ]
+      },
+      "meta": {
+        "rawPolicyTypeLabel": "Privatsikring Fritidshus",
+        "indexYear": "2025"
+      }
+    }
+  ]
+}
+
+
+Notes:
+
+All coverage monetary fields (limit, deductible) stay as strings with the original formatting ("2.834 kr", "10% (min. 2.500 kr)").
+
+Only annualPremium is numeric (so you can do math).
+
+included lets you later encode fravalgt/not included coverages from product sheets if you want.
+
+2.2 Phase-1 System message
+SYSTEM (Phase 1 – PolicyExtractor)
+
+You are an expert Danish insurance parsing engine.
+
+Your ONLY job is to convert OCR text from Danish insurance offers into a clean, structured JSON format.
+
+Rules:
+- Always respond with VALID JSON only – no explanations, no comments.
+- Never invent coverages that are not present in the text.
+- Preserve Danish wording in labels where possible.
+- Amounts inside coverage details (limits and deductibles) must be returned as TEXT exactly as in the source, including thousands separators and “kr”.
+- Convert annual premiums to numbers (e.g. "8.734,59 kr" → 8734.59).
+- If something is not clearly stated, use null rather than guessing.
+
+2.3 Phase-1 User prompt template
+USER (Phase 1 – PolicyExtractor)
+
+BedreTilbud – OCR → Policy JSON
+
+Du får rå OCR-tekst fra et eller flere forsikringstilbud (samme kunde). 
+Din opgave er at finde ALLE selvstændige policer (hus/fritidshus, indbo, ulykke, bil, rejse osv.) 
+og udtrække dem i et struktureret JSON-format.
+
+INPUT (rå OCR fra Mistral):
+${rawOcrJson}   // hele objektet med "pages": [...]
+
+OUTPUTFORMAT (OBLIGATORISK):
+
+{
+  "policies": [
+    {
+      "policyType": "hus" | "indbo" | "ulykke" | "bil" | "rejse" | "andet",
+      "policyName": "string",
+      "company": "string",
+      "offerNumber": "string | null",
+      "address": "string | null",
+      "annualPremium": number | null,
+      "defaultDeductible": "string | null",
+      "coverageDetails": {
+        "mainCoverages": [
+          {
+            "name": "string",
+            "limit": "string | null",
+            "deductible": "string | null",
+            "included": true,
+            "sourceTable": "string | null"
+          }
+        ],
+        "additionalCoverages": [
+          {
+            "name": "string",
+            "limit": "string | null",
+            "deductible": "string | null",
+            "included": true | false,
+            "sourceTable": "string | null"
+          }
+        ]
+      },
+      "meta": {
+        "rawPolicyTypeLabel": "string | null",
+        "indexYear": "string | null"
+      }
+    }
+  ]
+}
+
+EKSTRAKTIONSREGLER
+
+1) Identificér policer
+- Brug overskrifter som “Privatsikring Fritidshus”, “Privatsikring Indbo”, “Privatsikring Ulykke”.
+- Map:
+  - “Privatsikring Fritidshus” → policyType = "hus"
+  - “Privatsikring Hus” → "hus"
+  - “Privatsikring Indbo” → "indbo"
+  - “Privatsikring Ulykke” → "ulykke"
+
+2) Årlig præmie (annualPremium)
+- Find tekst som: 
+  - “Årlig pris inklusiv ... er 8.734,59 kr.”
+  - “Samlet årlig pris er 11.872,70 kr.”
+- Tag den årlige pris for DEN ENKELTE police (ikke samlet for alle policer).
+- Konverter dansk talformat til decimaltal:
+  - fjern punktummer som tusindtalsseparator
+  - erstat komma med punktum
+  - fjern “kr” og mellemrum
+  - "8.734,59 kr" → 8734.59
+
+3) coverageDetails.mainCoverages
+- Find tabeller som:
+  - “Dækning | Selvrisiko”
+  - “Forsikringssummer for de valgte dækninger”
+- For hver række i “Dækning | Selvrisiko”:
+  - name = dækningsnavn (fx "Brand", "Kasko", "Skybrud", "Hus og grundejeransvar").
+  - deductible = værdien i selvrisiko-kolonnen (fx "2.834 kr", "5.000 kr", "0 kr").
+  - included = true.
+  - sourceTable = "dækning-selvrisiko".
+- Hvis selvrisikoen står på to linjer, skal de flettes:
+  - fx “Retshjælp* | 10 %” + næste linje “dog mindst | 2.500 kr.”
+  - → name = "Retshjælp", deductible = "10% (min. 2.500 kr)".
+
+4) coverageDetails limits
+- Brug tabellen “Forsikringssummer for de valgte dækninger” til at udfylde limit hvor muligt.
+  - fx "Lovliggørelse, af nyværdien | 2.150.775 kr."
+  - match så vidt muligt til eksisterende name (fx Brand/Kasko) ellers opret ekstra entry i additionalCoverages.
+- Skriv limit præcis som i dokumentet inklusive “kr”.
+
+5) additionalCoverages
+- Brug:
+  - Sektioner med “Tilvalg”, “Eventuelle tilvalgsmuligheder”, “Udvidet vand”, “Udvidet indbo” osv.
+- Opret en entry per tilvalg:
+  - name = dækningsnavn (fx "Udvidet vand").
+  - limit = null hvis ingen tydelig sum.
+  - deductible = null hvis ikke nævnt specifikt i policen.
+  - included = true (tilbuddet indeholder dækningen) – eller false, hvis det tydeligt står at den IKKE er valgt.
+
+6) Bevar rå tekstformatering
+- I name: fjern kun overflødige linebreaks/spaces.
+- I limit og deductible: kopier tallet og “kr” nøjagtigt, fx:
+  - "2.834 kr .” → "2.834 kr"
+  - "10.000 .000 kr." → "10.000.000 kr"
+
+Returner KUN JSON i det angivne format.
+
+
+You can test this on the OCR you pasted; for the fritidshus part it should spit out mainCoverages that match your example almost 1:1.
+
+3. Phase 2 – Structured policy JSON → Health-check JSON
+
+Now the important part: force a 1:1 deterministic mapping from coverageDetails to whatsIncluded, and guarantee attributes.selvrisiko is set whenever coverageDetails.*.deductible exists.
+
+3.1 Updated System message (Phase 2)
+SYSTEM (Phase 2 – HealthCheckAnalyst)
+
+You are an expert Danish insurance analyst.
+
+You receive already structured policy data and must produce a JSON object that powers a UI.
+
+Critical rules:
+- ALWAYS answer in VALID JSON only – no other text.
+- All text values must be in Danish.
+- You must treat coverageDetails as the SINGLE source of truth for what is inkluderet.
+- For every coverage in coverageDetails.mainCoverages and coverageDetails.additionalCoverages
+  you MUST create exactly one entry in whatsIncluded.
+- If a coverage has a deductible value, you MUST copy it directly into attributes.selvrisiko.
+- Never leave attributes.selvrisiko null when coverage.deductible is not null.
+
+3.2 Updated User prompt template (Phase 2)
+
+This is your “big” prompt, but reorganised and tightened around the fragile parts.
+
+USER (Phase 2 – HealthCheckAnalyst)
+
+BedreTilbud – ForsikringsTJEK (DK)
+
+ROLLE
+Du er dansk forsikringsrådgiver og forsikringsmatematiker. Du får en allerede udtrukket forsikringspolice og skal lave et "forsikringstjek", som matcher vores UI (årlig besparelse, forsikringsfordele, hvad er inkluderet, styrker/svagheder, manglende information, kumulativ besparelse).
+
+INPUT (STRUCTURED POLICY)
+
+{
+  "policyType": ${policyType},              // fx "hus"
+  "annualPremium": ${premium},              // tal, fx 8734.59
+  "defaultDeductible": ${deductible},       // string | null
+  "coverageDetails": ${coverageDetails}     // JSON med mainCoverages/additionalCoverages
+}
+
+MARKEDSKONTEKST (REFERENCE – IKKE FACIT)
+- Typiske selskaber: Alm. Brand, Tryg, GF, Topdanmark
+- Standard indbo/hus: brand, vand, tyveri, ansvar
+- Typiske selvrisici: 2.500–5.000 kr
+- Gennemsnitlige årlige præmier:
+  - Indbo/hus: 3.000–6.000 kr/år
+  - Bil: 4.000–8.000 kr/år
+
+MÅL
+
+1) Estimér potentiel årlig besparelse (konservativ / realistisk / optimistisk) ift. markedskontekst og denne præmie.
+2) Byg policyBenefits (4 generiske forsikringsfordele, ingen sammenligning).
+3) Byg whatsIncluded ved MEKANISK 1:1 mapping fra coverageDetails.
+4) Find styrker og svagheder (3–6 af hver).
+5) Find manglende information (Forstå det med småt).
+6) Skab en kumulativ besparelsesprojektion over 120 måneder (10 år).
+7) Giv anbefalinger og simple markedssammenligninger.
+
+GENERELLE TAL-REGLER
+
+- Beløb: heltal i kr hvor muligt (afrund til nærmeste kr).
+- Årlige beløb: månedlig * 12 hvis kun månedlig findes (forklar kort i explanation).
+- Hvis der ikke er sikkert grundlag for besparelse:
+  - konservativ = 10–15% af annualPremium
+  - realistisk = 18–25% af annualPremium
+  - optimistisk = 28–35% af annualPremium
+- Anvend realistisk procent til kumulativ besparelse.
+
+FORSIKRINGSFORDELE (policyBenefits)
+
+- Vælg 4 generiske fordele ud fra policyType.
+- Ingen sammenligningssprog. Kun neutrale USP’er.
+- Format per fordel:
+
+{
+  "title": "Kort titel (3-5 ord)",
+  "description": "Kort forklaring (5-10 ord)",
+  "icon": "clock" | "zap" | "star" | "check-circle" | "shield" | "headphones" | "car" | "home" | "info",
+  "variant": "neutral"
+}
+
+EKSEMPLER
+- Hus/indbo:
+  - 24/7 akut service (clock)
+  - Hurtig udbetaling (zap)
+  - 5-stjernet service (star)
+  - Autoriserede håndværkere (check-circle)
+- Ulykke:
+  - Dækning hele døgnet (clock)
+  - Personlig rådgivning (headphones)
+  - Hurtig sagsbehandling (zap)
+  - Ingen karensperiode (check-circle)
+
+KOMPLET DÆKNINGSOPDAGELSE (whatsIncluded) – KRITISK DEL
+
+coverageDetails har format:
+
+{
+  "mainCoverages": [
+    { "name": "...", "limit": "...", "deductible": "...", "included": true/false },
+    ...
+  ],
+  "additionalCoverages": [
+    { "name": "...", "limit": "...", "deductible": "...", "included": true/false },
+    ...
+  ]
+}
+
+ALGORTIME – FØLGES I DENNE RÆKKEFØLGE:
+
+STEP 1 – SAMLE ALLE DÆKNINGER
+- Lav en intern liste over alle coverages = mainCoverages + additionalCoverages.
+- AntalAll = antal mainCoverages + antal additionalCoverages.
+
+STEP 2 – BYG whatsIncluded 1:1
+- For HVER coverage i denne liste skal du lave PRÆCIS én entry i whatsIncluded.
+
+Mapping:
+
+coverage.name           → whatsIncluded[].coverage (kort label, maks 4–5 ord)
+coverage.limit          → whatsIncluded[].attributes.sum
+coverage.deductible     → whatsIncluded[].attributes.selvrisiko (se regler nedenfor)
+coverage.included true  → value = "inkluderet"
+coverage.included false → value = "ikke inkluderet"
+coverage.included null  → value = "ukendt"
+
+Hvis coverage.limit er null → attributes.sum = null
+
+STEP 3 – SELVRISIKO (KRITISK FELT)
+
+- Hvis coverage.deductible ER IKKE null:
+  - attributes.selvrisiko MÅ ALDRIG være null.
+  - Kopiér værdien 1:1 som tekst (inkl. punktummer, procent, "kr").
+  - Eksempler:
+    - "2.834 kr" → "2.834 kr"
+    - "5.000 kr" → "5.000 kr"
+    - "10% (min. 2.500 kr)" → "10% (min. 2.500 kr)"
+- Hvis coverage.deductible er null:
+  - attributes.selvrisiko = null.
+
+STEP 4 – STATUS / VARIANT
+
+- status beskriver om dækningen ser stærk, neutral eller svag ud ud fra selvrisiko og type.
+
+Regler:
+- Hvis coverage.included = false → status = "warning".
+- Ellers vurder på selvrisiko:
+  - selvrisiko ≤ 2.500 kr → status = "success"
+  - 2.500 < selvrisiko < 5.000 kr → status = "warning"
+  - selvrisiko ≥ 5.000 kr → status = "error"
+  - ukendt selvrisiko → status = "neutral"
+
+Hvis selvrisiko er tekst med procent → vurder groft:
+  - fx "10% (min. 2.500 kr)" → status = "warning" (måske dyrt).
+
+STEP 5 – ATTRIBUTES ØVRIGE FELTER
+
+For hver whatsIncluded-entry:
+
+{
+  "coverage": "...",
+  "description": "kort dansk forklaring af, hvad dækningen gør",
+  "value": "inkluderet" | "ikke inkluderet" | "ukendt",
+  "status": "success" | "neutral" | "warning" | "error",
+  "attributes": {
+    "sum": "dækningssum eller limit som tekst | null",
+    "selvrisiko": "OBLIGATORISK når deductible findes ellers null",
+    "loft": "maks pr. genstand/hændelse hvis nævnt ellers null",
+    "sla": "service-niveau hvis nævnt ellers null",
+    "noter": "specielle forhold, fx 'skybrud 5.000 kr' ellers null"
+  }
+}
+
+STEP 6 – KONSISTENSTJEK
+- Til sidst: tjek at længden af whatsIncluded = AntalAll.
+- Hvis du mangler en dækning, skal du tilføje den FØR du returnerer JSON.
+
+MANGLEDE INFORMATION (missingInformation)
+
+- Find uklare eller ufuldstændige ting, fx:
+  - pris & økonomi (indeksregulering, gebyrer, rabatter)
+  - dækning (undtagelser, definitioner, loft pr. genstand)
+  - skadebehandling (SLA, dokumentationskrav, karens)
+- 3–7 punkter er fint.
+- Format:
+
+{
+  "severity": "critical" | "important" | "question",
+  "question": "konkret spørgsmål kunden kan sende til selskabet",
+  "explanation": "kort forklaring på hvorfor det er vigtigt"
+}
+
+STYRKER & SVAGHEDER
+
+- 3–6 styrker (variant = "success").
+- 3–6 svagheder (variant = "warning" eller "error" + severity).
+
+Styrke-format:
+
+{
+  "title": "kort overskrift",
+  "description": "konkret forklaring",
+  "icon": "shield" | "trending-up" | "zap" | "home" | "info",
+  "variant": "success"
+}
+
+Svagheds-format:
+
+{
+  "title": "kort overskrift",
+  "description": "konkret forklaring",
+  "icon": "trending-down" | "alert-triangle" | "info",
+  "variant": "warning" | "error",
+  "severity": "critical" | "important" | "minor"
+}
+
+KUMULATIV BESPARSELSE (cumulativeSavings)
+
+- Brug potentialSavings.realistic procent som grundlag.
+- annualSavingsRealistic = annualPremium * realisticProcent.
+- monthlySavingRealistic = annualSavingsRealistic / 12.
+- Byg 120 måneder:
+
+"chartData": [
+  { "month": "Måned 1", "savings": round(monthlySavingRealistic * 1) },
+  { "month": "Måned 2", "savings": round(monthlySavingRealistic * 2) },
+  ...
+  { "month": "Måned 120", "savings": round(monthlySavingRealistic * 120) }
+]
+
+- monthlyRange.min/max = spænd baseret på conservative/optimistic / 12.
+- after12Months = samlet besparelse efter 12 mdr (realistisk).
+- after10Years = samlet besparelse efter 120 mdr (realistisk).
+- totalOver10Years = det samme som after10Years.
+
+POTENTIALSAVINGS
+
+{
+  "conservative": number,
+  "realistic": number,
+  "optimistic": number,
+  "explanation": "kort forklaring på antagelsen"
+}
+
+MARKETCOMPARISON
+
+- 2–4 korte sammenligninger, fx:
+  - Årlig præmie vs. markeds-gennemsnit
+  - Niveau af selvrisiko
+  - Dækningsbredde (antal inkluderede dækninger)
+
+Format:
+
+{
+  "category": "fx Årlig præmie",
+  "current": "fx 8.735 kr/år",
+  "marketAverage": "fx 6.000 kr/år",
+  "difference": "fx 45% dyrere end gennemsnit",
+  "status": "success" | "warning" | "error" | "neutral"
+}
+
+OVERALLSCORE
+
+- Skala 1–10:
+  - 1–3: dårlig/dyr
+  - 4–6: middel med forbedringsrum
+  - 7–8: god med små optimeringer
+  - 9–10: fremragende
+- Giv kort forklaring i scoreExplanation.
+
+ENDLIGT OUTPUT
+
+Du skal returnere ÉT JSON-objekt med præcis denne form:
+
+{
+  "overallScore": number,
+  "scoreExplanation": "string",
+  "annualSavings": {
+    "conservative": number,
+    "realistic": number,
+    "optimistic": number,
+    "explanation": "string"
+  },
+  "policyBenefits": [ ... ],
+  "whatsIncluded": [ ... ],
+  "missingInformation": [ ... ],
+  "recommendations": [ "string", ... ],
+  "cumulativeSavings": {
+    "totalOver10Years": number,
+    "monthlyRange": { "min": number, "max": number },
+    "after12Months": number,
+    "after10Years": number,
+    "chartData": [ { "month": "Måned 1", "savings": number }, ... ]
+  },
+  "potentialSavings": {
+    "conservative": number,
+    "realistic": number,
+    "optimistic": number,
+    "explanation": "string"
+  },
+  "strengths": [ ... ],
+  "weaknesses": [ ... ],
+  "coverageGaps": {
+    "categories": [
+      {
+        "name": "string",
+        "icon": "shield" | "home" | "droplet" | "zap",
+        "items": [
+          {
+            "title": "string",
+            "description": "string",
+            "severity": "critical" | "important" | "minor",
+            "estimatedCost": number | null,
+            "potentialSaving": number | null
+          }
+        ]
+      }
+    ]
+  },
+  "marketComparison": [ ... ]
+}
+
+Returnér kun gyldig JSON – intet andet.
+
+4. Why this should fix your issues
+
+1. Missing coverages / selvrisiko
+
+We now force a two-step mechanical process:
+
+Phase 1 creates coverageDetails from OCR.
+
+Phase 2 is told explicitly:
+
+“For every coverage in coverageDetails.mainCoverages and additionalCoverages you MUST create exactly one entry in whatsIncluded.”
+
+“If coverage.deductible is not null, attributes.selvrisiko MUST NOT be null, and you must copy the exact string.”
+
+We also add an internal count check: len(whatsIncluded) = len(mainCoverages) + len(additionalCoverages). That pushes the model to self-correct before returning.
+
+2. Alignment with UI
+
+JSON still matches your current UI (annual savings card, benefits, hvad er inkluderet, styrker/svagheder, manglende info, kumulativ besparelse).
+
+You get all the fields you need for the badges: sum, selvrisiko, status.
+
+3. Easier debugging
+
+You can test Phase 1 and Phase 2 separately:
+
+Feed raw OCR into Phase 1 and inspect coverageDetails.
+
+Feed a known coverageDetails (like your hus-eksempel) into Phase 2 and verify that:
+
+every coverage appears in whatsIncluded
+
+attributes.selvrisiko is always filled when it should be.
+
+If you want, next step can be: you paste the actual JSON output you get from this new prompt on your sample policy, and we can tighten the rules further until it’s perfectly deterministic.
