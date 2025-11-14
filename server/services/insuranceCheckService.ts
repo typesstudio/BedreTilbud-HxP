@@ -177,6 +177,11 @@ function normalizeCumulativeSavings(
 class InsuranceCheckService {
   /**
    * Analyzes insurance health using OfferSnapshot (validated, normalized data).
+   * 
+   * Two-Phase Architecture (Nov 2025):
+   * - If input has structuredPolicy (Phase 1 output) → use Phase 2 prompt with deterministic mapping
+   * - Otherwise → fallback to legacy behavior with coverageDetails
+   * 
    * Supports both legacy Policy and new OfferSnapshot objects for backward compatibility.
    */
   async analyzeInsuranceHealth(input: Policy | OfferSnapshot): Promise<HealthCheckResult> {
@@ -184,7 +189,11 @@ class InsuranceCheckService {
       // Determine if input is OfferSnapshot or legacy Policy
       const isOfferSnapshot = 'extractionVersion' in input;
       
-      const coverageDetails = input.coverageDetails as any;
+      // Check if we have Phase 1 structured policy data (two-phase extraction)
+      const hasStructuredPolicy = isOfferSnapshot && 
+        (input as OfferSnapshot).structuredPolicy !== null && 
+        (input as OfferSnapshot).structuredPolicy !== undefined;
+      
       const policyType = input.policyType || 'home';
       const premium = isOfferSnapshot 
         ? (input as OfferSnapshot).premium 
@@ -193,15 +202,34 @@ class InsuranceCheckService {
         ? (input as OfferSnapshot).deductible
         : (input as Policy).deductible;
       
-      console.log(`[Health Check] Using ${isOfferSnapshot ? 'OfferSnapshot' : 'Legacy Policy'} (confidence: ${isOfferSnapshot ? (input as OfferSnapshot).confidenceScore : 'N/A'}%)`);
+      let prompt: string;
       
-      const promptTemplate = loadPrompt('health-check/analysis');
-      const prompt = replaceVariables(promptTemplate, {
-        policyType,
-        premium: premium || 'N/A',
-        deductible: deductible || 'N/A',
-        coverageDetails: JSON.stringify(coverageDetails, null, 2)
-      });
+      if (hasStructuredPolicy) {
+        // Phase 2: Use structured policy from Phase 1 extraction
+        const structuredPolicy = (input as OfferSnapshot).structuredPolicy as any;
+        console.log(`[Health Check Phase 2] Using structured policy from Phase 1`);
+        console.log(`[Health Check Phase 2] Coverages: ${structuredPolicy.coverageDetails?.mainCoverages?.length || 0} main + ${structuredPolicy.coverageDetails?.additionalCoverages?.length || 0} additional`);
+        
+        const promptTemplate = loadPrompt('health-check/analysis');
+        prompt = replaceVariables(promptTemplate, {
+          policyType,
+          premium: premium || 'N/A',
+          deductible: deductible || 'N/A',
+          structuredPolicy: JSON.stringify(structuredPolicy, null, 2)
+        });
+      } else {
+        // Legacy: Use coverageDetails directly
+        const coverageDetails = input.coverageDetails as any;
+        console.log(`[Health Check Legacy] Using ${isOfferSnapshot ? 'OfferSnapshot' : 'Legacy Policy'} coverageDetails (confidence: ${isOfferSnapshot ? (input as OfferSnapshot).confidenceScore : 'N/A'}%)`);
+        
+        const promptTemplate = loadPrompt('health-check/analysis');
+        prompt = replaceVariables(promptTemplate, {
+          policyType,
+          premium: premium || 'N/A',
+          deductible: deductible || 'N/A',
+          structuredPolicy: JSON.stringify({ coverageDetails }, null, 2)
+        });
+      }
 
       // Use retry logic + OpenAI gpt-4o for high-quality analysis
       const response = await retryAICall(async () => {

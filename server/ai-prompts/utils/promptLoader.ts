@@ -12,6 +12,7 @@ type PromptName =
   | 'emails/missing-info'
   | 'emails/system-prompt'
   | 'ocr/policy-extraction'
+  | 'extraction/policy-extractor'
   | 'health-check/analysis';
 
 const promptCache: Map<string, string> = new Map();
@@ -25,6 +26,7 @@ const FALLBACK_PROMPTS: Record<PromptName, string> = {
   'emails/missing-info': `You are a professional insurance broker writing follow-up emails in Danish. Be polite, clear, and professional.`,
   'emails/system-prompt': `You are a helpful AI assistant for BedreTilbud, a Danish insurance comparison platform.`,
   'ocr/policy-extraction': `You are an expert at extracting insurance policy information from documents. Identify ALL distinct insurance policies in the document and extract each one separately.`,
+  'extraction/policy-extractor': `You are an expert Danish insurance parsing engine. Extract policies with perfect accuracy from OCR text. Return only valid JSON.`,
   'health-check/analysis': `You are a Danish insurance expert analyzing a user's current insurance policy. Perform a comprehensive health check analysis.`
 };
 
@@ -77,6 +79,7 @@ export function preloadPrompts(): void {
     'emails/missing-info',
     'emails/system-prompt',
     'ocr/policy-extraction',
+    'extraction/policy-extractor',
     'health-check/analysis'
   ];
 
