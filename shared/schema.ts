@@ -124,6 +124,24 @@ export const comparisons = pgTable("comparisons", {
   userIdCompanyTypeIdx: index("comparisons_user_id_company_type_idx").on(table.userId, table.companyId, table.policyType),
 }));
 
+// NEW: Company-level comparisons from Phase 4 (ComparisonAgent)
+export const companyComparisons = pgTable("company_comparisons", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  currentCompany: text("current_company").notNull(), // Company name (e.g., "Alm. Brand")
+  offerCompany: text("offer_company").notNull(), // Company name (e.g., "Tryg")
+  status: text("status").default("pending"), // "pending", "processing", "completed", "failed"
+  comparisonJSON: jsonb("comparison_json"), // Full ComparisonResult from Phase 4
+  errorMessage: text("error_message"), // Error details if failed
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  userIdIdx: index("company_comparisons_user_id_idx").on(table.userId),
+  statusIdx: index("company_comparisons_status_idx").on(table.status),
+  userIdCreatedIdx: index("company_comparisons_user_id_created_idx").on(table.userId, table.createdAt),
+  userIdStatusIdx: index("company_comparisons_user_id_status_idx").on(table.userId, table.status),
+}));
+
 export const householdMembers = pgTable("household_members", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id).notNull(),
@@ -304,6 +322,12 @@ export const insertHealthCheckSchema = createInsertSchema(healthChecks).omit({
   createdAt: true,
 });
 
+export const insertCompanyComparisonSchema = createInsertSchema(companyComparisons).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -327,3 +351,142 @@ export type OnboardingProgress = typeof onboardingProgress.$inferSelect;
 export type InsertOnboardingProgress = z.infer<typeof insertOnboardingProgressSchema>;
 export type HealthCheck = typeof healthChecks.$inferSelect;
 export type InsertHealthCheck = z.infer<typeof insertHealthCheckSchema>;
+export type CompanyComparison = typeof companyComparisons.$inferSelect;
+export type InsertCompanyComparison = z.infer<typeof insertCompanyComparisonSchema>;
+
+// ============================================================================
+// COMPARISON DATA STRUCTURES (Phase 3 + 4)
+// Based on expert spec for comparison flow
+// ============================================================================
+
+// Phase 3: Matched policy pairs
+export const matchedPairSchema = z.object({
+  policyType: z.enum(["hus", "indbo", "ulykke", "bil", "rejse", "andet"]),
+  label: z.string(), // Display label e.g., "Hus"
+  currentPolicyId: z.string().nullable(),
+  offerPolicyId: z.string().nullable(),
+});
+
+export type MatchedPair = z.infer<typeof matchedPairSchema>;
+
+export const policyMatchResultSchema = z.object({
+  currentCompany: z.string(),
+  offerCompany: z.string(),
+  pairs: z.array(matchedPairSchema),
+  unmatchedCurrent: z.array(z.string()), // Policy IDs
+  unmatchedOffer: z.array(z.string()), // Policy IDs
+});
+
+export type PolicyMatchResult = z.infer<typeof policyMatchResultSchema>;
+
+// Phase 4: Comparison output structures
+export const highlightSchema = z.object({
+  title: z.string(),
+  description: z.string(),
+  icon: z.enum(["trending-up", "shield", "zap", "car", "droplet", "info"]),
+  variant: z.enum(["success", "warning", "error", "neutral"]),
+  category: z.enum(["coverage", "price", "deductible", "feature"]),
+});
+
+export type Highlight = z.infer<typeof highlightSchema>;
+
+export const missingInformationItemSchema = z.object({
+  severity: z.enum(["critical", "important", "question"]),
+  question: z.string(),
+  explanation: z.string(),
+});
+
+export type MissingInformationItem = z.infer<typeof missingInformationItemSchema>;
+
+export const coverageComparisonRowSchema = z.object({
+  coverage: z.string(), // Coverage name/title
+  description: z.string(),
+  current: z.object({
+    value: z.string(), // "inkluderet" | "ikke inkluderet" | "ukendt"
+    limit: z.string().nullable(),
+    selvrisiko: z.string().nullable(),
+    status: z.enum(["success", "warning", "error", "neutral"]),
+  }),
+  offer: z.object({
+    value: z.string(),
+    limit: z.string().nullable(),
+    selvrisiko: z.string().nullable(),
+    status: z.enum(["success", "warning", "error", "neutral"]),
+  }),
+  note: z.string().nullable(),
+});
+
+export type CoverageComparisonRow = z.infer<typeof coverageComparisonRowSchema>;
+
+export const perPolicySummarySchema = z.object({
+  policyType: z.string(),
+  label: z.string(),
+  currentAnnualPremium: z.number(),
+  offerAnnualPremium: z.number(),
+  annualSavings: z.number(),
+  annualSavingsPercent: z.number(),
+});
+
+export type PerPolicySummary = z.infer<typeof perPolicySummarySchema>;
+
+export const overallComparisonSchema = z.object({
+  totalCurrentAnnualPremium: z.number(),
+  totalOfferAnnualPremium: z.number(),
+  annualSavings: z.number(),
+  annualSavingsPercent: z.number(),
+  explanation: z.string(),
+  perPolicySummary: z.array(perPolicySummarySchema),
+  globalHighlights: z.array(highlightSchema),
+});
+
+export type OverallComparison = z.infer<typeof overallComparisonSchema>;
+
+export const policyComparisonSchema = z.object({
+  policyType: z.string(),
+  label: z.string(),
+  currentCompany: z.string(),
+  offerCompany: z.string(),
+  costSummary: z.object({
+    currentAnnualPremium: z.number(),
+    offerAnnualPremium: z.number(),
+    annualSavings: z.number(),
+    annualSavingsPercent: z.number(),
+  }),
+  highlights: z.array(highlightSchema),
+  coverageComparison: z.object({
+    rows: z.array(coverageComparisonRowSchema),
+  }),
+  missingInformation: z.array(missingInformationItemSchema),
+  recommendations: z.array(z.string()),
+});
+
+export type PolicyComparison = z.infer<typeof policyComparisonSchema>;
+
+export const cumulativeSavingsSchema = z.object({
+  totalOver10Years: z.number(),
+  monthlyRange: z.object({
+    min: z.number(),
+    max: z.number(),
+  }),
+  after12Months: z.number(),
+  after10Years: z.number(),
+  chartData: z.array(z.object({
+    month: z.string(),
+    savings: z.number(),
+  })),
+});
+
+export type CumulativeSavings = z.infer<typeof cumulativeSavingsSchema>;
+
+// Complete comparison result from Phase 4 (ComparisonAgent output)
+export const comparisonResultSchema = z.object({
+  overall: overallComparisonSchema,
+  policyComparisons: z.array(policyComparisonSchema),
+  cumulativeSavings: cumulativeSavingsSchema,
+  meta: z.object({
+    currentCompany: z.string(),
+    offerCompany: z.string(),
+  }),
+});
+
+export type ComparisonResult = z.infer<typeof comparisonResultSchema>;
