@@ -1,200 +1,61 @@
 # BedreTilbud - Insurance Comparison Platform
 
 ## Overview
-
-BedreTilbud is a Danish insurance comparison platform designed for users aged 50+. Its core purpose is to simplify insurance selection by enabling users to upload PDF policies, complete a questionnaire, and receive AI-powered comparative offers. The platform provides clear comparisons, personalized recommendations, and a user-friendly experience with a focus on accessibility. The vision is to make insurance comparison transparent and efficient for an underserved demographic.
+BedreTilbud is a Danish insurance comparison platform simplifying insurance selection for users aged 50+. It allows users to upload PDF policies, complete a questionnaire, and receive AI-powered comparative offers. The platform focuses on transparent comparisons, personalized recommendations, and a user-friendly, accessible experience. The overarching vision is to make insurance comparison efficient and clear for this demographic.
 
 ## User Preferences
-
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
+The platform features a React and TypeScript frontend, optimized for mobile-first accessibility with large typography and high contrast, utilizing Shadcn/ui, Subframe, and TailwindCSS. It includes multi-step onboarding, an offers dashboard, and adaptive policy comparison. State management is handled by TanStack Query, and Wouter manages routing.
 
-The platform uses a React and TypeScript frontend, optimized for mobile-first accessibility with large typography and high contrast, leveraging Shadcn/ui, Subframe, and TailwindCSS. It includes multi-step onboarding, an offers dashboard, and adaptive policy comparison. State management uses TanStack Query, and Wouter handles routing.
-
-The backend is built with Node.js and Express.js, exposing a RESTful API. Key services include:
+The backend is built with Node.js and Express.js, providing a RESTful API. Key services include:
 - **Mistral OCR Service**: Extracts structured data from PDF policies.
-- **Policy Segmentation Service**: NEW - Splits multi-policy PDFs into separate policy blocks using `o1-mini` reasoning.
-- **OpenAI Extraction Service**: Upgraded - Processes policy segments individually with improved Danish prompts.
+- **Policy Segmentation Service**: Splits multi-policy PDFs into separate blocks using `o1-mini`.
+- **OpenAI Extraction Service**: Processes policy segments with improved Danish prompts.
 - **Mistral Text Service**: Generates personalized emails and auto-responses.
 - **Comparison Service**: Provides AI-powered policy comparisons and recommendations using a hybrid AI strategy.
-- **Policy Matching Service**: Automatically matches offer policies to user's existing policies by type.
+- **Policy Matching Service**: Matches offer policies to user's existing policies by type.
 - **Email Service**: Manages email inquiries and threading with inbox monitoring.
 - **AI Response Service**: Automatically responds to company replies using a hybrid AI strategy.
 - **Storage Adapter**: Abstracts data persistence using Drizzle ORM with Neon Serverless PostgreSQL.
-- **Insurance Health Check Service**: Analyzes single policies for health scores, potential savings, and recommendations.
-- **Health Check Orchestrator**: NEW (Nov 2025) - Automatically creates health checks for all offer_snapshots in a document. Ensures health checks are stored in both the health_checks table (for frontend access) and policies table (for legacy compatibility). Runs automatically on document upload and email offer processing.
+- **Insurance Health Check Service**: Analyzes single policies for health scores and recommendations.
+- **Health Check Orchestrator**: Automatically creates health checks for all offer_snapshots in a document upon upload or email offer processing.
 
 ### Extraction Pipeline Architecture
+The system uses a **Two-Step Pipeline** for robust extraction:
+1.  **OCR**: Converts PDFs to raw markdown text (Mistral OCR).
+2.  **Validation**: Ensures document quality.
+3.  **Policy Segmentation**: Identifies and splits multiple policies (`o1-mini`).
+4.  **Structured Extraction**: Extracts data per segment (`gpt-4o`) with pre-extracted hints.
+5.  **OfferSnapshot Creation**: Persists data to the database.
 
-**Two-Step Pipeline** (ENABLE_TWO_STEP_EXTRACTION=true, v2.1.0):
-1. **OCR** (Mistral OCR) → Raw markdown text
-2. **Validation** → Quality gates for insurance documents
-3a. **Policy Segmentation** (`o1-mini`) → Identifies and splits multiple policies
-3b. **Structured Extraction** (`gpt-4o`) → Per-segment data extraction with pre-extracted hints
-4. **OfferSnapshot Creation** → Database persistence
+A **Legacy Pipeline** (`v2.0.0`) exists for single-pass extraction. The two-step pipeline improves quality by separating policy identification from data extraction, using a reasoning model for segmentation, and processing segments individually.
 
-**Legacy Pipeline** (default, v2.0.0):
-1. **OCR** (Mistral OCR) → Raw markdown text
-2. **Validation** → Quality gates
-3. **Structured Extraction** (`gpt-4o-mini`) → Single-pass extraction
-4. **OfferSnapshot Creation** → Database persistence
+### Two-Phase Health Check Architecture
+This architecture ensures deterministic deductible display in the UI.
+-   **Phase 1: PolicyExtractor**: Pure extraction of OCR markdown to structured policy JSON, preserving exact deductible strings. Stores output in `offer_snapshots.structuredPolicy`.
+-   **Phase 2: HealthCheckAnalyst**: Maps coverages 1:1, populating mandatory deductibles. Assigns UI variants based on deductible values.
+This design provides deterministic mapping, reprocessability, testability, and cost-efficiency. It's enabled by `ENABLE_TWO_PHASE_HEALTHCHECK=true`.
 
-**Key Improvements in Two-Step Pipeline:**
-- Separates policy identification from data extraction (mimics successful manual process)
-- Reasoning model for segmentation ensures multi-policy documents are split correctly
-- Pre-extracted metadata (prices, company, addresses) guides extraction
-- Per-segment processing enables better quality and confidence tracking
-- Fallback chains allow graceful degradation to cheaper models
+### Extraction Stages Debugging System
+This system persists intermediate outputs of the extraction pipeline (OCR, Segmentation, Extraction) to `documents.extraction_stages` for quality monitoring. Each stage captures raw output, timestamp, and metadata (tokens, cost, latency, confidence). An API endpoint `/api/documents/:id/extraction-stages` allows debugging access.
 
-File uploads handled by Multer (PDFs up to 10MB). Database uses Drizzle ORM with PostgreSQL (UUIDs, JSON columns, optimized indexing). Security: input validation, RBAC, rate limiting, PII-redacting logging. Reliability: AI retry logic, distributed locking, structured validation with Zod.
+### Comparison Pipeline Architecture
+This pipeline generates comprehensive comparison analyses between user's current and offer insurance policies.
+1.  **Phase 3: Deterministic Policy Matching**: Pairs current and offer policies using scoring heuristics (address, person, offer number match) to ensure stable, deterministic matching.
+2.  **Phase 4: ComparisonAgent**: An AI-powered agent (`gpt-4o` with `gpt-4o-mini` fallback) generates validated ComparisonResult JSON using matched pairs and health check data. It focuses on 1:1 coverage mapping and deductible preservation.
+The **ComparisonOrchestrator** manages this pipeline, groups policies by company pair, and stores results in the `company_comparisons` table. It includes idempotency checks and is enabled by `ENABLE_COMPARISON=true`.
 
-### Two-Phase Health Check Architecture (NEW - Nov 2025)
+### AI Model Configuration
+A centralized configuration system (`server/config/aiModels.ts`) manages AI models, enabling easy switching and cost tracking.
+-   **Supported Models**: `gpt-4o-mini`, `gpt-4o`, `gpt-4o-reasoning` (`o1-mini`), `mistral-large-latest`, `mistral-ocr-latest`.
+-   **Pipeline Steps**: OCR uses `mistral-ocr-latest`, Policy Segmentation uses `o1-mini` (with fallbacks), Structured Extraction uses `gpt-4o` (with fallbacks), and Health Check uses `gpt-4o-mini`.
+-   **Cost/Quality Tradeoffs**: Different configurations (Premium, Balanced, Budget) offer varying levels of quality and cost per document. The "Premium" configuration (o1-mini + gpt-4o) is recommended for production.
 
-**Problem Solved:** Deterministic selvrisiko (deductible) display in UI badges. Previous single-phase health checks had non-deterministic coverage mapping, causing selvrisiko data to be lost or inconsistently displayed despite being present in extraction output.
-
-**Architecture:**
-
-**Phase 1: PolicyExtractor** (`server/services/policyExtractorService.ts`)
-- **Purpose**: Pure extraction - OCR markdown → structured policy JSON
-- **Input**: Raw OCR markdown text
-- **Output**: Structured policy with mainCoverages/additionalCoverages arrays
-- **Storage**: Saved to `offer_snapshots.structuredPolicy` (JSONB field)
-- **Model**: `gpt-4o` for high-quality extraction
-- **Key Feature**: Preserves exact deductible/limit strings from OCR (e.g., "2.834 kr", "5.000 kr") with thousand separators intact
-
-**Phase 2: HealthCheckAnalyst** (`server/services/insuranceCheckService.ts`)
-- **Purpose**: 1:1 coverage mapping with MANDATORY selvrisiko population
-- **Input**: Structured policy from Phase 1 (or legacy coverageDetails)
-- **Output**: HealthCheckResult with complete whatsIncluded array
-- **Model**: `gpt-4o` for analysis
-- **Key Features**:
-  - Deterministic 1:1 mapping: mainCoverages.length + additionalCoverages.length === whatsIncluded.length
-  - Selvrisiko MUST be populated when coverage.deductible exists
-  - UI variant assignment based on deductible value (success/warning/error)
-  - Length validation prevents data loss
-
-**Feature Flag:**
-```bash
-ENABLE_TWO_PHASE_HEALTHCHECK=true  # Enable two-phase architecture
-```
-
-**Pipeline Flow:**
-1. Document upload → OCR extraction → Policy extraction → OfferSnapshots created
-2. **If ENABLE_TWO_PHASE_HEALTHCHECK=true**:
-   - Run PolicyExtractor on OCR markdown
-   - Store structured policy in `offer_snapshots.structuredPolicy`
-   - Health check reads structuredPolicy and uses Phase 2 prompt
-3. **Else (legacy)**:
-   - Health check uses coverageDetails directly
-
-**Benefits:**
-- ✅ **Deterministic mapping**: No coverage data loss
-- ✅ **Reprocessable**: Phase 2 can be rerun without re-extracting (uses stored structuredPolicy)
-- ✅ **Testable**: Each phase independently validated
-- ✅ **Cost-efficient**: Failed Phase 2 doesn't require expensive OCR re-run
-- ✅ **Production-ready**: Gradual rollout via feature flag
-
-**Validation:**
-- Phase 1: `coverageValidator.validatePolicy()` ensures all required fields present
-- Phase 2: Length validation (whatsIncluded.length === totalCoverages)
-- Fallback: If Phase 1 fails, falls back to legacy single-phase behavior
-
-**Reprocessing:**
-Use `server/scripts/reprocess-with-two-phase.ts` to backfill existing policies:
-1. Reads stored OCR markdown from `offer_snapshots.rawExtractedData`
-2. Runs Phase 1 PolicyExtractor
-3. Updates `structuredPolicy` field
-4. Regenerates health checks with Phase 2
-
-### Extraction Stages Debugging System (NEW - Nov 2025)
-
-**Purpose:** Provides complete visibility into extraction pipeline intermediate outputs for quality monitoring and optimization.
-
-**Architecture:**
-- Persists OCR, Segmentation, and Extraction outputs to `documents.extraction_stages` (jsonb column)
-- Each stage captures: rawOutput, timestamp, metadata (tokens, cost, latency, confidence)
-- API endpoint: `GET /api/documents/:id/extraction-stages` for debugging access
-- Zero cross-document data leakage (extractionStagesData reset per processDocument call)
-
-**Stage Data Structure:**
-```json
-{
-  "stage1_ocr": {
-    "rawOutput": "markdown text...",
-    "timestamp": "ISO 8601",
-    "metadata": { "source", "markdownLength", "pageCount", "latencyMs" }
-  },
-  "stage2_segmentation": {
-    "rawOutput": [PolicySegment, ...],
-    "timestamp": "ISO 8601",
-    "metadata": { "segmentCount", "modelUsed", "tokensUsed", "costUsd", "latencyMs", "confidenceScores" }
-  },
-  "stage3_extraction": {
-    "rawOutput": [StructuredPolicy, ...],
-    "timestamp": "ISO 8601",
-    "metadata": { "policyCount", "latencyMs", "successCount", "failureCount", "errors" }
-  }
-}
-```
-
-**API Response Codes:**
-- **404**: Document not found
-- **409**: Extraction in progress (non-terminal status)
-- **204**: Document exists but no stages captured yet
-- **200**: Success (returns documentId, fileName, validation, stages)
-
-**Testing Results (Nov 2025):**
-- ✅ Benchmark document 399a9364 tested: 100% benchmark parity
-- ✅ All critical values extracted (Indbo: 66,595/121,854 kr, Fritidshus: Kornvænget/410,901 kr, Ulykke: dobbelterstatning 30%)
-- ✅ No significant missing data patterns detected
-- ✅ Performance: ~55s total (OCR 4s, Segmentation 41s, Extraction 9s), ~$0.13/document
-- ✅ Production-ready with comprehensive test documentation (EXTRACTION_STAGES_TEST_RESULTS.md)
-
-## AI Model Configuration
-
-The platform uses a centralized model configuration system (`server/config/aiModels.ts`) that enables easy model switching and cost tracking:
-
-**Supported Models:**
-- `gpt-4o-mini`: Fast, cost-efficient ($0.15/$0.60 per M tokens) - good for simple tasks
-- `gpt-4o`: High-quality ($5/$15 per M tokens) - better understanding, recommended for extraction
-- `gpt-4o-reasoning` (`o1-mini`): Best quality with reasoning - recommended for segmentation
-- `mistral-large-latest`: Alternative high-quality model
-- `mistral-ocr-latest`: Specialized OCR model
-
-**Pipeline Step Configuration:**
-- **OCR**: `mistral-ocr-latest` (optimal for document OCR)
-- **Policy Segmentation**: `o1-mini` reasoning → fallback to `gpt-4o` → `gpt-4o-mini`
-- **Structured Extraction**: `gpt-4o` → fallback to `gpt-4o-mini`
-- **Health Check**: `gpt-4o-mini` (sufficient for health checks)
-
-**Cost/Quality Tradeoffs:**
-
-| Configuration | Cost/Document | Quality | Use Case |
-|---------------|---------------|---------|----------|
-| Premium (o1-mini + gpt-4o) | ~$0.12 | ⭐⭐⭐⭐⭐ | Production - matches manual quality |
-| Balanced (gpt-4o + gpt-4o-mini) | ~$0.07 | ⭐⭐⭐⭐ | Testing with good quality |
-| Budget (gpt-4o-mini only) | ~$0.03 | ⭐⭐ | Development/testing only |
-
-**Model Selection Guide:**
-- Use **Premium** for production: Quality is critical for user trust
-- Use **Balanced** for high-volume testing
-- Avoid **Budget** for multi-policy documents: Segmentation quality insufficient
-
-**Environment Configuration:**
-```bash
-# Enable new two-step pipeline
-ENABLE_TWO_STEP_EXTRACTION=true
-
-# Override model configuration (JSON)
-AI_PIPELINE_CONFIG='{"policySegmentation":{"modelId":"gpt-4o"}}'
-```
-
-**Cost Tracking:**
-All AI invocations are logged with token usage, costs, latency, and confidence scores. Check console logs for `[AI Invocation]` entries.
+File uploads are handled by Multer (PDFs up to 10MB). The database uses Drizzle ORM with PostgreSQL. Security measures include input validation, RBAC, rate limiting, and PII-redacting logging. Reliability features include AI retry logic, distributed locking, and Zod for structured validation.
 
 ## External Dependencies
-
 -   **Gmail Integration**: Google APIs client library.
 -   **Mistral AI**: Document OCR API (`mistral-ocr-latest`) and Chat API (`mistral-large-latest`).
 -   **OpenAI API**: `o1-mini`, `gpt-4o`, `gpt-4o-mini`.
@@ -204,39 +65,3 @@ All AI invocations are logged with token usage, costs, latency, and confidence s
 -   **Multer**: File uploads.
 -   **Connect-pg-simple**: PostgreSQL-backed session management.
 -   **Third-Party UI Libraries**: react-dropzone, react-hook-form with Zod, date-fns.
-
-## Recent Learnings & Decisions (November 2025)
-
-### Manual vs Automated Extraction Quality Gap
-
-**Problem:** Legacy single-step extraction (`gpt-4o-mini`) produced lower quality results than manual ChatGPT processing.
-
-**Root Cause Analysis:**
-1. Single-pass extraction struggled with multi-policy PDFs (couldn't separate Indbo, Fritidshus, Ulykke clearly)
-2. Model lacked reasoning depth for complex Danish insurance terminology
-3. No pre-extracted context to guide extraction
-4. Pricing data often misinterpreted due to Danish number formatting
-
-**Solution - Two-Step Pipeline:**
-1. **Step 1**: Policy Segmentation with reasoning model (`o1-mini`)
-   - Identifies all policies in document
-   - Extracts key metadata (prices, company, addresses)
-   - Creates separate content blocks per policy
-   - Confidence scoring per segment
-
-2. **Step 2**: Structured Extraction per segment (`gpt-4o`)
-   - Processes one policy at a time
-   - Uses pre-extracted metadata as hints
-   - Improved Danish prompts with terminology guide
-   - Zod validation ensures data quality
-
-**Results:**
-- Quality matches manual ChatGPT process
-- Correct policy separation for multi-policy documents
-- Better handling of Danish terminology and number formats
-- Higher confidence scores (avg 0.85+ vs 0.65 previously)
-- Cost increase justified by quality improvement
-
-**When to Use Each Pipeline:**
-- **Two-Step**: Production use, multi-policy documents, quality-critical scenarios
-- **Legacy**: Single-policy documents, development testing, cost-sensitive environments
