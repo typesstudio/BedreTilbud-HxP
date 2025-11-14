@@ -11,6 +11,8 @@ import {
   type InsertEmail,
   type Comparison,
   type InsertComparison,
+  type CompanyComparison,
+  type InsertCompanyComparison,
   type HouseholdMember,
   type InsertHouseholdMember,
   type Policy,
@@ -67,6 +69,13 @@ export interface IStorage {
   getComparisonByUserAndCompany(userId: string, companyId: string): Promise<Comparison | undefined>;
   getComparisonsByUserAndCompany(userId: string, companyId: string): Promise<Comparison[]>;
   createComparison(comparison: InsertComparison): Promise<Comparison>;
+
+  // Company Comparisons (Phase 4)
+  getCompanyComparison(id: string): Promise<CompanyComparison | undefined>;
+  getCompanyComparisonsByUser(userId: string): Promise<CompanyComparison[]>;
+  getCompanyComparisonByCompanies(userId: string, currentCompany: string, offerCompany: string): Promise<CompanyComparison | undefined>;
+  createCompanyComparison(comparison: InsertCompanyComparison): Promise<CompanyComparison>;
+  updateCompanyComparisonStatus(id: string, status: string, comparisonJSON?: any, errorMessage?: string): Promise<CompanyComparison>;
 
   // Household Members
   getHouseholdMember(id: string): Promise<HouseholdMember | undefined>;
@@ -1109,6 +1118,85 @@ export class DatabaseStorage implements IStorage {
     const { db } = await import("./db");
     const { comparisons } = await import("@shared/schema");
     const [comparison] = await db.insert(comparisons).values(insertComparison).returning();
+    return comparison;
+  }
+
+  // Company Comparisons (Phase 4)
+  async getCompanyComparison(id: string): Promise<CompanyComparison | undefined> {
+    const { db } = await import("./db");
+    const { companyComparisons } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [comparison] = await db.select().from(companyComparisons).where(eq(companyComparisons.id, id));
+    return comparison || undefined;
+  }
+
+  async getCompanyComparisonsByUser(userId: string): Promise<CompanyComparison[]> {
+    const { db } = await import("./db");
+    const { companyComparisons } = await import("@shared/schema");
+    const { eq, desc } = await import("drizzle-orm");
+    return await db.select()
+      .from(companyComparisons)
+      .where(eq(companyComparisons.userId, userId))
+      .orderBy(desc(companyComparisons.createdAt));
+  }
+
+  async getCompanyComparisonByCompanies(
+    userId: string,
+    currentCompany: string,
+    offerCompany: string
+  ): Promise<CompanyComparison | undefined> {
+    const { db } = await import("./db");
+    const { companyComparisons } = await import("@shared/schema");
+    const { eq, and, desc } = await import("drizzle-orm");
+    const [comparison] = await db.select()
+      .from(companyComparisons)
+      .where(
+        and(
+          eq(companyComparisons.userId, userId),
+          eq(companyComparisons.currentCompany, currentCompany),
+          eq(companyComparisons.offerCompany, offerCompany)
+        )
+      )
+      .orderBy(desc(companyComparisons.createdAt))
+      .limit(1);
+    return comparison || undefined;
+  }
+
+  async createCompanyComparison(insertComparison: InsertCompanyComparison): Promise<CompanyComparison> {
+    const { db } = await import("./db");
+    const { companyComparisons } = await import("@shared/schema");
+    const [comparison] = await db.insert(companyComparisons).values(insertComparison).returning();
+    return comparison;
+  }
+
+  async updateCompanyComparisonStatus(
+    id: string,
+    status: string,
+    comparisonJSON?: any,
+    errorMessage?: string
+  ): Promise<CompanyComparison> {
+    const { db } = await import("./db");
+    const { companyComparisons } = await import("@shared/schema");
+    const { eq, sql } = await import("drizzle-orm");
+    
+    const updates: any = {
+      status,
+      updatedAt: sql`CURRENT_TIMESTAMP`,
+    };
+    
+    if (comparisonJSON !== undefined) {
+      updates.comparisonJSON = comparisonJSON;
+    }
+    
+    if (errorMessage !== undefined) {
+      updates.errorMessage = errorMessage;
+    }
+    
+    const [comparison] = await db.update(companyComparisons)
+      .set(updates)
+      .where(eq(companyComparisons.id, id))
+      .returning();
+    
     return comparison;
   }
 
