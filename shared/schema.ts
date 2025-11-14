@@ -181,7 +181,10 @@ export const offerSnapshots = pgTable("offer_snapshots", {
   companyId: varchar("company_id").references(() => companies.id),
   premium: numeric("premium", { precision: 10, scale: 2 }), // Annual premium in DKK (normalized)
   deductible: numeric("deductible", { precision: 10, scale: 2 }), // Deductible in DKK (normalized)
-  coverageDetails: json("coverage_details").notNull(), // Structured coverage data
+  coverageDetails: json("coverage_details").notNull(), // Structured coverage data (legacy)
+  
+  // Two-Phase Extraction Architecture (NEW - Nov 2025)
+  structuredPolicy: jsonb("structured_policy"), // Phase 1 extraction output with mainCoverages/additionalCoverages
   
   // Extraction provenance
   extractionVersion: text("extraction_version").notNull(), // "v1", "v2", etc. for tracking schema changes
