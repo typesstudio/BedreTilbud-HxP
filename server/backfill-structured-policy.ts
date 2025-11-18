@@ -2,7 +2,7 @@
 import { db } from "./db";
 import { documents, offerSnapshots } from "@shared/schema";
 import { eq, isNull } from "drizzle-orm";
-import { PolicyExtractorService } from "./services/policyExtractorService";
+import { policyExtractorService } from "./services/policyExtractorService";
 
 const BATCH_SIZE = 10;
 const DRY_RUN = process.env.DRY_RUN === "true";
@@ -44,7 +44,6 @@ async function backfillStructuredPolicies() {
 
     // Step 2: Process each document
     console.log("\n[2/5] Processing documents...");
-    const policyExtractor = new PolicyExtractorService();
     let successCount = 0;
     let skipCount = 0;
     let errorCount = 0;
@@ -77,7 +76,7 @@ async function backfillStructuredPolicies() {
           const stages = document.extractionStages as any;
           if (stages.stage1_ocr?.rawOutput) {
             ocrMarkdown = stages.stage1_ocr.rawOutput;
-            console.log(`  ✓ Found OCR markdown in extraction_stages (${ocrMarkdown.length} chars)`);
+            console.log(`  ✓ Found OCR markdown in extraction_stages (${ocrMarkdown!.length} chars)`);
           }
         }
 
@@ -86,7 +85,7 @@ async function backfillStructuredPolicies() {
           const ocrResponse = document.ocrRawResponse as any;
           if (ocrResponse.text) {
             ocrMarkdown = ocrResponse.text;
-            console.log(`  ✓ Found OCR markdown in ocrRawResponse (${ocrMarkdown.length} chars)`);
+            console.log(`  ✓ Found OCR markdown in ocrRawResponse (${ocrMarkdown!.length} chars)`);
           }
         }
 
@@ -98,7 +97,7 @@ async function backfillStructuredPolicies() {
 
         // Step 3: Run PolicyExtractor to get structured policies
         console.log(`  → Running PolicyExtractor...`);
-        const extractionResult = await policyExtractor.extractPolicies(ocrMarkdown);
+        const extractionResult = await policyExtractorService.extractPolicies(ocrMarkdown);
         const structuredPolicies = extractionResult.policies;
 
         console.log(`  ✓ Extracted ${structuredPolicies.length} structured policies`);
@@ -107,7 +106,7 @@ async function backfillStructuredPolicies() {
         for (const snapshot of snapshots) {
           // Try to match by policyType
           const matchingPolicy = structuredPolicies.find(
-            (p) => p.policyType?.toLowerCase() === snapshot.policyType?.toLowerCase()
+            (p: any) => p.policyType?.toLowerCase() === snapshot.policyType?.toLowerCase()
           );
 
           if (!matchingPolicy) {

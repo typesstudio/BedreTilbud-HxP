@@ -55,6 +55,7 @@ export class ComparisonOrchestrator {
    */
   async runForUser(options: ComparisonOptions): Promise<ComparisonOrchestrationResult> {
     const { userId, forceRerun = false, currentCompany, offerCompany } = options;
+    const startTime = Date.now();
 
     if (!this.enableComparison) {
       console.log(`[ComparisonOrchestrator] Feature disabled, skipping for user ${userId}`);
@@ -141,10 +142,32 @@ export class ComparisonOrchestrator {
         .map(r => r.status === 'fulfilled' ? r.value : null)
         .filter((id): id is string => id !== null);
 
-      console.log(`[ComparisonOrchestrator] Comparisons completed for user ${userId}`, {
-        total: companyPairs.length,
+      // 6. Gather statusReason breakdown for failed comparisons
+      const failureReasons: Record<string, number> = {};
+      const allComparisons = await this.storage.getCompanyComparisonsByUser(userId);
+      allComparisons
+        .filter(c => c.status === 'failed' && c.statusReason)
+        .forEach(c => {
+          const reason = c.statusReason || 'UNKNOWN';
+          failureReasons[reason] = (failureReasons[reason] || 0) + 1;
+        });
+
+      const elapsedMs = Date.now() - startTime;
+      const successRate = companyPairs.length > 0 
+        ? ((successful.length / companyPairs.length) * 100).toFixed(1)
+        : '0.0';
+
+      // Log comprehensive summary
+      console.log(`[ComparisonOrchestrator] ✅ SUMMARY for user ${userId}:`, {
+        totalPairs: companyPairs.length,
         successful: successful.length,
-        failed: failed.length
+        failed: failed.length,
+        successRate: `${successRate}%`,
+        elapsedMs: `${elapsedMs}ms`,
+        currentPoliciesLoaded: currentPoliciesData.length,
+        offerPoliciesLoaded: offerPoliciesData.length,
+        failureReasons: Object.keys(failureReasons).length > 0 ? failureReasons : 'none',
+        comparisonIds: comparisonIds.length > 0 ? `${comparisonIds.length} created` : 'none'
       });
 
       return {
