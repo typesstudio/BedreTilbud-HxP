@@ -227,6 +227,7 @@ export class ComparisonOrchestrator {
 
   /**
    * Load current policies with health checks for a user
+   * Phase 2: Use ID-based matching via snapshot_id FK
    */
   private async loadCurrentPolicies(userId: string): Promise<any[]> {
     // Get documents where documentType = "current"
@@ -237,22 +238,12 @@ export class ComparisonOrchestrator {
     for (const doc of documents) {
       // Fetch snapshots and health checks once per document
       const snapshots = await this.storage.getOfferSnapshotsByDocument(doc.id);
-      let healthChecks = await this.storage.getHealthChecksByDocument(doc.id);
+      const healthChecks = await this.storage.getHealthChecksByDocument(doc.id);
       
-      // Dedupe health checks by ID (handle double-runs) and sort by createdAt
-      const uniqueHealthChecks = Array.from(
-        new Map(healthChecks.map(hc => [hc.id, hc])).values()
-      ).sort((a, b) => {
-        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return aTime - bTime; // Earliest first
-      });
-      
-      // Match snapshots to health checks by creation order
-      // Snapshots are created in sequence, health checks run in same order
-      for (let i = 0; i < snapshots.length; i++) {
-        const snapshot = snapshots[i];
-        const healthCheck = uniqueHealthChecks[i]; // Match by sorted index
+      // Phase 2: Match snapshots to health checks by ID (via snapshot_id FK)
+      for (const snapshot of snapshots) {
+        // Find health check using snapshot_id FK (deterministic, not index-based)
+        const healthCheck = healthChecks.find(hc => hc.snapshotId === snapshot.id);
         
         if (!healthCheck) {
           console.warn(`[ComparisonOrchestrator] No health check for snapshot ${snapshot.id}, skipping`);
@@ -285,6 +276,7 @@ export class ComparisonOrchestrator {
 
   /**
    * Load offer policies with health checks for a user
+   * Phase 2: Use ID-based matching via snapshot_id FK
    */
   private async loadOfferPolicies(userId: string): Promise<any[]> {
     // Get documents where documentType = "offer"
@@ -295,22 +287,12 @@ export class ComparisonOrchestrator {
     for (const doc of documents) {
       // Fetch snapshots and health checks once per document
       const snapshots = await this.storage.getOfferSnapshotsByDocument(doc.id);
-      let healthChecks = await this.storage.getHealthChecksByDocument(doc.id);
+      const healthChecks = await this.storage.getHealthChecksByDocument(doc.id);
       
-      // Dedupe health checks by ID (handle double-runs) and sort by createdAt
-      const uniqueHealthChecks = Array.from(
-        new Map(healthChecks.map(hc => [hc.id, hc])).values()
-      ).sort((a, b) => {
-        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-        return aTime - bTime; // Earliest first
-      });
-      
-      // Match snapshots to health checks by creation order
-      // Snapshots are created in sequence, health checks run in same order
-      for (let i = 0; i < snapshots.length; i++) {
-        const snapshot = snapshots[i];
-        const healthCheck = uniqueHealthChecks[i]; // Match by sorted index
+      // Phase 2: Match snapshots to health checks by ID (via snapshot_id FK)
+      for (const snapshot of snapshots) {
+        // Find health check using snapshot_id FK (deterministic, not index-based)
+        const healthCheck = healthChecks.find(hc => hc.snapshotId === snapshot.id);
         
         if (!healthCheck) {
           console.warn(`[ComparisonOrchestrator] No health check for snapshot ${snapshot.id}, skipping`);
