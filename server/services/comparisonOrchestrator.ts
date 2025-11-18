@@ -172,6 +172,60 @@ export class ComparisonOrchestrator {
   }
 
   /**
+   * Defensive fallback: Resolve company_id from structuredPolicy if null
+   * This handles edge cases where extraction didn't set company_id
+   */
+  private async resolveCompanyFromPolicy(snapshot: any): Promise<string | null> {
+    if (snapshot.companyId) {
+      return snapshot.companyId;
+    }
+    
+    // Try to extract company name from structuredPolicy
+    try {
+      const structuredPolicyData = typeof snapshot.structuredPolicy === 'string'
+        ? JSON.parse(snapshot.structuredPolicy)
+        : snapshot.structuredPolicy;
+      
+      const companyName = structuredPolicyData?.company || structuredPolicyData?.companyName;
+      
+      if (!companyName) {
+        console.warn(`[ComparisonOrchestrator] Snapshot ${snapshot.id} has null company_id and no company in structuredPolicy`);
+        return null;
+      }
+      
+      // Attempt exact normalized match against companies table
+      const companies = await this.storage.getActiveCompanies();
+      
+      // Normalize: lowercase, trim, remove punctuation for exact matching
+      const normalize = (str: string) => 
+        str.toLowerCase().trim().replace(/[^\w\s]/g, '').replace(/\s+/g, ' ');
+      
+      const normalizedSearch = normalize(companyName);
+      
+      const match = companies.find((c: any) => 
+        normalize(c.name) === normalizedSearch
+      );
+      
+      if (match) {
+        console.warn(`[ComparisonOrchestrator] Fallback: Resolved company_id for snapshot ${snapshot.id} via exact match: "${companyName}" → ${match.id}`);
+        return match.id;
+      }
+      
+      // Log available candidates for debugging
+      const candidates = companies.map((c: any) => c.name).join(', ');
+      console.warn(
+        `[ComparisonOrchestrator] Fallback failed: No exact match for "${companyName}" (snapshot ${snapshot.id}). ` +
+        `Available companies: ${candidates}. Leaving company_id as null.`
+      );
+      return null;
+      
+    } catch (error) {
+      console.error(`[ComparisonOrchestrator] Error resolving company from structuredPolicy:`, error);
+      return null;
+    }
+  }
+
+  /**
    * Load current policies with health checks for a user
    */
   private async loadCurrentPolicies(userId: string): Promise<any[]> {
@@ -189,8 +243,8 @@ export class ComparisonOrchestrator {
       const uniqueHealthChecks = Array.from(
         new Map(healthChecks.map(hc => [hc.id, hc])).values()
       ).sort((a, b) => {
-        const aTime = new Date(a.createdAt).getTime();
-        const bTime = new Date(b.createdAt).getTime();
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return aTime - bTime; // Earliest first
       });
       
@@ -210,10 +264,13 @@ export class ComparisonOrchestrator {
           ? JSON.parse(healthCheck.result)
           : healthCheck.result;
         
+        // Defensive fallback: Resolve company_id if null
+        const companyId = await this.resolveCompanyFromPolicy(snapshot);
+        
         allPolicies.push({
           snapshotId: snapshot.id,
           policyType: snapshot.policyType,
-          companyId: snapshot.companyId,
+          companyId: companyId,
           premium: snapshot.premium,
           healthCheck: healthCheckData,
           structuredPolicy: snapshot.structuredPolicy,
@@ -243,8 +300,8 @@ export class ComparisonOrchestrator {
       const uniqueHealthChecks = Array.from(
         new Map(healthChecks.map(hc => [hc.id, hc])).values()
       ).sort((a, b) => {
-        const aTime = new Date(a.createdAt).getTime();
-        const bTime = new Date(b.createdAt).getTime();
+        const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return aTime - bTime; // Earliest first
       });
       
@@ -270,10 +327,13 @@ export class ComparisonOrchestrator {
           : snapshot.structuredPolicy;
         const offerNumber = structuredPolicyData?.offerNumber || structuredPolicyData?.policyNumber;
         
+        // Defensive fallback: Resolve company_id if null
+        const companyId = await this.resolveCompanyFromPolicy(snapshot);
+        
         allPolicies.push({
           snapshotId: snapshot.id,
           policyType: snapshot.policyType,
-          companyId: snapshot.companyId,
+          companyId: companyId,
           premium: snapshot.premium,
           healthCheck: healthCheckData,
           structuredPolicy: snapshot.structuredPolicy,
@@ -405,14 +465,26 @@ export class ComparisonOrchestrator {
           currency: 'DKK'
         },
         policyPairs: matchingResult.pairs.map(pair => {
-          const currentPolicy = currentPolicies.find(p => p.snapshotId === pair.currentId);
-          const offerPolicy = offerPolicies.find(p => p.snapshotId === pair.offerId);
+          const currentPolicy = currentPolicies.find(p => p.snapshotId === pair.currentPolicyId);
+          const offerPolicy = offerPolicies.find(p => p.snapshotId === pair.offerPolicyId);
+          
+          if (!currentPolicy || !offerPolicy) {
+            throw new Error(`Missing policy data for pair: ${pair.policyType}`);
+          }
           
           return {
-            currentPolicyId: pair.currentId,
-            offerPolicyId: pair.offerId,
-            currentPolicy,
-            offerPolicy
+            policyType: pair.policyType,
+            label: pair.label,
+            current: {
+              policyId: currentPolicy.snapshotId,
+              annualPremium: parseFloat(currentPolicy.premium || '0'),
+              healthCheck: currentPolicy.healthCheck
+            },
+            offer: {
+              policyId: offerPolicy.snapshotId,
+              annualPremium: parseFloat(offerPolicy.premium || '0'),
+              healthCheck: offerPolicy.healthCheck
+            }
           };
         })
       });

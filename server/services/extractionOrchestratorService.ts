@@ -691,8 +691,18 @@ export class ExtractionOrchestratorService {
       const snapshots: OfferSnapshot[] = [];
       
       for (const policy of policies) {
-        // Resolve company name to ID
-        const companyId = await this.resolveCompanyName(policy.companyName);
+        // Prioritize relational company_id from document (set via emailThread)
+        // Fallback to OCR-extracted company name only if document.companyId is null
+        let companyId = document.companyId;
+        let companyIdSource = 'relational';
+        
+        if (!companyId) {
+          companyId = await this.resolveCompanyName(policy.companyName);
+          companyIdSource = 'ocr_extraction';
+          console.log(`[Orchestrator] No relational company_id for document ${document.id}, resolved from OCR: ${policy.companyName} → ${companyId}`);
+        } else {
+          console.log(`[Orchestrator] Using relational company_id from document: ${companyId}`);
+        }
         
         const insertData: InsertOfferSnapshot = {
           documentId: document.id,
