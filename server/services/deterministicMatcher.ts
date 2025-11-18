@@ -22,6 +22,16 @@ function normalizeString(str: string | null | undefined): string {
 }
 
 function extractAddress(policy: Policy): string {
+  // Try structured_policy first (Phase 1 PolicyExtractor data)
+  const structured = (policy as any).structuredPolicy;
+  if (structured) {
+    const structuredData = typeof structured === 'string' ? JSON.parse(structured) : structured;
+    if (structuredData.address) {
+      return normalizeString(structuredData.address);
+    }
+  }
+  
+  // Fallback to coverageDetails (legacy)
   const details = policy.coverageDetails as any;
   if (!details) return '';
   
@@ -30,6 +40,17 @@ function extractAddress(policy: Policy): string {
 }
 
 function extractPersonName(policy: Policy): string {
+  // Try structured_policy first (Phase 1 PolicyExtractor data)
+  const structured = (policy as any).structuredPolicy;
+  if (structured) {
+    const structuredData = typeof structured === 'string' ? JSON.parse(structured) : structured;
+    // PolicyExtractor stores person name in 'person' field
+    if (structuredData.person) {
+      return normalizeString(structuredData.person);
+    }
+  }
+  
+  // Fallback to coverageDetails (legacy)
   const details = policy.coverageDetails as any;
   if (!details) return '';
   
@@ -38,6 +59,16 @@ function extractPersonName(policy: Policy): string {
 }
 
 function extractOfferNumber(policy: Policy): string {
+  // Try structured_policy first (Phase 1 PolicyExtractor data)
+  const structured = (policy as any).structuredPolicy;
+  if (structured) {
+    const structuredData = typeof structured === 'string' ? JSON.parse(structured) : structured;
+    if (structuredData.offerNumber) {
+      return normalizeString(structuredData.offerNumber);
+    }
+  }
+  
+  // Fallback to coverageDetails (legacy)
   const details = policy.coverageDetails as any;
   if (!details) return '';
   

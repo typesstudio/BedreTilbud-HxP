@@ -1,0 +1,121 @@
+Here’s a cleaned-up, fully loaded Replit prompt you can paste in:
+
+---
+
+You are my lead engineer on a project called **BedreTilbud** – an insurance comparison platform that:
+
+* Extracts policies from PDFs
+* Runs a **Health Check** on each policy
+* Runs a **Comparison Orchestrator** to compare a user’s current policies with new offers
+
+The **comparison pipeline integration is already complete and architect-approved**. It is production-ready from a code perspective, but we’ve had a **data quality issue around `company_id`** that previously caused 0 matched pairs.
+
+### Current Context
+
+* Old legacy matching logic has been **removed** – only the new Phase 3→4 flow is active.
+* The **Health Check Orchestrator** runs automatically for both current and offer uploads.
+* The **Comparison Orchestrator** is wired up with proper error handling.
+* Known fixes already done:
+
+  * Prompt loader bug fixed (`.md.md` issue resolved)
+  * Health check matching now dedupes + sorts by `createdAt`
+  * All LSP errors resolved
+* Architect review: ✅ “No functional regressions detected, code is production-ready.”
+
+### Previously Known Blocking Issue
+
+* `current` policies had a valid `company_id` (e.g. `'322935ed-…'`)
+* `offer` policies had `company_id = NULL`
+* This caused the matcher to find **0 matched pairs**, because it relies on `company_id` for grouping.
+
+### New Task
+
+I have now uploaded a **new offer PDF from Tryg** into the system.
+Your job is to **debug exactly where the flow breaks for this new Tryg offer** and propose/apply the minimal, correct fix.
+
+### What I Want You To Do
+
+1. **Trace the end-to-end flow for the new Tryg offer**
+
+   * Start from wherever the new offer PDF enters the system (upload / incoming email / webhook).
+   * Follow it through:
+
+     * OCR / extraction → `structuredPolicy`
+     * Snapshot creation (`offer_snapshots` or equivalent)
+     * Health Check Orchestrator
+     * Comparison Orchestrator
+   * Identify **the exact point** where data becomes incomplete or causes the comparison to skip this offer (e.g., missing `company_id`, wrong `type`, bad foreign key, etc.).
+
+2. **Inspect database records**
+
+   * Find the newly created records for this Tryg offer in:
+
+     * `documents` / `policy_snapshots` / `offer_snapshots` (or whatever tables we use)
+     * Any linking tables like `company_requests`, `traade`/threads, etc.
+   * Confirm:
+
+     * Is `company_id` set on the relevant snapshot row(s)?
+     * Is `type` set correctly (e.g. `Indbo`, `Hus`, `Bil`, etc.)?
+     * Are `document_id` and foreign keys consistent across tables?
+
+3. **Run and debug the comparison script**
+
+   * Run the comparison test script we use, e.g.:
+
+     ```bash
+     tsx server/scripts/test-comparison-pipeline.ts <test-user-email>
+     ```
+   * Confirm whether the new Tryg offer is included in the matched pairs.
+   * If it’s skipped, log why:
+
+     * Missing `company_id`?
+     * No matching policy type?
+     * Filter conditions excluding it?
+
+4. **Identify the root cause**
+
+   * Is the bug in:
+
+     * **Ingestion logic** (not setting `company_id` on offer snapshots from known `company_requests.company_id`)?
+     * **Extraction logic** (wrong or missing `structuredPolicy.company` or `type`)?
+     * **Comparison Orchestrator logic** (overly strict matching conditions)?
+   * Be precise and point to concrete lines/files where the problem originates.
+
+5. **Implement a robust fix**
+
+   * Prefer a fix that:
+
+     * Sets `company_id` deterministically from relational data (e.g. `company_requests.company_id`) when available.
+     * Uses extracted `structuredPolicy.company` only as a **fallback**, not the primary source of truth.
+   * Make sure the fix does **not** reintroduce the old legacy flow or create double-matching.
+
+6. **Re-run tests and capture evidence**
+
+   * Re-run the comparison test script.
+   * Confirm that:
+
+     * The new Tryg offer is correctly matched to the user’s current policies (1:1 by type).
+     * Comparison JSON is generated and looks production-ready (savings, highlights, detailed coverage comparison).
+   * If we have a test user (e.g. `hello@vyork.dk`), use that for reproducibility.
+
+### Acceptance Criteria
+
+* The new Tryg offer:
+
+  * Has a non-NULL `company_id` in the relevant snapshot table.
+  * Is correctly matched with the corresponding current policy by **policy type**.
+* The comparison pipeline:
+
+  * Produces at least one valid matched pair including this Tryg offer.
+  * Generates full comparison JSON (savings, highlights, coverage rows) without errors.
+* The fix:
+
+  * Is **minimal, clean, and robust**.
+  * Is documented in a short summary (what was broken, where, how you fixed it).
+  * Does not reintroduce any legacy matching logic.
+
+Please now:
+
+1. Trace the new Tryg offer through the system.
+2. Explain exactly where it breaks.
+3. Apply the best fix according to the guidelines above.
