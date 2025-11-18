@@ -336,21 +336,82 @@ export default function OffersOverview() {
                         </div>
                         {offer.comparisonStatus === 'failed' && (
                           <div className="flex w-full flex-col items-start gap-2 mt-2 p-3 bg-warning-50 rounded">
-                            <span className="text-caption-bold font-caption-bold text-warning-700">
-                              Upload dine nuværende forsikringer
-                            </span>
-                            <span className="text-caption font-caption text-warning-600">
-                              For at sammenligne dette tilbud skal du uploade dine nuværende forsikringer først.
-                            </span>
-                            <Button
-                              size="small"
-                              variant="warning-primary"
-                              className="mt-2"
-                              onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/onboarding")}
-                              data-testid={`button-upload-current-${offer.id}`}
-                            >
-                              Upload nuværende forsikringer
-                            </Button>
+                            {offer.statusReason === 'MISSING_STRUCTURED_POLICY_CURRENT' && (
+                              <>
+                                <span className="text-caption-bold font-caption-bold text-warning-700">
+                                  Dine nuværende forsikringer mangler data
+                                </span>
+                                <span className="text-caption font-caption text-warning-600">
+                                  Dine uploadede forsikringer blev ikke korrekt behandlet. Prøv at uploade dem igen eller kontakt support.
+                                </span>
+                                <Button
+                                  size="small"
+                                  variant="brand-primary"
+                                  className="mt-2"
+                                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/onboarding")}
+                                  data-testid={`button-reupload-current-${offer.id}`}
+                                >
+                                  Upload forsikringer igen
+                                </Button>
+                              </>
+                            )}
+                            {offer.statusReason === 'MISSING_STRUCTURED_POLICY_OFFER' && (
+                              <>
+                                <span className="text-caption-bold font-caption-bold text-warning-700">
+                                  Tilbuddet kunne ikke læses korrekt
+                                </span>
+                                <span className="text-caption font-caption text-warning-600">
+                                  Dette tilbud blev ikke korrekt behandlet af vores system. Prøv at uploade det igen eller kontakt support.
+                                </span>
+                                <Button
+                                  size="small"
+                                  variant="brand-primary"
+                                  className="mt-2"
+                                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/upload-offer")}
+                                  data-testid={`button-reupload-offer-${offer.id}`}
+                                >
+                                  Upload tilbud igen
+                                </Button>
+                              </>
+                            )}
+                            {offer.statusReason === 'NO_MATCHED_PAIRS' && (
+                              <>
+                                <span className="text-caption-bold font-caption-bold text-warning-700">
+                                  Ingen matchende forsikringer fundet
+                                </span>
+                                <span className="text-caption font-caption text-warning-600">
+                                  Dette tilbud indeholder ikke forsikringer der matcher dine nuværende. Upload dine nuværende forsikringer eller kontakt support.
+                                </span>
+                                <Button
+                                  size="small"
+                                  variant="brand-primary"
+                                  className="mt-2"
+                                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/onboarding")}
+                                  data-testid={`button-upload-current-${offer.id}`}
+                                >
+                                  Upload nuværende forsikringer
+                                </Button>
+                              </>
+                            )}
+                            {!offer.statusReason && (
+                              <>
+                                <span className="text-caption-bold font-caption-bold text-warning-700">
+                                  Sammenligning ikke tilgængelig
+                                </span>
+                                <span className="text-caption font-caption text-warning-600">
+                                  For at sammenligne dette tilbud skal du uploade dine nuværende forsikringer først.
+                                </span>
+                                <Button
+                                  size="small"
+                                  variant="brand-primary"
+                                  className="mt-2"
+                                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/onboarding")}
+                                  data-testid={`button-upload-current-${offer.id}`}
+                                >
+                                  Upload nuværende forsikringer
+                                </Button>
+                              </>
+                            )}
                           </div>
                         )}
                       </div>

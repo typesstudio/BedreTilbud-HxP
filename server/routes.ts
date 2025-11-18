@@ -19,7 +19,7 @@ import { convertToPolicyRecord } from "./utils/policyExtractionParser";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { insertUserSchema, insertDocumentSchema, type Document as DocumentType, type Comparison } from "@shared/schema";
+import { insertUserSchema, insertDocumentSchema, type Document as DocumentType, type Comparison, type CompanyComparison } from "@shared/schema";
 import { z } from "zod";
 import * as validationSchemas from "./validation/schemas";
 
@@ -1725,9 +1725,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const snapshots = await storage.getOfferSnapshotsByDocument(doc.id);
           const healthChecks = await storage.getHealthChecksByDocument(doc.id);
           
-          // Determine comparison status
+          // Determine comparison status using both old comparisons and new company_comparisons
           const comparisons = await storage.getComparisonsByOfferDocument(doc.id);
           let comparisonStatus: 'ok' | 'failed' | 'pending' = 'pending';
+          let statusReason: string | null = null;
           
           if (comparisons.length > 0) {
             // Check if any comparison is successful (has valid comparison data)
@@ -1735,6 +1736,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
               c.comparisonData && Object.keys(c.comparisonData as object).length > 0
             );
             comparisonStatus = hasSuccessful ? 'ok' : 'failed';
+          }
+
+          // Also check company_comparisons for more detailed status
+          if (company) {
+            const companyComparisons = await storage.getCompanyComparisonsByUser(req.params.userId);
+            const relevantComparison = companyComparisons.find((cc: CompanyComparison) => 
+              cc.offerCompany === company.name
+            );
+            
+            if (relevantComparison) {
+              if (relevantComparison.status === 'complete' && relevantComparison.comparisonJSON) {
+                comparisonStatus = 'ok';
+              } else if (relevantComparison.status === 'failed') {
+                comparisonStatus = 'failed';
+                statusReason = relevantComparison.statusReason || null;
+              }
+            }
           }
 
           return {
@@ -1745,7 +1763,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             snapshotCount: snapshots.length,
             healthCheckCount: healthChecks.length,
             comparisonStatus,
-            comparisonCount: comparisons.length
+            comparisonCount: comparisons.length,
+            statusReason
           };
         })
       );
