@@ -1,0 +1,154 @@
+Short answer: yes, this is a solid approach conceptually – the *root cause* is correctly identified as a data problem, not a pipeline problem. But I’d tweak your plan in one important way: don’t make OCR the primary source of `company_id` if you can avoid it.
+
+Let me break it down.
+
+---
+
+## 1. Overall architecture / status
+
+What you describe as “done” looks sane:
+
+* Legacy matcher removed → ✅ good, no double systems.
+* Health Check Orchestrator runs for *all* uploads (current + offer) → ✅ matches your Phase 3–4 architecture.
+* Comparison Orchestrator integrated with error handling → ✅ exactly what you want before plugging into UI.
+* Fixes:
+
+  * Prompt loader `.md.md` bug fixed
+  * Health check matching dedupes + sorts by `createdAt`
+  * LSP clean
+* Architect review: “no functional regressions” → ✅ that’s the right bar for this step.
+
+So: the **pipeline is in the right shape**. The fact that it returns 0 pairs because of NULL `company_id` is consistent with a data-join problem, not a logic bug.
+
+---
+
+## 2. The real root cause (and where I’d adjust your plan)
+
+Right now you’ve framed it as:
+
+> “The extraction pipeline isn’t capturing company information from offer PDFs, which prevents the matcher from pairing policies.”
+
+I’d reframe that as:
+
+> “`company_id` isn’t being populated on `offer_snapshots` at ingestion time.”
+
+Important nuance:
+
+* `company_id` is a **relational key**, not an OCR field.
+* You already *know* which company a given offer belongs to from your system:
+
+  * `company_requests.company_id`
+  * Thread-specific email (`thread_id@bedretilbud.com`) → `company_request_id` → `company_id`
+* The PDF’s “company name” is *nice to have* for display/verification, but it should not be the canonical source of `company_id`.
+
+So before changing prompts, I’d:
+
+### ✅ Step 0 (preferred): Fix the ingestion path
+
+Wherever `offer_snapshots` is created:
+
+* Join to `company_requests` (or equivalent) and set:
+
+  ```ts
+  offer_snapshot.company_id = company_request.company_id
+  ```
+* Only *if* that’s not available, then consider OCR-based fallback.
+
+This is more robust than making the model responsible for relational integrity.
+
+You can still keep your three options, but I’d slightly rename Option 1:
+
+> **Option 1 (Recommended): Fix ingestion to always set `company_id` from relational data when available. Only fall back to extracted `structuredPolicy.company` if necessary.**
+
+---
+
+## 3. Evaluating your three options
+
+### Option 1: Fix Extraction (as written)
+
+What you wrote:
+
+> Update PolicyExtractor or segmentation prompts to capture company info
+
+**My take:**
+
+* Capturing `structuredPolicy.company` in the JSON is good and you should keep it.
+* But mapping that to `company_id` should preferably be a separate, deterministic step:
+
+  * First try relational source (`company_requests.company_id`).
+  * If missing, try exact / fuzzy match from `structuredPolicy.company` → `companies` table.
+* So: keep the idea, but don’t *only* rely on extraction.
+
+### Option 2: Temporary SQL workaround
+
+```sql
+UPDATE offer_snapshots 
+SET company_id = (SELECT id FROM companies WHERE name ILIKE '%lærerstandens%')
+WHERE document_id = '058d6efd-b947-48d6-b6e0-ccee58c11311';
+```
+
+**This is fine as a one-off unblocker**, with two caveats:
+
+* Explicitly mark it as “test-only, do not rely on in production”.
+* Add a note in `INTEGRATION_SUMMARY.md` that this was applied only to validate comparison output, not as a permanent fix.
+
+Good for:
+
+* Generating one golden sample of comparison JSON.
+* Letting you hook up the UI and see the full “Tryg vs Nuværende” style output.
+
+### Option 3: Fallback logic in ComparisonOrchestrator
+
+> Parse company name from `structuredPolicy.company` and fuzzy match against `companies`.
+
+This is useful as **defense-in-depth**, but I wouldn’t make it the primary path:
+
+* Pros:
+
+  * Makes the system more resilient if some rows slip through without `company_id`.
+  * You can add good logging like:
+
+    * “ComparisonOrchestrator: snapshot X had NULL company_id, resolved via fuzzy match → company Y (score 0.92)”.
+* Cons:
+
+  * Fuzzy matching is probabilistic; you don’t want your core relationship to depend on it.
+
+So: keep Option 3, but as a safety net, not as the “real fix”.
+
+---
+
+## 4. Is your written status update good?
+
+As a status / handoff message, it’s actually strong:
+
+* Clear structure: What’s working → Blocking issue → Options → Docs.
+* Very easy for another dev/agent to pick up.
+* The “Would you like me to investigate the extraction pipeline…?” line is perfect as a next-task suggestion for a Lovable/Cursor/Replit agent.
+
+If you want to tighten the *technical accuracy*, I’d just tweak the “Blocking Issue” paragraph to something like:
+
+> The comparison pipeline found 0 matched pairs during testing because `offer_snapshots.company_id` is `NULL` for offer policies, while current policies have a valid `company_id`. The matcher relies on `company_id` to group offers per company, so these offers are currently ignored.
+
+That’s it.
+
+---
+
+## 5. Recommended concrete next step
+
+If you want a ranked plan that you can hand to the agent:
+
+1. **In the snapshot creation code (where offer JSON is persisted):**
+
+   * Set `company_id` from `company_requests.company_id` (or equivalent).
+2. **Add a defensive check in ComparisonOrchestrator:**
+
+   * If `company_id` is NULL:
+
+     * Try to resolve it from `company_requests` / thread context.
+     * If still NULL, log a warning and (optionally) fuzzy match from `structuredPolicy.company`.
+3. **Run the one-off SQL update** for the test `document_id` so you can:
+
+   * Run `tsx server/scripts/test-comparison-pipeline.ts hello@vyork.dk`
+   * Inspect the generated comparison JSON for UI wiring.
+
+If you paste me the relevant snippet where `offer_snapshots` is written, I can outline the exact change to inject the `company_id` there.
