@@ -268,7 +268,8 @@ export class ComparisonOrchestrator {
         const companyId = await this.resolveCompanyFromPolicy(snapshot);
         
         allPolicies.push({
-          snapshotId: snapshot.id,
+          id: snapshot.id, // Required by deterministic matcher
+          snapshotId: snapshot.id, // Keep for backward compatibility
           policyType: snapshot.policyType,
           companyId: companyId,
           premium: snapshot.premium,
@@ -331,7 +332,8 @@ export class ComparisonOrchestrator {
         const companyId = await this.resolveCompanyFromPolicy(snapshot);
         
         allPolicies.push({
-          snapshotId: snapshot.id,
+          id: snapshot.id, // Required by deterministic matcher
+          snapshotId: snapshot.id, // Keep for backward compatibility
           policyType: snapshot.policyType,
           companyId: companyId,
           premium: snapshot.premium,

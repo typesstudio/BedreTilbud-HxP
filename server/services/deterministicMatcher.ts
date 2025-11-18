@@ -27,16 +27,23 @@ function extractAddress(policy: Policy): string {
   if (structured) {
     const structuredData = typeof structured === 'string' ? JSON.parse(structured) : structured;
     if (structuredData.address) {
-      return normalizeString(structuredData.address);
+      const addr = normalizeString(structuredData.address);
+      console.log(`[Matcher] extractAddress from structuredPolicy for ${(policy as any).id}: "${addr}"`);
+      return addr;
     }
   }
   
   // Fallback to coverageDetails (legacy)
   const details = policy.coverageDetails as any;
-  if (!details) return '';
+  if (!details) {
+    console.log(`[Matcher] extractAddress for ${(policy as any).id}: no address found`);
+    return '';
+  }
   
   const address = details.insuredAddress || details.address || '';
-  return normalizeString(address);
+  const addr = normalizeString(address);
+  console.log(`[Matcher] extractAddress from coverageDetails for ${(policy as any).id}: "${addr}"`);
+  return addr;
 }
 
 function extractPersonName(policy: Policy): string {
