@@ -168,6 +168,7 @@ export class HealthCheckOrchestrator {
       const healthCheckData: InsertHealthCheck = {
         documentId,
         userId,
+        snapshotId: snapshot.id, // Phase 2: FK to offer_snapshots for ID-based matching
         dataSource: 'OfferSnapshot', // Indicates this came from extraction pipeline
         confidenceScore: snapshot.confidenceScore, // Use extraction confidence score
         result: healthCheckResult // Full AI analysis result
