@@ -22,65 +22,99 @@ function normalizeString(str: string | null | undefined): string {
 }
 
 function extractAddress(policy: Policy): string {
+  const policyId = (policy as any).id || 'unknown';
+  
   // Try structured_policy first (Phase 1 PolicyExtractor data)
   const structured = (policy as any).structuredPolicy;
   if (structured) {
-    const structuredData = typeof structured === 'string' ? JSON.parse(structured) : structured;
-    if (structuredData.address) {
-      const addr = normalizeString(structuredData.address);
-      console.log(`[Matcher] extractAddress from structuredPolicy for ${(policy as any).id}: "${addr}"`);
+    try {
+      const structuredData = typeof structured === 'string' ? JSON.parse(structured) : structured;
+      if (structuredData?.address) {
+        const addr = normalizeString(structuredData.address);
+        console.log(`[Matcher] extractAddress from structuredPolicy for ${policyId}: "${addr}"`);
+        return addr;
+      }
+      // structuredPolicy exists but lacks address field - fall through to coverageDetails
+    } catch (error) {
+      console.warn(`[Matcher] Failed to parse structuredPolicy for ${policyId}:`, error);
+      // Fall through to coverageDetails
+    }
+  }
+  
+  // Fallback to coverageDetails (legacy or supplementary)
+  const details = policy.coverageDetails as any;
+  if (details) {
+    const address = details.insuredAddress || details.address || '';
+    if (address) {
+      const addr = normalizeString(address);
+      console.log(`[Matcher] extractAddress from coverageDetails for ${policyId}: "${addr}"`);
       return addr;
     }
   }
   
-  // Fallback to coverageDetails (legacy)
-  const details = policy.coverageDetails as any;
-  if (!details) {
-    console.log(`[Matcher] extractAddress for ${(policy as any).id}: no address found`);
-    return '';
-  }
-  
-  const address = details.insuredAddress || details.address || '';
-  const addr = normalizeString(address);
-  console.log(`[Matcher] extractAddress from coverageDetails for ${(policy as any).id}: "${addr}"`);
-  return addr;
+  console.warn(`[Matcher] extractAddress for ${policyId}: no address found in structuredPolicy or coverageDetails`);
+  return '';
 }
 
 function extractPersonName(policy: Policy): string {
+  const policyId = (policy as any).id || 'unknown';
+  
   // Try structured_policy first (Phase 1 PolicyExtractor data)
   const structured = (policy as any).structuredPolicy;
   if (structured) {
-    const structuredData = typeof structured === 'string' ? JSON.parse(structured) : structured;
-    // PolicyExtractor stores person name in 'person' field
-    if (structuredData.person) {
-      return normalizeString(structuredData.person);
+    try {
+      const structuredData = typeof structured === 'string' ? JSON.parse(structured) : structured;
+      // PolicyExtractor stores person name in 'person' field
+      if (structuredData?.person) {
+        return normalizeString(structuredData.person);
+      }
+      // structuredPolicy exists but lacks person field - fall through to coverageDetails
+    } catch (error) {
+      console.warn(`[Matcher] Failed to parse structuredPolicy for ${policyId}:`, error);
+      // Fall through to coverageDetails
     }
   }
   
-  // Fallback to coverageDetails (legacy)
+  // Fallback to coverageDetails (legacy or supplementary)
   const details = policy.coverageDetails as any;
-  if (!details) return '';
+  if (details) {
+    const name = details.insuredPerson || details.personName || '';
+    if (name) {
+      return normalizeString(name);
+    }
+  }
   
-  const name = details.insuredPerson || details.personName || '';
-  return normalizeString(name);
+  return '';
 }
 
 function extractOfferNumber(policy: Policy): string {
+  const policyId = (policy as any).id || 'unknown';
+  
   // Try structured_policy first (Phase 1 PolicyExtractor data)
   const structured = (policy as any).structuredPolicy;
   if (structured) {
-    const structuredData = typeof structured === 'string' ? JSON.parse(structured) : structured;
-    if (structuredData.offerNumber) {
-      return normalizeString(structuredData.offerNumber);
+    try {
+      const structuredData = typeof structured === 'string' ? JSON.parse(structured) : structured;
+      if (structuredData?.offerNumber) {
+        return normalizeString(structuredData.offerNumber);
+      }
+      // structuredPolicy exists but lacks offerNumber field - fall through to coverageDetails
+    } catch (error) {
+      console.warn(`[Matcher] Failed to parse structuredPolicy for ${policyId}:`, error);
+      // Fall through to coverageDetails
     }
   }
   
-  // Fallback to coverageDetails (legacy)
+  // Fallback to coverageDetails (legacy or supplementary)
   const details = policy.coverageDetails as any;
-  if (!details) return '';
+  if (details) {
+    const offerNum = details.offerNumber || details.tilbudsnummer || '';
+    if (offerNum) {
+      return normalizeString(offerNum);
+    }
+  }
   
-  const offerNum = details.offerNumber || details.tilbudsnummer || '';
-  return normalizeString(offerNum);
+  return '';
 }
 
 function scoreMatch(currentPolicy: Policy, offerPolicy: Policy): number {
@@ -107,6 +141,51 @@ function scoreMatch(currentPolicy: Policy, offerPolicy: Policy): number {
   return score;
 }
 
+/**
+ * Lightweight check for raw matching metadata presence (no normalization/parsing overhead)
+ * Returns true if policy has ANY of: address, person name, or offer number in RAW form
+ * Does NOT call extraction helpers to avoid O(n²) JSON.parse overhead
+ */
+function hasRawMatchingMetadata(policy: Policy): boolean {
+  const policyId = (policy as any).id || 'unknown';
+  
+  // Check structured_policy first
+  const structured = (policy as any).structuredPolicy;
+  if (structured) {
+    try {
+      const data = typeof structured === 'string' ? JSON.parse(structured) : structured;
+      // Check for non-empty raw fields (before normalization)
+      if (
+        (data?.address && String(data.address).trim()) ||
+        (data?.person && String(data.person).trim()) ||
+        (data?.offerNumber && String(data.offerNumber).trim())
+      ) {
+        return true;
+      }
+    } catch (error) {
+      console.warn(`[Matcher] hasRawMatchingMetadata: Failed to parse structuredPolicy for ${policyId}`);
+      // Fall through to coverageDetails check
+    }
+  }
+  
+  // Check coverageDetails fallback
+  const details = policy.coverageDetails as any;
+  if (details) {
+    if (
+      (details.insuredAddress && String(details.insuredAddress).trim()) ||
+      (details.address && String(details.address).trim()) ||
+      (details.insuredPerson && String(details.insuredPerson).trim()) ||
+      (details.personName && String(details.personName).trim()) ||
+      (details.offerNumber && String(details.offerNumber).trim()) ||
+      (details.tilbudsnummer && String(details.tilbudsnummer).trim())
+    ) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
 export function computeBestMatches(
   currentPolicies: Policy[],
   offerPolicies: Policy[]
@@ -114,10 +193,37 @@ export function computeBestMatches(
   pairs: MatchedPair[];
   unmatchedCurrent: string[];
   unmatchedOffer: string[];
+  dataQualityError?: string;
 } {
   const pairs: MatchedPair[] = [];
   const unmatchedCurrent: Set<string> = new Set();
   const unmatchedOffer: Set<string> = new Set();
+  
+  // Data quality validation: Check if policies have matching metadata
+  const currentWithMetadata = currentPolicies.filter(hasRawMatchingMetadata);
+  const offerWithMetadata = offerPolicies.filter(hasRawMatchingMetadata);
+  
+  if (currentPolicies.length > 0 && currentWithMetadata.length === 0) {
+    const error = `All ${currentPolicies.length} current policies lack matching metadata (address/person/offerNumber). Re-upload current policies to populate structured_policy.`;
+    console.error(`[Matcher] ${error}`);
+    return {
+      pairs: [],
+      unmatchedCurrent: currentPolicies.map(p => p.id!),
+      unmatchedOffer: offerPolicies.map(p => p.id!),
+      dataQualityError: error
+    };
+  }
+  
+  if (offerPolicies.length > 0 && offerWithMetadata.length === 0) {
+    const error = `All ${offerPolicies.length} offer policies lack matching metadata (address/person/offerNumber). Re-upload offer documents to populate structured_policy.`;
+    console.error(`[Matcher] ${error}`);
+    return {
+      pairs: [],
+      unmatchedCurrent: currentPolicies.map(p => p.id!),
+      unmatchedOffer: offerPolicies.map(p => p.id!),
+      dataQualityError: error
+    };
+  }
   
   const currentByType = new Map<string, Policy[]>();
   for (const policy of currentPolicies) {

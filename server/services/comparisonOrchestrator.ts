@@ -445,8 +445,21 @@ export class ComparisonOrchestrator {
       console.log(`[ComparisonOrchestrator] Phase 3 matching completed:`, {
         matched: matchingResult.pairs.length,
         unmatchedCurrent: matchingResult.unmatchedCurrent.length,
-        unmatchedOffer: matchingResult.unmatchedOffer.length
+        unmatchedOffer: matchingResult.unmatchedOffer.length,
+        dataQualityError: matchingResult.dataQualityError || 'none'
       });
+
+      // Check for data quality errors first
+      if (matchingResult.dataQualityError) {
+        console.error(`[ComparisonOrchestrator] Data quality error: ${matchingResult.dataQualityError}`);
+        await this.storage.updateCompanyComparisonStatus(
+          comparison.id,
+          'failed',
+          undefined,
+          matchingResult.dataQualityError
+        );
+        throw new Error(`Data quality error: ${matchingResult.dataQualityError}`);
+      }
 
       if (matchingResult.pairs.length === 0) {
         console.warn(`[ComparisonOrchestrator] No matched pairs found, cannot generate comparison`);
