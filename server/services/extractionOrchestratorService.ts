@@ -217,16 +217,16 @@ export class ExtractionOrchestratorService {
 
       console.log(`[Orchestrator] Successfully created ${snapshots.length} OfferSnapshots`);
 
-      // Stage 5 (Optional): Phase 1 PolicyExtractor for Two-Phase Health Check
-      if (this.useTwoPhaseHealthCheck) {
-        const policyExtractorStage = this.createStage("phase1_policy_extractor");
-        stages.push(policyExtractorStage);
-        await this.runPolicyExtractorStage(
-          snapshots,
-          ocrOutput,
-          policyExtractorStage
-        );
-      }
+      // Stage 5: Phase 1 PolicyExtractor (ALWAYS run to populate structured_policy for deterministic matching)
+      // This ensures offer_snapshots.structured_policy has address/offerNumber/person data
+      // needed by Phase 3 (deterministic matcher) to find policy pairs
+      const policyExtractorStage = this.createStage("phase1_policy_extractor");
+      stages.push(policyExtractorStage);
+      await this.runPolicyExtractorStage(
+        snapshots,
+        ocrOutput,
+        policyExtractorStage
+      );
 
       return {
         success: true,
