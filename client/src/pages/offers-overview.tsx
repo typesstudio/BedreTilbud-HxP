@@ -35,6 +35,12 @@ export default function OffersOverview() {
   });
   const comparisons = comparisonsResponse?.data || [];
 
+  // Get all offers with comparison status (Phase 1: Make offers visible)
+  const { data: offersResponse } = useQuery<{ data: any[]; pagination: any }>({
+    queryKey: ["/api/offers/user", userId],
+  });
+  const offers = offersResponse?.data || [];
+
   // Check inbox mutation
   const checkInboxMutation = useMutation({
     mutationFn: async () => {
@@ -44,6 +50,7 @@ export default function OffersOverview() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/emails/threads", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/comparisons/user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/offers/user", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats", userId] });
       toast({
         title: "Indbakke tjekket",
@@ -66,6 +73,7 @@ export default function OffersOverview() {
     const intervalId = setInterval(() => {
       queryClient.invalidateQueries({ queryKey: ["/api/emails/threads", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/comparisons/user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/offers/user", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats", userId] });
     }, AUTO_REFRESH_INTERVAL);
 
@@ -87,7 +95,15 @@ export default function OffersOverview() {
     }).format(amount);
   };
 
-  // Group comparisons by company
+  // Phase 1: Use offers endpoint - show ALL offers regardless of comparison status
+  const allOffers = offers || [];
+  
+  // Separate offers by comparison status
+  const offersWithComparisons = allOffers.filter((o: any) => o.comparisonStatus === 'ok');
+  const failedOffers = allOffers.filter((o: any) => o.comparisonStatus === 'failed');
+  const pendingOffers = allOffers.filter((o: any) => o.comparisonStatus === 'pending');
+
+  // Keep old logic for comparisons (for offers with successful comparisons)
   const companiesWithOffers = comparisons?.length > 0 
     ? Object.values(
         (comparisons as any[]).reduce((acc: any, comp: any) => {
@@ -114,7 +130,7 @@ export default function OffersOverview() {
     : [];
 
   const pendingThreads = (threads as any[]).filter((t: any) => t.status !== 'received' && !getComparisonForThread(t.id));
-  const hasOffers = companiesWithOffers.length > 0;
+  const hasOffers = companiesWithOffers.length > 0 || failedOffers.length > 0 || pendingOffers.length > 0;
   const hasPending = pendingThreads.length > 0;
 
   return (
@@ -272,6 +288,76 @@ export default function OffersOverview() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Failed/Pending Uploaded Offers Section (Phase 1: Make offers visible) */}
+          {(failedOffers.length > 0 || pendingOffers.length > 0) && (
+            <div className="flex w-full flex-col items-start gap-4">
+              <span className="text-heading-2 font-heading-2 text-default-font">
+                Uploadede tilbud
+              </span>
+              <div className="flex w-full flex-col items-start gap-4">
+                {[...failedOffers, ...pendingOffers].map((offer: any) => (
+                  <div 
+                    key={offer.id}
+                    className="flex w-full flex-col md:flex-row items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm"
+                    data-testid={`offer-card-${offer.id}`}
+                  >
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4">
+                      <div className="flex w-full items-start justify-between flex-wrap gap-2">
+                        <span className="text-heading-3 font-heading-3 text-default-font">
+                          {offer.company?.name || 'Ukendt selskab'}
+                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {offer.comparisonStatus === 'failed' && (
+                            <Badge variant="warning" data-testid={`badge-failed-${offer.id}`}>
+                              Kan ikke sammenlignes
+                            </Badge>
+                          )}
+                          {offer.comparisonStatus === 'pending' && (
+                            <Badge variant="neutral" data-testid={`badge-pending-${offer.id}`}>
+                              Afventer sammenligning
+                            </Badge>
+                          )}
+                          <Badge variant="neutral">
+                            {new Date(offer.createdAt).toLocaleDateString('da-DK')}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="flex w-full flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6">
+                        <div className="flex w-full items-center justify-between">
+                          <span className="text-body font-body text-subtext-color">
+                            Antal forsikringer
+                          </span>
+                          <span className="text-body font-body text-default-font">
+                            {offer.snapshotCount} {offer.snapshotCount === 1 ? 'forsikring' : 'forsikringer'}
+                          </span>
+                        </div>
+                        {offer.comparisonStatus === 'failed' && (
+                          <div className="flex w-full flex-col items-start gap-2 mt-2 p-3 bg-warning-50 rounded">
+                            <span className="text-caption-bold font-caption-bold text-warning-700">
+                              Upload dine nuværende forsikringer
+                            </span>
+                            <span className="text-caption font-caption text-warning-600">
+                              For at sammenligne dette tilbud skal du uploade dine nuværende forsikringer først.
+                            </span>
+                            <Button
+                              size="small"
+                              variant="warning-primary"
+                              className="mt-2"
+                              onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/onboarding")}
+                              data-testid={`button-upload-current-${offer.id}`}
+                            >
+                              Upload nuværende forsikringer
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
