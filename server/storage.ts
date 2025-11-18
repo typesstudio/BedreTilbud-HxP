@@ -76,7 +76,7 @@ export interface IStorage {
   getCompanyComparisonsByUser(userId: string): Promise<CompanyComparison[]>;
   getCompanyComparisonByCompanies(userId: string, currentCompany: string, offerCompany: string): Promise<CompanyComparison | undefined>;
   createCompanyComparison(comparison: InsertCompanyComparison): Promise<CompanyComparison>;
-  updateCompanyComparisonStatus(id: string, status: string, comparisonJSON?: any, errorMessage?: string): Promise<CompanyComparison>;
+  updateCompanyComparisonStatus(id: string, status: string, comparisonJSON?: any, errorMessage?: string, statusReason?: string): Promise<CompanyComparison>;
 
   // Household Members
   getHouseholdMember(id: string): Promise<HouseholdMember | undefined>;
@@ -140,6 +140,7 @@ export class MemStorage implements IStorage {
   private emailThreads: Map<string, EmailThread> = new Map();
   private emails: Map<string, Email> = new Map();
   private comparisons: Map<string, Comparison> = new Map();
+  private companyComparisons: Map<string, CompanyComparison> = new Map();
   private householdMembers: Map<string, HouseholdMember> = new Map();
   private policies: Map<string, Policy> = new Map();
   private offerSnapshots: Map<string, OfferSnapshot> = new Map();
@@ -478,6 +479,73 @@ export class MemStorage implements IStorage {
     };
     this.comparisons.set(id, comparison);
     return comparison;
+  }
+
+  // Company Comparisons (Phase 4)
+  async getCompanyComparison(id: string): Promise<CompanyComparison | undefined> {
+    return this.companyComparisons.get(id);
+  }
+
+  async getCompanyComparisonsByUser(userId: string): Promise<CompanyComparison[]> {
+    return Array.from(this.companyComparisons.values()).filter(c => c.userId === userId);
+  }
+
+  async getCompanyComparisonByCompanies(
+    userId: string,
+    currentCompany: string,
+    offerCompany: string
+  ): Promise<CompanyComparison | undefined> {
+    return Array.from(this.companyComparisons.values())
+      .filter(c => c.userId === userId && c.currentCompany === currentCompany && c.offerCompany === offerCompany)
+      .sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0))[0];
+  }
+
+  async createCompanyComparison(insertComparison: InsertCompanyComparison): Promise<CompanyComparison> {
+    const id = randomUUID();
+    const comparison: CompanyComparison = {
+      id,
+      userId: insertComparison.userId,
+      currentCompany: insertComparison.currentCompany,
+      offerCompany: insertComparison.offerCompany,
+      status: insertComparison.status ?? 'pending',
+      statusReason: insertComparison.statusReason ?? null,
+      comparisonJSON: insertComparison.comparisonJSON ?? null,
+      errorMessage: insertComparison.errorMessage ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    };
+    this.companyComparisons.set(id, comparison);
+    return comparison;
+  }
+
+  async updateCompanyComparisonStatus(
+    id: string,
+    status: string,
+    comparisonJSON?: any,
+    errorMessage?: string,
+    statusReason?: string
+  ): Promise<CompanyComparison> {
+    const comparison = await this.getCompanyComparison(id);
+    if (!comparison) throw new Error('Company comparison not found');
+    
+    const updated: CompanyComparison = {
+      ...comparison,
+      status,
+      updatedAt: new Date()
+    };
+    
+    if (comparisonJSON !== undefined) {
+      updated.comparisonJSON = comparisonJSON;
+    }
+    if (errorMessage !== undefined) {
+      updated.errorMessage = errorMessage;
+    }
+    if (statusReason !== undefined) {
+      updated.statusReason = statusReason;
+    }
+    
+    this.companyComparisons.set(id, updated);
+    return updated;
   }
 
   // Household Members
@@ -1185,7 +1253,8 @@ export class DatabaseStorage implements IStorage {
     id: string,
     status: string,
     comparisonJSON?: any,
-    errorMessage?: string
+    errorMessage?: string,
+    statusReason?: string
   ): Promise<CompanyComparison> {
     const { db } = await import("./db");
     const { companyComparisons } = await import("@shared/schema");
@@ -1202,6 +1271,10 @@ export class DatabaseStorage implements IStorage {
     
     if (errorMessage !== undefined) {
       updates.errorMessage = errorMessage;
+    }
+    
+    if (statusReason !== undefined) {
+      updates.statusReason = statusReason;
     }
     
     const [comparison] = await db.update(companyComparisons)

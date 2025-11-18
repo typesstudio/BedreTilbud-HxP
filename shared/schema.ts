@@ -131,6 +131,7 @@ export const companyComparisons = pgTable("company_comparisons", {
   currentCompany: text("current_company").notNull(), // Company name (e.g., "Alm. Brand")
   offerCompany: text("offer_company").notNull(), // Company name (e.g., "Tryg")
   status: text("status").default("pending"), // "pending", "processing", "completed", "failed"
+  statusReason: text("status_reason"), // Machine-readable reason: MISSING_STRUCTURED_POLICY_CURRENT, MISSING_STRUCTURED_POLICY_OFFER, etc.
   comparisonJSON: jsonb("comparison_json"), // Full ComparisonResult from Phase 4
   errorMessage: text("error_message"), // Error details if failed
   createdAt: timestamp("created_at").defaultNow(),

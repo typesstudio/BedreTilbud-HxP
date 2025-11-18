@@ -1,0 +1,256 @@
+````text
+You are a senior full-stack engineer working in Replit on **BedreTilbud**, an insurance comparison platform (TypeScript/Node backend + React frontend). You’re working in a real production codebase and must prioritize correctness, clarity, and minimal, safe changes.
+
+Context (DO NOT RE-DO):
+- The comparison pipeline is already implemented and mostly working.
+- Phase 1 PolicyExtractor populates `structured_policy` for new uploads.
+- Phase 2 improvements (ID-based matching via `snapshot_id` on `health_checks` + `ORDER BY` on queries) are DONE. Do not change or re-implement this logic.
+- `deterministicMatcher.ts` is already updated to use `structured_policy` (with fallback to coverageDetails). Do not rewrite it.
+
+The latest reliability analysis (which you should treat as ground truth) shows:
+
+1. New cross-company comparisons (e.g. Privatsikring → Tryg, Privatsikring → IF) work when both sides have `structured_policy`.
+2. Automatic comparison triggering after health checks is working.
+3. Same-company comparisons (e.g. Privatsikring → Privatsikring renewal) are currently blocked by business logic in `comparisonOrchestrator.ts`.
+4. Old data (offers & current policies uploaded before Phase 1) often have `structured_policy = NULL`, making them unusable until reprocessed or re-uploaded.
+5. There is no user-facing explanation when comparisons are missing or partial.
+6. Logging/metrics for comparison results and data quality are minimal.
+
+Your job is to implement **five concrete tasks** that move the system towards “100% solid at scale”, WITHOUT regressing existing behavior.
+
+---
+
+### OVERALL GOALS FOR THIS TASK
+
+1. **Allow same-company comparisons** (renewal offers) instead of skipping them.
+2. **Explain partial/missing comparisons to users** in a clean, non-technical way.
+3. **Get this specific test user (`hello@vyork.dk`) into a “golden path” state** where all three policy types can be compared.
+4. **Create a small backfill script** to re-run Phase 1 extraction (structured_policy) for selected old documents.
+5. **Add structured logging/metrics** around comparison runs so we can monitor behavior in production.
+
+You should implement all of these in a production-quality way: type-safe, cleanly structured, with minimal but clear changes.
+
+---
+
+## TASK 1 – Allow same-company comparisons (P0)
+
+**Goal:** Users MUST be able to compare renewal offers from the same insurer (e.g. Privatsikring current vs Privatsikring new offer).
+
+1. Locate the logic in `comparisonOrchestrator.ts` that groups comparisons by company pairs and currently skips same-company comparisons. It likely looks like:
+
+   ```ts
+   if (currentCompanyId === offerCompanyId) {
+     continue; // currently blocking same-company comparisons
+   }
+````
+
+2. Change this logic so that same-company comparisons are **allowed**, with explicit logging instead of skipping:
+
+   ```ts
+   if (currentCompanyId === offerCompanyId) {
+     console.log(
+       `[ComparisonOrchestrator] Same-company renewal comparison allowed: ${currentCompanyId}`
+     );
+     // Do NOT continue; allow the comparison to run
+   }
+   ```
+
+   If there is any special-case logic that assumes “different company only”, adjust it so same-company works too.
+
+3. Add or update a small test (unit or integration) that verifies:
+
+   * Given:
+
+     * A current policy set from company A with valid `structured_policy`.
+     * An offer policy set from company A with valid `structured_policy`.
+   * When the comparison orchestrator runs, it creates a `company_comparisons` row for `(A → A)` and attempts matches.
+
+4. After implementing, run the existing comparison test script for the specific user:
+
+   ```bash
+   tsx server/scripts/test-comparison-pipeline.ts hello@vyork.dk
+   ```
+
+   Make sure it runs without errors and that the logs show a same-company comparison being attempted (Privatsikring → Privatsikring).
+
+---
+
+## TASK 2 – Add user-facing messages for missing/partial comparisons (P0)
+
+**Goal:** When a comparison fails or is partial because of missing metadata (e.g. `structured_policy` missing), the user gets a clear, helpful explanation and a re-upload suggestion.
+
+### Backend
+
+1. Inspect the `company_comparisons` table and related model types to see what fields exist (e.g. `status`, `error`, maybe a `meta` JSON field).
+
+2. If there is no suitable field to store a machine-readable reason, add a lightweight `status_reason` text column (with a migration) or use an existing JSON/meta field. Keep it simple and backwards-compatible.
+
+3. When a comparison fails or is degraded due to missing metadata, set `status_reason` (or equivalent) to one of a small set of enum-like strings, for example:
+
+   * `MISSING_STRUCTURED_POLICY_CURRENT`
+   * `MISSING_STRUCTURED_POLICY_OFFER`
+   * `MISSING_STRUCTURED_POLICY_BOTH`
+
+   This should be set in the part of `comparisonOrchestrator` where you already catch/record failure conditions or when the deterministic matcher reports “no match due to missing metadata”.
+
+4. Ensure successful comparisons still store `status = 'completed'` (or equivalent) and leave `status_reason` null or empty.
+
+### Frontend
+
+1. Find the component(s) that render comparison results for each company (e.g. “Privatsikring vs Tryg”). It might be on a “comparison overview” and/or “per-company comparison” page.
+
+2. Based on `status` and `status_reason`, show human-readable messages in Danish like:
+
+   * If `status_reason === 'MISSING_STRUCTURED_POLICY_CURRENT'`:
+
+     > “Vi kunne ikke sammenligne alle dine policer, fordi dine nuværende forsikringer blev uploadet før vores nye analyse-system. Upload dem igen for at få en fuld sammenligning.”
+
+   * If `status_reason === 'MISSING_STRUCTURED_POLICY_OFFER'`:
+
+     > “Vi kunne ikke sammenligne dette tilbud, fordi det blev uploadet før vores nye analyse-system. Bed selskabet om at sende tilbuddet igen og upload det på ny.”
+
+   Make sure these messages are styled consistently with the rest of the UI (no breaking layout).
+
+3. Ensure that:
+
+   * Companies with fully successful comparisons show no warning.
+   * Companies with partial comparisons show both the available comparisons AND a short warning that some policies could not be compared.
+
+---
+
+## TASK 3 – Golden-path data for `hello@vyork.dk` (P0/P1)
+
+**Goal:** Ensure that for the test user `hello@vyork.dk`, there exists a set of current policies where all three policy types (`hus`, `indbo`, `ulykke`) have `structured_policy`, so we can see full comparisons end-to-end.
+
+You CANNOT actually “upload” via the UI from Replit, but you can:
+
+1. Document the expectation in `INTEGRATION_SUMMARY.md` or similar:
+
+   * Add a small section “Test User Golden Path (`hello@vyork.dk`)" explaining:
+
+     * The user should re-upload their current policies via the UI.
+     * This ensures all current snapshots have non-null `structured_policy`.
+     * Once done, running the comparison script should show 3/3 policy types matched for new offers (Privatsikring, Tryg, IF).
+
+2. Optionally, if the codebase has a seeding or test data mechanism, add a small note or helper that can create a “synthetic golden user” with complete structured data, but keep this optional and non-invasive.
+
+3. After you’ve implemented Tasks 1 & 2, run:
+
+   ```bash
+   tsx server/scripts/test-comparison-pipeline.ts hello@vyork.dk
+   ```
+
+   And verify in the log:
+
+   * Same-company comparison is attempted.
+   * Tryg and IF comparisons at least attempt to match all 3 types (actual success for all 3 may require the real user to re-upload data, which is okay).
+
+---
+
+## TASK 4 – Backfill script for old documents (P1)
+
+**Goal:** Implement a small script that can re-run Phase 1 PolicyExtractor for selected old documents to populate `structured_policy` for `offer_snapshots` (and potentially `current` snapshots), starting small (e.g. Types Studio + one test document).
+
+1. Create a script file, e.g.:
+
+   * `server/scripts/backfill-structured-policy.ts`
+
+2. This script should:
+
+   * Accept one or more document IDs as CLI args (you can keep argument parsing simple, e.g. `process.argv.slice(2)`).
+   * For each document id:
+
+     * Load the document and its existing OCR/extraction payload from whichever storage the extractor uses (refer to existing extraction code).
+     * Re-run only the Phase 1 PolicyExtractor on that document:
+
+       * Do NOT duplicate snapshot creation; reuse existing snapshots if possible.
+       * The goal is to fill `structured_policy` for existing snapshots.
+     * Update the relevant `offer_snapshots` / `policy_snapshots` rows with the new `structured_policy`.
+     * Optionally, ensure there is a `health_check` row for each snapshot (if the current design expects one).
+
+3. Log progress in a structured way (JSON or clear plaintext), for example:
+
+   ```ts
+   console.log({
+     type: 'backfill_structured_policy',
+     documentId,
+     snapshotsUpdated,
+     warnings,
+   });
+   ```
+
+4. Add a short usage note to `INTEGRATION_SUMMARY.md`, e.g.:
+
+   * How to run it:
+
+     ```bash
+     tsx server/scripts/backfill-structured-policy.ts <doc-id-1> <doc-id-2>
+     ```
+   * That it’s intended for small batches initially.
+
+5. Test the script with:
+
+   * 1–2 old documents (e.g. Types Studio offers) in a safe environment.
+   * After running, confirm that `structured_policy` is now populated and that a comparison for those documents no longer fails due to missing metadata.
+
+---
+
+## TASK 5 – Comparison summary logging/metrics (P1)
+
+**Goal:** Add basic, structured logging so we can later build dashboards or alerts around comparison health. Start small but intentional.
+
+1. In `comparisonOrchestrator` (where a full run completes per user), add a summary log object. For example:
+
+   ```ts
+   console.log(JSON.stringify({
+     type: 'comparison_summary',
+     userId,
+     comparisons_attempted: comparisons.length,
+     comparisons_succeeded: comparisons.filter(c => c.status === 'completed').length,
+     comparisons_failed: comparisons.filter(c => c.status === 'failed').length,
+     failed_same_company: comparisons.filter(c => c.status === 'failed' && c.statusReason === 'SAME_COMPANY_BLOCKED').length ?? 0,
+     failed_missing_metadata: comparisons.filter(c => c.statusReason && c.statusReason.startsWith('MISSING_STRUCTURED_POLICY')).length,
+     timestamp: new Date().toISOString(),
+   }));
+   ```
+
+   Adjust field names to match the actual model in the code.
+
+2. If there is a central logger, use that instead of `console.log`, but keep it structured and machine-parsable (JSON preferred).
+
+3. Optionally add a separate log for metadata quality when a run starts, for example:
+
+   ```ts
+   console.log(JSON.stringify({
+     type: 'metadata_quality',
+     userId,
+     total_snapshots,
+     missing_structured_policy,
+     pct_missing: total_snapshots ? (missing_structured_policy / total_snapshots) : 0,
+     timestamp: new Date().toISOString(),
+   }));
+   ```
+
+4. Ensure these logs do not leak sensitive PII beyond what’s already logged elsewhere (use IDs, not raw emails, where appropriate).
+
+---
+
+## GENERAL IMPLEMENTATION GUIDELINES
+
+* Respect the existing architecture; make the minimal changes needed to achieve the goals.
+* Keep TypeScript strictly typed. Fix any new type errors you introduce.
+* Run existing tests / scripts after changes:
+
+  * `tsx server/scripts/test-comparison-pipeline.ts hello@vyork.dk`
+  * Any relevant test suites (e.g. `npm test` or `pnpm test` if available).
+* Update `INTEGRATION_SUMMARY.md` (or equivalent) with:
+
+  * What you changed.
+  * How to run the new backfill script.
+  * How same-company comparisons now behave.
+  * Any manual steps required (e.g. user re-upload for golden-path).
+
+Once you’ve done all of the above, summarize your changes in a short note at the end of `INTEGRATION_SUMMARY.md` under a heading like “Comparison Pipeline P0/P1 Fixes – 2025-11-18”.
+
+```
+```

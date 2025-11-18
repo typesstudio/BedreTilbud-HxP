@@ -350,9 +350,9 @@ export class ComparisonOrchestrator {
         const currentCompanyId = current.companyId || 'unknown';
         const offerCompanyId = offer.companyId || 'unknown';
         
-        // Skip if same company (no point comparing company to itself)
+        // Allow same-company comparisons (renewal offers scenario)
         if (currentCompanyId === offerCompanyId) {
-          continue;
+          console.log(`[ComparisonOrchestrator] Same-company renewal comparison allowed: ${currentCompanyId}`);
         }
         
         const pairKey = `${currentCompanyId}|${offerCompanyId}`;
@@ -434,11 +434,21 @@ export class ComparisonOrchestrator {
       // Check for data quality errors first
       if (matchingResult.dataQualityError) {
         console.error(`[ComparisonOrchestrator] Data quality error: ${matchingResult.dataQualityError}`);
+        
+        // Determine statusReason based on error message
+        let statusReason = 'DATA_QUALITY_ERROR';
+        if (matchingResult.dataQualityError.includes('current policies lack matching metadata')) {
+          statusReason = 'MISSING_STRUCTURED_POLICY_CURRENT';
+        } else if (matchingResult.dataQualityError.includes('offer policies lack matching metadata')) {
+          statusReason = 'MISSING_STRUCTURED_POLICY_OFFER';
+        }
+        
         await this.storage.updateCompanyComparisonStatus(
           comparison.id,
           'failed',
           undefined,
-          matchingResult.dataQualityError
+          matchingResult.dataQualityError,
+          statusReason
         );
         throw new Error(`Data quality error: ${matchingResult.dataQualityError}`);
       }
@@ -449,7 +459,8 @@ export class ComparisonOrchestrator {
           comparison.id,
           'failed',
           undefined,
-          'No matched policy pairs found'
+          'No matched policy pairs found',
+          'NO_MATCHED_PAIRS'
         );
         throw new Error('No matched policy pairs found');
       }
@@ -486,11 +497,13 @@ export class ComparisonOrchestrator {
         })
       });
 
-      // Update record with completed status and result
+      // Update record with completed status and result (clear statusReason on success)
       await this.storage.updateCompanyComparisonStatus(
         comparison.id,
         'completed',
-        comparisonResult
+        comparisonResult,
+        undefined,
+        undefined
       );
 
       console.log(`[ComparisonOrchestrator] Comparison completed successfully (${comparison.id})`);
@@ -500,12 +513,16 @@ export class ComparisonOrchestrator {
     } catch (error) {
       console.error(`[ComparisonOrchestrator] Comparison failed for ${currentCompany} → ${offerCompany}:`, error);
       
-      // Update record with failed status
+      // Update record with failed status (preserve statusReason if already set by earlier logic)
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      const statusReason = errorMessage.includes('Data quality error') ? undefined : 'COMPARISON_FAILED';
+      
       await this.storage.updateCompanyComparisonStatus(
         comparison.id,
         'failed',
         undefined,
-        error instanceof Error ? error.message : String(error)
+        errorMessage,
+        statusReason
       );
       
       throw error;
