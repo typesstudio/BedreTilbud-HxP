@@ -1,0 +1,158 @@
+You are my lead full-stack engineer working in Replit on **BedreTilbud**, an insurance comparison platform (TypeScript/Node backend + React frontend).
+
+Context
+We already ran a full debug session on the **comparison pipeline** and the expert’s recommendations are documented and correct. Two key fixes are already implemented and should be treated as DONE:
+
+1) deterministicMatcher.ts
+   - Now reads matching metadata from `structured_policy` (Phase 1 output) with fallback to `coverageDetails`.
+   - Updated helpers:
+     - `extractAddress()` → uses `structured_policy.address` then `coverageDetails`
+     - `extractPersonName()` → uses `structured_policy.person` then `coverageDetails`
+     - `extractOfferNumber()` → uses `structured_policy.offerNumber` then `coverageDetails`
+   - Extra debug logging is already in place.
+
+2) comparisonOrchestrator.ts
+   - Policy objects now include `id: snapshot.id` in both:
+     - `loadCurrentPolicies`
+     - `loadOfferPolicies`
+   - `snapshotId` is still present for backwards compatibility.
+   - This fixed the issue where the matcher silently dropped all policies due to `!policy.id`.
+
+Do NOT re-diagnose or re-implement these two fixes. Assume they are correct and already merged.
+
+Current Behavior / Problems
+
+1) **Offers exist but don’t show in the UI**
+   - New offers (e.g. IF Forsikring / Tryg) are uploaded correctly:
+     - `documents.document_type = 'offer'`
+     - Snapshots + health checks exist.
+   - The **offers overview page** does NOT list raw offer documents.
+   - Instead, it:
+     - Calls `/api/comparisons/user/:userId`
+     - Builds `companiesWithOffers` from **comparison results**.
+   - For the new offers, all attempted comparisons currently fail because:
+     - Current policies lack usable matching metadata (`structured_policy` is NULL or missing).
+   - Result: Offers with failed comparisons are completely invisible in the UI.
+   - This is a UX gap: uploaded offers that can’t be compared yet are not visible anywhere.
+
+2) **Architectural issues confirmed by expert & debug session**
+   - These are already analyzed and agreed to be correct:
+
+   a) Health checks are linked only by `documentId` and matched by **array index**:
+      - Code pattern:
+        ```ts
+        for (let i = 0; i < snapshots.length; i++) {
+          const snapshot = snapshots[i];
+          const healthCheck = uniqueHealthChecks[i];
+          if (!healthCheck) {
+            console.warn(`No health check for snapshot ${snapshot.id}, skipping`);
+            continue;
+          }
+          // ...
+        }
+        ```
+      - If there are 3 snapshots and 2 health checks, one snapshot (often the important one, e.g. a `hus` policy with valid `structured_policy`) gets dropped.
+      - Health checks should instead be linked explicitly to the relevant snapshot.
+
+   b) Queries used in matching have **no explicit ORDER BY**:
+      - Example:
+        ```ts
+        async getOfferSnapshotsByDocument(documentId: string): Promise<OfferSnapshot[]> {
+          return db
+            .select()
+            .from(offerSnapshots)
+            .where(eq(offerSnapshots.documentId, documentId));
+          // No .orderBy(...)
+        }
+        ```
+      - Combined with index-based matching, this makes snapshot ↔ health check pairing nondeterministic.
+
+   c) Legacy data limitation:
+      - Current policies uploaded **before** the `structured_policy` fix have `structured_policy = NULL`.
+      - New offers have proper `structured_policy` and can be matched, but the old current policies cannot participate in deterministic matching until re-uploaded or re-processed.
+
+Your Job
+
+Take all of the above as **ground truth**. Do not re-run the investigation. Your task is to:
+
+1. **Make offers visible in the UI even when comparisons fail.**
+2. **Implement the expert’s architectural recommendations for robust matching.**
+3. **Make the comparison pipeline tolerant of older data, without crashing.**
+
+Focus on clean, minimal, production-ready changes.
+
+---
+
+Task Breakdown
+
+### Phase 1 – Make Offers Visible (Quick Win)
+
+Goal: When a user uploads a new offer, they should see it in the UI even if comparisons fail (e.g. because current policies lack metadata).
+
+Implementation outline:
+
+- Locate the offers overview UI (the page that currently fetches from `/api/comparisons/user/:userId`).
+- Extend the backend and frontend so that the overview can also show:
+  - Offer documents (or snapshots) that have:
+    - Successfully completed health checks
+    - But no successful comparisons yet
+
+Concrete requirements:
+
+- Backend:
+  - Expose an endpoint (or extend an existing one) to return:
+    - All offers for the user with basic metadata (company, document type, createdAt)
+    - A flag / status for each offer, e.g.:
+      - `"comparisonStatus": "ok" | "failed" | "pending"` or similar
+  - “Failed” in this context means: comparison pipeline tried but produced 0 valid matches due to missing metadata or data quality errors.
+
+- Frontend:
+  - Update the offers overview list so:
+    - Offers with successful comparisons are shown as today.
+    - Offers without comparisons still appear with a clear label, e.g.:
+      - “Kan ikke sammenlignes endnu – Upload dine nuværende forsikringer”
+      - Or “Afventer sammenligning” if you detect that comparison has not run.
+  - Do NOT hide offers simply because comparisons are missing.
+
+Acceptance criteria Phase 1:
+
+- After uploading a new offer, it is visible on the overview page regardless of comparison success.
+- The user can see:
+  - Company name
+  - Upload date
+  - A comparison status badge/message
+- No changes to the core comparison algorithm yet.
+
+---
+
+### Phase 2 – Implement Architectural Fixes
+
+Use the expert recommendations directly. Implement these concrete changes:
+
+#### 2.1 Add `snapshot_id` foreign key to `health_checks`
+
+- Find the `health_checks` (or equivalent) table/schema.
+- Add a `snapshot_id` column:
+  - Type: matches the snapshot ID type (likely UUID).
+  - FK referencing the snapshot table (offer/current snapshots).
+  - Initially nullable to avoid breaking existing rows.
+
+- Update the **Health Check Orchestrator** so that:
+  - When it creates a new health check, it sets both:
+    - `documentId`
+    - `snapshot_id` (the exact snapshot the health check is about)
+
+We want **new** health checks to always have a `snapshot_id`.
+
+#### 2.2 Refactor comparisonOrchestrator to use ID-based matching
+
+- Replace index-based matching:
+  ```ts
+  const snapshots = ...
+  const uniqueHealthChecks = ...
+
+  for (let i = 0; i < snapshots.length; i++) {
+    const snapshot = snapshots[i];
+    const healthCheck = uniqueHealthChecks[i];
+    // ...
+  }

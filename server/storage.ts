@@ -68,6 +68,7 @@ export interface IStorage {
   getUserComparisons(userId: string): Promise<Comparison[]>;
   getComparisonByUserAndCompany(userId: string, companyId: string): Promise<Comparison | undefined>;
   getComparisonsByUserAndCompany(userId: string, companyId: string): Promise<Comparison[]>;
+  getComparisonsByOfferDocument(offerDocumentId: string): Promise<Comparison[]>;
   createComparison(comparison: InsertComparison): Promise<Comparison>;
 
   // Company Comparisons (Phase 4)
@@ -453,6 +454,10 @@ export class MemStorage implements IStorage {
 
   async getComparisonsByUserAndCompany(userId: string, companyId: string): Promise<Comparison[]> {
     return Array.from(this.comparisons.values()).filter(c => c.userId === userId && c.companyId === companyId);
+  }
+
+  async getComparisonsByOfferDocument(offerDocumentId: string): Promise<Comparison[]> {
+    return Array.from(this.comparisons.values()).filter(c => c.offerDocumentId === offerDocumentId);
   }
 
   async createComparison(insertComparison: InsertComparison): Promise<Comparison> {
@@ -1112,6 +1117,13 @@ export class DatabaseStorage implements IStorage {
     return await db.select().from(comparisons).where(
       and(eq(comparisons.userId, userId), eq(comparisons.companyId, companyId))
     );
+  }
+
+  async getComparisonsByOfferDocument(offerDocumentId: string): Promise<Comparison[]> {
+    const { db } = await import("./db");
+    const { comparisons } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    return await db.select().from(comparisons).where(eq(comparisons.offerDocumentId, offerDocumentId));
   }
 
   async createComparison(insertComparison: InsertComparison): Promise<Comparison> {

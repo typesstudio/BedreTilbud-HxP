@@ -19,7 +19,7 @@ import { convertToPolicyRecord } from "./utils/policyExtractionParser";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
-import { insertUserSchema, insertDocumentSchema } from "@shared/schema";
+import { insertUserSchema, insertDocumentSchema, type Document as DocumentType, type Comparison } from "@shared/schema";
 import { z } from "zod";
 import * as validationSchemas from "./validation/schemas";
 
@@ -1702,6 +1702,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       });
     } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Offers with comparison status (Phase 1: Make offers visible)
+  app.get("/api/offers/user/:userId", requireAuth, async (req, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const offset = (page - 1) * limit;
+
+      // Get all offer documents for the user
+      const offerDocuments = await storage.getUserDocuments(req.params.userId, 'offer');
+      const totalCount = offerDocuments.length;
+      const paginatedOffers = offerDocuments.slice(offset, offset + limit);
+
+      // Enrich each offer with comparison status, snapshots, and health checks
+      const enrichedOffers = await Promise.all(
+        paginatedOffers.map(async (doc: DocumentType) => {
+          const company = doc.companyId ? await storage.getCompany(doc.companyId) : null;
+          const snapshots = await storage.getOfferSnapshotsByDocument(doc.id);
+          const healthChecks = await storage.getHealthChecksByDocument(doc.id);
+          
+          // Determine comparison status
+          const comparisons = await storage.getComparisonsByOfferDocument(doc.id);
+          let comparisonStatus: 'ok' | 'failed' | 'pending' = 'pending';
+          
+          if (comparisons.length > 0) {
+            // Check if any comparison is successful (has valid comparison data)
+            const hasSuccessful = comparisons.some((c: Comparison) => 
+              c.comparisonData && Object.keys(c.comparisonData as object).length > 0
+            );
+            comparisonStatus = hasSuccessful ? 'ok' : 'failed';
+          }
+
+          return {
+            id: doc.id,
+            fileName: doc.fileName,
+            createdAt: doc.createdAt,
+            company,
+            snapshotCount: snapshots.length,
+            healthCheckCount: healthChecks.length,
+            comparisonStatus,
+            comparisonCount: comparisons.length
+          };
+        })
+      );
+
+      res.json({
+        data: enrichedOffers,
+        pagination: {
+          page,
+          limit,
+          totalCount,
+          totalPages: Math.ceil(totalCount / limit),
+          hasMore: offset + limit < totalCount
+        }
+      });
+    } catch (error: any) {
+      logger.error('Failed to fetch offers', error);
       res.status(500).json({ message: error.message });
     }
   });

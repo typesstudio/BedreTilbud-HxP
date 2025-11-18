@@ -1,0 +1,103 @@
+You are my lead backend engineer working in Replit on a TypeScript/Node backend for a project called **BedreTilbud** (an insurance comparison platform).
+
+We already ran a deep debug session on the **comparison pipeline** on November 18, 2025. Two critical bugs were fixed and are **already implemented**:
+
+1) deterministicMatcher.ts
+   - Now reads matching metadata from `structured_policy` (Phase 1 data) with fallback to `coverageDetails`.
+   - Functions updated:
+     - `extractAddress()` → uses `structured_policy.address` then `coverageDetails`
+     - `extractPersonName()` → uses `structured_policy.person` then `coverageDetails`
+     - `extractOfferNumber()` → uses `structured_policy.offerNumber` then `coverageDetails`
+   - Extra debug logging was added.
+
+2) comparisonOrchestrator.ts
+   - Policy objects now include `id: snapshot.id` (required by matcher).
+   - This was done for both `loadCurrentPolicies` and `loadOfferPolicies`.
+   - `snapshotId` is still kept for backwards compatibility.
+
+These fixes are DONE. Do **not** re-implement them.
+
+---
+
+### Current State (Ground Truth from Debug Session)
+
+- The comparison pipeline now runs and processes policies correctly (no silent filtering).
+- New offer from **Tryg** (uploaded Nov 18) has `structured_policy` correctly populated on its snapshots.
+- Older current policies (e.g. Svphil, uploaded Nov 11) have:
+  - Some snapshots with `structured_policy = NULL`.
+  - One `hus` snapshot *does* have `structured_policy`, but is currently being skipped due to health check alignment.
+
+Because of this, the matcher still finds `0` matches for the Svphil vs Tryg test user, **not due to code bugs but due to data and architecture issues**.
+
+Key findings from the debug:
+
+1) **Health Check Orphaning (index-based matching)**
+   - In `comparisonOrchestrator.ts`, snapshots and health checks are matched **by array index**, not by ID.
+   - Pseudocode (current behavior):
+     ```ts
+     for (let i = 0; i < snapshots.length; i++) {
+       const snapshot = snapshots[i];
+       const healthCheck = uniqueHealthChecks[i];
+       if (!healthCheck) {
+         console.warn(`No health check for snapshot ${snapshot.id}, skipping`);
+         continue;
+       }
+       // ...
+     }
+     ```
+   - If there are 3 snapshots but only 2 unique health checks, one snapshot (in our case, the important `hus` snapshot with metadata) gets dropped from comparison.
+   - Health checks are currently linked via `documentId`, not `snapshotId`.
+
+2) **Undefined database ordering**
+   - Example: `getOfferSnapshotsByDocument(documentId)` does not use `orderBy`.
+   - That means both snapshot ordering and health check ordering are not guaranteed.
+   - Combined with index-based matching this is fragile and can lead to mismatched or dropped pairs.
+
+3) **Legacy data limitation**
+   - Current policies uploaded *before* the structured_policy fix have `structured_policy = NULL`.
+   - They simply cannot participate in deterministic matching until re-uploaded or re-extracted.
+
+---
+
+### Your Job
+
+Take the debug session conclusions as **truth** and implement the **short-term architectural fixes** to make the comparison pipeline robust and deterministic.
+
+#### Goals
+
+1. **Make health check ↔ snapshot matching explicit and stable**
+2. **Make DB queries deterministic where they are used for matching**
+3. **Keep existing behavior working for new data (post-fix), while making the system safer for future growth**
+
+Do not re-diagnose the issues. Assume the analysis is correct. Focus on implementation.
+
+---
+
+### Tasks
+
+#### 1) Add `snapshot_id` foreign key to health checks
+
+- Locate the `health_checks` (or equivalent) table in the schema.
+- Add a `snapshot_id` column:
+  - Type: UUID (or whatever matches `offerSnapshots.id` / `policySnapshots.id`)
+  - Foreign key referencing the snapshot table.
+- Create a migration:
+  - Add the column.
+  - Make it nullable initially to avoid breaking existing rows.
+- Update the **Health Check Orchestrator** so that whenever a health check is created:
+  - It stores the correct `snapshot_id` along with the `documentId`.
+  - This should be based on the exact snapshot it was generated from, not just the document.
+
+Acceptance criteria for this step:
+- New health checks have both `documentId` and `snapshot_id` populated.
+- Existing references still work (no runtime errors).
+
+#### 2) Refactor comparisonOrchestrator to match using `snapshot_id` instead of array index
+
+- Replace the current index-based mapping logic:
+  ```ts
+  for (let i = 0; i < snapshots.length; i++) {
+    const snapshot = snapshots[i];
+    const healthCheck = uniqueHealthChecks[i];
+    // ...
+  }
