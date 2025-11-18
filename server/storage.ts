@@ -1373,8 +1373,12 @@ export class DatabaseStorage implements IStorage {
   async getOfferSnapshotsByDocument(documentId: string): Promise<OfferSnapshot[]> {
     const { db } = await import("./db");
     const { offerSnapshots } = await import("@shared/schema");
-    const { eq } = await import("drizzle-orm");
-    return db.select().from(offerSnapshots).where(eq(offerSnapshots.documentId, documentId));
+    const { eq, asc } = await import("drizzle-orm");
+    // Phase 2: Add ORDER BY createdAt for deterministic ordering
+    return db.select()
+      .from(offerSnapshots)
+      .where(eq(offerSnapshots.documentId, documentId))
+      .orderBy(asc(offerSnapshots.createdAt));
   }
 
   async getOfferSnapshotsByUser(userId: string, validationStatus?: string): Promise<OfferSnapshot[]> {
