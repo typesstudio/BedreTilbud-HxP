@@ -327,7 +327,7 @@ export default function OfferComparisonPage() {
                     </Table.Cell>
                     <Table.Cell className="justify-end">
                       <span className="text-body-bold font-body-bold text-brand-600">
-                        {formatCurrency(row.savings)}
+                        {formatCurrency(row.annualSavings)}
                       </span>
                     </Table.Cell>
                   </Table.Row>
@@ -348,8 +348,8 @@ export default function OfferComparisonPage() {
     const costSummary = comparison.costSummary || {};
     const currentPremium = costSummary.currentAnnualPremium || 0;
     const offerPremium = costSummary.offerAnnualPremium || 0;
-    const savings = costSummary.savings || 0;
-    const savingsPercentage = costSummary.savingsPercent || 0;
+    const savings = costSummary.annualSavings || 0;
+    const savingsPercentage = costSummary.annualSavingsPercent || 0;
     const highlights = comparison.highlights || [];
     const coverageRows = comparison.coverageComparison?.rows || [];
 
@@ -417,40 +417,57 @@ export default function OfferComparisonPage() {
                   </Table.HeaderRow>
                 }
               >
-                {coverageRows.map((row: any, rowIndex: number) => (
-                  <Table.Row key={rowIndex}>
-                    <Table.Cell>
-                      <div className="flex flex-col gap-1">
-                        <span className="text-body font-body text-default-font">
-                          {row.feature || row.label}
-                        </span>
-                        {row.description && (
-                          <span className="text-caption font-caption text-subtext-color">
-                            {row.description}
+                {coverageRows.map((row: any, rowIndex: number) => {
+                  const currentValue = row.current?.value;
+                  const offerValue = row.offer?.value;
+                  const currentLimit = row.current?.limit;
+                  const offerLimit = row.offer?.limit;
+                  
+                  return (
+                    <Table.Row key={rowIndex}>
+                      <Table.Cell>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-body font-body text-default-font">
+                            {row.coverage || row.feature || row.label}
                           </span>
-                        )}
-                      </div>
-                    </Table.Cell>
-                    <Table.Cell className="justify-center">
-                      {row.currentValue === 'inkluderet' || row.currentValue === true ? (
-                        <Badge variant="success">inkluderet</Badge>
-                      ) : row.currentValue === 'ikke inkluderet' || row.currentValue === false ? (
-                        <Badge variant="error">ikke inkluderet</Badge>
-                      ) : (
-                        <span className="text-body font-body text-default-font">{row.currentValue || "N/A"}</span>
-                      )}
-                    </Table.Cell>
-                    <Table.Cell className="justify-center">
-                      {row.offerValue === 'inkluderet' || row.offerValue === true ? (
-                        <Badge variant="success">inkluderet</Badge>
-                      ) : row.offerValue === 'ikke inkluderet' || row.offerValue === false ? (
-                        <Badge variant="error">ikke inkluderet</Badge>
-                      ) : (
-                        <span className="text-body font-body text-default-font">{row.offerValue || "N/A"}</span>
-                      )}
-                    </Table.Cell>
-                  </Table.Row>
-                ))}
+                          {row.description && (
+                            <span className="text-caption font-caption text-subtext-color">
+                              {row.description}
+                            </span>
+                          )}
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell className="justify-center">
+                        <div className="flex flex-col gap-1 items-center">
+                          {currentValue === 'inkluderet' || currentValue === true ? (
+                            <Badge variant="success">inkluderet</Badge>
+                          ) : currentValue === 'ikke inkluderet' || currentValue === false ? (
+                            <Badge variant="error">ikke inkluderet</Badge>
+                          ) : (
+                            <span className="text-body font-body text-default-font">{currentValue || "N/A"}</span>
+                          )}
+                          {currentLimit && (
+                            <span className="text-caption font-caption text-subtext-color">{currentLimit}</span>
+                          )}
+                        </div>
+                      </Table.Cell>
+                      <Table.Cell className="justify-center">
+                        <div className="flex flex-col gap-1 items-center">
+                          {offerValue === 'inkluderet' || offerValue === true ? (
+                            <Badge variant="success">inkluderet</Badge>
+                          ) : offerValue === 'ikke inkluderet' || offerValue === false ? (
+                            <Badge variant="error">ikke inkluderet</Badge>
+                          ) : (
+                            <span className="text-body font-body text-default-font">{offerValue || "N/A"}</span>
+                          )}
+                          {offerLimit && (
+                            <span className="text-caption font-caption text-subtext-color">{offerLimit}</span>
+                          )}
+                        </div>
+                      </Table.Cell>
+                    </Table.Row>
+                  );
+                })}
               </Table>
             </div>
           </div>
