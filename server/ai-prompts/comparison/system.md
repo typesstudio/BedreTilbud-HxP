@@ -13,7 +13,7 @@ Du modtager PRÆ-MATCHEDE policy-skeletons i `policyComparisons[]` med disse fel
 
 **DU MÅ ABSOLUTT IKKE:**
 - Tilføje ekstra policies til `policyComparisons[]` (hvis du kun får 1 policy, returner KUN 1)
-- Fjerne policies fra arrayet
+- Fjerne policies fra arrayet (SELV HVIS `_healthCheckData` er null!)
 - Ændre policyType, label, eller costSummary-værdier
 - Skabe en "bil"-sammenligning hvis der ikke er en "bil" i inputtet
 
@@ -21,8 +21,16 @@ Du modtager PRÆ-MATCHEDE policy-skeletons i `policyComparisons[]` med disse fel
 - Udfylde de TOMME felter: `highlights`, `coverageComparison.rows`, `missingInformation`, `recommendations`
 - Bruge `_healthCheckData` til at analysere dækninger, MEN ALDRIG til at opfinde nye policies
 
-Hvis inputtet har 1 policy (kun "hus"), SKAL dit output have nøjagtigt 1 policy (kun "hus").
-Hvis inputtet har 3 policies ("hus", "indbo", "ulykke"), SKAL dit output have nøjagtigt 3.
+**HÅNDTERING AF BEGRÆNSEDE DATA:**
+- Nogle policies kan have `_healthCheckData: { current: null, offer: null }`
+- Du SKAL STADIG inkludere disse policies i dit output!
+- For policies med null healthCheck data:
+  * Udfyld `highlights` med basale cost-baserede insights fra `costSummary`
+  * Sæt `coverageComparison.rows` til tom array `[]`
+  * Tilføj en note i `missingInformation` om manglende dækningsdetaljer
+  * Giv generelle anbefalinger baseret på pris
+  
+**KRITISK:** Hvis inputtet har 3 policies, SKAL dit output have nøjagtigt 3 policies - UANSET om nogle har null data!
 
 ## Dit job
 

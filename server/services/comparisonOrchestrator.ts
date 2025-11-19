@@ -269,14 +269,16 @@ export class ComparisonOrchestrator {
         const healthCheck = healthChecks.find(hc => hc.snapshotId === snapshot.id);
         
         if (!healthCheck) {
-          console.warn(`[ComparisonOrchestrator] No health check for snapshot ${snapshot.id}, skipping`);
-          continue;
+          console.warn(`[ComparisonOrchestrator] No health check for snapshot ${snapshot.id}, including anyway (coverage data will be limited)`);
+          // Don't skip - allow policies without health checks for Phase 3 matching
+          // Health checks are only needed for detailed coverage comparison UI
         }
         
         // Parse health check result (stored as JSON in 'result' field, not 'payload')
-        const healthCheckData = typeof healthCheck.result === 'string' 
-          ? JSON.parse(healthCheck.result)
-          : healthCheck.result;
+        // Handle null healthCheck gracefully
+        const healthCheckData = healthCheck
+          ? (typeof healthCheck.result === 'string' ? JSON.parse(healthCheck.result) : healthCheck.result)
+          : null;
         
         // Defensive fallback: Resolve company_id if null
         const companyId = await this.resolveCompanyFromPolicy(snapshot);
@@ -287,7 +289,7 @@ export class ComparisonOrchestrator {
           policyType: snapshot.policyType,
           companyId: companyId,
           premium: snapshot.premium,
-          healthCheck: healthCheckData,
+          healthCheck: healthCheckData, // Can be null
           structuredPolicy: snapshot.structuredPolicy,
           documentId: doc.id
         });
@@ -318,14 +320,16 @@ export class ComparisonOrchestrator {
         const healthCheck = healthChecks.find(hc => hc.snapshotId === snapshot.id);
         
         if (!healthCheck) {
-          console.warn(`[ComparisonOrchestrator] No health check for snapshot ${snapshot.id}, skipping`);
-          continue;
+          console.warn(`[ComparisonOrchestrator] No health check for snapshot ${snapshot.id}, including anyway (coverage data will be limited)`);
+          // Don't skip - allow policies without health checks for Phase 3 matching
+          // Health checks are only needed for detailed coverage comparison UI
         }
         
         // Parse health check result (stored as JSON in 'result' field, not 'payload')
-        const healthCheckData = typeof healthCheck.result === 'string' 
-          ? JSON.parse(healthCheck.result)
-          : healthCheck.result;
+        // Handle null healthCheck gracefully
+        const healthCheckData = healthCheck
+          ? (typeof healthCheck.result === 'string' ? JSON.parse(healthCheck.result) : healthCheck.result)
+          : null;
         
         // Extract offer number from structuredPolicy if available
         const structuredPolicyData = typeof snapshot.structuredPolicy === 'string'

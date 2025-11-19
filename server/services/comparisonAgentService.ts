@@ -161,14 +161,12 @@ export class ComparisonAgentService {
       );
     }
 
-    // Check for missing policy types
+    // Check for missing policy types - STRICT VALIDATION
     const missing = allowedPolicyTypes.filter(type => !outputPolicyTypes.includes(type));
     if (missing.length > 0) {
-      console.warn(
-        `[ComparisonAgent] ⚠️  AI omitted policy types:`,
-        missing.join(', ')
-      );
-      // Don't throw - allow partial results, but log warning
+      const errorMsg = `AI omitted required policy types: ${missing.join(', ')}. Input had ${allowedPolicyTypes.length} policies, output has ${outputPolicyTypes.length} policies.`;
+      console.error(`[ComparisonAgent] ❌ ${errorMsg}`);
+      throw new Error(errorMsg);
     }
 
     console.log(`[ComparisonAgent] ✅ Hallucination check passed: All ${outputPolicyTypes.length} policy types valid`);
