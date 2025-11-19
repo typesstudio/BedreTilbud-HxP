@@ -3,6 +3,7 @@ import type { InsertCompanyComparison, CompanyComparison } from "@shared/schema"
 import { computeBestMatches } from "./deterministicMatcher";
 import { comparisonAgentService } from "./comparisonAgentService";
 import { matchCoverages } from "./coverageMatcher";
+import { generateHighlights } from "./highlightsGenerator";
 
 interface ComparisonOptions {
   userId: string;
@@ -518,6 +519,17 @@ export class ComparisonOrchestrator {
         
         console.log(`[ComparisonOrchestrator] Matched ${coverageRows.length} coverage rows for ${pair.policyType} (current: ${currentCoverages.length}, offer: ${offerCoverages.length})`);
         
+        // DETERMINISTIC HIGHLIGHTS GENERATION (Phase 4B)
+        // Generate highlights from coverage/cost differences BEFORE calling AI
+        const highlights = generateHighlights({
+          coverageRows,
+          currentAnnualPremium,
+          offerAnnualPremium,
+          policyType: pair.policyType
+        });
+        
+        console.log(`[ComparisonOrchestrator] Generated ${highlights.length} highlights for ${pair.policyType}`);
+        
         return {
           policyType: pair.policyType,
           label: pair.label,
@@ -531,8 +543,9 @@ export class ComparisonOrchestrator {
           },
           // COVERAGE ROWS BUILT DETERMINISTICALLY (not by AI)
           coverageComparison: { rows: coverageRows },
+          // HIGHLIGHTS BUILT DETERMINISTICALLY (not by AI)
+          highlights,
           // AI will fill these narrative fields:
-          highlights: [],
           missingInformation: [],
           recommendations: [],
           // Include health checks for AI to analyze for narratives

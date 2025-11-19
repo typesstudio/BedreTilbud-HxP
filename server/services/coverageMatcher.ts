@@ -21,7 +21,7 @@ interface CoverageItem {
   };
 }
 
-interface MatchedCoverageRow {
+export interface MatchedCoverageRow {
   coverage: string;
   description: string | null;
   current: {

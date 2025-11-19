@@ -386,7 +386,21 @@ export type PolicyMatchResult = z.infer<typeof policyMatchResultSchema>;
 export const highlightSchema = z.object({
   title: z.string(),
   description: z.string(),
-  icon: z.enum(["trending-up", "shield", "zap", "car", "droplet", "info"]),
+  icon: z.enum([
+    "trending-up",      // Higher coverage/limits
+    "trending-down",    // Lower deductibles
+    "shield",           // Better protection/coverage
+    "zap",              // Speed/efficiency
+    "car",              // Car-related
+    "droplet",          // Water/leak related
+    "truck",            // Roadside assistance
+    "piggy-bank",       // Savings/money
+    "info",             // Information
+    "dollar-sign",      // Price-related
+    "home",             // Home insurance
+    "heart",            // Health/accident
+    "check",            // Included feature
+  ]),
   variant: z.enum(["success", "warning", "error", "neutral"]),
   category: z.enum(["coverage", "price", "deductible", "feature"]),
 });
