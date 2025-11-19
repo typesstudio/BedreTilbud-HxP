@@ -23,7 +23,7 @@ interface SnapshotToRegenerate {
   documentId: string;
   policyType: string;
   companyId: string | null;
-  documentType: string;
+  documentType: string | null;
 }
 
 async function main() {
@@ -70,7 +70,7 @@ async function main() {
     }
 
     console.log(`Grouped into ${snapshotsByDocument.size} documents:\n`);
-    for (const [documentId, snapshots] of snapshotsByDocument.entries()) {
+    for (const [documentId, snapshots] of Array.from(snapshotsByDocument.entries())) {
       console.log(`  Document ${documentId.substring(0, 8)}:`);
       for (const snapshot of snapshots) {
         console.log(`    - Snapshot ${snapshot.id.substring(0, 8)} (${snapshot.policyType}, ${snapshot.documentType})`);
@@ -83,7 +83,7 @@ async function main() {
     let snapshotsUpdated = 0;
     let errors: string[] = [];
 
-    for (const [documentId, snapshots] of snapshotsByDocument.entries()) {
+    for (const [documentId, snapshots] of Array.from(snapshotsByDocument.entries())) {
       console.log(`[Step 2.${documentsProcessed + 1}] Processing document ${documentId.substring(0, 8)}...`);
       
       try {
@@ -99,7 +99,7 @@ async function main() {
         }
 
         // Get OCR markdown
-        let ocrMarkdown: string;
+        let ocrMarkdown: string | null = null;
         
         // Try extraction_stages first (new pipeline)
         if (document.extractionStages && typeof document.extractionStages === 'object') {

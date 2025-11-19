@@ -190,25 +190,35 @@ export class HealthCheckOrchestrator {
       const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(snapshot);
 
       // VALIDATION: Check if AI-extracted coverages match snapshot's policy_type
+      // Skip validation if snapshot has structured_policy that matches (trust Phase 1 extraction)
+      const hasMatchingStructuredPolicy = 
+        snapshot.structuredPolicy && 
+        typeof snapshot.structuredPolicy === 'object' &&
+        (snapshot.structuredPolicy as any).policyType === snapshot.policyType;
+
       const guessedType = guessPolicyTypeFromCoverages(healthCheckResult.whatsIncluded ?? []);
-      
-      if (guessedType !== 'unknown' && guessedType !== snapshot.policyType) {
-        console.warn(
-          `[HealthCheckOrchestrator] ⚠️  Policy type mismatch detected:`,
-          {
-            snapshotId: snapshot.id,
-            dbPolicyType: snapshot.policyType,
-            guessedFromCoverages: guessedType,
-            firstCoverages: (healthCheckResult.whatsIncluded ?? []).slice(0, 3).map(c => c.coverage).join(', ')
-          }
-        );
-        
-        // Skip creating health check with mismatched data to prevent bad comparisons
-        throw new Error(
-          `Policy type mismatch: snapshot=${snapshot.id} db=${snapshot.policyType} guessed=${guessedType}. ` +
-          `This indicates the snapshot has incorrect policy_type or extraction failed. ` +
-          `Skipping health check creation to prevent bad data.`
-        );
+
+      if (!hasMatchingStructuredPolicy) {
+        if (guessedType !== 'unknown' && guessedType !== snapshot.policyType) {
+          console.warn(
+            `[HealthCheckOrchestrator] ⚠️  Policy type mismatch detected:`,
+            {
+              snapshotId: snapshot.id,
+              dbPolicyType: snapshot.policyType,
+              guessedFromCoverages: guessedType,
+              firstCoverages: (healthCheckResult.whatsIncluded ?? []).slice(0, 3).map(c => c.coverage).join(', ')
+            }
+          );
+          
+          // Skip creating health check with mismatched data to prevent bad comparisons
+          throw new Error(
+            `Policy type mismatch: snapshot=${snapshot.id} db=${snapshot.policyType} guessed=${guessedType}. ` +
+            `This indicates the snapshot has incorrect policy_type or extraction failed. ` +
+            `Skipping health check creation to prevent bad data.`
+          );
+        }
+      } else {
+        console.log(`[HealthCheckOrchestrator] ✓ Validation skipped: structured_policy matches snapshot.policyType (${snapshot.policyType})`);
       }
 
       // Prepare health check record for database
