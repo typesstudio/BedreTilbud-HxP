@@ -107,15 +107,41 @@ export class ComparisonAgentService {
     const allowedPolicyTypes = input.policyComparisons.map(pc => pc.policyType);
     console.log(`[ComparisonAgent] Allowed policy types: ${allowedPolicyTypes.join(', ')}`);
 
-    const userPrompt = replaceVariables(this.userPromptTemplate, {
+    // TRY 1: Standard prompt
+    try {
+      return await this.attemptGeneration(input, allowedPolicyTypes, false);
+    } catch (error: any) {
+      // RETRY: If AI omitted policies, try again with reinforced prompt
+      if (error.message?.includes('AI omitted required policy types')) {
+        console.warn(`[ComparisonAgent] ⚠️  First attempt failed (${error.message}), retrying with reinforced prompt...`);
+        return await this.attemptGeneration(input, allowedPolicyTypes, true);
+      }
+      // For other errors, fail immediately
+      throw error;
+    }
+  }
+
+  private async attemptGeneration(
+    input: ComparisonAgentInput,
+    allowedPolicyTypes: string[],
+    reinforcePrompt: boolean
+  ): Promise<ComparisonResult> {
+    const startTime = Date.now();
+
+    let userPrompt = replaceVariables(this.userPromptTemplate, {
       policyComparisonsJSON: JSON.stringify(input, null, 2),
       allowedPolicyTypes: allowedPolicyTypes.join(', ')
     });
 
+    // Add reinforcement on retry
+    if (reinforcePrompt) {
+      userPrompt = `⚠️ CRITICAL REMINDER: You MUST return EXACTLY ${allowedPolicyTypes.length} policies in policyComparisons array: ${allowedPolicyTypes.join(', ')}. Do NOT omit any policies even if they have limited data!\n\n` + userPrompt;
+    }
+
     const aiResponse = await this.callComparisonAgent(userPrompt);
     const latencyMs = Date.now() - startTime;
 
-    console.log(`[ComparisonAgent] AI call completed in ${latencyMs}ms`);
+    console.log(`[ComparisonAgent] AI call completed in ${latencyMs}ms ${reinforcePrompt ? '(retry)' : ''}`);
 
     let parsedResult: ComparisonResult;
     try {
@@ -130,7 +156,7 @@ export class ComparisonAgentService {
     // Validate output matches input structure (prevent hallucination)
     this.validateComparisonResult(parsedResult, allowedPolicyTypes);
 
-    logAIInvocation("ComparisonAgent", {
+    logAIInvocation("ComparisonAgent" + (reinforcePrompt ? " (retry)" : ""), {
       model: aiResponse.model,
       tokensUsed: aiResponse.tokensUsed,
       costUsd: aiResponse.costUsd,
