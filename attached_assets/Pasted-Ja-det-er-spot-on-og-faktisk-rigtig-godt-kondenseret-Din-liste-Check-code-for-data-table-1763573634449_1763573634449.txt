@@ -1,0 +1,62 @@
+Ja, det er spot on – og faktisk rigtig godt kondenseret 🌶️
+
+Din liste:
+
+> Check code for data tables
+> Create script for debugging comparison
+> Show document overview and details
+> Show snapshots matrix with coverage
+> Check health check consistency logs
+> Match current and offer snapshots
+> Build and log comparison agent input
+> Show latest completed comparison summary
+> Add script to run comparison debug
+> Test script and check logs
+
+matcher præcis den plan jeg skitserede – det er bare den “short version”.
+
+Jeg vil kun tilføje 3 **små, men vigtige** præciseringer, så Replit ikke misser de kritiske ting:
+
+1. **I “Show snapshots matrix with coverage”**
+   Sørg for at scriptet også logger pr. snapshot:
+
+   * `has_structured_policy` (true/false)
+   * antal `mainCoverages` + `additionalCoverages`
+   * de første 1–2 coverage-navne
+
+   → Det er her vi kan se: *“aha, current indbo/ulykke mangler structured_policy – eller har helt forkerte coverages”*.
+
+2. **I “Check health check consistency logs”**
+   Det er vigtigt at Replit implementerer den lille helper jeg beskrev:
+
+   * `guessPolicyTypeFromCoverages(whatsIncluded)`
+   * og logger linjer som:
+     `policy_type(db)=hus, policy_type(guessed)=ulykke, firstCoverages=[Invaliditet, Dødsfald,…]`
+   * samt en warning når de ikke matcher.
+
+   → Det er her vi med 99% sikkerhed finder “hus-healthcheck der ligner ulykke” osv.
+
+3. **I “Build and log comparison agent input” + “Show latest completed comparison summary”**
+   Bed den om eksplicit at logge for hver policy:
+
+   * `policyType`
+   * om `_healthCheckData.current` og `_healthCheckData.offer` er null eller ej
+   * længden af `coverageComparison.rows` i det endelige `comparison_json`
+
+   → Så kan vi se: matcher danner 1, 2 eller 3 policies? Og hvorfor har en policy ingen coverage rows?
+
+Hvis du vil, kan du skrive til Replit som:
+
+> “Use the task list below, **and please make sure to include**:
+>
+> * has_structured_policy + coverage counts in the snapshot matrix
+> * a `guessPolicyTypeFromCoverages` helper + mismatch warnings
+> * per-policy logging of healthCheck presence and coverageComparison.rows length”
+
+Når scriptet kører, og du har første output fra `npm run debug:comparison`, så smid det her – det er dér vi for alvor kan sige:
+
+* “vi er én migration fra at det hele spiller”
+  eller
+* “det er hurtigere at regenerere current-data end at lappe mere”.
+
+Men: ud fra alt det du har delt, synes jeg stadig **det her setup er værd at redde** – du er tættere på end det føles lige nu.

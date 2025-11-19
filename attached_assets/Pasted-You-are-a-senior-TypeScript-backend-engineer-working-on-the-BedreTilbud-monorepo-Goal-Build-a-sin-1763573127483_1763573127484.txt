@@ -1,0 +1,304 @@
+You are a senior TypeScript backend engineer working on the BedreTilbud monorepo.
+
+Goal:
+Build a single debug script that lets me see, END-TO-END, what happens in the comparison pipeline for ONE user and ONE offer company.
+
+User ID (constant for now):
+- e85ec3b9-e354-4c49-9f68-194830e356af
+
+Offer company for this test:
+- LB Forsikring / Lærerstandens Brandforsikring (use the actual company_id you find in the DB for the uploaded LB offer PDF)
+
+IMPORTANT:
+Do NOT “fix” random bugs yet. First we want visibility and invariants. The script should NOT mutate data – only read and log.
+
+---
+
+## Step 1: Find how to access the DB
+
+1. Search the repo for existing DB helpers or scripts:
+   - Look for drizzle / prisma / db client in `server/` (e.g. `db.ts`, `drizzleClient`, `pool`, etc.).
+   - Reuse the SAME DB client and types that the rest of the server uses (do NOT create a new raw pg client unless absolutely necessary).
+
+2. Confirm which tables are used:
+   - documents
+   - offer_snapshots
+   - health_checks
+   - company_comparisons
+   - companies
+
+---
+
+## Step 2: Create `server/scripts/debugComparison.ts`
+
+Create a new TypeScript script: `server/scripts/debugComparison.ts`.
+
+It should:
+
+- Be runnable from Node (we will add an npm script later).
+- Import the shared DB client.
+- Export an `async function main()` and call it at the bottom with proper error handling.
+
+The script should focus on ONE user + ONE offer company (LB), and log the entire pipeline in a human-readable way.
+
+---
+
+## Step 3: Implement the debug steps
+
+### 3.1 Configuration
+
+At the top of the script, define:
+
+- const USER_ID = 'e85ec3b9-e354-4c49-9f68-194830e356af';
+- const OFFER_COMPANY_NAME = '%lb%'; // or similar ILIKE pattern, then resolve to actual company_id.
+
+Write a helper to resolve the company_id:
+
+- Query `companies` where name ILIKE OFFER_COMPANY_NAME.
+- Log what you found.
+- If multiple matches, pick the LB offer that has a recent document for this user.
+
+### 3.2 Step A – Documents overview
+
+Query `documents` for this user:
+
+- WHERE user_id = USER_ID AND document_type IN ('current', 'offer')
+- LEFT JOIN companies ON documents.company_id = companies.id
+
+Log a table like:
+
+- document_id
+- document_type (current/offer)
+- file_name
+- company_name
+- created_at
+
+Use console.table or a custom pretty log.
+
+### 3.3 Step B – Snapshots matrix
+
+Query `offer_snapshots` for this user:
+
+- WHERE user_id = USER_ID
+- JOIN documents ON offer_snapshots.document_id = documents.id
+- LEFT JOIN companies ON offer_snapshots.company_id = companies.id
+
+For each snapshot, derive:
+
+- snapshot_id
+- doc_type (documents.document_type)
+- company_name
+- policy_type
+- has_structured_policy = structured_policy IS NOT NULL
+- mainCoverageCount = structured_policy.coverageDetails.mainCoverages.length (if present)
+- additionalCoverageCount = structured_policy.coverageDetails.additionalCoverages.length (if present)
+- first 2 coverage names (mainCoverages[0..1]?.name)
+
+Log a “snapshot matrix” grouped by:
+
+- current vs offer
+- company_name
+- policy_type
+
+This alone should show us:
+- which policy_types exist per side
+- where structured_policy is missing
+
+### 3.4 Step C – Health check consistency
+
+Query `health_checks` for this user:
+
+- JOIN offer_snapshots ON health_checks.snapshot_id = offer_snapshots.id
+- JOIN documents ON offer_snapshots.document_id = documents.id
+- LEFT JOIN companies ON offer_snapshots.company_id = companies.id
+
+For each health check:
+
+1. Extract:
+   - snapshot_id
+   - doc_type (current/offer)
+   - company_name
+   - policy_type (from snapshot)
+   - result.whatsIncluded (array)
+
+2. Implement a small helper `guessPolicyTypeFromCoverages(whatsIncluded)`:
+
+   - If most coverage names look like:
+     - "Brand", "Bygningsbrand", "Bygningsbeskadigelse", "Råd, svamp", "Stikledninger" → guess "hus"
+     - "Indbo", "Cykel", "Ansvar", "ID-tyveri" → guess "indbo"
+     - "Invaliditet", "Dødsfald", "Behandlingsudgifter", "Tyggeskade", "Strakserstatning" → guess "ulykke"
+   - If unclear, return "ukendt".
+
+3. For each row, log:
+
+   - `[HEALTH] snapshot=<id> doc_type=<current|offer> company=<name> policy_type(db)=<hus/indbo/ulykke> policy_type(guessed)=<hus/indbo/ulykke/ukendt> whatsIncludedCount=<n> firstCoverages=[...first 3 names...]`
+
+4. If `guessedType !== snapshot.policy_type`, log a warning:
+
+   - `⚠️ MISMATCH: snapshot <id> is typed as '<policy_type>' but looks like '<guessedType>' from coverages.`
+
+This should clearly show the current bug where:
+- current_hus_health_check actually looks like “ulykke”
+- offer_ulykke_health_check looks like “indbo”
+
+### 3.5 Step D – Deterministic matcher output
+
+The goal here is NOT to re-implement the matcher logic, but to see whether your existing matcher is producing the right pairs and for which policy types.
+
+Do the following:
+
+1. Locate the existing deterministic matcher in the codebase:
+   - It should be in something like `server/services/deterministicMatcher.ts`.
+   - It probably exports a function used by the comparison orchestrator.
+
+2. Import and call it in the script with the snapshots relevant for this user & offer company.
+
+   - You may need:
+     - current snapshots for this user (Privatsikring / current company)
+     - offer snapshots for LB (offer company)
+   - Reuse the same shapes/DTOs that the orchestrator uses (look at the orchestrator code).
+
+3. After calling matcher, log something like:
+
+   ```text
+   [MATCHES]
+   policyType=hus    currentSnapshot=<id> offerSnapshot=<id>
+   policyType=indbo  currentSnapshot=<id> offerSnapshot=<id>
+   policyType=ulykke currentSnapshot=<id> offerSnapshot=<id>
+Also log invariants:
+
+How many matched pairs per policy_type?
+
+If any expected types (hus/indbo/ulykke) are missing from matches, log a warning.
+
+3.6 Step E – ComparisonAgent input
+We want to see what actually gets sent into the ComparisonAgent.
+
+Find where the orchestrator builds the policyComparisons array before calling ComparisonAgent (in comparisonOrchestrator.ts).
+
+Extract the logic into a reusable helper if needed, or reconstruct it in the script by imitating the orchestrator.
+
+In the debug script, build the exact input object that ComparisonAgent gets:
+
+ts
+Copy code
+const agentInput = {
+  context: { ... },
+  policyComparisons: [ ... ] // pre-matched policies with _healthCheckData
+};
+Log it with:
+
+ts
+Copy code
+console.dir(agentInput, { depth: null });
+This will tell us:
+
+How many policies are being compared (1 vs 3).
+
+For each policyComparison:
+
+policyType
+
+costSummary
+
+whether _healthCheckData.current and _healthCheckData.offer are null or populated.
+
+3.7 Step F – Comparison JSON in DB
+Finally, load the latest comparison JSON from company_comparisons for this user + LB:
+
+WHERE user_id = USER_ID AND offer_company = <LB company_id> AND status = 'completed'
+
+Log:
+
+id
+
+status
+
+how many policyComparisons
+
+for each policyType:
+
+number of rows in coverageComparison.rows
+
+You can log a summary instead of the full JSON:
+
+ts
+Copy code
+{
+  id,
+  status,
+  policyCount,
+  policies: policyComparisons.map(p => ({
+    policyType: p.policyType,
+    rows: p.coverageComparison?.rows?.length ?? 0
+  }))
+}
+Step 4: Add an npm script to run the debug
+In package.json (probably in the root or server package), add:
+
+"debug:comparison": "ts-node server/scripts/debugComparison.ts"
+
+or use whatever runner you already use for TS scripts (e.g. tsx).
+
+Then run it in the Replit shell:
+
+npm run debug:comparison
+
+Copy the console output for ONE run and keep it for analysis.
+
+Step 5: Do NOT auto-fix yet
+VERY IMPORTANT:
+This script is purely for observability. It must not:
+
+delete rows
+
+update health_checks
+
+update snapshots
+
+regenerate comparisons
+
+We first want a clear, reproducible view of:
+
+where policy types are wrong
+
+where structuredPolicy is missing
+
+what the matcher and ComparisonAgent actually see
+
+Once this script is working and gives clean logs, I will use the output to design the next steps (automatic repair / migrations).
+
+End of instructions.
+
+markdown
+Copy code
+
+---
+
+## 3. Hvad jeg gerne vil have fra dig bagefter
+
+Når Replit har:
+
+1. Oprettet `debugComparison.ts`
+2. Tilføjet npm-script
+3. Kørt `npm run debug:comparison`
+
+… så:
+
+- Kopiér **hele console-outputtet** (eller i hvert fald:
+  - dokument-overblik
+  - snapshot matrix
+  - health check mismatches
+  - matcher output
+  - agentInput summary
+  - comparison summary)
+
+Smid det herind, så kan jeg:
+
+- pege helt præcist på:
+  - “Her er current ulykke væk”
+  - “Her er health check koblet på forkert snapshot”
+  - “Herfor laver matcher kun 1 policy i stedet for 3”
+- og derefter skrive en *målrettet* Replit-prompt til en “repair-script” i stedet for at skyde i blinde.
+
+Hvis du vil, kan vi bagefter også lave en “sanity check” der kører automatisk efter hver upload, så de her ting aldrig kan snige sig igennem igen.
