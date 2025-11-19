@@ -1739,6 +1739,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Also check company_comparisons for more detailed status
+          let comparisonData: any = null;
+          let comparisonId: string | null = null;
+          let currentCompanyId: string | null = null;
+          
           if (doc.companyId) {
             const companyComparisons = await storage.getCompanyComparisonsByUser(req.params.userId);
             const relevantComparison = companyComparisons.find((cc: CompanyComparison) => 
@@ -1748,6 +1752,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (relevantComparison) {
               if (relevantComparison.status === 'completed' && relevantComparison.comparisonJSON) {
                 comparisonStatus = 'ok';
+                comparisonData = relevantComparison.comparisonJSON;
+                comparisonId = relevantComparison.id;
+                currentCompanyId = relevantComparison.currentCompany;
               } else if (relevantComparison.status === 'failed') {
                 comparisonStatus = 'failed';
                 statusReason = relevantComparison.statusReason || null;
@@ -1764,7 +1771,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             healthCheckCount: healthChecks.length,
             comparisonStatus,
             comparisonCount: comparisons.length,
-            statusReason
+            statusReason,
+            comparisonData,
+            comparisonId,
+            currentCompanyId
           };
         })
       );

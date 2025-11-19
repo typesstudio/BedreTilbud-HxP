@@ -29,13 +29,7 @@ export default function OffersOverview() {
   });
   const threads = threadsResponse?.data || [];
 
-  // Get comparisons
-  const { data: comparisonsResponse } = useQuery<{ data: any[]; pagination: any }>({
-    queryKey: ["/api/comparisons/user", userId],
-  });
-  const comparisons = comparisonsResponse?.data || [];
-
-  // Get all offers with comparison status (Phase 1: Make offers visible)
+  // Get all offers with comparison status (now includes comparisonData from company_comparisons)
   const { data: offersResponse } = useQuery<{ data: any[]; pagination: any }>({
     queryKey: ["/api/offers/user", userId],
   });
@@ -49,7 +43,6 @@ export default function OffersOverview() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/emails/threads", userId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/comparisons/user", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/offers/user", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats", userId] });
       toast({
@@ -72,7 +65,6 @@ export default function OffersOverview() {
     
     const intervalId = setInterval(() => {
       queryClient.invalidateQueries({ queryKey: ["/api/emails/threads", userId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/comparisons/user", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/offers/user", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/stats", userId] });
     }, AUTO_REFRESH_INTERVAL);
@@ -81,8 +73,12 @@ export default function OffersOverview() {
   }, [userId]);
 
   const getComparisonForThread = (threadId: string) => {
-    return (comparisons as any[]).find((comp: any) => 
-      (threads as any[]).find((t: any) => t.id === threadId && t.companyId === comp.companyId)
+    // Find offers that match the thread's company
+    const thread = (threads as any[]).find((t: any) => t.id === threadId);
+    if (!thread) return null;
+    
+    return allOffers.find((offer: any) => 
+      offer.company?.id === thread.companyId && offer.comparisonStatus === 'ok'
     );
   };
 
@@ -95,7 +91,7 @@ export default function OffersOverview() {
     }).format(amount);
   };
 
-  // Phase 1: Use offers endpoint - show ALL offers regardless of comparison status
+  // Use offers endpoint - show ALL offers regardless of comparison status
   const allOffers = offers || [];
   
   // Separate offers by comparison status
@@ -103,30 +99,25 @@ export default function OffersOverview() {
   const failedOffers = allOffers.filter((o: any) => o.comparisonStatus === 'failed');
   const pendingOffers = allOffers.filter((o: any) => o.comparisonStatus === 'pending');
 
-  // Keep old logic for comparisons (for offers with successful comparisons)
-  const companiesWithOffers = comparisons?.length > 0 
-    ? Object.values(
-        (comparisons as any[]).reduce((acc: any, comp: any) => {
-          const companyId = comp.companyId;
-          if (!acc[companyId]) {
-            acc[companyId] = {
-              companyId,
-              company: comp.company,
-              totalSavings: 0,
-              policyCount: 0,
-              policies: [],
-              createdAt: comp.createdAt
-            };
-          }
-          acc[companyId].totalSavings += comp.savings || 0;
-          acc[companyId].policyCount += 1;
-          acc[companyId].policies.push(comp.policyType);
-          if (new Date(comp.createdAt) > new Date(acc[companyId].createdAt)) {
-            acc[companyId].createdAt = comp.createdAt;
-          }
-          return acc;
-        }, {})
-      )
+  // Build companiesWithOffers from offersWithComparisons (new company_comparisons data)
+  const companiesWithOffers = offersWithComparisons.length > 0 
+    ? offersWithComparisons.map((offer: any) => {
+        const comparisonData = offer.comparisonData || {};
+        const overall = comparisonData.overall || {};
+        const policyComparisons = comparisonData.policyComparisons || [];
+        
+        return {
+          id: offer.id,
+          companyId: offer.company?.id,
+          company: offer.company,
+          totalSavings: overall.annualSavings || 0,
+          policyCount: policyComparisons.length,
+          policies: policyComparisons.map((pc: any) => pc.policyType).filter(Boolean),
+          createdAt: offer.createdAt,
+          comparisonId: offer.comparisonId,
+          comparisonStatus: offer.comparisonStatus
+        };
+      })
     : [];
 
   const pendingThreads = (threads as any[]).filter((t: any) => t.status !== 'received' && !getComparisonForThread(t.id));
@@ -229,9 +220,9 @@ export default function OffersOverview() {
 
                 return (
                   <div 
-                    key={companyOffer.companyId}
+                    key={companyOffer.id}
                     className="flex w-full flex-col md:flex-row items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background mobile-padding shadow-sm"
-                    data-testid={`company-card-${companyOffer.companyId}`}
+                    data-testid={`company-card-${companyOffer.id}`}
                   >
                     <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4">
                       <div className="flex w-full items-start justify-between">

@@ -1,0 +1,78 @@
+You are a senior full-stack engineer working in Replit on **BedreTilbud**.
+
+We are debugging ONE concrete production bug:
+
+> After uploading an **Alm. Brand** offer (3 policies) for user
+> `hello@vyork.dk`, the system redirects to `/offers`, but Alm. Brand
+> still doesn’t appear under **“Dine bedre tilbud”** in the left nav or
+> main list – only the old “svphil” comparison is shown.  
+> In the “Uploadede tilbud” section I now only see **Types Studio
+> (Kan ikke sammenlignes)**, *not* Alm. Brand.
+
+You already did a first pass of fixes – **do NOT undo these**:
+
+1. In `server/routes.ts` you fixed the typo:
+   - `relevantComparison.status === 'complete'` → `relevantComparison.status === 'completed'`.
+2. You fixed matching by **company ID** instead of name in `/api/offers/user`.
+3. You updated schema comments to reflect that `currentCompany` and `offerCompany` store IDs, not names.
+
+Assume those changes are correct and KEEP THEM unless you prove they are wrong.
+
+Despite those fixes, the UI still only shows:
+
+- Under “Dine bedre tilbud”: **svphil**  
+- Under “Uploadede tilbud”: only **Types Studio (Kan ikke sammenlignes)**  
+- No Alm. Brand anywhere (screenshot confirms this).
+
+This means **at least one more bug** is still hiding in either:
+
+- The comparison pipeline (company_comparisons not written or wrong),
+- The `/api/offers/user/:userId` aggregator,
+- Or the React UI’s filtering logic.
+
+I need you to do a **systematic, end-to-end debug for Alm. Brand**, with DB queries and concrete evidence – no guessing.
+
+---
+
+## Step 1 – Verify the Alm. Brand data in the DB
+
+For user `hello@vyork.dk`:
+
+1. Find the **latest Alm. Brand offer document**:
+   - `SELECT * FROM documents WHERE user_id = '<user-id-for-hello@vyork.dk>' AND document_type = 'offer' ORDER BY created_at DESC;`
+   - Confirm which one is Alm. Brand (by `company_id` / name via join).
+   - Note:
+     - `id`
+     - `status`
+     - `created_at`
+
+2. For that document ID:
+   - List all snapshots:
+     - `SELECT * FROM offer_snapshots WHERE document_id = '<alm_brand_doc_id>';`
+   - Confirm:
+     - Count = 3.
+     - Each snapshot has:
+       - a non-null `company_id` (Alm. Brand’s ID),
+       - a valid `policyType`,
+       - **non-null `structured_policy`** (if extraction worked).
+
+3. Health checks:
+   - `SELECT * FROM health_checks WHERE document_id = '<alm_brand_doc_id>';`
+   - Confirm:
+     - Count (should be 3).
+     - Each has a `snapshot_id` that matches one of the snapshots.
+
+Write down the exact findings (counts + any NULLs) in comments or logs.
+
+---
+
+## Step 2 – Verify company_comparisons for Alm. Brand
+
+Now check whether the comparison pipeline actually wrote a comparison row:
+
+1. Find comparisons for this user where the **offer company is Alm. Brand**:
+
+   ```sql
+   SELECT * FROM company_comparisons
+   WHERE user_id = '<user-id>'
+   ORDER BY created_at DESC;
