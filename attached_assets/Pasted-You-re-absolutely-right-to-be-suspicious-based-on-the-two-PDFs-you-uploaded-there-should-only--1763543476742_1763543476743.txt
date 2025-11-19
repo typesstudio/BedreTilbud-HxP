@@ -1,0 +1,324 @@
+You’re absolutely right to be suspicious – based on the two PDFs you uploaded there should **only** be:
+
+* Fritidshus / Hus
+* Indbo
+* Ulykke
+
+There is **no** Bil anywhere in either the user offer (Privatsikring) or the LB offer, so “Hus, Bil” in the UI is definitely a bug, not reality.
+
+Below is how I’d debug this as the “expert”, and what I’d then fix.
+
+---
+
+## 1. Confirm the ground truth in the database
+
+**Goal:** Make sure the DB actually contains the right policy types and matched pairs. If the data is wrong, everything above it will also be wrong.
+
+### 1.1. Inspect all snapshots for this user
+
+Run something like:
+
+```sql
+SELECT 
+  os.id,
+  os.policy_type,
+  os.document_id,
+  d.document_type,
+  c.name AS company,
+  os.created_at
+FROM offer_snapshots os
+JOIN documents d ON os.document_id = d.id
+LEFT JOIN companies c ON os.company_id = c.id
+WHERE d.user_id = 'e85ec3b9-e354-4c49-9f68-194830e356af'
+ORDER BY d.document_type, c.name, os.created_at;
+```
+
+**What we expect:**
+
+* For each company (Privatsikring, Alm. Brand, IF, LB etc.) you should see **exactly 3** `policy_type` values: something like `hus`, `indbo`, `ulykke`.
+* **No `bil` rows at all**.
+
+  * If you *do* see `bil`, then Phase 1 extraction / segmentation has mis-classified something and we must fix that first.
+
+### 1.2. Inspect the comparison JSON (the “truth” the UI should show)
+
+```sql
+SELECT
+  id,
+  current_company,
+  offer_company,
+  status,
+  jsonb_array_length(comparison_json->'policyPairs') AS pair_count,
+  comparison_json->'policyPairs' AS pairs
+FROM company_comparisons
+WHERE user_id = 'e85ec3b9-e354-4c49-9f68-194830e356af'
+ORDER BY created_at DESC;
+```
+
+Focus on the rows for:
+
+* Privatsikring → Alm. Brand
+* Privatsikring → Privatsikring (same company)
+* Privatsikring → IF
+
+**What we want to see:**
+
+* `status = 'completed'`
+
+* `pair_count >= 1`
+
+* Inside `policyPairs`, each pair has something like:
+
+  ```json
+  {
+    "currentPolicy": { "type": "hus", ... },
+    "offerPolicy":   { "type": "hus", ... }
+  }
+  ```
+
+* No `type: "bil"` anywhere in `comparison_json` for these test rows.
+
+If `pair_count` is `0` for some companies, then the pipeline never produced actual 1:1 pairs and the “no sammenligning” message on the detail page is *true*. Then we need to fix matcher / comparison agent.
+If `pair_count > 0` but the UI still says “ingen sammenligning”, then the bug is **between API and frontend**.
+
+---
+
+## 2. Debug the “Se sammenligning” detail flow
+
+Right now you see a card with numbers (OK) but clicking “Se sammenligning” opens a page that says “ingen sammenligning”. That strongly suggests:
+
+* The **overview** is now using the new `company_comparisons` data ✅
+* The **detail page** is still wired to the **old `comparisons` table / endpoint** ❌
+  or is calling the new API with the **wrong ID**.
+
+### 2.1. Find which API the detail page uses
+
+In the frontend, search for the button label:
+
+* Search in the web codebase for `Se sammenligning` to find the component (likely the card in *offers* page and the comparison detail page).
+
+On the **detail page** component (e.g. something like `web/app/sammenligning/[id]/page.tsx` or `comparison-detail.tsx`):
+
+* Look for the data fetch – something like:
+
+  ```ts
+  const { id } = useParams();
+  const { data } = useQuery(['comparison', id], () =>
+    fetch(`/api/comparisons/${id}`).then(res => res.json())
+  );
+  ```
+
+or
+
+```ts
+fetch(`/api/company-comparisons/${id}`)
+```
+
+**Check:**
+
+1. Is it still calling `/api/comparisons/:id` (old table) instead of the new `company_comparisons` endpoint?
+2. Is the `id` coming from the right place (company comparison ID vs document ID vs company ID)?
+
+If it’s hitting the old endpoint or using a wrong ID, the backend will return `null` and the page will show “ingen sammenligning” even though `company_comparisons` has data.
+
+### 2.2. Verify what ID the card passes
+
+In the offers overview component (the page that shows Alm. Brand / IF / Privatsikring cards):
+
+* Find the “Se sammenligning” button. It probably looks like:
+
+  ```tsx
+  <Button onClick={() => router.push(`/sammenligning/${offer.comparisonId}`)}>
+    Se sammenligning
+  </Button>
+  ```
+
+or similar.
+
+Check **what field** you are passing:
+
+* If it’s `offer.documentId` or `company.id`, but the detail API expects `companyComparison.id`, they won’t match → 404 / empty result → “ingen sammenligning”.
+
+**Fix here:** make sure each card gets the actual `companyComparisonId` from the backend and uses *that* in the route.
+
+---
+
+## 3. Debug the “Hus, Bil” label
+
+The line “Sammenlignet: Hus, Bil” is wrong because there is no Bil in your PDFs.
+
+This label is usually derived either from:
+
+* `comparison_json.policyPairs[*].currentPolicy.type / offerPolicy.type`, *or*
+* a union of `policy_type` from snapshots or health checks.
+
+Given your history (earlier test data probably had a car policy), I suspect:
+
+> The offers overview is building the list of policy types per company from **all historical comparisons / health checks for that company**, not just from the current offer’s comparison.
+
+So if you once tested with a car insurance:
+
+* Old health checks / old comparisons have `policy_type = 'bil'`.
+* The aggregation code now does something like:
+
+  ```ts
+  const policyTypes = Array.from(new Set(
+    allComparisonsForCompany.flatMap(c => c.policyTypes)
+  ));
+  ```
+
+→ You get `['hus', 'bil']` even though the *current* comparison only has `hus`, `indbo`, `ulykke`.
+
+### 3.1. Confirm in data
+
+Run:
+
+```sql
+-- Any 'bil' policies for this user?
+SELECT DISTINCT policy_type, company_id
+FROM offer_snapshots os
+JOIN documents d ON os.document_id = d.id
+WHERE d.user_id = 'e85ec3b9-e354-4c49-9f68-194830e356af';
+```
+
+If this returns a row with `policy_type = 'bil'`, that’s from an old test document.
+
+Also check whether `"bil"` appears inside `comparison_json`:
+
+```sql
+SELECT id
+FROM company_comparisons
+WHERE user_id = 'e85ec3b9-e354-4c49-9f68-194830e356af'
+  AND comparison_json::text ILIKE '%"bil"%';
+```
+
+* If it **does not** appear in `comparison_json`, but appears in the UI, then the UI is **not** using `comparison_json` to build that label – it’s using some other, older data source → fix frontend.
+* If it **does** appear in `comparison_json`, then Phase 1 extraction mis-labelled something; fix the extractor and re-run comparison.
+
+### 3.2. Fix how “Sammenlignet” is computed
+
+On the **offers API** (`/api/offers/user/:userId`):
+
+* Find where `policyTypes` / `comparedTypes` / `comparedCoverages` is computed for each offer card.
+
+* Change the logic so that for each offer **we derive the types only from the latest `company_comparisons.comparison_json` row for that company + offer**, for example:
+
+  ```ts
+  const policyTypes = Array.from(
+    new Set(
+      (comparisonJson.policyPairs ?? []).flatMap((pair: any) => [
+        pair.currentPolicy?.type,
+        pair.offerPolicy?.type,
+      ].filter(Boolean))
+    )
+  );
+  ```
+
+* Do *not* union across old comparisons or health checks.
+
+* Optional: filter to a known set of types: `['hus', 'indbo', 'ulykke', 'bil', 'rejse']` to avoid weird junk labels.
+
+After this, all three cards should show exactly the same types (hus, indbo, ulykke) because you use the same current and same structure for each company.
+
+---
+
+## 4. Putting it together – what I’d actually change
+
+### Backend fixes
+
+1. **Detail endpoint**
+
+   * Add a dedicated endpoint if not already there, e.g.:
+
+     ```ts
+     // GET /api/company-comparisons/:id
+     app.get('/api/company-comparisons/:id', async (req, res) => {
+       const id = req.params.id;
+       const comparison = await db
+         .select()
+         .from(companyComparisons)
+         .where(eq(companyComparisons.id, id))
+         .limit(1);
+
+       if (!comparison.length || !comparison[0].comparisonJson) {
+         return res.json({ data: null });
+       }
+
+       res.json({ data: comparison[0] });
+     });
+     ```
+
+2. **Offers endpoint**
+
+   * Ensure each offer entry includes `companyComparisonId` and `policyTypes` derived from `comparison_json.policyPairs` as described.
+
+### Frontend fixes
+
+1. **Offers overview page**
+
+   * Use the new offers API field:
+
+     ```tsx
+     <Button onClick={() =>
+       router.push(`/sammenligning/${offer.companyComparisonId}`)
+     }>
+       Se sammenligning
+     </Button>
+     ```
+
+   * Show `offer.policyTypes.join(', ')` in the “Sammenlignet” line.
+
+2. **Comparison detail page**
+
+   * Fetch from `/api/company-comparisons/:id`.
+   * Use `data.comparisonJson.policyPairs` to render the detailed comparison.
+   * Show the “ingen sammenligning” message **only if** `!data` OR `policyPairs.length === 0`.
+
+---
+
+## 5. Optional: a ready-to-paste Replit prompt
+
+If you want to let the Replit Agent do this work, you can paste something like:
+
+> You are my Lead Reliability Engineer for the BedreTilbud app.
+> I have a bug in the comparison feature:
+>
+> * On `/offers` I see cards for Alm. Brand, Privatsikring, IF, with savings and a list of policy types like “Hus, Bil”.
+> * When I click “Se sammenligning”, the comparison page loads but shows that there is **no comparison**.
+> * All these offers were created from the **same current PDF** (`User Insurance.pdf`) and the same **offer PDF** (`Offer Insurance.pdf`). Those PDFs contain **only three policy types**: fritidshus/hus, indbo, ulykkesforsikring – **no car/Bil**.
+>
+> I want you to debug this end-to-end and then fix it. Work step-by-step and explain in the console what you’re doing.
+>
+> **Your tasks:**
+>
+> 1. In the database, confirm:
+>
+>    * All `offer_snapshots` for user `e85ec3b9-e354-4c49-9f68-194830e356af` and the relevant documents have only `hus`, `indbo`, `ulykke` policy types (no `bil`).
+>    * The `company_comparisons` rows for this user and the companies Alm. Brand, IF, Privatsikring have `status = 'completed'` and non-empty `comparison_json.policyPairs`.
+> 2. Inspect `comparison_json` for these rows and verify which policy types it contains. If `"bil"` appears there, identify why; otherwise note that the UI is not using `comparison_json` to build the “Sammenlignet” label.
+> 3. Find the frontend code that renders:
+>
+>    * The `/offers` page (cards with “Se sammenligning” and “Sammenlignet: …”).
+>    * The comparison detail page that is opened when clicking “Se sammenligning”.
+> 4. For the **detail page**, verify:
+>
+>    * Which API endpoint it calls (old `/api/comparisons/:id` vs new `/api/company-comparisons/:id`).
+>    * What ID is passed in the URL (comparison ID vs document ID vs company ID).
+>    * Fix it so it always fetches the correct `company_comparisons` row using its ID, and returns `comparison_json` including `policyPairs`.
+>    * Only show the “ingen sammenligning” message when `policyPairs` is truly empty.
+> 5. For the **offers overview**, fix the “Sammenlignet” label:
+>
+>    * Make it derive the policy types **only** from `comparison_json.policyPairs` of the relevant `company_comparisons` row for that offer.
+>    * Do **not** aggregate over old comparisons or health checks for that company.
+>    * Ensure no `Bil` is shown for my current test data (only `hus`, `indbo`, `ulykke`).
+> 6. Make sure each card’s “Se sammenligning” button passes the correct `companyComparisonId` to the detail page.
+> 7. After your changes, restart the app, simulate clicking “Se sammenligning” for Alm. Brand, Privatsikring, and IF, and confirm that:
+>
+>    * The detail page shows a proper 1:1 comparison using the JSON in `company_comparisons`.
+>    * The “Sammenlignet” line on the cards shows the correct policy types without `Bil`.
+>
+> While working, print concise debug notes to the console so I can follow your reasoning. Don’t just describe – actually change the code and verify it works.
+
+---
+
+If you like, next we can also design how the **comparison detail page** should look for these three policies (hus/indbo/ulykke) so it’s consistent across companies.

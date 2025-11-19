@@ -14,18 +14,24 @@ const openai = new OpenAI({
   maxRetries: 2,
 });
 
-interface PolicyPairInput {
+interface PolicyComparisonSkeleton {
   policyType: string;
   label: string;
-  current: {
-    policyId: string;
-    annualPremium: number;
-    healthCheck: any;
+  currentCompany: string;
+  offerCompany: string;
+  costSummary: {
+    currentAnnualPremium: number;
+    offerAnnualPremium: number;
+    annualSavings: number;
+    annualSavingsPercent: number;
   };
-  offer: {
-    policyId: string;
-    annualPremium: number;
-    healthCheck: any;
+  highlights: any[];
+  coverageComparison: { rows: any[] };
+  missingInformation: any[];
+  recommendations: string[];
+  _healthCheckData: {
+    current: any;
+    offer: any;
   };
 }
 
@@ -35,7 +41,7 @@ interface ComparisonAgentInput {
     offerCompany: string;
     currency: string;
   };
-  policyPairs: PolicyPairInput[];
+  policyComparisons: PolicyComparisonSkeleton[];
 }
 
 function logAIInvocation(
@@ -92,13 +98,18 @@ export class ComparisonAgentService {
   async generateComparison(input: ComparisonAgentInput): Promise<ComparisonResult> {
     console.log(
       `[ComparisonAgent] Starting comparison: ${input.context.currentCompany} vs ${input.context.offerCompany}`,
-      `(${input.policyPairs.length} pairs)`
+      `(${input.policyComparisons.length} comparisons)`
     );
 
     const startTime = Date.now();
 
+    // Extract allowed policy types from input (prevent hallucination)
+    const allowedPolicyTypes = input.policyComparisons.map(pc => pc.policyType);
+    console.log(`[ComparisonAgent] Allowed policy types: ${allowedPolicyTypes.join(', ')}`);
+
     const userPrompt = replaceVariables(this.userPromptTemplate, {
-      policyPairsJSON: JSON.stringify(input, null, 2),
+      policyComparisonsJSON: JSON.stringify(input, null, 2),
+      allowedPolicyTypes: allowedPolicyTypes.join(', ')
     });
 
     const aiResponse = await this.callComparisonAgent(userPrompt);
@@ -116,6 +127,9 @@ export class ComparisonAgentService {
       throw new Error(`ComparisonAgent output validation failed: ${validationError.message}`);
     }
 
+    // Validate output matches input structure (prevent hallucination)
+    this.validateComparisonResult(parsedResult, allowedPolicyTypes);
+
     logAIInvocation("ComparisonAgent", {
       model: aiResponse.model,
       tokensUsed: aiResponse.tokensUsed,
@@ -124,6 +138,40 @@ export class ComparisonAgentService {
     });
 
     return parsedResult;
+  }
+
+  /**
+   * Validates that AI output respects input constraints
+   * Prevents hallucination of policy types that don't exist in matched pairs
+   */
+  private validateComparisonResult(result: ComparisonResult, allowedPolicyTypes: string[]): void {
+    const outputPolicyTypes = result.policyComparisons.map(pc => pc.policyType);
+    
+    // Check for hallucinated policy types
+    const hallucinated = outputPolicyTypes.filter(type => !allowedPolicyTypes.includes(type));
+    if (hallucinated.length > 0) {
+      console.error(
+        `[ComparisonAgent] ❌ HALLUCINATION DETECTED: AI added policy types not in input:`,
+        hallucinated.join(', '),
+        `| Allowed: ${allowedPolicyTypes.join(', ')}`
+      );
+      throw new Error(
+        `AI hallucinated policy types: ${hallucinated.join(', ')}. ` +
+        `Only allowed: ${allowedPolicyTypes.join(', ')}`
+      );
+    }
+
+    // Check for missing policy types
+    const missing = allowedPolicyTypes.filter(type => !outputPolicyTypes.includes(type));
+    if (missing.length > 0) {
+      console.warn(
+        `[ComparisonAgent] ⚠️  AI omitted policy types:`,
+        missing.join(', ')
+      );
+      // Don't throw - allow partial results, but log warning
+    }
+
+    console.log(`[ComparisonAgent] ✅ Hallucination check passed: All ${outputPolicyTypes.length} policy types valid`);
   }
 
   private async callComparisonAgent(userPrompt: string): Promise<{

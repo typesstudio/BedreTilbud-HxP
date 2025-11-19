@@ -1,0 +1,146 @@
+Yeah, that diagnosis makes sense **if** what you wrote is literally true in the DB:
+
+* ✅ Snapshots: only `hus`, `indbo`, `ulykke` (7 of each), **no `bil` anywhere**
+* ✅ `company_comparisons.comparison_json` **does** contain policy pairs with `bil`
+  → then there’s only one place that can be wrong: **Phase 4 / ComparisonAgent**.
+
+So this bit:
+
+> The ComparisonAgent (Phase 4) is generating fake policy comparisons that don't exist in the underlying data.
+
+…is the right conclusion. The UI is just faithfully rendering whatever garbage the agent put into `comparison_json`.
+
+Your “what needs to be fixed” bullets are on the right track, but I’d tighten them a bit so it’s bullet-proof:
+
+---
+
+### What’s really going wrong
+
+1. **Phase 1–3 are clean**
+
+   * Extraction & snapshots: only three types (hus, indbo, ulykke)
+   * Deterministic matcher should only be able to create 1:1 pairs for those types.
+
+2. **Phase 4 (ComparisonAgent) is “free-styling” JSON**
+
+   * Instead of just *describing* matched pairs, it’s *creating* `policyPairs` from scratch.
+   * Because the prompt isn’t constrained enough (or includes examples with `bil`), the LLM is happily inventing a “bil” pair.
+
+So you essentially have:
+
+> Correct structured data → ✅
+> LLM-generated comparison JSON that doesn’t respect that data → ❌
+
+---
+
+### What I’d do to fix it (refined version of your plan)
+
+#### 1. Lock policy pairs to actual snapshots (code, not AI)
+
+Don’t let the model invent which policies exist.
+
+* In the **comparison orchestrator**, build `policyPairs` **purely from deterministicMatcher output**:
+
+  ```ts
+  const policyPairs = matchedPairs.map(pair => ({
+    currentPolicy: {
+      id: pair.current.id,
+      type: pair.current.policyType,
+      // any other numeric fields you trust from DB
+    },
+    offerPolicy: {
+      id: pair.offer.id,
+      type: pair.offer.policyType,
+      // ...
+    },
+  }));
+  ```
+
+* Pass this `policyPairs` into the ComparisonAgent as **input**, and tell the model:
+
+  > “You MUST NOT create or remove policy pairs. Use the policyPairs array exactly as given. If there is no car insurance in policyPairs, you must not mention car insurance or Bil anywhere.”
+
+* The AI then only generates:
+
+  * narrative summary,
+  * highlights,
+  * maybe rating/scores – **but not the list of policies** itself.
+
+#### 2. Add strict validation on the agent’s JSON
+
+Even with a stricter prompt, add a guard:
+
+```ts
+function validateComparisonJson(
+  comparisonJson,
+  allowedCurrentIds: string[],
+  allowedOfferIds: string[],
+  allowedTypes: string[]
+) {
+  const pairs = comparisonJson.policyPairs ?? [];
+  const errors: string[] = [];
+
+  for (const [i, pair] of pairs.entries()) {
+    if (!allowedTypes.includes(pair.currentPolicy?.type)) {
+      errors.push(`pair[${i}] currentPolicy.type=${pair.currentPolicy?.type} not allowed`);
+    }
+    if (!allowedTypes.includes(pair.offerPolicy?.type)) {
+      errors.push(`pair[${i}] offerPolicy.type=${pair.offerPolicy?.type} not allowed`);
+    }
+    // if you include ids, also check they exist in the matchedPairs set
+  }
+
+  return errors;
+}
+```
+
+* If there are validation errors:
+
+  * Either:
+
+    * Strip invalid pairs and log a warning, **or**
+    * Mark the comparison as `status = 'failed'`, `status_reason = 'INVALID_AGENT_OUTPUT'` and **do not** save the bad JSON.
+
+This guarantees that even if the LLM hallucinates, “Bil” never makes it into `comparison_json`.
+
+#### 3. Regenerate comparisons for your test companies
+
+Once the agent + validation are fixed:
+
+1. Delete or mark the bad `company_comparisons` rows for this user (Privatsikring, Alm. Brand, Tryg, IF).
+
+2. Re-run the comparison pipeline for `hello@vyork.dk`:
+
+   * Either via your test script:
+
+     ```bash
+     tsx server/scripts/test-comparison-pipeline.ts hello@vyork.dk
+     ```
+   * Or by triggering a recompute endpoint.
+
+3. Check `company_comparisons.comparison_json` again:
+
+   * `policyPairs` should only contain `hus`, `indbo`, `ulykke`.
+   * No `"bil"` string anywhere.
+
+#### 4. Fix the “no comparison” detail page separately
+
+You already noted this, but just to be explicit:
+
+* Detail page returning “ingen sammenligning” is **a separate routing/API bug**:
+
+  * Make sure:
+
+    * `Se sammenligning` passes the **company_comparisons.id**.
+    * The detail page calls `/api/company-comparisons/:id` (or whatever your new endpoint is).
+    * It treats “no comparison” only as `policyPairs.length === 0`, not as “couldn’t find a row”.
+
+---
+
+So: **yes**, your summary is basically correct, but I’d phrase the fix like this:
+
+* **Don’t ask the LLM to decide what policies exist.**
+* **Have deterministicMatcher decide, then treat those pairs as read-only input.**
+* **Enforce that in code with validation.**
+
+If you want, I can turn this into a precise Replit prompt for the agent (“refactor ComparisonAgent to stop hallucinating policy pairs + add validation + rerun for this user”).

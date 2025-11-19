@@ -1,8 +1,17 @@
 # USER – BedreTilbud PolicyComparisonAnalyst
 
+## ⚠️ CRITICAL CONSTRAINTS
+
+**Du SKAL bruge nøjagtigt de policy-typer, du modtager som input.**  
+**Du må IKKE tilføje eller fjerne policies.**  
+**Kun tilladte policy-typer: {{allowedPolicyTypes}}**
+
+Hvis der ikke er en "bil"-policy i inputtet, må du ikke nævne bil.  
+Hvis der kun er "hus", "indbo", "ulykke", må output kun indeholde disse tre.
+
 ## INPUT
 
-Du får policies for to selskaber i dette format:
+Du modtager PRÆ-MATCHEDE policy-sammenligninger i dette format:
 
 ```json
 {
@@ -11,26 +20,43 @@ Du får policies for to selskaber i dette format:
     "offerCompany": "string",
     "currency": "DKK"
   },
-  "policyPairs": [
+  "policyComparisons": [
     {
-      "policyType": "hus" | "indbo" | "ulykke" | "bil" | "rejse" | "andet",
+      "policyType": "hus" | "indbo" | "ulykke", // KUN de typer, der findes i inputtet
       "label": "Hus",
-      "current": {
-        "policyId": "string",
-        "annualPremium": number,
-        "healthCheck": { ... }
+      "currentCompany": "string",
+      "offerCompany": "string",
+      "costSummary": {
+        "currentAnnualPremium": number,      // ✅ Allerede beregnet
+        "offerAnnualPremium": number,        // ✅ Allerede beregnet
+        "annualSavings": number,             // ✅ Allerede beregnet
+        "annualSavingsPercent": number       // ✅ Allerede beregnet
       },
-      "offer": {
-        "policyId": "string",
-        "annualPremium": number,
-        "healthCheck": { ... }
+      "highlights": [],                       // ❌ TOM - du skal udfylde
+      "coverageComparison": { "rows": [] },   // ❌ TOM - du skal udfylde
+      "missingInformation": [],               // ❌ TOM - du skal udfylde
+      "recommendations": [],                  // ❌ TOM - du skal udfylde
+      "_healthCheckData": {                   // ✅ Data til analyse
+        "current": { ... },
+        "offer": { ... }
       }
     }
   ]
 }
 ```
 
-healthCheck-objekterne har bla.:
+**Dit job:**  
+Du skal BEVARE nøjagtigt de policies, du modtager, og kun UDFYLDE de tomme felter:
+- `highlights` (højdepunkter for denne policy)
+- `coverageComparison.rows` (detaljeret dækningssammenligning)
+- `missingInformation` (spørgsmål til tilbuddet)
+- `recommendations` (anbefalinger til kunden)
+
+Du må IKKE ændre `policyType`, `label`, `currentCompany`, `offerCompany`, eller `costSummary`.
+
+### _healthCheckData struktur
+
+`_healthCheckData.current` og `_healthCheckData.offer` indeholder:
 
 - whatsIncluded: liste over dækninger  
   ```json
@@ -56,17 +82,13 @@ healthCheck-objekterne har bla.:
 ## OPGAVE
 
 ### 1) Beregn årlige totalpriser og besparelse (Samlet)
-- totalCurrentAnnualPremium = sum af annualPremium for alle policyPairs.current.
-- totalOfferAnnualPremium   = sum af annualPremium for alle policyPairs.offer.
+- totalCurrentAnnualPremium = sum af costSummary.currentAnnualPremium for alle policyComparisons.
+- totalOfferAnnualPremium   = sum af costSummary.offerAnnualPremium for alle policyComparisons.
 - annualSavings = totalCurrentAnnualPremium - totalOfferAnnualPremium (kan være negativ).
 - annualSavingsPercent = annualSavings / totalCurrentAnnualPremium * 100 (afrundet til 1 decimal).
 
-### 2) Lav per-policy costSummary
-- For hver policyPair:
-  - currentAnnualPremium = current.annualPremium
-  - offerAnnualPremium = offer.annualPremium
-  - annualSavings = currentAnnualPremium - offerAnnualPremium
-  - annualSavingsPercent = annualSavings / currentAnnualPremium * 100
+### 2) Per-policy costSummary (✅ ALLEREDE BEREGNET)
+- Brug costSummary direkte fra inputtet. Du skal IKKE genberegne dette.
 
 ### 3) Byg globale highlights (overall.globalHighlights)
 - Vælg 3–6 stærke forskelle til Samlet-sektionen.
@@ -90,10 +112,10 @@ healthCheck-objekterne har bla.:
 
 **ALGORITME FOR MATCH AF DÆKNINGER**
 
-For et policyPair:
+For hver policyComparison:
 
-- currentList = current.healthCheck.whatsIncluded
-- offerList   = offer.healthCheck.whatsIncluded
+- currentList = _healthCheckData.current.whatsIncluded
+- offerList   = _healthCheckData.offer.whatsIncluded
 
 1. Normalisér dækningsnavne:
    - til lowercase
@@ -142,7 +164,7 @@ Rækkefølge:
 
 ### 6) missingInformation pr. policetype
 
-- Start med offer.healthCheck.missingInformation (tilbuddet er det, kunden skal udfordre).
+- Start med _healthCheckData.offer.missingInformation (tilbuddet er det, kunden skal udfordre).
 - Filtrér/omskriv til 3–7 vigtigste spørgsmål.
 - Format:
 
@@ -249,4 +271,6 @@ Returnér et JSON-objekt med præcis denne struktur:
 
 ## ACTUAL DATA
 
-{{policyPairsJSON}}
+**HUSK: Du må KUN bruge policy-typer fra denne liste: {{allowedPolicyTypes}}**
+
+{{policyComparisonsJSON}}

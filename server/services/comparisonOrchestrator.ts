@@ -488,36 +488,57 @@ export class ComparisonOrchestrator {
         throw new Error('No matched policy pairs found');
       }
 
-      // Phase 4: Generate comparison JSON using AI
+      // Phase 4: Build policyComparisons structure from matched pairs (CODE-DRIVEN)
+      // This prevents AI from hallucinating policy types that don't exist
+      const policyComparisons = matchingResult.pairs.map(pair => {
+        const currentPolicy = currentPolicies.find(p => p.snapshotId === pair.currentPolicyId);
+        const offerPolicy = offerPolicies.find(p => p.snapshotId === pair.offerPolicyId);
+        
+        if (!currentPolicy || !offerPolicy) {
+          throw new Error(`Missing policy data for pair: ${pair.policyType}`);
+        }
+        
+        const currentAnnualPremium = parseFloat(currentPolicy.premium || '0');
+        const offerAnnualPremium = parseFloat(offerPolicy.premium || '0');
+        const annualSavings = currentAnnualPremium - offerAnnualPremium;
+        const annualSavingsPercent = currentAnnualPremium > 0 
+          ? (annualSavings / currentAnnualPremium) * 100 
+          : 0;
+        
+        return {
+          policyType: pair.policyType,
+          label: pair.label,
+          currentCompany,
+          offerCompany,
+          costSummary: {
+            currentAnnualPremium,
+            offerAnnualPremium,
+            annualSavings,
+            annualSavingsPercent: Math.round(annualSavingsPercent * 10) / 10
+          },
+          // AI will fill these fields:
+          highlights: [],
+          coverageComparison: { rows: [] },
+          missingInformation: [],
+          recommendations: [],
+          // Include health checks for AI to analyze
+          _healthCheckData: {
+            current: currentPolicy.healthCheck,
+            offer: offerPolicy.healthCheck
+          }
+        };
+      });
+
+      console.log(`[ComparisonOrchestrator] Built ${policyComparisons.length} policy comparison skeletons (code-driven)`);
+
+      // Phase 4: AI enriches the structure with narratives (AI cannot add/remove policies)
       const comparisonResult = await comparisonAgentService.generateComparison({
         context: {
           currentCompany,
           offerCompany,
           currency: 'DKK'
         },
-        policyPairs: matchingResult.pairs.map(pair => {
-          const currentPolicy = currentPolicies.find(p => p.snapshotId === pair.currentPolicyId);
-          const offerPolicy = offerPolicies.find(p => p.snapshotId === pair.offerPolicyId);
-          
-          if (!currentPolicy || !offerPolicy) {
-            throw new Error(`Missing policy data for pair: ${pair.policyType}`);
-          }
-          
-          return {
-            policyType: pair.policyType,
-            label: pair.label,
-            current: {
-              policyId: currentPolicy.snapshotId,
-              annualPremium: parseFloat(currentPolicy.premium || '0'),
-              healthCheck: currentPolicy.healthCheck
-            },
-            offer: {
-              policyId: offerPolicy.snapshotId,
-              annualPremium: parseFloat(offerPolicy.premium || '0'),
-              healthCheck: offerPolicy.healthCheck
-            }
-          };
-        })
+        policyComparisons // Pass pre-built structure instead of raw pairs
       });
 
       // Update record with completed status and result (clear statusReason on success)
