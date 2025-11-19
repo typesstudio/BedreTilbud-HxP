@@ -16,48 +16,60 @@ interface HighlightsInput {
 }
 
 /**
+ * Internal type with explicit priority for sorting.
+ * 
+ * The _priority field (0-4) ensures deterministic ordering:
+ * - Lower values sort first (0 = highest priority)
+ * - Prevents category/variant confusion (e.g., coverage warnings outranking deductible improvements)
+ * - Stripped before returning to match Highlight schema
+ */
+type HighlightWithPriority = Highlight & { _priority: number };
+
+/**
  * Generate highlights from coverage and cost differences
  * 
- * Priority order:
- * 1. Cost savings (if offer is cheaper)
- * 2. New coverages in offer (not in current)
- * 3. Higher coverage limits in offer
- * 4. Lower deductibles in offer
- * 5. Removed coverages (warnings)
+ * Explicit priority order (enforced via _priority field):
+ * 0 = Cost savings (if offer is cheaper)
+ * 1 = New coverages in offer (not in current)
+ * 2 = Higher coverage limits in offer
+ * 3 = Lower deductibles in offer
+ * 4 = Removed coverages (warnings)
  */
 export function generateHighlights(input: HighlightsInput): Highlight[] {
-  const highlights: Highlight[] = [];
+  const highlights: HighlightWithPriority[] = [];
   const { coverageRows, currentAnnualPremium, offerAnnualPremium, policyType } = input;
 
-  // 1. Cost savings highlight (if significant)
+  // PRIORITY 0: Cost savings highlight (if significant)
   const annualSavings = currentAnnualPremium - offerAnnualPremium;
   if (annualSavings > 0) {
     const savingsPercent = (annualSavings / currentAnnualPremium) * 100;
     if (savingsPercent >= 5) { // Only show if ≥5% savings
       highlights.push({
         title: "Lavere pris",
-        description: `Spar ${Math.round(annualSavings)} kr årligt`,
+        description: `Spar ${formatCurrency(annualSavings)} årligt`,
         icon: "piggy-bank",
         variant: "success",
-        category: "price"
+        category: "price",
+        _priority: 0
       });
     }
   }
 
-  // 2. Analyze coverage differences
+  // Analyze coverage differences
   for (const row of coverageRows) {
-    // New coverage in offer (not in current)
+    // PRIORITY 1: New coverage in offer (not in current)
     if (row.current.value === 'ikke inkluderet' && row.offer.value !== 'ikke inkluderet') {
       highlights.push({
         title: `${row.coverage} inkluderet`,
         description: row.offer.limit ? `Med dækning på ${row.offer.limit}` : 'Ny dækning i tilbuddet',
         icon: getIconForCoverage(row.coverage),
         variant: "success",
-        category: "coverage"
+        category: "coverage",
+        _priority: 1
       });
     }
     
-    // Higher coverage limit in offer
+    // PRIORITY 2: Higher coverage limit in offer
     else if (row.current.limit && row.offer.limit) {
       const currentLimit = parseCurrency(row.current.limit);
       const offerLimit = parseCurrency(row.offer.limit);
@@ -72,13 +84,14 @@ export function generateHighlights(input: HighlightsInput): Highlight[] {
             description: formatLimitIncrease(currentLimit, offerLimit),
             icon: "trending-up",
             variant: "success",
-            category: "coverage"
+            category: "coverage",
+            _priority: 2
           });
         }
       }
     }
     
-    // Lower deductible in offer
+    // PRIORITY 3: Lower deductible in offer
     if (row.current.selvrisiko && row.offer.selvrisiko) {
       const currentDeductible = parseCurrency(row.current.selvrisiko);
       const offerDeductible = parseCurrency(row.offer.selvrisiko);
@@ -90,58 +103,69 @@ export function generateHighlights(input: HighlightsInput): Highlight[] {
           description: `−${formatCurrency(diff)} pr. skade på ${row.coverage.toLowerCase()}`,
           icon: "trending-down",
           variant: "success",
-          category: "deductible"
+          category: "deductible",
+          _priority: 3
         });
       }
     }
     
-    // Coverage removed in offer (warning)
+    // PRIORITY 4: Coverage removed in offer (warning)
     if (row.current.value !== 'ikke inkluderet' && row.offer.value === 'ikke inkluderet') {
       highlights.push({
         title: `${row.coverage} ikke inkluderet`,
         description: 'Dækning fjernet i tilbuddet',
         icon: "info",
         variant: "warning",
-        category: "coverage"
+        category: "coverage",
+        _priority: 4
       });
     }
   }
 
-  // Limit to top 4 highlights (matches Tryg design)
-  // Prioritize: success > neutral > warning > error
-  const sortedHighlights = highlights.sort((a, b) => {
-    const variantOrder = { success: 0, neutral: 1, warning: 2, error: 3 };
-    return variantOrder[a.variant] - variantOrder[b.variant];
-  });
-
-  return sortedHighlights.slice(0, 4);
+  // Sort by explicit priority, then return top 4 (matches Tryg design)
+  const sortedHighlights = highlights.sort((a, b) => a._priority - b._priority);
+  
+  // Remove internal _priority field before returning
+  return sortedHighlights.slice(0, 4).map(({ _priority, ...highlight }) => highlight);
 }
 
 /**
  * Parse currency string to number
- * Handles formats: "1.000 kr", "1.000.000", "1000", "1000 kr"
+ * Handles formats: "1.000 kr", "1.000.000", "1000", "1000 kr", "1.000.000,50 kr"
+ * Danish format: . for thousands, , for decimals
  */
 function parseCurrency(value: string): number {
-  if (!value) return 0;
+  if (!value || typeof value !== 'string') return 0;
   
-  // Remove all non-numeric except commas and dots
-  const cleaned = value.replace(/[^\d.,]/g, '');
+  // Remove all whitespace and common suffixes
+  const cleaned = value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+    .replace(/kr\.?$/g, '');
   
-  // Danish format uses . for thousands and , for decimals
-  // Convert to standard number format
+  if (cleaned === '') return 0;
+  
+  // Danish format: . for thousands, , for decimals
+  // Convert to standard number format: remove thousand separators, replace decimal comma with dot
   const normalized = cleaned.replace(/\./g, '').replace(',', '.');
   
-  return parseFloat(normalized) || 0;
+  const parsed = parseFloat(normalized);
+  return isNaN(parsed) ? 0 : parsed;
 }
 
 /**
- * Format currency for display
+ * Format currency for display (consistent with Danish format)
  */
 function formatCurrency(amount: number): string {
+  if (isNaN(amount)) return '0 kr';
+  
   if (amount >= 1000000) {
-    return `${(amount / 1000000).toFixed(1)}M kr`;
+    const millions = (amount / 1000000).toFixed(1).replace('.', ',');
+    return `${millions}M kr`;
   } else if (amount >= 1000) {
-    return `${Math.round(amount / 1000)}k kr`;
+    const thousands = Math.round(amount / 1000);
+    return `${thousands}k kr`;
   }
   return `${Math.round(amount)} kr`;
 }
