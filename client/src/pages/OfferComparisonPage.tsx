@@ -24,7 +24,13 @@ import {
   FeatherAlertCircle,
   FeatherArrowUp,
   FeatherPiggyBank,
-  FeatherStar
+  FeatherStar,
+  FeatherDroplet,
+  FeatherTruck,
+  FeatherDollarSign,
+  FeatherHeart,
+  FeatherZap,
+  FeatherInfo
 } from "@subframe/core";
 
 const policyTypeLabels: { [key: string]: string } = {
@@ -49,7 +55,15 @@ const iconMap: { [key: string]: any } = {
   "shield": FeatherShield,
   "home": FeatherHome,
   "check": FeatherCheck,
-  "alert-circle": FeatherAlertCircle
+  "alert-circle": FeatherAlertCircle,
+  "zap": FeatherZap,
+  "car": FeatherCar,
+  "droplet": FeatherDroplet,
+  "truck": FeatherTruck,
+  "piggy-bank": FeatherPiggyBank,
+  "info": FeatherInfo,
+  "dollar-sign": FeatherDollarSign,
+  "heart": FeatherHeart
 };
 
 export default function OfferComparisonPage() {
@@ -270,23 +284,35 @@ export default function OfferComparisonPage() {
         </div>
 
         {overall.globalHighlights && overall.globalHighlights.length > 0 && (
-          <div className="flex flex-col gap-4">
-            <span className="text-heading-3 font-heading-3 text-default-font">Højdepunkter</span>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="flex flex-col gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+            <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold">
+              Højdepunkter hvor anbefalingen er bedre
+            </span>
+            <div className="flex w-full items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
               {overall.globalHighlights.map((highlight: any, index: number) => {
-                const bgClass = getVariantBackgroundClass(highlight.variant || "neutral");
+                const IconComponent = iconMap[highlight.icon] || FeatherInfo;
+                const variant = highlight.variant === "success" ? "success" : highlight.variant === "warning" ? "warning" : "neutral";
+                
                 return (
                   <div 
-                    key={index} 
-                    className={`flex flex-col gap-2 p-4 rounded-lg border ${bgClass}`}
+                    key={index}
+                    className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4 mobile:flex-col mobile:flex-nowrap mobile:gap-2"
                     data-testid={`highlight-card-${index}`}
                   >
-                    <span className="text-body-bold font-body-bold text-default-font">
-                      {highlight.title}
-                    </span>
-                    <span className="text-caption font-caption text-subtext-color">
-                      {highlight.description}
-                    </span>
+                    <IconWithBackground
+                      variant={variant}
+                      size="medium"
+                      icon={<IconComponent />}
+                      square={true}
+                    />
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-body-bold font-body-bold text-default-font">
+                        {highlight.title}
+                      </span>
+                      <span className="text-caption font-caption text-subtext-color">
+                        {highlight.description}
+                      </span>
+                    </div>
                   </div>
                 );
               })}
@@ -375,26 +401,35 @@ export default function OfferComparisonPage() {
         />
 
         {highlights.length > 0 && (
-          <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
-            <span className="text-heading-3 font-heading-3 text-default-font">
-              Højdepunkter
+          <div className="flex flex-col gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm">
+            <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold">
+              Højdepunkter hvor anbefalingen er bedre
             </span>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="flex w-full items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
               {highlights.map((highlight: any, index: number) => {
-                const variant = highlight.variant || (isWorseOffer ? "error" : "success");
-                const bgClass = getVariantBackgroundClass(variant);
+                const IconComponent = iconMap[highlight.icon] || FeatherInfo;
+                const variant = highlight.variant === "success" ? "success" : highlight.variant === "warning" ? "warning" : "neutral";
+                
                 return (
                   <div 
-                    key={index} 
-                    className={`flex flex-col gap-2 p-4 rounded-md border ${bgClass}`}
+                    key={index}
+                    className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4 mobile:flex-col mobile:flex-nowrap mobile:gap-2"
                     data-testid={`highlight-card-${index}`}
                   >
-                    <span className="text-body-bold font-body-bold text-default-font">
-                      {highlight.title}
-                    </span>
-                    <span className="text-caption font-caption text-subtext-color">
-                      {highlight.description}
-                    </span>
+                    <IconWithBackground
+                      variant={variant}
+                      size="medium"
+                      icon={<IconComponent />}
+                      square={true}
+                    />
+                    <div className="flex flex-col items-start gap-1">
+                      <span className="text-body-bold font-body-bold text-default-font">
+                        {highlight.title}
+                      </span>
+                      <span className="text-caption font-caption text-subtext-color">
+                        {highlight.description}
+                      </span>
+                    </div>
                   </div>
                 );
               })}
