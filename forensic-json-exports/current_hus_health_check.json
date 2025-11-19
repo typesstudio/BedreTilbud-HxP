@@ -1,0 +1,99 @@
+{
+  "overallScore": 7,
+  "scoreExplanation": "Denne ulykkesforsikring tilbyder omfattende dækning uden selvrisiko, hvilket er en betydelig fordel, men der er mulighed for besparelser sammenlignet med markedet.",
+  "annualSavings": {
+    "amount": 194,
+    "percentageLower": 18,
+    "explanation": "Baseret på den gennemsnitlige pris for ulykkesforsikringer, er der mulighed for en realistisk besparelse på 18% ved at vurdere andre tilbud."
+  },
+  "highlights": [
+    {
+      "title": "Hurtig sagsbehandling",
+      "description": "Få dine sager behandlet hurtigt",
+      "icon": "zap",
+      "variant": "neutral"
+    },
+    {
+      "title": "Personlig rådgivning",
+      "description": "Få hjælp og vejledning af eksperter",
+      "icon": "headphones",
+      "variant": "neutral"
+    },
+    {
+      "title": "Dækning hele døgnet",
+      "description": "Beskyttelse døgnet rundt",
+      "icon": "clock",
+      "variant": "neutral"
+    },
+    {
+      "title": "Ingen karensperiode",
+      "description": "Ingen ventetid før dækningen træder i kraft",
+      "icon": "check-circle",
+      "variant": "neutral"
+    }
+  ],
+  "whatsIncluded": [
+    {
+      "coverage": "Invaliditet ved ulykke",
+      "description": "Inkl. dobbelterstatning ved varigt mén fra 30%",
+      "value": "inkluderet",
+      "status": "neutral",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": "Ingen",
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Krisehjælp",
+      "description": "Tilbydes op til 25.505 kr",
+      "value": "inkluderet",
+      "status": "neutral",
+      "attributes": {
+        "sum": "25.505 kr",
+        "selvrisiko": "Ingen",
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Tandskade",
+      "description": "Inkl. tyggeskader",
+      "value": "inkluderet",
+      "status": "neutral",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": "Ingen",
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Dobbelterstatning",
+      "description": "Dobbelterstatning tilbydes",
+      "value": "inkluderet",
+      "status": "neutral",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": "Ingen",
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    }
+  ],
+  "keyFigures": [],
+  "missingInformation": {
+    "totalIssues": 3,
+    "criticalCount": 1,
+    "categories": [
+      "Pris & Økonomi: gebyrer, indeksregulering, rabatter",
+      "Dækning: specifikke limits, undtagelser, dobbelterstatning",
+      "Vilkår: binding, opsigelse, karensperiode"
+    ]
+  }
+}

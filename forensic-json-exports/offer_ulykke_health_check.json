@@ -1,0 +1,170 @@
+{
+  "overallScore": 7,
+  "scoreExplanation": "Policen har bred dækning, men den årlige præmie mangler, hvilket komplicerer analysering af økonomiske fordele.",
+  "annualSavings": {
+    "amount": 0,
+    "percentageLower": 0,
+    "explanation": "På grund af den manglende årlige præmie, kan der ikke beregnes en realistisk besparelse."
+  },
+  "highlights": [
+    {
+      "title": "24/7 akut service",
+      "description": "Altid klar til at hjælpe i nødsituationer",
+      "icon": "clock",
+      "variant": "neutral"
+    },
+    {
+      "title": "Hurtig udbetaling",
+      "description": "Få erstatning hurtigt ved skader",
+      "icon": "zap",
+      "variant": "neutral"
+    },
+    {
+      "title": "5-stjernet service",
+      "description": "Fremragende kundesupport og hjælp",
+      "icon": "star",
+      "variant": "neutral"
+    },
+    {
+      "title": "Autoriserede håndværkere",
+      "description": "Kvalitetsarbejde sikret af professionelle",
+      "icon": "check-circle",
+      "variant": "neutral"
+    }
+  ],
+  "whatsIncluded": [
+    {
+      "coverage": "Indbo BASIS",
+      "description": "Standard indbodækning",
+      "value": "inkluderet",
+      "status": "warning",
+      "attributes": {
+        "sum": "835.600 kr",
+        "selvrisiko": "1.300 kr",
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Cykel inkl. tilbehør",
+      "description": "Dækning af cykler og tilbehør",
+      "value": "inkluderet",
+      "status": "warning",
+      "attributes": {
+        "sum": "16.900 kr",
+        "selvrisiko": "1.300 kr",
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Ansvar tingskade",
+      "description": "Ansvarsforsikring for tingskader",
+      "value": "inkluderet",
+      "status": "error",
+      "attributes": {
+        "sum": "5.000.000 kr",
+        "selvrisiko": "1.300 kr",
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Ansvar personskade",
+      "description": "Ansvarsforsikring for personskader",
+      "value": "inkluderet",
+      "status": "error",
+      "attributes": {
+        "sum": "10.000.000 kr",
+        "selvrisiko": "1.300 kr",
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Retshjælp",
+      "description": "Juridisk bistand og råd",
+      "value": "inkluderet",
+      "status": "error",
+      "attributes": {
+        "sum": "225.000 kr",
+        "selvrisiko": "10% af sagens omkostninger dog mindst 2.500 kr",
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Psykologisk krisehjælp",
+      "description": "Støtte efter traumatiske hændelser",
+      "value": "inkluderet",
+      "status": "neutral",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": null,
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "ID-tyveri",
+      "description": "Beskyttelse mod identitetstyveri",
+      "value": "inkluderet",
+      "status": "neutral",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": null,
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    }
+  ],
+  "keyFigures": [],
+  "missingInformation": {
+    "totalIssues": 3,
+    "criticalCount": 2,
+    "categories": [
+      "Pris & Økonomi",
+      "Dækning",
+      "Vilkår"
+    ]
+  },
+  "strengths": [
+    "Fuldt ansvar for person- og tingskade",
+    "Indkluderer psykologisk krisehjælp"
+  ],
+  "weaknesses": [
+    "Mangler oplysninger om årlig præmie",
+    "Retshjælp har relativt høj selvrisiko"
+  ],
+  "coverageGaps": {
+    "categories": [
+      "Bindende betingelser ukendt",
+      "Opsigelsesvilkår ukendt",
+      "Ingen årlig præmie oplyst"
+    ]
+  },
+  "marketComparison": [
+    {
+      "provider": "Tryg",
+      "price": "5.000 kr/år",
+      "coverage": "Standard forsikringsdækning"
+    },
+    {
+      "provider": "Topdanmark",
+      "price": "5.500 kr/år",
+      "coverage": "Udvidet dækning"
+    }
+  ],
+  "recommendations": [
+    "Indhent information om årlig præmie",
+    "Overvej dækninger med lavere selvrisiko",
+    "Sørg for at alle vilkår er gennemsigtige"
+  ]
+}

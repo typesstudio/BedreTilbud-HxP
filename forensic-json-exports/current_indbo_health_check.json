@@ -1,0 +1,164 @@
+{
+  "overallScore": 7,
+  "scoreExplanation": "Policen tilbyder solid dækning inden for indbo og ansvar med konkurrencedygtig præmie. Selvom nogle selvrisici er på den højere side, inkluderer policen flere værdifulde tillægsmuligheder.",
+  "annualSavings": {
+    "amount": 416,
+    "percentageLower": 20,
+    "explanation": "Baseret på en sammenligning med gennemsnitlige markedssatser for indboforsikring kan der være potentielle besparelser."
+  },
+  "highlights": [
+    {
+      "title": "24/7 akut service",
+      "description": "Altid tilgængelig hjælp ved nødsituationer.",
+      "icon": "clock",
+      "variant": "neutral"
+    },
+    {
+      "title": "Hurtig udbetaling",
+      "description": "Effektiv skadebehandling og udbetaling.",
+      "icon": "zap",
+      "variant": "neutral"
+    },
+    {
+      "title": "5-stjernet service",
+      "description": "Anmeldt som fremragende kundeservice.",
+      "icon": "star",
+      "variant": "neutral"
+    },
+    {
+      "title": "Autoriserede håndværkere",
+      "description": "Garanti for høj kvalitet i skadeudbedring.",
+      "icon": "check-circle",
+      "variant": "neutral"
+    }
+  ],
+  "whatsIncluded": [
+    {
+      "coverage": "Ansvarsforsikring",
+      "description": "Beskyttelse mod ansvarsskader på tredjepart.",
+      "value": "inkluderet",
+      "status": "success",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": "0 kr",
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Indbodækning",
+      "description": "Dækker skader på indbo og ejendele.",
+      "value": "inkluderet",
+      "status": "warning",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": "1.417 kr",
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Elskadeforsikring",
+      "description": "Dækker skader forårsaget af kortslutning og el.",
+      "value": "inkluderet",
+      "status": "warning",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": "1.417 kr",
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Pludselig skade",
+      "description": "Dækning mod pludselige, uforudsete skader.",
+      "value": "inkluderet",
+      "status": "warning",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": "1.417 kr",
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Skade forvoldt af små børn",
+      "description": "Dækning af skader skabt af børn under 5 år.",
+      "value": "inkluderet",
+      "status": "success",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": null,
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Gæstebudsdækning",
+      "description": "Dækker skader forårsaget af gæster.",
+      "value": "inkluderet",
+      "status": "success",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": null,
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Dækning af lånte/ejede ting",
+      "description": "Forsikring mod skader på lånte eller lejede ejendele.",
+      "value": "inkluderet",
+      "status": "success",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": null,
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Skybrudsdækning",
+      "description": "Beskytter mod vandskader fra tunge regnskyl.",
+      "value": "inkluderet",
+      "status": "success",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": null,
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Retshjælpsforsikring",
+      "description": "Dækning for juridiske udgifter ved tvister.",
+      "value": "inkluderet",
+      "status": "success",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": null,
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    }
+  ],
+  "keyFigures": [],
+  "missingInformation": {
+    "totalIssues": 3,
+    "criticalCount": 1,
+    "categories": [
+      "prisstruktur, såsom gebyrer og indeksregulering",
+      "specifikke dækningsgrænser og undtagelser",
+      "vilkår for binding og opsigelse"
+    ]
+  }
+}

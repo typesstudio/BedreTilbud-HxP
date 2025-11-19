@@ -1,0 +1,138 @@
+{
+  "overallScore": 7,
+  "scoreExplanation": "Forsikringen tilbyder bred dækning, men mangler information om præmier og gebyrer.",
+  "annualSavings": {
+    "amount": 0,
+    "percentageLower": 0,
+    "explanation": "Der kan ikke beregnes besparelser baseret på en årlig præmie på 0.00 kr."
+  },
+  "highlights": [
+    {
+      "title": "24/7 akut service",
+      "description": "Tilgængelighed døgnet rundt",
+      "icon": "clock",
+      "variant": "neutral"
+    },
+    {
+      "title": "Hurtig udbetaling",
+      "description": "Effektiv erstatning til tiden",
+      "icon": "zap",
+      "variant": "neutral"
+    },
+    {
+      "title": "5-stjernet service",
+      "description": "Kvalitetssikret kundeservice",
+      "icon": "star",
+      "variant": "neutral"
+    },
+    {
+      "title": "Autoriserede håndværkere",
+      "description": "Kvalitetssikrede reparationer",
+      "icon": "check-circle",
+      "variant": "neutral"
+    }
+  ],
+  "whatsIncluded": [
+    {
+      "coverage": "Indbo BASIS",
+      "description": "Basisdækning for indbo",
+      "value": "inkluderet",
+      "status": "neutral",
+      "attributes": {
+        "sum": "835.600,00 kr",
+        "selvrisiko": null,
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Cykel inkl. tilbehør",
+      "description": "Cykeldækning pr. cykel",
+      "value": "inkluderet",
+      "status": "neutral",
+      "attributes": {
+        "sum": "16.900,00 kr",
+        "selvrisiko": null,
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Ansvar tingskade",
+      "description": "Ansvarsforsikring ved skader på ting",
+      "value": "inkluderet",
+      "status": "error",
+      "attributes": {
+        "sum": "5.000.000,00 kr",
+        "selvrisiko": null,
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Ansvar personskade",
+      "description": "Ansvarsforsikring ved personskader",
+      "value": "inkluderet",
+      "status": "error",
+      "attributes": {
+        "sum": "10.000.000,00 kr",
+        "selvrisiko": null,
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Retshjælp",
+      "description": "Hjælp ved juridiske tvister",
+      "value": "inkluderet",
+      "status": "warning",
+      "attributes": {
+        "sum": "225.000,00 kr",
+        "selvrisiko": "10% (min. 2.500,00 kr)",
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "Psykologisk krisehjælp",
+      "description": "Hjælp ved krisesituationer",
+      "value": "inkluderet",
+      "status": "neutral",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": null,
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    },
+    {
+      "coverage": "ID-tyveri",
+      "description": "Beskyttelse mod identitetstyveri",
+      "value": "inkluderet",
+      "status": "neutral",
+      "attributes": {
+        "sum": null,
+        "selvrisiko": null,
+        "loft": null,
+        "sla": null,
+        "noter": null
+      }
+    }
+  ],
+  "keyFigures": [],
+  "missingInformation": {
+    "totalIssues": 3,
+    "criticalCount": 1,
+    "categories": [
+      "Pris & Økonomi: gebyrer, indeksregulering, rabatter",
+      "Dækning: specifikke limits, undtagelser",
+      "Vilkår: binding, opsigelse, karensperiode"
+    ]
+  }
+}
