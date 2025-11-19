@@ -1,0 +1,357 @@
+Nice, we’re *close* now – the overview looks right, but the per-policy views are still half-dead.
+
+From your screenshots I can infer this:
+
+* **Samlet oversigt (Alm. Brand)**
+
+  * Samlet besparelse: **900 kr** ✅
+  * Antal forsikringer: **3** ✅
+  * Hurtig oversigt: shows correct current/offer prices for Hus/Indbo/Ulykke ✅
+  * But “Besparelse” column is **N/A** ❌
+
+* **Ulykke-tab**
+
+  * Current: **1.500 kr/år**
+  * New: **1.300 kr/år**
+  * “Årlig besparelse”: **0 kr** and “0%” ❌
+  * Coverage table shows only one row with `N/A / N/A` ❌
+
+So:
+
+* The pipeline **knows the premiums per policy** (it can show 1.500 vs 1.300).
+* The combined summary is correct (900 total).
+* But **per-policy savings and coverage comparisons are either missing or not wired up.**
+
+That means:
+
+* Phase 1–3 (extract → health check → match) are mostly fine.
+* The bug is in **Phase 4 JSON + frontend mapping** for each policy.
+
+Below is how I’d debug this end-to-end and where I’d expect the bug to be.
+
+---
+
+## 1. Check the comparison JSON for Alm. Brand
+
+Ask Replit (or run in psql) to pull the *actual* `comparison_json` you’re rendering for Alm. Brand:
+
+```sql
+SELECT
+  id,
+  comparison_json
+FROM company_comparisons
+WHERE user_id = 'e85ec3b9-e354-4c49-9f68-194830e356af'
+  AND offer_company = (SELECT id FROM companies WHERE name ILIKE '%alm. brand%')
+ORDER BY created_at DESC
+LIMIT 1;
+```
+
+Pretty-print that JSON.
+
+You should see something like:
+
+```json
+{
+  "summary": {
+    "currentAnnualTotal": 8500,
+    "offerAnnualTotal": 7600,
+    "annualSavings": 900,
+    "monthlySavings": 75,
+    "numPolicies": 3
+  },
+  "policyComparisons": [
+    {
+      "policyType": "hus",
+      "currentAnnualPremium": 5000,
+      "offerAnnualPremium": 4500,
+      "annualSavings": 500,
+      "coverageRows": [...]
+    },
+    {
+      "policyType": "indbo",
+      "currentAnnualPremium": 2000,
+      "offerAnnualPremium": 1800,
+      "annualSavings": 200,
+      "coverageRows": [...]
+    },
+    {
+      "policyType": "ulykke",
+      "currentAnnualPremium": 1500,
+      "offerAnnualPremium": 1300,
+      "annualSavings": 200,
+      "coverageRows": [...]
+    }
+  ]
+}
+```
+
+Right now, based on the UI, I’d bet it actually looks more like:
+
+```json
+{
+  "summary": {
+    "currentAnnualTotal": 8500,
+    "offerAnnualTotal": 7600,
+    "annualSavings": 900,
+    "numPolicies": 3
+  },
+  "policyComparisons": [
+    {
+      "policyType": "hus",
+      "currentAnnualPremium": 5000,
+      "offerAnnualPremium": 4500,
+      "annualSavings": null,
+      "coverageRows": []
+    },
+    {
+      "policyType": "indbo",
+      "currentAnnualPremium": 2000,
+      "offerAnnualPremium": 1800,
+      "annualSavings": null,
+      "coverageRows": []
+    },
+    {
+      "policyType": "ulykke",
+      "currentAnnualPremium": 1500,
+      "offerAnnualPremium": 1300,
+      "annualSavings": null,
+      "coverageRows": []
+    }
+  ]
+}
+```
+
+If `currentAnnualPremium` / `offerAnnualPremium` are there but `annualSavings` and `coverageRows` are empty, then:
+
+* The **numeric part of Phase 4 is missing** for each policy.
+* The frontend shows `0 kr` or `N/A` because it just reads `annualSavings` / `percentageSavings` and `coverageRows`.
+
+---
+
+## 2. Drill into each pipeline step for *one* policy type
+
+Let’s take **ulykke** as the example (since its card is clearly wrong).
+
+### 2.1. Health checks for ulykke
+
+Check what the health check outputs look like for current + offer ulykke snapshots:
+
+```sql
+SELECT
+  hc.id,
+  hc.snapshot_id,
+  os.policy_type,
+  hc.result_json
+FROM health_checks hc
+JOIN offer_snapshots os ON os.id = hc.snapshot_id
+JOIN documents d ON d.id = os.document_id
+WHERE d.user_id = 'e85ec3b9-e354-4c49-9f68-194830e356af'
+  AND os.policy_type = 'ulykke';
+```
+
+You want to see in `result_json`:
+
+* The annual premium (current & offer) used for health check
+* The list of coverages (e.g. “Dækning ved varig invaliditet”, “tandskader”, etc.)
+
+If **health checks have no coverage details** for ulykke, then Phase 1 health-check prompt/extractor isn’t pulling them out → that’s why your detailed table is empty.
+
+### 2.2. Deterministic matcher for ulykke
+
+You now have 3 matched pairs (Hus/Indbo/Ulykke), or you wouldn’t see “3 sammenlignede typer”.
+
+But to be sure, in `deterministicMatcher` for this user:
+
+* Log the matched pairs:
+
+```ts
+console.log('[Matcher] Matched pairs for', userId, matchedPairs.map(p => ({
+  type: p.current.policyType,
+  currentId: p.current.id,
+  offerId: p.offer.id,
+  score: p.score
+})));
+```
+
+Re-run the pipeline once.
+
+You should see one pair of `{ type: 'ulykke', ... }`. If not, matching is still failing and the overview is lying.
+
+---
+
+## 3. Fix Phase 4: Comparison JSON per policy
+
+At this point the likely situation is:
+
+* For each policy pair you **do** have:
+
+  * current + offer premiums
+  * some health-check text
+* But the **ComparisonAgent** and/or orchestrator:
+
+  * Only calculates totals in `summary`,
+  * And never fills `annualSavings`, `percentageSavings`, `coverageRows` for each policy.
+
+Given what you want, I’d do this:
+
+### 3.1. Move savings calculation into code, not AI
+
+In `comparisonOrchestrator.ts`, when you build the `policyComparisons` array (before calling the AI):
+
+```ts
+const policyComparisons = matchedPairs.map(pair => {
+  const current = pair.current;
+  const offer = pair.offer;
+
+  const currentPremium = current.annualPremium ?? current.healthCheck?.annualPremium;
+  const offerPremium   = offer.annualPremium ?? offer.healthCheck?.annualPremium;
+
+  const annualSavings = currentPremium != null && offerPremium != null
+    ? currentPremium - offerPremium
+    : null;
+
+  const percentageSavings = annualSavings != null && currentPremium
+    ? (annualSavings / currentPremium) * 100
+    : null;
+
+  return {
+    policyType: current.policyType,
+    currentAnnualPremium: currentPremium,
+    offerAnnualPremium: offerPremium,
+    annualSavings,
+    percentageSavings,
+    coverageRows: [],       // fill below or via AI
+    // plus ids, raw healthCheck snippets, etc.
+  };
+});
+```
+
+Then pass **this** `policyComparisons` into the AI with a hard rule:
+
+> “You MUST NOT change, remove or add items in `policyComparisons`. You may only fill in `highlights`, `narratives` and `coverageRows` for each existing item.”
+
+That way:
+
+* Your per-policy cards can *always* trust `annualSavings` and `percentageSavings`.
+* The combined totals can either be taken from `summary` or computed by summing `policyComparisons[].annualSavings`.
+
+### 3.2. Populate coverageRows deterministically where possible
+
+Start simple:
+
+* Use the health check result for each policy:
+
+  ```ts
+  const currentCoverages = current.healthCheck?.coverages ?? [];
+  const offerCoverages   = offer.healthCheck?.coverages ?? [];
+
+  // Build a union by coverage name
+  const allCoverageNames = uniq([
+    ...currentCoverages.map(c => c.name),
+    ...offerCoverages.map(c => c.name),
+  ]);
+
+  const coverageRows = allCoverageNames.map(name => {
+    const cur = currentCoverages.find(c => c.name === name);
+    const off = offerCoverages.find(c => c.name === name);
+
+    return {
+      name,
+      currentValue: cur?.amount ?? cur?.included ?? null,
+      offerValue: off?.amount ?? off?.included ?? null,
+    };
+  });
+  ```
+
+* Attach `coverageRows` directly in code; let the AI only rewrite the **titles/labels** or add human-readable highlight sentences.
+
+That will make the “Detaljeret sammenligning” table non-empty.
+
+If the health checks are weak for indbo/ulykke right now, you’ll see that quickly – then you know to improve that prompt separately.
+
+---
+
+## 4. Wire the frontend to the correct JSON fields
+
+Once the backend JSON is sane, fix the UI.
+
+### 4.1. “Samlet oversigt” / “Hurtig oversigt”
+
+In `OfferComparisonPage`:
+
+* For the **quick overview table**, use the actual JSON:
+
+```ts
+const policyComparisons = data?.comparisonJson?.policyComparisons ?? [];
+
+const quickRows = policyComparisons.map(pc => ({
+  type: pc.policyType,
+  current: pc.currentAnnualPremium,
+  offer: pc.offerAnnualPremium,
+  savings: pc.annualSavings,
+}));
+```
+
+* Don’t rebuild these from scratch; otherwise it’s easy to drift from backend.
+
+### 4.2. Policy tabs (Hus / Indbo / Ulykke)
+
+For each tab:
+
+```ts
+const comparison = policyComparisons.find(
+  pc => pc.policyType === 'ulykke' // or 'hus', 'indbo'
+);
+
+if (!comparison) {
+  return <EmptyState ... />;
+}
+
+const annualSavings = comparison.annualSavings ?? 
+  (comparison.currentAnnualPremium && comparison.offerAnnualPremium
+    ? comparison.currentAnnualPremium - comparison.offerAnnualPremium
+    : 0);
+
+const coverageRows = comparison.coverageRows ?? [];
+```
+
+* Use `annualSavings` directly.
+* If it’s missing for some reason, compute it as a fallback in the component.
+
+This will fix:
+
+* Ulykke card displaying **0 kr** instead of 200 kr
+* “Hurtig oversigt” showing “N/A” instead of 500/200/200.
+
+---
+
+## 5. About a “golden” benchmark from the PDFs
+
+Yes, I’d absolutely add that as a safety net:
+
+1. Take the **User Insurance.pdf** + **Offer Insurance.pdf** you uploaded.
+
+2. Manually define the expected structured JSON for those two files (just the 3 policy premiums + 2–3 coverages each).
+
+3. Add a tiny test harness that:
+
+   * Bypasses OCR and uses that JSON as input to Phases 3–4.
+   * Asserts:
+
+     * 3 matched pairs.
+     * `policyComparisons.length === 3`.
+     * `annualSavings` for each type matches the hand-computed values.
+     * Coverage rows are not empty.
+
+4. Run that whenever you touch matcher / comparison agent.
+
+That will stop you from ever landing in another “looks nice in overview, broken in detail” situation without noticing.
+
+---
+
+If you want, I can now turn this into a strict Replit prompt that forces it to:
+
+1. Dump `comparison_json` for Alm. Brand.
+2. Confirm `policyComparisons` content.
+3. Implement the “compute savings in code” pattern above.
+4. Wire the UI tabs to `comparisonJson.policyComparisons`.
