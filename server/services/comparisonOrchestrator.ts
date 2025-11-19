@@ -2,6 +2,7 @@ import type { IStorage } from "../storage";
 import type { InsertCompanyComparison, CompanyComparison } from "@shared/schema";
 import { computeBestMatches } from "./deterministicMatcher";
 import { comparisonAgentService } from "./comparisonAgentService";
+import { matchCoverages } from "./coverageMatcher";
 
 interface ComparisonOptions {
   userId: string;
@@ -509,6 +510,14 @@ export class ComparisonOrchestrator {
           ? (annualSavings / currentAnnualPremium) * 100 
           : 0;
         
+        // DETERMINISTIC COVERAGE MATCHING (Phase 4A)
+        // Extract whatsIncluded from health checks and match deterministically
+        const currentCoverages = currentPolicy.healthCheck?.whatsIncluded || [];
+        const offerCoverages = offerPolicy.healthCheck?.whatsIncluded || [];
+        const coverageRows = matchCoverages(currentCoverages, offerCoverages);
+        
+        console.log(`[ComparisonOrchestrator] Matched ${coverageRows.length} coverage rows for ${pair.policyType} (current: ${currentCoverages.length}, offer: ${offerCoverages.length})`);
+        
         return {
           policyType: pair.policyType,
           label: pair.label,
@@ -520,12 +529,13 @@ export class ComparisonOrchestrator {
             annualSavings,
             annualSavingsPercent: Math.round(annualSavingsPercent * 10) / 10
           },
-          // AI will fill these fields:
+          // COVERAGE ROWS BUILT DETERMINISTICALLY (not by AI)
+          coverageComparison: { rows: coverageRows },
+          // AI will fill these narrative fields:
           highlights: [],
-          coverageComparison: { rows: [] },
           missingInformation: [],
           recommendations: [],
-          // Include health checks for AI to analyze
+          // Include health checks for AI to analyze for narratives
           _healthCheckData: {
             current: currentPolicy.healthCheck,
             offer: offerPolicy.healthCheck
