@@ -1,0 +1,251 @@
+Gotcha – so Alm. Brand *works* in the sense that numbers are right, but it’s clearly not reaching the depth of the Tryg mock: only one coverage row, almost no “brain” in the analysis, and the “Forstå det med småt” / big cumulative story is missing.
+
+Based on the forensic report you pasted, here’s what we know and what’s still off:
+
+* ✅ Backend pipeline is **technically correct** for Alm. Brand:
+
+  * 3 matched pairs (hus/indbo/ulykke)
+  * `comparison_json` has correct premiums + savings per policy
+  * One coverage row per policy (Brand, Tyveri, Invaliditet) with correct limits/values
+* ✅ Frontend now reads the right nested paths (`costSummary.*`, `coverageComparison.rows`).
+* ❌ The **depth of analysis** is missing compared to the Tryg design:
+
+  * Only 1 coverage row per policy instead of “everything”.
+  * Only minimal highlights.
+  * “Forstå det med småt” section & richer narrative aren’t there.
+  * Cumulative chart is probably just using a trivial series, not a proper story.
+
+So the “bug” now isn’t a simple wrong field – it’s that **Phase 4 + the JSON schema aren’t rich enough to drive the design you want.** Alm. Brand is showing you exactly what you ask it to generate.
+
+---
+
+## Where the gaps are (vs the design)
+
+Compare your current JSON (from the report):
+
+```json
+{
+  "overall": {
+    "annualSavings": 900,
+    "totalCurrentAnnualPremium": 8500,
+    "totalOfferAnnualPremium": 7600,
+    "perPolicySummary": [...]
+  },
+  "policyComparisons": [
+    {
+      "policyType": "hus",
+      "costSummary": {...},
+      "coverageComparison": {
+        "rows": [ { "coverage": "Brand", ... } ]
+      }
+    },
+    ...
+  ]
+}
+```
+
+Against what the UI *wants* for the Tryg mock:
+
+1. **Samlet oversigt**
+
+   * Big card with annual cost + savings ✅ (you have this)
+   * 3–4 highlight cards (better coverage, better price, etc.) → needs `overall.highlights`
+   * Long “Detaljeret sammenligning” table with many rows → needs more than 1 row per policy
+   * “Forstå det med småt” section with 4–6 bullet items → needs e.g. `overall.finePrint[]`
+   * Cumulative chart series → needs `overall.cumulativeSavingsSeries` *or* a reliable way to compute it
+
+2. **Policy tabs (Hus/Indbo/Ulykke)**
+
+   * Per-policy savings ✅ (now correct)
+   * Per-policy highlights (e.g. “Forbedret dækning på husforsikring”) → okay-ish, but could be richer
+   * Detailed table with multiple rows (kasko, brand, vandskade, retshjælp, osv.) → currently only 1 row
+
+So the missing pieces are:
+
+* **Data depth**: only one coverage row per policy, not full coverage set
+* **Narrative structure**: no `highlights[]` / `finePrint[]` / `cumulativeSeries[]` in JSON
+
+That’s backend / AI, not just frontend.
+
+---
+
+## Plan: Make the comparison actually “rich” like your Tryg mock
+
+### 1. Upgrade coverage comparison to use *all* coverages, not just 1
+
+Right now, per your report, `coverageComparison.rows` has exactly one row per policy (Brand, Tyveri, Invaliditet).
+
+You want the **full table**. To get that:
+
+1. **Find the richest coverage source** in your data model:
+
+   * Either:
+
+     * `offer_snapshots.coverageDetails` (from OCR → structured coverages), or
+     * `health_checks.result_json.coverages` (if you’re already storing a list there).
+
+2. In `comparisonOrchestrator` when you build `policyComparisons`:
+
+   ```ts
+   const currentCoverages = current.coverageDetails ?? current.healthCheck?.coverages ?? [];
+   const offerCoverages   = offer.coverageDetails   ?? offer.healthCheck?.coverages   ?? [];
+
+   const coverageNames = Array.from(new Set([
+     ...currentCoverages.map(c => c.name?.trim()),
+     ...offerCoverages.map(c => c.name?.trim()),
+   ].filter(Boolean)));
+
+   const rows = coverageNames.map(name => {
+     const cur = currentCoverages.find(c => c.name === name);
+     const off = offerCoverages.find(c => c.name === name);
+
+     return {
+       coverage: name,
+       description: cur?.description || off?.description || null,
+       current: {
+         value: cur ? (cur.included ? 'inkluderet' : 'ikke inkluderet') : 'ikke nævnt',
+         limit: cur?.amountText ?? cur?.limit ?? null,
+         selvrisiko: cur?.deductibleText ?? null,
+       },
+       offer: {
+         value: off ? (off.included ? 'inkluderet' : 'ikke inkluderet') : 'ikke nævnt',
+         limit: off?.amountText ?? off?.limit ?? null,
+         selvrisiko: off?.deductibleText ?? null,
+       },
+     };
+   });
+   ```
+
+3. Plug `rows` into `coverageComparison.rows`.
+
+4. Optionally limit to, say, the first 20 rows in the UI to avoid insane tables.
+
+👉 This change alone will turn your “1 row per tab” into a **rich coverage table** like the Tryg mock.
+
+---
+
+### 2. Make the AI produce structured highlights & “small print”
+
+You currently only have per-policy cost + coverage. To power the boxes in your Tryg mock, you need more structure:
+
+I’d extend the schema like:
+
+```json
+{
+  "overall": {
+    "annualSavings": 900,
+    "monthlySavings": 75,
+    "tenYearSavings": 10800,
+    "highlights": [
+      { "kind": "price", "policyType": "hus", "title": "Større besparelse på husforsikring", "body": "..." },
+      { "kind": "coverage", "policyType": "indbo", "title": "Lavere præmie på indboforsikring", "body": "..." },
+      { "kind": "coverage", "policyType": "ulykke", "title": "Forbedret dækning på ulykkesforsikring", "body": "..." }
+    ],
+    "finePrint": [
+      { "severity": "medium", "title": "Frivillig selvrisiko", "body": "..." },
+      { "severity": "high", "title": "Begrænsning ved lejeudlejning", "body": "..." }
+    ],
+    "cumulativeSavingsSeries": [
+      { "month": 1, "savings": 75 },
+      { "month": 2, "savings": 150 },
+      ...
+    ]
+  }
+}
+```
+
+**Implementation steps:**
+
+1. **In the orchestrator** compute the numeric bits *before* calling the AI:
+
+   ```ts
+   const annualSavings = overall.totalCurrentAnnualPremium - overall.totalOfferAnnualPremium;
+   const monthlySavings = annualSavings / 12;
+   const tenYearSavings = annualSavings * 10;
+
+   const cumulativeSavingsSeries = Array.from({ length: 120 }, (_, i) => ({
+     month: i + 1,
+     savings: monthlySavings * (i + 1),
+   }));
+   ```
+
+2. Pass these numbers, plus:
+
+   * the cost summaries,
+   * the coverage differences,
+   * and the per-policy health-check pros/cons,
+
+   into the ComparisonAgent, and change the prompt to:
+
+   > *“You MUST NOT change the numeric fields or the `cumulativeSavingsSeries`. Only generate human-readable `highlights[]` and `finePrint[]` arrays based on the differences.”*
+
+3. Update the TypeScript type + JSON schema accordingly.
+
+4. Adjust the frontend:
+
+   * Top highlight cards (in Samlet oversigt) ← `overall.highlights`
+   * “Forstå det med småt” section ← `overall.finePrint`
+   * Cumulative chart ← `overall.cumulativeSavingsSeries` (or just recompute on the frontend from `annualSavings` if you prefer).
+
+Right now those arrays simply **don’t exist** in your JSON, so the design can’t be fulfilled.
+
+---
+
+### 3. Wire the frontend to the richer schema
+
+Once the backend has:
+
+* `overall.highlights[]`
+* `overall.finePrint[]`
+* `overall.cumulativeSavingsSeries[]`
+* `policyComparisons[].coverageComparison.rows[]` with many rows
+
+then:
+
+1. **Samlet oversigt page**
+
+   * Use `overall.highlights` to render the 3 green cards like your Tryg mock.
+   * Use `overall.finePrint` to render the “Forstå det med småt” checklist.
+   * Use `overall.cumulativeSavingsSeries` to build the chart data.
+
+2. **Per-policy tabs**
+
+   * Keep using `costSummary` for the top box.
+   * Use the *filtered* coverage rows for that type (you already do this, you’ll just get more rows now).
+
+3. **Guardrails**
+
+   * If `highlights` or `finePrint` are missing (old comparisons), show a simple fallback text instead of empty sections.
+   * Log a warning in dev so you notice.
+
+---
+
+### 4. How to debug where it’s wrong *right now* (AI vs frontend)
+
+If you want to be absolutely sure *where* the gap is before changing things, ask Replit to:
+
+1. Dump the full `comparison_json` for Alm. Brand and paste/inspect:
+
+   * Does it already contain `highlights` / `finePrint` / multiple coverage rows?
+
+     * **Yes:** frontend still isn’t mapping correctly for those sections.
+     * **No:** backend/ComparisonAgent simply isn’t generating what the design expects.
+
+2. Dump `health_checks.result_json` for each snapshot:
+
+   * Check how many coverage items exist in raw health check.
+   * If there are many, but `coverageComparison.rows` only has one → orchestrator is throwing them away.
+   * If there is only one there too → you need to feed a richer coverage list (from `coverageDetails` or OCR) into the comparison.
+
+But given your forensic report already shows **exactly one coverage row per policy** in `comparison_json`, I’d say:
+
+* **Backend is correct but minimal**,
+* **Frontend is now correctly displaying a minimal JSON**,
+* and to get the full Tryg-style design you need to **extend the JSON schema + ComparisonAgent + mapping** as above.
+
+---
+
+If you’d like, I can draft:
+
+* A concrete JSON schema for `comparison_json` v2 (including `highlights`, `finePrint`, `cumulativeSavingsSeries`), and/or
+* A Replit prompt that explicitly tells the agent: “Don’t change any numbers, just add those narrative arrays based on this deterministic data.”
