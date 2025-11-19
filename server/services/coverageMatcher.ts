@@ -42,15 +42,18 @@ interface MatchedCoverageRow {
 /**
  * Known coverage name synonyms for Danish insurance
  * Maps variations to canonical name
+ * 
+ * NOTE: Keys are PRE-NORMALIZED (lowercase, no punctuation, collapsed whitespace)
+ * to match the output of normalizeCoverageName()
  */
 const COVERAGE_SYNONYMS: Record<string, string> = {
-  // Brand variations
+  // Brand variations (normalized)
   'brand': 'brand',
   'bygningsbrand': 'brand',
   'branddækning': 'brand',
   'brandskade': 'brand',
-  'el-skade': 'brand', // Often bundled with brand
-  'bygningsbrand, el-skade': 'brand',
+  'elskade': 'brand', // Often bundled with brand (was: el-skade)
+  'bygningsbrand elskade': 'brand', // (was: bygningsbrand, el-skade)
   
   // Kasko variations (for car insurance)
   'kasko': 'kasko',
@@ -73,7 +76,7 @@ const COVERAGE_SYNONYMS: Record<string, string> = {
   'ansvarsdækning': 'ansvar',
   'privatansvar': 'ansvar',
   'bygningsansvar': 'ansvar',
-  'bygningsbeskadigelse, ansvar': 'ansvar',
+  'bygningsbeskadigelse ansvar': 'ansvar', // (was: bygningsbeskadigelse, ansvar)
   
   // Legal assistance
   'retshjælp': 'retshjælp',
@@ -85,11 +88,11 @@ const COVERAGE_SYNONYMS: Record<string, string> = {
   'ulykkesforsikring': 'ulykke',
   'invaliditet': 'ulykke',
   
-  // Rot/fungus
+  // Rot/fungus (normalized)
   'råd': 'råd og svamp',
   'svamp': 'råd og svamp',
   'råd og svamp': 'råd og svamp',
-  'råd, svamp og insekt': 'råd og svamp',
+  'råd svamp og insekt': 'råd og svamp', // (was: råd, svamp og insekt)
   
   // Pipes/plumbing
   'stikledninger': 'stikledninger',
@@ -104,14 +107,14 @@ const COVERAGE_SYNONYMS: Record<string, string> = {
 /**
  * Normalize coverage name for matching
  * - Lowercase
- * - Remove punctuation
+ * - Remove punctuation (including &, /, -)
  * - Collapse whitespace
  */
 function normalizeCoverageName(name: string): string {
   return name
     .toLowerCase()
     .trim()
-    .replace(/[.,!?;:()\[\]{}]/g, '') // Remove punctuation
+    .replace(/[.,!?;:()\[\]{}&\/-]/g, '') // Remove punctuation including &, /, -
     .replace(/\s+/g, ' ') // Collapse whitespace
     .trim();
 }
@@ -174,6 +177,84 @@ function findBestMatch(targetName: string, candidates: CoverageItem[], threshold
 }
 
 /**
+ * Build a single comparison row from current and offer coverage items
+ */
+function buildComparisonRow(
+  currentItem: CoverageItem | null,
+  offerItem: CoverageItem | null
+): MatchedCoverageRow {
+  // Use display name from whichever side has the coverage
+  const displayName = currentItem?.coverage || offerItem?.coverage || 'Unknown';
+  const description = currentItem?.description || offerItem?.description || null;
+  
+  // Build current side
+  const current = currentItem
+    ? {
+        value: currentItem.value || 'inkluderet',
+        limit: currentItem.attributes?.sum || currentItem.attributes?.loft || null,
+        selvrisiko: currentItem.attributes?.selvrisiko || null,
+        status: currentItem.status || 'neutral'
+      }
+    : {
+        value: 'ikke inkluderet',
+        limit: null,
+        selvrisiko: null,
+        status: 'warning'
+      };
+  
+  // Build offer side
+  const offer = offerItem
+    ? {
+        value: offerItem.value || 'inkluderet',
+        limit: offerItem.attributes?.sum || offerItem.attributes?.loft || null,
+        selvrisiko: offerItem.attributes?.selvrisiko || null,
+        status: offerItem.status || 'neutral'
+      }
+    : {
+        value: 'ikke inkluderet',
+        limit: null,
+        selvrisiko: null,
+        status: 'error'
+      };
+  
+  // Generate note for significant differences
+  let note: string | null = null;
+  
+  // Only included in offer (new coverage)
+  if (!currentItem && offerItem) {
+    note = 'Ny dækning i tilbuddet';
+  }
+  // Only included in current (lost coverage)
+  else if (currentItem && !offerItem) {
+    note = 'Dækning fjernet i tilbuddet';
+  }
+  // Both present - check for limit improvements
+  else if (currentItem && offerItem && current.limit && offer.limit) {
+    const currentLimit = parseFloat(current.limit.replace(/[^\d,]/g, '').replace(',', '.'));
+    const offerLimit = parseFloat(offer.limit.replace(/[^\d,]/g, '').replace(',', '.'));
+    
+    if (!isNaN(currentLimit) && !isNaN(offerLimit)) {
+      const diff = offerLimit - currentLimit;
+      if (Math.abs(diff) > currentLimit * 0.1) { // >10% difference
+        if (diff > 0) {
+          note = `Højere dækningssum i tilbuddet`;
+        } else {
+          note = `Lavere dækningssum i tilbuddet`;
+        }
+      }
+    }
+  }
+  
+  return {
+    coverage: displayName,
+    description,
+    current,
+    offer,
+    note
+  };
+}
+
+/**
  * Match coverages between current and offer policies
  * 
  * Algorithm:
@@ -195,117 +276,55 @@ export function matchCoverages(
     return [];
   }
   
-  // Collect all unique coverage names (normalized)
-  const allCoverageNames = new Set<string>();
-  
-  currentCoverages.forEach(c => {
-    const normalized = normalizeCoverageName(c.coverage);
-    const canonical = getCanonicalName(normalized);
-    allCoverageNames.add(canonical);
-  });
-  
-  offerCoverages.forEach(c => {
-    const normalized = normalizeCoverageName(c.coverage);
-    const canonical = getCanonicalName(normalized);
-    allCoverageNames.add(canonical);
-  });
-  
-  // Build comparison rows for each unique coverage
   const rows: MatchedCoverageRow[] = [];
   const usedCurrentIndices = new Set<number>();
   const usedOfferIndices = new Set<number>();
   
-  for (const canonicalName of Array.from(allCoverageNames)) {
-    // Find best match in current list
-    const currentIndex = currentCoverages.findIndex((c, idx) => {
-      if (usedCurrentIndices.has(idx)) return false;
-      const normalized = normalizeCoverageName(c.coverage);
-      return getCanonicalName(normalized) === canonicalName;
-    });
+  // Start by matching current coverages to offer coverages
+  for (let currentIdx = 0; currentIdx < currentCoverages.length; currentIdx++) {
+    if (usedCurrentIndices.has(currentIdx)) continue;
     
-    // Find best match in offer list
-    const offerIndex = offerCoverages.findIndex((c, idx) => {
+    const currentItem = currentCoverages[currentIdx];
+    const currentNormalized = normalizeCoverageName(currentItem.coverage);
+    const currentCanonical = getCanonicalName(currentNormalized);
+    
+    // Try exact canonical match first
+    let offerIdx = offerCoverages.findIndex((c, idx) => {
       if (usedOfferIndices.has(idx)) return false;
       const normalized = normalizeCoverageName(c.coverage);
-      return getCanonicalName(normalized) === canonicalName;
+      return getCanonicalName(normalized) === currentCanonical;
     });
     
-    const currentItem = currentIndex >= 0 ? currentCoverages[currentIndex] : null;
-    const offerItem = offerIndex >= 0 ? offerCoverages[offerIndex] : null;
-    
-    // Mark indices as used
-    if (currentIndex >= 0) usedCurrentIndices.add(currentIndex);
-    if (offerIndex >= 0) usedOfferIndices.add(offerIndex);
-    
-    // Use display name from whichever side has the coverage
-    const displayName = currentItem?.coverage || offerItem?.coverage || canonicalName;
-    const description = currentItem?.description || offerItem?.description || null;
-    
-    // Build current side
-    const current = currentItem
-      ? {
-          value: currentItem.value || 'inkluderet',
-          limit: currentItem.attributes?.sum || currentItem.attributes?.loft || null,
-          selvrisiko: currentItem.attributes?.selvrisiko || null,
-          status: currentItem.status || 'neutral'
-        }
-      : {
-          value: 'ikke inkluderet',
-          limit: null,
-          selvrisiko: null,
-          status: 'warning'
-        };
-    
-    // Build offer side
-    const offer = offerItem
-      ? {
-          value: offerItem.value || 'inkluderet',
-          limit: offerItem.attributes?.sum || offerItem.attributes?.loft || null,
-          selvrisiko: offerItem.attributes?.selvrisiko || null,
-          status: offerItem.status || 'neutral'
-        }
-      : {
-          value: 'ikke inkluderet',
-          limit: null,
-          selvrisiko: null,
-          status: 'error'
-        };
-    
-    // Generate note for significant differences
-    let note: string | null = null;
-    
-    // Only included in offer (new coverage)
-    if (!currentItem && offerItem) {
-      note = 'Ny dækning i tilbuddet';
-    }
-    // Only included in current (lost coverage)
-    else if (currentItem && !offerItem) {
-      note = 'Dækning fjernet i tilbuddet';
-    }
-    // Both present - check for limit improvements
-    else if (currentItem && offerItem && current.limit && offer.limit) {
-      const currentLimit = parseFloat(current.limit.replace(/[^\d,]/g, '').replace(',', '.'));
-      const offerLimit = parseFloat(offer.limit.replace(/[^\d,]/g, '').replace(',', '.'));
+    // If no exact match, try fuzzy matching
+    if (offerIdx === -1) {
+      const unusedOfferCoverages = offerCoverages.filter((_, idx) => !usedOfferIndices.has(idx));
+      offerIdx = findBestMatch(currentItem.coverage, unusedOfferCoverages, 0.4); // 40% similarity threshold
       
-      if (!isNaN(currentLimit) && !isNaN(offerLimit)) {
-        const diff = offerLimit - currentLimit;
-        if (Math.abs(diff) > currentLimit * 0.1) { // >10% difference
-          if (diff > 0) {
-            note = `Højere dækningssum i tilbuddet`;
-          } else {
-            note = `Lavere dækningssum i tilbuddet`;
-          }
-        }
+      // Convert relative index to absolute index
+      if (offerIdx >= 0) {
+        const unusedIndices = offerCoverages
+          .map((_, idx) => idx)
+          .filter(idx => !usedOfferIndices.has(idx));
+        offerIdx = unusedIndices[offerIdx];
       }
     }
     
-    rows.push({
-      coverage: displayName,
-      description,
-      current,
-      offer,
-      note
-    });
+    const offerItem = offerIdx >= 0 ? offerCoverages[offerIdx] : null;
+    
+    // Mark as used
+    usedCurrentIndices.add(currentIdx);
+    if (offerIdx >= 0) usedOfferIndices.add(offerIdx);
+    
+    // Build row
+    rows.push(buildComparisonRow(currentItem, offerItem));
+  }
+  
+  // Add remaining unmatched offer coverages
+  for (let offerIdx = 0; offerIdx < offerCoverages.length; offerIdx++) {
+    if (usedOfferIndices.has(offerIdx)) continue;
+    
+    const offerItem = offerCoverages[offerIdx];
+    rows.push(buildComparisonRow(null, offerItem));
   }
   
   // Sort rows: main coverages first (brand, ansvar, indbo), then alphabetically
