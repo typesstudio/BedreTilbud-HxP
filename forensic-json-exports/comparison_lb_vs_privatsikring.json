@@ -1,0 +1,106 @@
+{
+  "meta": {
+    "offerCompany": "Tilbud Selskab",
+    "currentCompany": "Nuværende Selskab"
+  },
+  "overall": {
+    "explanation": "Samlet årlig besparelse ved at skifte til tilbuddet.",
+    "annualSavings": 2000,
+    "globalHighlights": [
+      {
+        "icon": "trending-up",
+        "title": "Årlig besparelse",
+        "variant": "success",
+        "category": "price",
+        "description": "Du sparer 2.000 kr årligt ved at skifte til tilbuddet."
+      }
+    ],
+    "perPolicySummary": [
+      {
+        "label": "Hus",
+        "policyType": "hus",
+        "annualSavings": 2000,
+        "offerAnnualPremium": 10000,
+        "annualSavingsPercent": 16.7,
+        "currentAnnualPremium": 12000
+      }
+    ],
+    "annualSavingsPercent": 16.7,
+    "totalOfferAnnualPremium": 10000,
+    "totalCurrentAnnualPremium": 12000
+  },
+  "cumulativeSavings": {
+    "chartData": [
+      {
+        "month": "Måned 1",
+        "savings": 167
+      },
+      {
+        "month": "Måned 2",
+        "savings": 333
+      }
+    ],
+    "after10Years": 24000,
+    "monthlyRange": {
+      "max": 183,
+      "min": 150
+    },
+    "after12Months": 2000,
+    "totalOver10Years": 24000
+  },
+  "policyComparisons": [
+    {
+      "label": "Hus",
+      "highlights": [
+        {
+          "icon": "trending-up",
+          "title": "Lavere årlig præmie",
+          "variant": "success",
+          "category": "price",
+          "description": "Tilbuddet tilbyder en lavere årlig præmie på 10.000 kr."
+        }
+      ],
+      "policyType": "hus",
+      "costSummary": {
+        "annualSavings": 2000,
+        "offerAnnualPremium": 10000,
+        "annualSavingsPercent": 16.7,
+        "currentAnnualPremium": 12000
+      },
+      "offerCompany": "Tilbud Selskab",
+      "currentCompany": "Nuværende Selskab",
+      "recommendations": [
+        "Forhandl selvrisiko på brandskader ned fra 3.000 kr til 2.000 kr.",
+        "Overvej tilvalg af glas og sanitet for at matche nuværende dækning."
+      ],
+      "coverageComparison": {
+        "rows": [
+          {
+            "note": "Tilbuddet har 500.000 kr højere sum og lavere selvrisiko.",
+            "offer": {
+              "limit": "2.500.000 kr",
+              "value": "inkluderet",
+              "status": "success",
+              "selvrisiko": "3.000 kr"
+            },
+            "current": {
+              "limit": "2.000.000 kr",
+              "value": "inkluderet",
+              "status": "success",
+              "selvrisiko": "5.000 kr"
+            },
+            "coverage": "Brand",
+            "description": "Dækning mod brandskader"
+          }
+        ]
+      },
+      "missingInformation": [
+        {
+          "question": "Hvad er dækningen for vandskader?",
+          "severity": "important",
+          "explanation": "Det er vigtigt at vide, om vandskader er dækket, da det kan være en stor udgift."
+        }
+      ]
+    }
+  ]
+}
