@@ -1,0 +1,262 @@
+Here’s a focused, “deep debug” Replit prompt you can paste in. It forces the agent to walk the whole chain and prove each step with logs/SQL before touching anything:
+
+---
+
+````text
+You are my Lead Reliability Engineer for BedreTilbud running inside Replit.
+
+Goal: Do a **deep end-to-end debug** of the comparison flow for my current test case (user `hello@vyork.dk`, company `Alm. Brand`) and explain EXACTLY what is happening at each step.
+
+Context (current state):
+- Overview page now works:
+  - Samlet besparelse = 900 kr
+  - Antal forsikringer = 3
+  - Hurtig oversigt shows Hus/Indbo/Ulykke with correct prices.
+- “Hus” tab looks correct (500 kr savings + Brand coverage row).
+- “Indbo” and “Ulykke” tabs have just been wired up, but I want a **deep sanity check** that:
+  - All three policy types are compared correctly end-to-end.
+  - Savings per policy and coverage rows all come from real data (no hallucinations).
+  - The frontend is reading JSON from the correct paths.
+
+Please **do not just tweak things**. I want a **forensic investigation** with evidence.
+
+---
+
+## Step 1 – Ground truth from the database
+
+For user `hello@vyork.dk` and the current Alm. Brand offer:
+
+1. List all snapshots:
+
+   ```sql
+   SELECT 
+     os.id,
+     os.policy_type,
+     os.structured_policy IS NOT NULL AS has_structured,
+     os.document_id,
+     d.document_type,
+     c.name AS company,
+     os.created_at
+   FROM offer_snapshots os
+   JOIN documents d ON os.document_id = d.id
+   LEFT JOIN companies c ON os.company_id = c.id
+   WHERE d.user_id = 'e85ec3b9-e354-4c49-9f68-194830e356af'
+   ORDER BY d.document_type, c.name, os.created_at;
+````
+
+* Confirm how many `hus`, `indbo`, `ulykke` snapshots exist for:
+
+  * current (Privatsikring)
+  * offer (Alm. Brand)
+* Confirm all 6 relevant snapshots have `has_structured = true`.
+
+2. For those 6 snapshots, inspect health checks:
+
+   ```sql
+   SELECT
+     hc.id,
+     hc.snapshot_id,
+     os.policy_type,
+     hc.result_json
+   FROM health_checks hc
+   JOIN offer_snapshots os ON os.id = hc.snapshot_id
+   WHERE hc.snapshot_id IN (<ids from step 1>);
+   ```
+
+   * Confirm that **each** hus/indbo/ulykke snapshot has:
+
+     * an annual premium in `result_json`
+     * some coverage items.
+
+**Write a short summary in the console**: how many snapshots of each type, and whether each has a health check with premiums + coverages.
+
+---
+
+## Step 2 – Verify matching (Phase 3)
+
+Instrument `deterministicMatcher.ts` (or equivalent) with temporary logs:
+
+* Log current policies and offer policies per type for this user.
+* Log the final `matchedPairs`.
+
+Example (pseudo):
+
+```ts
+console.log('[Matcher] Current policies', currentPolicies.map(p => ({
+  id: p.id, type: p.policyType, addr: p.structuredPolicy?.address
+})));
+
+console.log('[Matcher] Offer policies', offerPolicies.map(...));
+
+console.log('[Matcher] Matched pairs', matchedPairs.map(p => ({
+  type: p.current.policyType,
+  currentId: p.current.id,
+  offerId: p.offer.id,
+  score: p.score
+})));
+```
+
+Then run the comparison pipeline ONLY for `hello@vyork.dk` (use the existing test script):
+
+```bash
+tsx server/scripts/test-comparison-pipeline.ts hello@vyork.dk
+```
+
+From the logs, confirm:
+
+* Exactly **3 matched pairs**, one for each `hus`, `indbo`, `ulykke`.
+* Note if the matcher is using the “single-per-type” shortcut or address/person scoring.
+
+If there are NOT 3 pairs, stop and explain why, and fix the matcher before continuing.
+
+---
+
+## Step 3 – Inspect comparison_json structure (Phase 4 output)
+
+Now inspect the final `company_comparisons` row for Alm. Brand:
+
+```sql
+SELECT
+  id,
+  status,
+  comparison_json
+FROM company_comparisons
+WHERE user_id = 'e85ec3b9-e354-4c49-9f68-194830e356af'
+  AND offer_company = (SELECT id FROM companies WHERE name ILIKE '%alm. brand%')
+ORDER BY created_at DESC
+LIMIT 1;
+```
+
+Pretty-print `comparison_json`.
+
+I want you to explicitly answer:
+
+* What is the shape of:
+
+  * `comparison_json.summary`
+  * `comparison_json.policyComparisons[]`
+* For each `policyComparisons[i]`:
+
+  * `policyType`
+  * `costSummary.currentAnnual`
+  * `costSummary.offerAnnual`
+  * `costSummary.annualSavings`
+  * `costSummary.annualSavingsPercent`
+  * Number of rows in `coverageComparison.rows`
+  * The structure of each coverage row (`coverage`, `description`, `current`, `offer` etc.)
+
+Write a compact table in the console like:
+
+* Hus: current=5000, offer=4500, savings=500, rows=1
+* Indbo: current=?, offer=?, savings=?, rows=?
+* Ulykke: current=?, offer=?, savings=?, rows=?
+
+If any of these values look wrong or missing, diagnose whether the problem is:
+
+* In the data we pass into the ComparisonAgent
+* Or in how the ComparisonAgent fills the fields.
+
+---
+
+## Step 4 – Verify the frontend mapping for each tab
+
+Now move to the frontend.
+
+1. Open the **offer comparison page** (the one that renders the tabs “Samlet oversigt / Hus / Indbo / Ulykke”).
+
+2. In that page/component:
+
+   * Log the raw data object received from the API:
+
+     ```ts
+     console.log('[OfferComparisonPage] data', data);
+     ```
+
+   * Identify the exact path where `policyComparisons` is read, e.g.:
+
+     ```ts
+     const policyComparisons = data?.comparisonJson?.policyComparisons ?? [];
+     ```
+
+3. For each tab (“Hus”, “Indbo”, “Ulykke”), find the code that selects the relevant policy:
+
+   ```ts
+   const husComparison = policyComparisons.find(p => p.policyType === 'hus');
+   ```
+
+   and the code that feeds:
+
+   * `current price`
+   * `new price`
+   * `annual savings`
+   * `% savings`
+   * coverage table rows
+
+   Confirm it is now using the **correct** JSON fields:
+
+   * `comparison.costSummary.currentAnnual`
+   * `comparison.costSummary.offerAnnual`
+   * `comparison.costSummary.annualSavings`
+   * `comparison.costSummary.annualSavingsPercent`
+   * `comparison.coverageComparison.rows[]`
+
+     * `row.coverage`
+     * `row.current.value`, `row.current.limit` (if any)
+     * `row.offer.value`, `row.offer.limit` (if any)
+
+If any tab still reads old field names (e.g. `annualSavings` at the top level, `coverageRows`, `row.currentValue`, etc.), fix them and note exactly what you changed.
+
+---
+
+## Step 5 – End-to-end verification for all three types
+
+After fixes:
+
+1. Restart the app.
+
+2. Open the Alm. Brand comparison page in the browser.
+
+3. In the console, log:
+
+   * The `policyComparisons` array.
+   * For each tab, log the object used to render:
+
+     ```ts
+     console.log('[Tab Hus] comparison', husComparison);
+     console.log('[Tab Indbo] comparison', indboComparison);
+     console.log('[Tab Ulykke] comparison', ulykkeComparison);
+     ```
+
+4. Visually confirm for **each** tab:
+
+   * Hus:
+
+     * Årlig besparelse matches `costSummary.annualSavings` (should be 500 kr).
+     * Coverage table shows at least Brand row with correct current/offer values.
+   * Indbo:
+
+     * Årlig besparelse matches JSON (expected 200 kr if that’s what the comparison_json says).
+     * Coverage table not empty.
+   * Ulykke:
+
+     * Årlig besparelse matches JSON (expected 200 kr if that’s what the JSON says).
+     * Coverage table not empty.
+
+5. Finally, produce a short **debug report in the console**, including:
+
+   * A summary of snapshot + health check status (from Step 1).
+   * The matched pairs (from Step 2).
+   * A table of per-policy numbers from `comparison_json` (from Step 3).
+   * A note on what was wrong in the frontend mapping and how it now reads the data.
+
+---
+
+Important:
+
+* Do not change prompts or backend logic unless you find a concrete mismatch between DB data and JSON structure.
+* Focus first on **observing and logging**, then only make changes when you can point to a specific bug.
+
+Now please start from **Step 1** and work through to Step 5, writing concise debug notes and final summary so I can see exactly what’s going on.
+
+```
+```
