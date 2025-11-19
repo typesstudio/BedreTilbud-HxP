@@ -7,7 +7,7 @@ import { computeBestMatches } from "../services/deterministicMatcher";
 // Configuration
 // ========================================
 const USER_ID = 'e85ec3b9-e354-4c49-9f68-194830e356af';
-const OFFER_COMPANY_PATTERN = '%lb%'; // or '%lærerstand%'
+const OFFER_COMPANY_PATTERN = '%alm%'; // Use Alm. Brand which has offer data for this user
 
 // ========================================
 // Helper: Guess policy type from coverages
