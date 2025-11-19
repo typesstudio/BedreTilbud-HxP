@@ -1,0 +1,152 @@
+You are a senior full-stack engineer working in Replit on **BedreTilbud**, an insurance comparison platform (TypeScript/Node backend + React frontend).
+
+## Context
+
+The comparison pipeline has been largely validated:
+
+- Uploading an *offer* on `/upload-offer` should:
+  1. Run OCR + extraction
+  2. Run Phase 1 PolicyExtractor → populate `structured_policy`
+  3. Run HealthCheckOrchestrator
+  4. Run ComparisonOrchestrator
+  5. Write rows to `company_comparisons`
+  6. Redirect user to `/offers` where comparisons are visible
+
+- We recently:
+  - Allowed **same-company comparisons**.
+  - Added `statusReason`-style error reporting for data quality issues.
+  - Confirmed that comparisons run automatically for other companies (Tryg, IF, etc.).
+
+## Bug I’m Seeing (VERY SPECIFIC)
+
+User: `hello@vyork.dk`
+
+1. I go to `/upload-offer`.
+2. I upload a new offer for **“Alm. Brand”** (3 policies) and start analysis.
+3. I wait ~5 minutes.
+4. I am correctly redirected to `/offers`.
+
+On `/offers` (see attached screenshot):
+
+- Under **“Dine bedre tilbud”** I only see the existing comparison for **svphil** (works).
+- Under **“Uploadede tilbud”** I see a card:
+
+  - Title: “Alm. Brand”
+  - Subtitle: “Afventer sammenligning”
+  - “Antal forsikringer: 3 forsikringer”
+  - Date: “19.11.2025”
+
+- There is **no comparison entry** for Alm. Brand:
+  - Not in the left nav under “Dine bedre tilbud”.
+  - Not in the main comparison list.
+  - No error text, just “Afventer sammenligning”, even after several minutes.
+
+So:
+- The upload clearly succeeded (card appears).
+- But the comparison results for Alm. Brand never surface, and I don’t see our new error messaging or statusReason-based states.
+
+Treat this as a **production bug**: a user has uploaded an offer, sees “Afventer sammenligning”, but never gets a visible comparison or a clear error.
+
+---
+
+## Your Job
+
+**Analyse and fix why the Alm. Brand offer never shows up as a comparison.**
+
+You must trace the *actual* data and code paths and give me concrete changes.
+
+### Step 1 – Locate the Alm. Brand document + snapshots
+
+1. Find the newest `documents` row for user `hello@vyork.dk` with:
+   - `document_type = 'offer'`
+   - Company “Alm. Brand”
+   - Created around `2025-11-19`.
+
+2. Confirm for that document:
+   - `status` (e.g. `completed` / `processing` / `error`).
+   - All associated `offer_snapshots`:
+     - Count should be 3.
+     - Each should have:
+       - `policyType` (hus/indbo/ulykke/etc.)
+       - `company_id` set.
+       - `structured_policy` **NOT NULL** (if extraction worked).
+   - All associated `health_checks`:
+     - Are there 3?
+     - Do they have `snapshot_id` correctly filled?
+
+Document these findings in a short note in comments or logs so I can see them later.
+
+### Step 2 – Check comparison pipeline for Alm. Brand
+
+1. Look in `company_comparisons` for rows for this user and Alm. Brand:
+   - Did a row for `(currentCompany → Alm. Brand)` get created at all?
+   - If yes:
+     - What is `status`? (`completed` / `failed` / something else)
+     - What is `status_reason` / error field (if any)?
+   - If no:
+     - That means ComparisonOrchestrator was never triggered or short-circuited for this company.
+
+2. Open `comparisonOrchestrator.ts` and trace the logic that:
+
+   - Loads current snapshots for the user.
+   - Loads offer snapshots per company.
+   - Builds the list of company pairs.
+   - Runs comparisons.
+   - Writes to `company_comparisons`.
+
+   Specifically answer:
+   - Is Alm. Brand being considered as an offer company for this user?
+   - Is there any filter that would skip Alm. Brand (e.g. “no matching policy types”, “no current policies for that company”, “no matched pairs”)?
+   - If no matches are found, do we still write a `company_comparisons` row with a failure status, or do we silently skip it?
+
+3. Check logs/console output around the time of the upload:
+   - Are there messages from `ComparisonOrchestrator` mentioning Alm. Brand?
+   - Any errors or warnings about “no matches”, “missing metadata”, etc.?
+
+### Step 3 – Check `/offers` page data source
+
+1. Find the backend endpoint(s) used by `/offers`:
+
+   - It might be something like `/api/comparisons/user/:userId` or similar.
+   - Confirm:
+     - Which table(s) it reads from (likely `company_comparisons`).
+     - Which statuses it includes/excludes (e.g. only `status = 'completed'`).
+
+2. Find the React component(s) that render:
+
+   - **“Dine bedre tilbud”** list (left nav + main card).
+   - **“Uploadede tilbud”** list with “Afventer sammenligning”.
+
+   Answer:
+
+   - What conditions must be true for an offer/company to move from “Uploadede tilbud” → “Dine bedre tilbud”?
+   - Is Alm. Brand stuck because:
+     - There is no `company_comparisons` row at all?
+     - Or there is a row but with a status the UI doesn’t recognize?
+
+3. Confirm whether our new `statusReason` / error messaging is actually wired in for the offers overview, or only for the per-comparison detail pages.
+
+### Step 4 – Identify the exact break point
+
+At this point, explicitly identify:
+
+- ONE line of code / query / condition that is **responsible** for Alm. Brand not showing up as a comparison.
+
+For example (hypothetical examples you should confirm/deny):
+
+- “ComparisonOrchestrator never calls the comparison agent for Alm. Brand because there are zero matched pairs, and in that case it never inserts a row into `company_comparisons`.”
+- “The `/offers` page only displays companies where `status = 'completed'`, and ignores `status = 'failed'` or `null`, without showing an error state.”
+- “Health checks for Alm. Brand never complete, so we never trigger comparison for that document.”
+
+Be precise and reference the actual file + line(s).
+
+### Step 5 – Implement a minimal, robust fix
+
+Depending on what you find, implement the smallest production-safe fix that satisfies:
+
+1. **If comparison succeeded or partially succeeded**:
+   - Alm. Brand must appear under “Dine bedre tilbud” (like svphil).
+   - If only some policies were matchable, show partial results + a warning using the existing `statusReason` mechanism.
+
+2. **If comparison failed** (no match because of missing metadata / no current policies / etc.):
+   - Alm. Brand should **not** sit
