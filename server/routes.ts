@@ -1795,6 +1795,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // NEW: Get company comparison by ID (company_comparisons table)
+  app.get("/api/company-comparisons/:id", requireAuth, async (req, res) => {
+    try {
+      const comparison = await storage.getCompanyComparisonById(req.params.id);
+      if (!comparison) {
+        return res.status(404).json({ message: "Comparison not found" });
+      }
+
+      // Get company details
+      const currentCompany = comparison.currentCompany 
+        ? await storage.getCompany(comparison.currentCompany) 
+        : null;
+      const offerCompany = comparison.offerCompany 
+        ? await storage.getCompany(comparison.offerCompany) 
+        : null;
+
+      res.json({
+        ...comparison,
+        currentCompanyName: currentCompany?.name || 'Ukendt',
+        offerCompanyName: offerCompany?.name || 'Ukendt',
+        comparisonData: comparison.comparisonJSON
+      });
+    } catch (error: any) {
+      logger.error('Failed to fetch company comparison', error, { comparisonId: req.params.id });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // OLD: Get comparison by ID (legacy comparisons table - deprecated)
   app.get("/api/comparisons/:id", requireAuth, async (req, res) => {
     try {
       const comparison = await storage.getComparison(req.params.id);

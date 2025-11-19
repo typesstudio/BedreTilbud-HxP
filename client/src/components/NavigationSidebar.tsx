@@ -16,7 +16,7 @@ import {
 } from "@subframe/core";
 
 interface NavigationSidebarProps {
-  userId: string;
+  userId?: string;
 }
 
 const policyTypeLabels: { [key: string]: string } = {
@@ -47,6 +47,7 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
 
   const { data, isLoading } = useQuery({
     queryKey: ["/api/nav-data", userId],
+    enabled: !!userId,
   });
 
   const navData = data as {

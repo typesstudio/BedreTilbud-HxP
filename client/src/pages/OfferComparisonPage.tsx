@@ -53,53 +53,47 @@ const iconMap: { [key: string]: any } = {
 };
 
 export default function OfferComparisonPage() {
-  const { userId, companyId } = useParams<{ userId: string; companyId: string }>();
+  const { id } = useParams<{ id: string }>();
   const [location, setLocation] = useLocation();
   const searchString = useSearch();
+  const userId = localStorage.getItem("userId");
   
   const selectedTab = useMemo(() => {
     const params = new URLSearchParams(searchString);
     return params.get('tab') || 'samlet';
   }, [searchString]);
 
-  const { data: comparisons, isLoading: comparisonsLoading } = useQuery<any[]>({
-    queryKey: ['/api/sammenligning', userId, companyId],
-    enabled: !!userId && !!companyId,
+  // NEW: Fetch from company_comparisons endpoint
+  const { data: comparisonResponse, isLoading } = useQuery<any>({
+    queryKey: ['/api/company-comparisons', id],
+    enabled: !!id,
   });
 
-  const { data: combinedData, isLoading: combinedLoading } = useQuery<any>({
-    queryKey: ['/api/sammenligning', userId, companyId, 'combined'],
-    enabled: !!userId && !!companyId,
-  });
+  const comparisonData = comparisonResponse?.comparisonData || {};
+  const policyComparisons = comparisonData.policyComparisons || [];
+  const overall = comparisonData.overall || {};
 
   const multiPolicyProjection = useMemo(() => {
-    if (!comparisons || comparisons.length === 0) return { data: [], categories: [] };
+    const cumulativeSavings = comparisonData.cumulativeSavings;
+    if (!cumulativeSavings || !cumulativeSavings.chartData || cumulativeSavings.chartData.length === 0) {
+      return { data: [], categories: [] };
+    }
     
-    const chartData: any[] = Array.from({ length: 120 }, (_, i) => {
-      const yearMilestone = (i + 1) % 12 === 0 ? ` (År ${(i + 1) / 12})` : '';
-      return { Måned: `${i + 1}${yearMilestone}` };
+    const chartData = cumulativeSavings.chartData.map((item: any, index: number) => {
+      const yearMilestone = (index + 1) % 12 === 0 ? ` (År ${(index + 1) / 12})` : '';
+      return {
+        Måned: `${item.month || index + 1}${yearMilestone}`,
+        Besparelse: Math.round(item.savings || 0)
+      };
     });
     
-    const categories: string[] = [];
-    
-    comparisons.forEach((comparison: any) => {
-      const comparisonData = comparison.comparisonData || {};
-      const projection = comparisonData.projection || [];
-      const policyType = comparison.policyType || 'ukendt';
-      const categoryName = policyTypeLabels[policyType] || policyType;
-      
-      if (Array.isArray(projection) && projection.length === 120) {
-        categories.push(categoryName);
-        projection.forEach((entry: any, index: number) => {
-          chartData[index][categoryName] = Math.round(entry.cumulative || 0);
-        });
-      }
-    });
-    
-    return { data: chartData, categories };
-  }, [comparisons]);
+    return { 
+      data: chartData, 
+      categories: ["Besparelse"] 
+    };
+  }, [comparisonData]);
 
-  if (!userId || !companyId) {
+  if (!id) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-default-background">
         <div className="flex flex-col items-center gap-4">
@@ -114,11 +108,9 @@ export default function OfferComparisonPage() {
     localStorage.setItem('userId', userId);
   }
 
-  const isLoading = comparisonsLoading || combinedLoading;
-
   if (isLoading) {
     return (
-      <AppLayoutWithNav userId={userId}>
+      <AppLayoutWithNav userId={userId || undefined}>
         <div className="flex items-center justify-center min-h-screen">
           <span className="text-body font-body text-subtext-color">Indlæser sammenligning...</span>
         </div>
@@ -126,9 +118,9 @@ export default function OfferComparisonPage() {
     );
   }
 
-  if (!comparisons || comparisons.length === 0) {
+  if (!policyComparisons || policyComparisons.length === 0) {
     return (
-      <AppLayoutWithNav userId={userId}>
+      <AppLayoutWithNav userId={userId || undefined}>
         <div className="flex items-center justify-center min-h-screen">
           <span className="text-body font-body text-default-font">Ingen sammenligninger fundet</span>
         </div>
@@ -136,9 +128,10 @@ export default function OfferComparisonPage() {
     );
   }
 
-  const company = comparisons && comparisons.length > 0 ? comparisons[0]?.company : null;
-  const availablePolicyTypes = comparisons 
-    ? Array.from(new Set(comparisons.map((c: any) => c.policyType).filter(Boolean))) 
+  const currentCompanyName = comparisonResponse?.currentCompanyName || "Nuværende forsikring";
+  const offerCompanyName = comparisonResponse?.offerCompanyName || "Nyt tilbud";
+  const availablePolicyTypes = policyComparisons 
+    ? Array.from(new Set(policyComparisons.map((c: any) => c.policyType).filter(Boolean))) 
     : [];
 
   const tabs = [
@@ -148,11 +141,11 @@ export default function OfferComparisonPage() {
       count: availablePolicyTypes.length,
       Icon: FeatherStar
     },
-    ...availablePolicyTypes.map((type: string) => ({
-      id: type,
-      label: policyTypeLabels[type] || type,
+    ...availablePolicyTypes.map((type) => ({
+      id: String(type),
+      label: policyTypeLabels[String(type)] || String(type),
       count: undefined,
-      Icon: policyTypeIcons[type]
+      Icon: policyTypeIcons[String(type)]
     }))
   ];
 
@@ -165,29 +158,21 @@ export default function OfferComparisonPage() {
   };
 
   const renderCombinedOverview = () => {
-    if (!combinedData) return null;
+    if (!overall) return null;
 
-    const verdictColors: { [key: string]: string } = {
-      recommended: "success",
-      consider: "warning",
-      not_recommended: "error"
-    };
-
-    const verdictLabels: { [key: string]: string } = {
-      recommended: "Anbefalet",
-      consider: "Overvej",
-      not_recommended: "Ikke anbefalet"
-    };
+    const annualSavings = overall.annualSavings || 0;
+    const savingsPercent = overall.annualSavingsPercent || 0;
+    const totalOver10Years = comparisonData.cumulativeSavings?.totalOver10Years || (annualSavings * 10);
 
     return (
       <div className="flex flex-col gap-6 p-6">
         <div className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <span className="text-heading-2 font-heading-2 text-default-font">
-              {company?.name || "Forsikringsselskab"}
+              {offerCompanyName}
             </span>
-            <Badge variant={verdictColors[combinedData.verdict] as any}>
-              {verdictLabels[combinedData.verdict] || combinedData.verdict}
+            <Badge variant={annualSavings >= 0 ? "success" : "error"}>
+              {annualSavings >= 0 ? "Billigere" : "Dyrere"}
             </Badge>
           </div>
 
@@ -195,17 +180,17 @@ export default function OfferComparisonPage() {
             <div className="flex flex-col gap-2 p-4 bg-neutral-50 dark:bg-neutral-900 rounded-lg">
               <span className="text-body-bold font-body-bold text-subtext-color">Samlet besparelse</span>
               <span className="text-heading-1 font-heading-1 text-brand-600">
-                {formatCurrency(combinedData.totalSavings)}
+                {formatCurrency(annualSavings)}
               </span>
               <span className="text-caption font-caption text-subtext-color">
-                {combinedData.totalSavingsPercentage}% billigere
+                {savingsPercent.toFixed(1)}% billigere
               </span>
             </div>
 
             <div className="flex flex-col gap-2 p-4 bg-neutral-50 dark:bg-neutral-900 rounded-lg">
               <span className="text-body-bold font-body-bold text-subtext-color">Antal forsikringer</span>
               <span className="text-heading-1 font-heading-1 text-default-font">
-                {combinedData.policyCount}
+                {policyComparisons.length}
               </span>
               <span className="text-caption font-caption text-subtext-color">
                 Sammenlignede typer
@@ -213,12 +198,12 @@ export default function OfferComparisonPage() {
             </div>
 
             <div className="flex flex-col gap-2 p-4 bg-neutral-50 dark:bg-neutral-900 rounded-lg">
-              <span className="text-body-bold font-body-bold text-subtext-color">Status</span>
+              <span className="text-body-bold font-body-bold text-subtext-color">Nuværende pris</span>
               <span className="text-heading-3 font-heading-3 text-default-font">
-                {verdictLabels[combinedData.verdict]}
+                {formatCurrency(overall.totalCurrentAnnualPremium)}
               </span>
               <span className="text-caption font-caption text-subtext-color">
-                Samlet vurdering
+                Per år
               </span>
             </div>
           </div>
@@ -239,7 +224,7 @@ export default function OfferComparisonPage() {
               variant="success"
               icon={<FeatherArrowUp />}
             >
-              {formatCurrency(combinedData.totalSavings * 10)} over 10 år
+              {formatCurrency(totalOver10Years)} over 10 år
             </Badge>
           </div>
           <AreaChart
@@ -256,7 +241,7 @@ export default function OfferComparisonPage() {
                 Månedlig besparelse
               </span>
               <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
-                {formatCurrency(Math.round(combinedData.totalSavings / 12))}
+                {formatCurrency(Math.round(annualSavings / 12))}
               </span>
             </div>
             <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
@@ -264,7 +249,7 @@ export default function OfferComparisonPage() {
                 Total efter 12 måneder
               </span>
               <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
-                {formatCurrency(combinedData.totalSavings)} spart
+                {formatCurrency(annualSavings)} spart
               </span>
             </div>
             <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
@@ -272,7 +257,7 @@ export default function OfferComparisonPage() {
                 Forventet efter 10 år
               </span>
               <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
-                {formatCurrency(combinedData.totalSavings * 10)} spart
+                {formatCurrency(totalOver10Years)} spart
               </span>
             </div>
           </div>
@@ -284,12 +269,12 @@ export default function OfferComparisonPage() {
           </div>
         </div>
 
-        {combinedData.highlights && combinedData.highlights.length > 0 && (
+        {overall.globalHighlights && overall.globalHighlights.length > 0 && (
           <div className="flex flex-col gap-4">
             <span className="text-heading-3 font-heading-3 text-default-font">Højdepunkter</span>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {combinedData.highlights.map((highlight: any, index: number) => {
-                const bgClass = getVariantBackgroundClass(highlight.variant);
+              {overall.globalHighlights.map((highlight: any, index: number) => {
+                const bgClass = getVariantBackgroundClass(highlight.variant || "neutral");
                 return (
                   <div 
                     key={index} 
@@ -309,7 +294,7 @@ export default function OfferComparisonPage() {
           </div>
         )}
 
-        {combinedData.quickComparison && combinedData.quickComparison.length > 0 && (
+        {overall.perPolicySummary && overall.perPolicySummary.length > 0 && (
           <div className="flex flex-col gap-4">
             <span className="text-heading-3 font-heading-3 text-default-font">Hurtig oversigt</span>
             <div className="overflow-x-auto bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
@@ -320,36 +305,30 @@ export default function OfferComparisonPage() {
                     <Table.HeaderCell className="text-right">Nuværende</Table.HeaderCell>
                     <Table.HeaderCell className="text-right">Tilbud</Table.HeaderCell>
                     <Table.HeaderCell className="text-right">Besparelse</Table.HeaderCell>
-                    <Table.HeaderCell className="text-center">Status</Table.HeaderCell>
                   </Table.HeaderRow>
                 }
               >
-                {combinedData.quickComparison.map((row: any, index: number) => (
+                {overall.perPolicySummary.map((row: any, index: number) => (
                   <Table.Row key={index}>
                     <Table.Cell>
                       <span className="text-body-bold font-body-bold text-default-font">
-                        {policyTypeLabels[row.policyType] || row.policyType}
+                        {row.label || policyTypeLabels[row.policyType] || row.policyType}
                       </span>
                     </Table.Cell>
                     <Table.Cell className="justify-end">
                       <span className="text-body font-body text-subtext-color">
-                        {formatCurrency(row.currentPremium)}
+                        {formatCurrency(row.currentAnnualPremium)}
                       </span>
                     </Table.Cell>
                     <Table.Cell className="justify-end">
                       <span className="text-body font-body text-subtext-color">
-                        {formatCurrency(row.offerPremium)}
+                        {formatCurrency(row.offerAnnualPremium)}
                       </span>
                     </Table.Cell>
                     <Table.Cell className="justify-end">
                       <span className="text-body-bold font-body-bold text-brand-600">
                         {formatCurrency(row.savings)}
                       </span>
-                    </Table.Cell>
-                    <Table.Cell className="justify-center">
-                      <Badge variant={verdictColors[row.verdict] as any}>
-                        {verdictLabels[row.verdict]}
-                      </Badge>
                     </Table.Cell>
                   </Table.Row>
                 ))}
@@ -362,27 +341,19 @@ export default function OfferComparisonPage() {
   };
 
   const renderPolicyTypeComparison = (policyType: string) => {
-    if (!comparisons) return null;
-    const comparison = comparisons.find((c: any) => c.policyType === policyType);
+    if (!policyComparisons) return null;
+    const comparison = policyComparisons.find((c: any) => c.policyType === policyType);
     if (!comparison) return null;
 
-    const comparisonData = comparison.comparisonData || {};
-    const currentOcrData = comparison.currentPolicy?.ocrData || {};
-    const offerOcrData = comparison.offerPolicy?.ocrData || {};
-    const currentPremium = parseFloat(comparison.currentPolicy?.premium) || currentOcrData.annualPremium || 0;
-    const offerPremium = parseFloat(comparison.offerPolicy?.premium) || offerOcrData.annualPremium || 0;
-    const savings = currentPremium - offerPremium;
-    const savingsPercentage = currentPremium > 0 ? ((savings / currentPremium) * 100) : 0;
-    const highlights = comparisonData.highlights || [];
-    const detailedComparison = comparisonData.detailedComparison || [];
+    const costSummary = comparison.costSummary || {};
+    const currentPremium = costSummary.currentAnnualPremium || 0;
+    const offerPremium = costSummary.offerAnnualPremium || 0;
+    const savings = costSummary.savings || 0;
+    const savingsPercentage = costSummary.savingsPercent || 0;
+    const highlights = comparison.highlights || [];
+    const coverageRows = comparison.coverageComparison?.rows || [];
 
     const isWorseOffer = savings < 0;
-    const absoluteSavings = Math.abs(savings);
-    const absoluteSavingsPercentage = Math.abs(savingsPercentage);
-
-    const barWidthPercentage = offerPremium > 0 && currentPremium > 0
-      ? Math.min((offerPremium / currentPremium) * 100, 100)
-      : 80;
 
     return (
       <div className="flex flex-col gap-6 p-6 max-w-[768px] mx-auto">
@@ -431,7 +402,7 @@ export default function OfferComparisonPage() {
           </div>
         )}
 
-        {detailedComparison.length > 0 && (
+        {coverageRows.length > 0 && (
           <div className="flex flex-col gap-4 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 p-6">
             <span className="text-heading-3 font-heading-3 text-default-font">
               Detaljeret sammenligning
@@ -446,52 +417,39 @@ export default function OfferComparisonPage() {
                   </Table.HeaderRow>
                 }
               >
-                {detailedComparison.map((category: any, catIndex: number) => (
-                  <Fragment key={`category-${catIndex}`}>
-                    {category.name && (
-                      <Table.Row className="bg-neutral-50 dark:bg-neutral-700">
-                        <Table.Cell colSpan={3}>
-                          <span className="text-body-bold font-body-bold text-default-font">
-                            {category.name}
+                {coverageRows.map((row: any, rowIndex: number) => (
+                  <Table.Row key={rowIndex}>
+                    <Table.Cell>
+                      <div className="flex flex-col gap-1">
+                        <span className="text-body font-body text-default-font">
+                          {row.feature || row.label}
+                        </span>
+                        {row.description && (
+                          <span className="text-caption font-caption text-subtext-color">
+                            {row.description}
                           </span>
-                        </Table.Cell>
-                      </Table.Row>
-                    )}
-                    {category.rows && category.rows.map((row: any, rowIndex: number) => (
-                      <Table.Row key={`${catIndex}-${rowIndex}`}>
-                        <Table.Cell>
-                          <div className="flex flex-col gap-1">
-                            <span className="text-body font-body text-default-font">
-                              {row.feature}
-                            </span>
-                            {row.description && (
-                              <span className="text-caption font-caption text-subtext-color">
-                                {row.description}
-                              </span>
-                            )}
-                          </div>
-                        </Table.Cell>
-                        <Table.Cell className="justify-center">
-                          {row.currentValue === 'inkluderet' || row.currentValue === true ? (
-                            <Badge variant="success">inkluderet</Badge>
-                          ) : row.currentValue === 'ikke inkluderet' || row.currentValue === false ? (
-                            <Badge variant="error">ikke inkluderet</Badge>
-                          ) : (
-                            <span className="text-body font-body text-default-font">{row.currentValue}</span>
-                          )}
-                        </Table.Cell>
-                        <Table.Cell className="justify-center">
-                          {row.offerValue === 'inkluderet' || row.offerValue === true ? (
-                            <Badge variant="success">inkluderet</Badge>
-                          ) : row.offerValue === 'ikke inkluderet' || row.offerValue === false ? (
-                            <Badge variant="error">ikke inkluderet</Badge>
-                          ) : (
-                            <span className="text-body font-body text-default-font">{row.offerValue}</span>
-                          )}
-                        </Table.Cell>
-                      </Table.Row>
-                    ))}
-                  </Fragment>
+                        )}
+                      </div>
+                    </Table.Cell>
+                    <Table.Cell className="justify-center">
+                      {row.currentValue === 'inkluderet' || row.currentValue === true ? (
+                        <Badge variant="success">inkluderet</Badge>
+                      ) : row.currentValue === 'ikke inkluderet' || row.currentValue === false ? (
+                        <Badge variant="error">ikke inkluderet</Badge>
+                      ) : (
+                        <span className="text-body font-body text-default-font">{row.currentValue || "N/A"}</span>
+                      )}
+                    </Table.Cell>
+                    <Table.Cell className="justify-center">
+                      {row.offerValue === 'inkluderet' || row.offerValue === true ? (
+                        <Badge variant="success">inkluderet</Badge>
+                      ) : row.offerValue === 'ikke inkluderet' || row.offerValue === false ? (
+                        <Badge variant="error">ikke inkluderet</Badge>
+                      ) : (
+                        <span className="text-body font-body text-default-font">{row.offerValue || "N/A"}</span>
+                      )}
+                    </Table.Cell>
+                  </Table.Row>
                 ))}
               </Table>
             </div>
@@ -502,12 +460,13 @@ export default function OfferComparisonPage() {
   };
 
   const handleTabChange = (tabId: string) => {
-    const newUrl = `/sammenligning/${userId}/${companyId}?tab=${tabId}`;
+    if (!id) return;
+    const newUrl = `/sammenligning/${id}?tab=${tabId}`;
     setLocation(newUrl);
   };
 
   return (
-    <AppLayoutWithNav userId={userId}>
+    <AppLayoutWithNav userId={userId || undefined}>
       <div className="flex flex-col h-full w-full">
         <div className="border-b border-neutral-200 dark:border-neutral-700 px-6">
           <ListingsTabs>

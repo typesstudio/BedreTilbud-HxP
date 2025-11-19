@@ -47,7 +47,7 @@ function Router() {
         <Route path="/gmail-setup" component={GmailSetup} />
         <Route path="/check" component={InsuranceCheck} />
         <Route path="/forsikringstjek/:userId" component={InsuranceCheckPage} />
-        <Route path="/sammenligning/:userId/:companyId" component={OfferComparisonPage} />
+        <Route path="/sammenligning/:id" component={OfferComparisonPage} />
         <Route path="/admin" component={AdminTesting} />
         <Route component={NotFound} />
       </Switch>

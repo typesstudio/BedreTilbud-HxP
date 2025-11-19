@@ -2,7 +2,7 @@ import { NavigationSidebar } from "./NavigationSidebar";
 
 interface AppLayoutWithNavProps {
   children: React.ReactNode;
-  userId: string;
+  userId?: string;
 }
 
 export function AppLayoutWithNav({ children, userId }: AppLayoutWithNavProps) {
