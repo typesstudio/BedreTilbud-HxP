@@ -38,6 +38,8 @@ This architecture ensures deterministic deductible display in the UI.
 -   **Phase 2: HealthCheckAnalyst**: Maps coverages 1:1, populating mandatory deductibles. Assigns UI variants based on deductible values.
 This design provides deterministic mapping, reprocessability, testability, and cost-efficiency. It's enabled by `ENABLE_TWO_PHASE_HEALTHCHECK=true`.
 
+**Zero-Mismatch Validation**: The Health Check Orchestrator enforces data integrity by always validating AI-extracted coverages against `snapshot.policyType` using the `guessPolicyTypeFromCoverages` heuristic. When a mismatch is detected (guessed type ≠ snapshot type), the orchestrator aborts health check creation with a CRITICAL error, preventing corrupt data from entering the comparison pipeline. The orchestrator always persists `snapshot.policyType` to the `health_checks.policy_type` column, ensuring 100% snapshot-driven policy type assignment regardless of AI output. This guarantees zero policy type mismatches in the comparison results.
+
 ### Extraction Stages Debugging System
 This system persists intermediate outputs of the extraction pipeline (OCR, Segmentation, Extraction) to `documents.extraction_stages` for quality monitoring. Each stage captures raw output, timestamp, and metadata (tokens, cost, latency, confidence). An API endpoint `/api/documents/:id/extraction-stages` allows debugging access.
 
