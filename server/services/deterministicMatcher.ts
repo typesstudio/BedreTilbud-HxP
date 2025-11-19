@@ -310,6 +310,26 @@ export function computeBestMatches(
       usedOffer.add(candidate.offerPolicyId);
     }
     
+    // FALLBACK: If exactly 1 current + 1 offer of this type, and no pairs created (score=0 due to missing metadata),
+    // create a simple 1:1 match instead of leaving them unmatched
+    if (currents.length === 1 && offers.length === 1 && usedCurrent.size === 0 && usedOffer.size === 0) {
+      const current = currents[0];
+      const offer = offers[0];
+      const policyTypeLabel = getPolicyTypeLabel(policyType);
+      
+      console.log(`[Matcher] FALLBACK: Auto-matching single ${policyType} pair (current ${current.id} ↔ offer ${offer.id}) despite score=0 (missing metadata)`);
+      
+      pairs.push({
+        policyType: policyType as any,
+        label: policyTypeLabel,
+        currentPolicyId: current.id!,
+        offerPolicyId: offer.id!,
+      });
+      
+      usedCurrent.add(current.id!);
+      usedOffer.add(offer.id!);
+    }
+    
     for (const current of currents) {
       if (!usedCurrent.has(current.id!)) {
         unmatchedCurrent.add(current.id!);

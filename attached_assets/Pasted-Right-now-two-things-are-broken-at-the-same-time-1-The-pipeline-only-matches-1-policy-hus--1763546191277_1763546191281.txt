@@ -1,0 +1,258 @@
+Right now two things are broken **at the same time**:
+
+1. **The pipeline only matches 1 policy (hus) per company**, even though both PDFs clearly contain hus + indbo + ulykke.
+2. **The comparison detail page still shows “ingen sammenligning”**, which means the UI isn’t reading the new `company_comparisons` JSON correctly.
+
+Replit has been poking at individual spots, but not walking the whole chain from PDF → snapshots → matches → JSON → UI. Let’s do that systematically and then, yes, use a “golden” dataset as a benchmark so we’re not debugging in the dark.
+
+---
+
+## 1. Where the process is *most likely* breaking
+
+Given the latest Replit log:
+
+> “All 4 comparisons have exactly **1 policy (hus)** and no bil/indbo anywhere.”
+
+that tells us:
+
+* OCR + segmentation + snapshot creation **do** see indbo and ulykke (you’ve confirmed there are clean snapshots for those).
+* But **Phase 3 (DeterministicMatcher)** is only producing a single match (hus↔hus).
+  → Only that one pair is passed into ComparisonAgent.
+  → `comparison_json` only has 1 `policyComparison`.
+
+So for this LB offer:
+
+* Expected: 3 matched pairs
+
+  * fritidshus ↔ hus
+  * ulykkes ↔ ulykke
+  * indbo ↔ indbo
+* Actual: 1 pair (hus only)
+
+This almost always means:
+
+* either the **current** indbo / ulykke snapshots are missing `structured_policy` (address/person)
+* or the matcher’s scoring logic is too strict and refuses to match them.
+
+So **Phase 3 is the broken step**, not Phase 4 anymore.
+
+Separately, the detail page:
+
+* Probably receives `comparisonJson` + `policyComparisons`, but still checks `if (!data.policyComparisons)` or uses the old JSON shape (`data.coverageItems`), so it falls into the “no comparison” branch even when there is 1 pair.
+
+So the second broken step is **UI mapping of the new JSON schema**.
+
+---
+
+## 2. A step-by-step debugging path (what I’d do as the engineer)
+
+### Step 1 – Confirm snapshots & structured_policy for this exact test
+
+Tell Replit (or run via psql) to query **both current and offer** snapshots for `hello@vyork.dk` and specifically this LB offer PDF:
+
+```sql
+-- 1A. All snapshots for this user
+SELECT 
+  os.id,
+  os.policy_type,
+  os.structured_policy IS NOT NULL AS has_structured,
+  os.document_id,
+  d.document_type,
+  c.name AS company
+FROM offer_snapshots os
+JOIN documents d ON os.document_id = d.id
+LEFT JOIN companies c ON os.company_id = c.id
+WHERE d.user_id = 'e85ec3b9-e354-4c49-9f68-194830e356af'
+ORDER BY d.document_type, c.name, os.created_at;
+```
+
+You want to see, for **both** `document_type = 'current'` and this LB offer:
+
+* 1× `hus`, 1× `indbo`, 1× `ulykke`
+* and `has_structured = true` for all six rows.
+
+If **current indbo/ulykke have `has_structured = false`**, that’s the original problem coming back: they can’t be matched. Then you either:
+
+* re-upload current user PDF so Stage 5 fills them, or
+* add a matcher fallback “if there is exactly 1 of a given policy_type on both sides, match them even without structured_policy”.
+
+### Step 2 – Instrument DeterministicMatcher for this user
+
+In `deterministicMatcher.ts`:
+
+* Add logging like:
+
+```ts
+console.log('[Matcher] Current policies for user', userId, currentPolicies.map(p => ({
+  id: p.id, type: p.policyType, addr: p.structuredPolicy?.address, person: p.structuredPolicy?.person
+})));
+
+console.log('[Matcher] Offer policies for user', userId, offerPolicies.map(...));
+```
+
+* And just before you return `matchedPairs`, also log:
+
+```ts
+console.log('[Matcher] Matched pairs', matchedPairs.map(p => ({
+  currentId: p.current.id,
+  currentType: p.current.policyType,
+  offerId: p.offer.id,
+  offerType: p.offer.policyType,
+  score: p.score
+})));
+```
+
+Then run the pipeline **only for this user**, via your test script:
+
+```bash
+tsx server/scripts/test-comparison-pipeline.ts hello@vyork.dk
+```
+
+Look at the logs:
+
+* If you see all 3 types in “Current policies” and “Offer policies”, but only **1 pair in “Matched pairs”**, you know the scoring/threshold logic is dropping indbo/ulykke.
+
+### Step 3 – Simplify matching logic for this MVP
+
+Given your use case (1 current + 1 offer per type), you don’t actually need fancy heuristics for this first version.
+
+In `deterministicMatcher`, after you group by `policyType`, do something like:
+
+```ts
+// Pseudocode
+for each policyType:
+  const current = currentPoliciesOfThisType
+  const offer   = offerPoliciesOfThisType
+
+  if (current.length === 1 && offer.length === 1) {
+    // Simple, deterministic 1:1 match
+    matchedPairs.push({ current: current[0], offer: offer[0], score: 1.0, reason: 'single-per-type' });
+    continue;
+  }
+
+  // else fall back to address/person scoring when there are multiple of same type
+```
+
+That guarantees:
+
+* For your test data (exactly one `hus`, `indbo`, `ulykke` on each side), you always get **3 pairs**, independent of structured_policy quirks.
+
+You can keep the address/person scoring for more complex future cases, but unblock this product now.
+
+### Step 4 – Re-run and check company_comparisons JSON
+
+After changing matcher:
+
+1. Delete the existing `company_comparisons` rows for this user (just the test ones).
+2. Re-run `test-comparison-pipeline.ts` for `hello@vyork.dk`.
+3. Query:
+
+```sql
+SELECT 
+  id,
+  offer_company,
+  status,
+  jsonb_array_length(comparison_json->'policyComparisons') AS pair_count
+FROM company_comparisons
+WHERE user_id = 'e85ec3b9-e354-4c49-9f68-194830e356af'
+ORDER BY created_at DESC;
+```
+
+You want:
+
+* `status = 'completed'`
+* `pair_count = 3` for each of Alm. Brand / Privatsikring / IF.
+
+If that’s true, backend comparison data is now correct.
+
+### Step 5 – Fix the “no comparison” detail page
+
+You already know:
+
+* New endpoint: `/api/company-comparisons/:id`
+* New JSON shape: something like `{ data: { comparisonJson: { policyComparisons: [...] } } }`
+
+On `OfferComparisonPage.tsx`:
+
+* Log out what the hook receives:
+
+```ts
+console.log('comparison page data', data);
+```
+
+Check in the browser devtools console:
+
+* Is it `data.data.comparisonJson.policyComparisons`?
+* Or `data.comparisonJson.policyComparisons`?
+
+Then update the component:
+
+```ts
+const policyComparisons = data?.comparisonJson?.policyComparisons ?? []; 
+// or data?.data?.comparisonJson...
+
+if (!policyComparisons.length) {
+  return <EmptyState />; // “ingen sammenligning”
+}
+```
+
+Right now, it’s almost certainly checking the wrong path or still expecting the old field name.
+
+---
+
+## 3. Should we create a manual “golden” export from the PDFs?
+
+Yes – that’s actually a clean way to de-risk everything:
+
+1. **Create two JSON fixtures** in the repo under `test/fixtures/`:
+
+   * `lb-current.json` for your current policy PDF.
+   * `lb-offer.json` for the LB offer PDF.
+
+   Minimal shape:
+
+   ```json
+   {
+     "policies": [
+       { "id": "cur-hus",    "type": "hus",    "annualPremium": 5000, ... },
+       { "id": "cur-indbo",  "type": "indbo",  "annualPremium": 3000, ... },
+       { "id": "cur-ulykke", "type": "ulykke", "annualPremium": 1000, ... }
+     ]
+   }
+   ```
+
+2. **Write a small test script** that bypasses OCR entirely and feeds these fixtures directly into:
+
+   * deterministicMatcher
+   * ComparisonAgent
+   * the JSON builder that writes `company_comparisons.comparison_json`
+
+3. Assert in code (Jest or a simple script) that:
+
+   * The matcher returns **3 pairs**.
+   * The comparison JSON has `policyComparisons.length === 3`.
+   * The types in all pairs are exactly `hus`, `indbo`, `ulykke`.
+
+That becomes your “benchmark”. Whenever you change matcher/agent in the future, you can run this script and see if someone accidentally breaks the perfect LB example.
+
+Replit can absolutely help set this up – you just need to tell it explicitly: “don’t go through the upload flow, just create a test harness using these fixtures”.
+
+---
+
+## 4. If you want a new Replit strategy
+
+Very short version you could base a new prompt on:
+
+> *“Stop touching frontend or prompts until you prove Phase 3 returns 3 matches for this LB case. First, show me the SQL listing of snapshots + policy_type + structured_policy for current/offer. Then log `matchedPairs` from deterministicMatcher for `hello@vyork.dk`. If the matcher doesn’t return 3 pairs (hus/indbo/ulykke), change the matcher to do simple 1:1 by policyType when there’s exactly one of each. Only when SQL + logs show 3 pairs, rebuild `company_comparisons` and then fix OfferComparisonPage to read `comparisonJson.policyComparisons` correctly.”*
+
+If you want, I can turn that into another copy-paste-ready prompt, but the key is: **force it to prove each step is correct before moving to the next**.
+
+---
+
+Bottom line:
+
+* Backend is now *safe* (no hallucinated `bil`), but it’s still only pairing **hus**, so the data is incomplete.
+* That’s almost certainly in **DeterministicMatcher** (Phase 3) and possibly missing structured_policy on current indbo/ulykke.
+* In parallel, the **detail page** still needs to be wired to the new JSON shape.
+
+Fixing Phase 3 to always match 1:1 by type for this MVP + wiring the detail page to `comparisonJson.policyComparisons` will get you to the behaviour you actually want for these PDFs.
