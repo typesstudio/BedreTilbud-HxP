@@ -1,0 +1,277 @@
+Her er en ren copy-paste task til Replit, uden ekstra støj 👇
+
+---
+
+### TASK: Fix healthCheckOrchestrator + regenerér data for test-case (Alm. Brand vs. Privatsikring)
+
+**Goal**
+
+Få én “golden path” sammenligning til at virke 100 % korrekt for:
+
+* User: `e85ec3b9-e354-4c49-9f68-194830e356af` (`hello@vyork.dk`)
+* Current company: **Privatsikring** (hus, indbo, ulykke)
+* Offer company: **Alm. Brand / Lærerstandens Brandforsikring** (`abd44932-e5b2-4fda-a463-e75fd46c1ccc`)
+
+Når jeg klikker “Se sammenligning” på Alm. Brand-tilbuddet, skal **alle tre tabs (Hus, Indbo, Ulykke)** have rigtige tal og dækninger (ikke 0 rows på indbo/ulykke).
+
+Fokus er at implementere **STEP 3 + 4** fra debug-rapporten:
+
+1. Fix healthCheckOrchestrator (root cause)
+2. Regenerér structured_policy + health_checks for test-brugeren
+
+---
+
+## STEP 3 – Fix `healthCheckOrchestrator` (root cause)
+
+**Filer der skal berøres:**
+
+* `server/services/healthCheckOrchestrator.ts` (eller tilsvarende service der opretter `health_checks`)
+
+### 3.1. Gør orkestreringen 100 % snapshot-drevet
+
+Krav:
+
+1. Health checks skal altid oprettes **per snapshot**, ikke via implicit index-mapping.
+
+   Pseudocode-struktur (tilpas til eksisterende kode):
+
+   ```ts
+   const snapshots = await getSnapshotsForDocument(documentId);
+   // snapshots: id, policy_type, structured_policy, premium, deductible, user_id, company_id, document_type
+
+   for (const snapshot of snapshots) {
+     const result = await runHealthCheckAI({
+       policyType: snapshot.policy_type,
+       premium: snapshot.premium,
+       deductible: snapshot.deductible,
+       structuredPolicy: snapshot.structured_policy,
+     });
+
+     await insertHealthCheck({
+       user_id: snapshot.user_id,
+       snapshot_id: snapshot.id,
+       policy_type: snapshot.policy_type,   // IMPORTANT: copy from snapshot
+       analysis_result: result,
+     });
+   }
+   ```
+
+2. `health_checks.snapshot_id` skal altid være det snapshot, der blev brugt som input.
+
+3. `health_checks.policy_type` skal være en **ren kopi** af `offer_snapshots.policy_type` – ikke noget med at AI’en gætter typen og gemmer den.
+
+### 3.2. Tilføj intern validator (policy-type sanity check)
+
+Implementér en helper i samme fil eller et lille utils-modul, fx:
+
+```ts
+function guessPolicyTypeFromCoverages(
+  whatsIncluded: Array<{ coverage?: string }>
+): 'hus' | 'indbo' | 'ulykke' | 'unknown' {
+  const names = (whatsIncluded ?? [])
+    .map(c => (c.coverage || '').toLowerCase());
+
+  const has = (s: string) => names.some(n => n.includes(s));
+
+  if (has('invaliditet') || has('dødsfald') || has('tandskade')) return 'ulykke';
+  if (has('indbo') || has('cykel') || has('retshjælp')) return 'indbo';
+  if (has('bygningsbrand') || has('bygningsbeskadigelse') || has('fritidshus')) return 'hus';
+
+  return 'unknown';
+}
+```
+
+Efter AI-kaldet i orchestratoren:
+
+```ts
+const guessed = guessPolicyTypeFromCoverages(result.whatsIncluded ?? []);
+
+if (guessed !== 'unknown' && guessed !== snapshot.policy_type) {
+  logger.warn(
+    `HealthCheck policy mismatch: snapshot=${snapshot.id} db=${snapshot.policy_type} guessed=${guessed}`
+  );
+
+  // For now (for test user / dev):
+  // either:
+  // 1) throw new Error(...) to fail fast
+  // or
+  // 2) skip insertHealthCheck for this snapshot
+
+  // IMPORTANT: we must NOT write mismatched health_checks to DB.
+}
+```
+
+I prod kan vi nøjes med at logge en WARN, men til at starte med er det OK at være aggressiv (hellere ingen health_check end en forkert).
+
+---
+
+## STEP 4 – Regenerér data for test-case
+
+Målet er at få **ren data** for:
+
+* Current: Privatsikring (hus, indbo, ulykke)
+* Offer: Alm. Brand (hus, indbo, ulykke)
+* User: `e85ec3b9-e354-4c49-9f68-194830e356af`
+
+### 4.1. Slet gamle, forkerte health_checks for test-brugeren
+
+Brug gerne de queries fra rapporten, men konkret:
+
+```sql
+DELETE FROM health_checks
+WHERE user_id = 'e85ec3b9-e354-4c49-9f68-194830e356af';
+```
+
+(Det er ok at wipe alle health checks for denne test-user).
+
+### 4.2. Regenerér `structured_policy` for snapshots med NULL (kun denne user)
+
+1. Find snapshots uden structured_policy:
+
+```sql
+SELECT id, document_id, document_type, policy_type, company_id
+FROM offer_snapshots
+WHERE user_id = 'e85ec3b9-e354-4c49-9f68-194830e356af'
+  AND structured_policy IS NULL;
+```
+
+2. Lav et lille maintenance-script, fx `server/scripts/regenerateStructuredPolicy.ts`, der:
+
+   * Loader disse snapshots
+   * Henter tilhørende dokument/OCR-tekst
+   * Kører den **nye** to-step extractor (segmentation + policyExtractor)
+   * Skriver resultatet til `offer_snapshots.structured_policy`
+
+Pseudocode:
+
+```ts
+const snapshots = await getSnapshotsMissingStructuredPolicyForUser(userId);
+
+for (const snapshot of snapshots) {
+  const doc = await getDocument(snapshot.document_id);
+  const ocr = doc.extraction_stages?.stage1_ocr ?? doc.ocr_data;
+
+  const segmentText = await segmentPolicyForSnapshot(ocr, snapshot.policy_type); // or reuse existing logic
+  const structured = await extractStructuredPolicy(segmentText, {
+    policyType: snapshot.policy_type,
+  });
+
+  await updateSnapshotStructuredPolicy(snapshot.id, structured);
+}
+```
+
+Det vigtigste er: **current indbo + current ulykke + alle tre Alm. Brand-offers** ender med `structured_policy IS NOT NULL`.
+
+### 4.3. Regenerér health checks med den nye orchestrator
+
+Efter:
+
+* STEP 3 (orchestrator fix + validator) er deployed
+* STEP 4.2 (structured_policy udfyldt) er kørt
+
+→ kør health check-pipen igen for test-user.
+
+Enten via eksisterende flow eller et lille script der kalder orchestratoren for:
+
+* Privatsikring current dokument
+* Alm. Brand offer dokument (`Offer Insurance.pdf` for LB)
+
+Til sidst:
+
+Kør mismatch-check:
+
+```sql
+SELECT 
+  hc.id as health_check_id,
+  hc.snapshot_id,
+  os.policy_type as snapshot_policy_type,
+  hc.policy_type as healthcheck_policy_type
+FROM health_checks hc
+JOIN offer_snapshots os ON hc.snapshot_id = os.id
+WHERE os.user_id = 'e85ec3b9-e354-4c49-9f68-194830e356af'
+  AND hc.policy_type != os.policy_type;
+```
+
+**Forventet resultat:** 0 rows.
+
+---
+
+## Acceptance Criteria
+
+Opgaven er kun godkendt, hvis ALLE punkter her er opfyldt:
+
+### A. Datakvalitet i DB
+
+1. **Ingen policy-type mismatches** for test-brugeren:
+
+   * Query ovenfor (`hc.policy_type != os.policy_type`) returnerer 0 rækker.
+
+2. **Alle 3 current-policer** (Privatsikring) har structured_policy:
+
+   * hus, indbo, ulykke snapshots for test-brugeren har `structured_policy IS NOT NULL`.
+
+3. **Alle 3 Alm. Brand-offers** har structured_policy **og** health_checks:
+
+   ```sql
+   SELECT 
+     os.policy_type,
+     os.structured_policy IS NOT NULL as has_structured,
+     (SELECT COUNT(*) FROM health_checks hc WHERE hc.snapshot_id = os.id) as hc_count
+   FROM offer_snapshots os
+   JOIN companies c ON os.company_id = c.id
+   WHERE os.user_id = 'e85ec3b9-e354-4c49-9f68-194830e356af'
+     AND c.id = 'abd44932-e5b2-4fda-a463-e75fd46c1ccc';
+   ```
+
+   **Forventet:** 3 rækker (hus/indbo/ulykke), alle med `has_structured = true` og `hc_count = 1`.
+
+---
+
+### B. Debug-script (`debugComparison.ts`)
+
+Når jeg kører:
+
+```bash
+npx tsx server/scripts/debugComparison.ts
+```
+
+for user `e85ec3b9-e354-4c49-9f68-194830e356af` og Alm. Brand, skal output vise:
+
+* Ingen `⚠️ MISMATCH` under “Health Check Consistency”.
+* Under “Comparison JSON” noget i stil med:
+
+  * `policyType=hus    coverageRows > 0`
+  * `policyType=indbo  coverageRows > 0`
+  * `policyType=ulykke coverageRows > 0`
+
+(ikke længere 0 rows for indbo/ulykke)
+
+---
+
+### C. Frontend / UX
+
+På offers-overview siden:
+
+1. Klik på “Se sammenligning” for Alm. Brand vs. Privatsikring.
+2. I UI skal:
+
+   * **Samlet oversigt** vise total årlig besparelse (som nu).
+   * Tabs for **Hus, Indbo, Ulykke** alle:
+
+     * Viser årlig besparelse ≠ 0 kr (medmindre der reelt ikke er forskel).
+     * Har en ikke-tom dækningsliste i tabellen (coverageComparison.rows).
+     * Viser data der matcher de health_check JSON’er (fx Brand/Indbo BASIS/Invaliditet osv.).
+
+---
+
+### D. Robusthed
+
+Hvis vi uploader **de samme to PDF’er igen** for test-brugeren og kører pipelinen (Phase 1–4):
+
+* Der må ikke opstå nye `policy_type`-mismatches.
+* `debugComparison.ts` skal stadig vise et stabilt output med >0 coverage rows for alle tre policetyper.
+
+---
+
+**Kort sagt:**
+Fix healthCheckOrchestrator så health_checks altid matcher deres snapshots, regenerér structured_policy + health_checks for test-brugeren, og sørg for at debugComparison + UI viser fulde sammenligninger for hus/indbo/ulykke mellem Privatsikring og Alm. Brand.

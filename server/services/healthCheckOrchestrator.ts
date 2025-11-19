@@ -8,6 +8,31 @@ interface HealthCheckOptions {
   forceRerun?: boolean;
 }
 
+/**
+ * Guess policy type from coverage names (for validation)
+ * Returns 'hus' | 'indbo' | 'ulykke' | 'unknown'
+ */
+function guessPolicyTypeFromCoverages(
+  whatsIncluded: Array<{ coverage?: string }>
+): 'hus' | 'indbo' | 'ulykke' | 'unknown' {
+  const names = (whatsIncluded ?? [])
+    .map(c => (c.coverage || '').toLowerCase());
+
+  const has = (s: string) => names.some(n => n.includes(s));
+
+  if (has('invaliditet') || has('dødsfald') || has('tandskade') || has('krisehjælp')) {
+    return 'ulykke';
+  }
+  if (has('indbo') || has('cykel') || has('retshjælp') || has('ansvar')) {
+    return 'indbo';
+  }
+  if (has('bygningsbrand') || has('bygningsbeskadigelse') || has('fritidshus') || has('storm og skybrud') || has('brand')) {
+    return 'hus';
+  }
+
+  return 'unknown';
+}
+
 interface HealthCheckOrchestrationResult {
   success: boolean;
   documentId: string;
@@ -164,11 +189,34 @@ export class HealthCheckOrchestrator {
       // insuranceCheckService.analyzeInsuranceHealth accepts both Policy and OfferSnapshot
       const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(snapshot);
 
+      // VALIDATION: Check if AI-extracted coverages match snapshot's policy_type
+      const guessedType = guessPolicyTypeFromCoverages(healthCheckResult.whatsIncluded ?? []);
+      
+      if (guessedType !== 'unknown' && guessedType !== snapshot.policyType) {
+        console.warn(
+          `[HealthCheckOrchestrator] ⚠️  Policy type mismatch detected:`,
+          {
+            snapshotId: snapshot.id,
+            dbPolicyType: snapshot.policyType,
+            guessedFromCoverages: guessedType,
+            firstCoverages: (healthCheckResult.whatsIncluded ?? []).slice(0, 3).map(c => c.coverage).join(', ')
+          }
+        );
+        
+        // Skip creating health check with mismatched data to prevent bad comparisons
+        throw new Error(
+          `Policy type mismatch: snapshot=${snapshot.id} db=${snapshot.policyType} guessed=${guessedType}. ` +
+          `This indicates the snapshot has incorrect policy_type or extraction failed. ` +
+          `Skipping health check creation to prevent bad data.`
+        );
+      }
+
       // Prepare health check record for database
       const healthCheckData: InsertHealthCheck = {
         documentId,
         userId,
         snapshotId: snapshot.id, // Phase 2: FK to offer_snapshots for ID-based matching
+        policyType: snapshot.policyType, // CRITICAL: Copy from snapshot for data integrity
         dataSource: 'OfferSnapshot', // Indicates this came from extraction pipeline
         confidenceScore: snapshot.confidenceScore, // Use extraction confidence score
         result: healthCheckResult // Full AI analysis result
@@ -181,6 +229,7 @@ export class HealthCheckOrchestrator {
         healthCheckId: savedHealthCheck.id,
         snapshotId: snapshot.id,
         policyType: snapshot.policyType,
+        validationType: guessedType === snapshot.policyType ? 'MATCH' : 'UNKNOWN',
         potentialSavings: healthCheckResult.potentialSavings?.realistic || 0
       });
 

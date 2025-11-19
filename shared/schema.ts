@@ -256,6 +256,7 @@ export const healthChecks = pgTable("health_checks", {
   documentId: varchar("document_id").references(() => documents.id).notNull(),
   userId: varchar("user_id").references(() => users.id).notNull(),
   snapshotId: varchar("snapshot_id").references(() => offerSnapshots.id), // Phase 2: FK to offer_snapshots for ID-based matching
+  policyType: text("policy_type").notNull(), // "indbo", "ulykke", "hus" - copied from snapshot for data integrity
   dataSource: text("data_source").notNull(), // "OfferSnapshot", "Policy", "ocrData"
   confidenceScore: integer("confidence_score"), // 0-100 if from OfferSnapshot
   result: json("result").notNull(), // HealthCheckResult object
@@ -264,6 +265,7 @@ export const healthChecks = pgTable("health_checks", {
   documentIdIdx: index("health_checks_document_id_idx").on(table.documentId),
   userIdIdx: index("health_checks_user_id_idx").on(table.userId),
   snapshotIdIdx: index("health_checks_snapshot_id_idx").on(table.snapshotId),
+  policyTypeIdx: index("health_checks_policy_type_idx").on(table.policyType),
   userIdCreatedIdx: index("health_checks_user_id_created_idx").on(table.userId, table.createdAt),
 }));
 
