@@ -1739,14 +1739,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Also check company_comparisons for more detailed status
-          if (company) {
+          if (doc.companyId) {
             const companyComparisons = await storage.getCompanyComparisonsByUser(req.params.userId);
             const relevantComparison = companyComparisons.find((cc: CompanyComparison) => 
-              cc.offerCompany === company.name
+              cc.offerCompany === doc.companyId
             );
             
             if (relevantComparison) {
-              if (relevantComparison.status === 'complete' && relevantComparison.comparisonJSON) {
+              if (relevantComparison.status === 'completed' && relevantComparison.comparisonJSON) {
                 comparisonStatus = 'ok';
               } else if (relevantComparison.status === 'failed') {
                 comparisonStatus = 'failed';

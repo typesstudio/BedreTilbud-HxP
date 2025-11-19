@@ -128,8 +128,8 @@ export const comparisons = pgTable("comparisons", {
 export const companyComparisons = pgTable("company_comparisons", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   userId: varchar("user_id").references(() => users.id).notNull(),
-  currentCompany: text("current_company").notNull(), // Company name (e.g., "Alm. Brand")
-  offerCompany: text("offer_company").notNull(), // Company name (e.g., "Tryg")
+  currentCompany: text("current_company").notNull(), // Company ID (UUID from companies table)
+  offerCompany: text("offer_company").notNull(), // Company ID (UUID from companies table)
   status: text("status").default("pending"), // "pending", "processing", "completed", "failed"
   statusReason: text("status_reason"), // Machine-readable reason: MISSING_STRUCTURED_POLICY_CURRENT, MISSING_STRUCTURED_POLICY_OFFER, etc.
   comparisonJSON: jsonb("comparison_json"), // Full ComparisonResult from Phase 4
