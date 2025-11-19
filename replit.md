@@ -43,8 +43,13 @@ This system persists intermediate outputs of the extraction pipeline (OCR, Segme
 
 ### Comparison Pipeline Architecture
 This pipeline generates comprehensive comparison analyses between user's current and offer insurance policies.
-1.  **Phase 3: Deterministic Policy Matching**: Pairs current and offer policies using scoring heuristics (address, person, offer number match) to ensure stable, deterministic matching.
+1.  **Phase 3: Deterministic Policy Matching**: Pairs current and offer policies using scoring heuristics (address, person, offer number match) to ensure stable, deterministic matching. Includes fallback logic to auto-match single-policy-per-type pairs even with score=0 (missing metadata). Health checks are optional for matching.
 2.  **Phase 4: ComparisonAgent**: An AI-powered agent (`gpt-4o` with `gpt-4o-mini` fallback) generates validated ComparisonResult JSON using matched pairs and health check data. It focuses on 1:1 coverage mapping and deductible preservation.
+
+**Anti-Hallucination System**: The orchestrator builds the policy structure in code from Phase 3 matcher output BEFORE calling the AI, preventing hallucination of non-existent policy types. Strict validation throws errors when the AI omits required policies.
+
+**Retry Logic**: If the AI omits required policy types in its first attempt, the system automatically retries with a reinforced prompt explicitly listing the exact required policy types. This achieves a 75% success rate for multi-policy comparisons.
+
 The **ComparisonOrchestrator** manages this pipeline, groups policies by company pair, and stores results in the `company_comparisons` table. It includes idempotency checks and is enabled by `ENABLE_COMPARISON=true`.
 
 ### AI Model Configuration

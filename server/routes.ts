@@ -1798,7 +1798,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // NEW: Get company comparison by ID (company_comparisons table)
   app.get("/api/company-comparisons/:id", requireAuth, async (req, res) => {
     try {
-      const comparison = await storage.getCompanyComparisonById(req.params.id);
+      const comparison = await storage.getCompanyComparison(req.params.id);
       if (!comparison) {
         return res.status(404).json({ message: "Comparison not found" });
       }
