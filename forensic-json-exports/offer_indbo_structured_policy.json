@@ -1,0 +1,68 @@
+{
+  "meta": {
+    "indexYear": "2025",
+    "rawPolicyTypeLabel": "Tilbud Indboforsikring"
+  },
+  "address": "Kong Oscars Gade 4, 02. tv., 2100 København Ø",
+  "company": "Lærerstandens Brandforsikring",
+  "policyName": "Indboforsikring",
+  "policyType": "indbo",
+  "offerNumber": "3000104896671/000",
+  "annualPremium": null,
+  "coverageDetails": {
+    "mainCoverages": [
+      {
+        "name": "Indbo BASIS",
+        "limit": "835.600,00 kr",
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      },
+      {
+        "name": "Cykel inkl. tilbehør, pr. cykel højst",
+        "limit": "16.900,00 kr",
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      }
+    ],
+    "additionalCoverages": [
+      {
+        "name": "Ansvar ved tingskade",
+        "limit": "5.000.000,00 kr",
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      },
+      {
+        "name": "Ansvar ved personskade",
+        "limit": "10.000.000,00 kr",
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      },
+      {
+        "name": "Retshjælp",
+        "limit": "225.000,00 kr",
+        "included": true,
+        "deductible": "10% (min. 2.500,00 kr)",
+        "sourceTable": null
+      },
+      {
+        "name": "Psykologisk krisehjælp",
+        "limit": null,
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      },
+      {
+        "name": "ID-tyveri",
+        "limit": null,
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      }
+    ]
+  },
+  "defaultDeductible": "1.300,00 kr"
+}

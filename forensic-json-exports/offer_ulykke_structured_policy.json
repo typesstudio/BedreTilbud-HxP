@@ -1,0 +1,60 @@
+{
+  "meta": {
+    "indexYear": "2025",
+    "rawPolicyTypeLabel": "Tilbud Ulykkesforsikring"
+  },
+  "address": null,
+  "company": "Lærerstandens Brandforsikring",
+  "policyName": "Ulykkesforsikring",
+  "policyType": "ulykke",
+  "offerNumber": "2000104896673/000",
+  "annualPremium": 995.1,
+  "coverageDetails": {
+    "mainCoverages": [
+      {
+        "name": "Erstatning for varigt mén fra 5%",
+        "limit": null,
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      },
+      {
+        "name": "Erstatning ved død som følge af ulykke",
+        "limit": null,
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      },
+      {
+        "name": "Behandlingsudgifter efter ulykke",
+        "limit": null,
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      },
+      {
+        "name": "Transport fra ulykkesstedet",
+        "limit": null,
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      },
+      {
+        "name": "Tandskade",
+        "limit": null,
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      },
+      {
+        "name": "Tyggeskade",
+        "limit": null,
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      }
+    ],
+    "additionalCoverages": []
+  },
+  "defaultDeductible": null
+}

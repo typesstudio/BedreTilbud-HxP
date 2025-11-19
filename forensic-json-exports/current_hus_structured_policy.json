@@ -1,0 +1,131 @@
+{
+  "meta": {
+    "indexYear": "2025",
+    "rawPolicyTypeLabel": "Privatsikring Fritidshus"
+  },
+  "address": "Kornvænget 19, 3230 Græsted",
+  "company": "Forsikringsselskabet Privatsikring A/S",
+  "policyName": "Privatsikring Fritidshus",
+  "policyType": "hus",
+  "offerNumber": "9146390436",
+  "annualPremium": 8734.59,
+  "coverageDetails": {
+    "mainCoverages": [
+      {
+        "name": "Brand",
+        "limit": "62.344 kr",
+        "included": true,
+        "deductible": "2.834 kr",
+        "sourceTable": "dækning-selvrisiko"
+      },
+      {
+        "name": "Kasko",
+        "limit": "62.344 kr",
+        "included": true,
+        "deductible": "2.834 kr",
+        "sourceTable": "dækning-selvrisiko"
+      },
+      {
+        "name": "Skybrud",
+        "limit": null,
+        "included": true,
+        "deductible": "5.000 kr",
+        "sourceTable": "dækning-selvrisiko"
+      },
+      {
+        "name": "Hus og grundejeransvar",
+        "limit": "10.000.000 kr / 2.000.000 kr",
+        "included": true,
+        "deductible": "0 kr",
+        "sourceTable": "dækning-selvrisiko"
+      },
+      {
+        "name": "Retshjælp",
+        "limit": "225.000 kr",
+        "included": true,
+        "deductible": "10% (min. 2.500 kr)",
+        "sourceTable": "dækning-selvrisiko"
+      },
+      {
+        "name": "Glas og sanitet",
+        "limit": null,
+        "included": true,
+        "deductible": "0 kr",
+        "sourceTable": "dækning-selvrisiko"
+      },
+      {
+        "name": "Insekt",
+        "limit": null,
+        "included": true,
+        "deductible": "2.834 kr",
+        "sourceTable": "dækning-selvrisiko"
+      },
+      {
+        "name": "Svamp",
+        "limit": null,
+        "included": true,
+        "deductible": "2.834 kr",
+        "sourceTable": "dækning-selvrisiko"
+      },
+      {
+        "name": "Råd",
+        "limit": null,
+        "included": true,
+        "deductible": "2.834 kr",
+        "sourceTable": "dækning-selvrisiko"
+      },
+      {
+        "name": "Skjulte rør og kabler",
+        "limit": null,
+        "included": true,
+        "deductible": "2.834 kr",
+        "sourceTable": "dækning-selvrisiko"
+      },
+      {
+        "name": "Stikledning",
+        "limit": null,
+        "included": true,
+        "deductible": "2.834 kr",
+        "sourceTable": "dækning-selvrisiko"
+      },
+      {
+        "name": "Indbo",
+        "limit": "12.753 kr",
+        "included": true,
+        "deductible": "1.417 kr",
+        "sourceTable": "dækning-selvrisiko"
+      }
+    ],
+    "additionalCoverages": [
+      {
+        "name": "Udvidet vand",
+        "limit": null,
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      },
+      {
+        "name": "Udvidet hus og have",
+        "limit": null,
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      },
+      {
+        "name": "Ferieudlejning",
+        "limit": null,
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      },
+      {
+        "name": "Udvidet indbo",
+        "limit": null,
+        "included": true,
+        "deductible": null,
+        "sourceTable": null
+      }
+    ]
+  },
+  "defaultDeductible": null
+}
