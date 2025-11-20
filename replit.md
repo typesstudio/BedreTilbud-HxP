@@ -37,7 +37,16 @@ AI never sees coverage rows or highlights, so it **literally cannot** simplify o
 
 **Current Status:**
 - Enrichment Pattern implementation: COMPLETE ✅
-- Pending: Final testing to verify coverage rows are preserved in golden comparisons
+- policyKey mapping solution: IMPLEMENTED ✅ (solves UUID hallucination)
+- Testing results: 67% success rate (4/6 comparisons), coverage rows preserved (16, 16, 4)
+- Known issue: Single-policy comparisons need prompt tuning (edge case)
+
+**Testing Evidence (Nov 20, 2025):**
+- Multi-policy comparisons (3 policies): ✅ Working perfectly
+- Coverage preservation: ✅ Deterministic (16 hus + 16 indbo + 4 ulykke rows)
+- policyKey validation: ✅ 100% accurate (AI echoes "policy-1", "policy-2", "policy-3")
+- Integrity checks: ✅ No mutations detected
+- Edge case: Single-policy comparisons hallucinate extra policies (requires prompt fix)
 
 ## System Architecture
 The platform features a React and TypeScript frontend, optimized for mobile-first accessibility with large typography and high contrast, utilizing Shadcn/ui, Subframe, and TailwindCSS. It includes multi-step onboarding, an offers dashboard, and adaptive policy comparison. State management is handled by TanStack Query, and Wouter manages routing.

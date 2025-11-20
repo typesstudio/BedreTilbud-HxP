@@ -35,14 +35,14 @@ Return ONLY narrative fields in this format:
   "explanation": "Overall comparison explanation (2-3 sentences in Danish)",
   "policyNarratives": [
     {
-      "deterministicId": "abc-123",  // MUST COPY EXACTLY from input
-      "policyType": "hus",  // MUST COPY EXACTLY from input
+      "policyKey": "policy-1",  // COPY EXACTLY from input - do NOT modify
+      "policyType": "hus",  // COPY EXACTLY from input
       "recommendations": ["Anbefaling 1", "Anbefaling 2"],
       "missingInformation": [
         {
-          "field": "Selvrisiko ved vandskade",
-          "reason": "Tilbuddet nævner ikke selvrisiko for vandskader",
-          "severity": "high" | "medium" | "low"
+          "severity": "critical" | "important" | "question",
+          "question": "Hvad er selvrisikobeløbet ved vandskade?",
+          "explanation": "Tilbuddet nævner ikke selvrisiko for vandskader, hvilket gør det svært at sammenligne præcist"
         }
       ]
     }
@@ -50,11 +50,13 @@ Return ONLY narrative fields in this format:
 }
 ```
 
-**CRITICAL:** 
-- You MUST return exactly one narrative object for each policy in the input.
-- For each policy, you MUST copy the `deterministicId` field EXACTLY as it appears in the input.
-- You MUST copy the `policyType` field EXACTLY as it appears in the input.
-- If input has 3 policies, your `policyNarratives` array MUST have 3 objects with matching deterministicIds.
+**CRITICAL RULES:** 
+- You MUST return exactly one narrative object for each policy in the input. NO MORE, NO LESS.
+- For each policy, you MUST COPY the `policyKey` field EXACTLY from the input (e.g., "policy-1", "policy-2", "policy-3").
+- For each policy, you MUST COPY the `policyType` field EXACTLY from the input.
+- If input has 3 policies with policyKeys ["policy-1", "policy-2", "policy-3"], your `policyNarratives` array MUST have 3 objects with those EXACT keys.
+- If input has 1 policy with policyKey "policy-1", your `policyNarratives` array MUST have EXACTLY 1 object with key "policy-1". DO NOT invent "policy-2" or "policy-3".
+- COUNT the policies in the input BEFORE responding. Your output count MUST match the input count exactly.
 
 ## GUIDELINES
 

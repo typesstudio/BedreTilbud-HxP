@@ -512,7 +512,10 @@ export class ComparisonOrchestrator {
           throw new Error(`Missing policy data for pair: ${pair.policyType}`);
         }
         
-        // Generate UNIQUE deterministicId (prevents duplicate policy type collisions)
+        // Generate SIMPLE policyKey for AI (easy to echo back)
+        const policyKey = `policy-${index + 1}`;
+        
+        // Generate UNIQUE deterministicId (prevents duplicate policy type collisions) - KEPT SERVER-SIDE
         const deterministicId = `${pair.currentPolicyId}-${pair.offerPolicyId}`;
         
         const currentAnnualPremium = parseFloat(currentPolicy.premium || '0');
@@ -540,7 +543,8 @@ export class ComparisonOrchestrator {
         console.log(`[ComparisonOrchestrator] Built ${highlights.length} deterministic highlights for ${pair.policyType} (ID: ${deterministicId})`);
         
         return {
-          deterministicId, // UNIQUE ID for 1:1 merge
+          policyKey, // Simple slot key for AI to echo back
+          deterministicId, // UNIQUE ID (server-side only, rehydrated after AI call)
           policyType: pair.policyType,
           label: pair.label,
           currentCompany,
@@ -562,7 +566,11 @@ export class ComparisonOrchestrator {
 
       console.log(`[ComparisonOrchestrator] ✅ Cached deterministic data for ${deterministicPolicyData.length} policies`);
       
-      // STEP 2: Build minimal AI input (only health checks + identity fields + unique IDs)
+      // BUILD policyKey → deterministicId mapping (for rehydration after AI call)
+      const keyToIdMap = new Map(deterministicPolicyData.map(d => [d.policyKey, d.deterministicId]));
+      console.log(`[ComparisonOrchestrator] Created policyKey mapping: ${Array.from(keyToIdMap.keys()).join(', ')}`);
+      
+      // STEP 2: Build minimal AI input (only health checks + identity fields + simple policyKey)
       const aiInput = {
         context: {
           currentCompany,
@@ -570,7 +578,7 @@ export class ComparisonOrchestrator {
           currency: 'DKK'
         },
         policies: deterministicPolicyData.map(p => ({
-          deterministicId: p.deterministicId, // UNIQUE ID for 1:1 merge
+          policyKey: p.policyKey, // SIMPLE key for AI to echo back (e.g. "policy-1")
           policyType: p.policyType,
           label: p.label,
           currentCompany: p.currentCompany,
@@ -586,30 +594,33 @@ export class ComparisonOrchestrator {
 
       console.log(`[ComparisonOrchestrator] ✅ AI returned narratives for ${aiNarratives.policyNarratives.length} policies`);
 
-      // STEP 3: MERGE deterministic data with AI narratives (DICTIONARY-BASED)
-      // Build dictionaries for O(1) lookup and prevent duplicate ID issues
-      const deterministicById = new Map(deterministicPolicyData.map(d => [d.deterministicId, d]));
-      const narrativeById = new Map(aiNarratives.policyNarratives.map(n => [n.deterministicId, n]));
+      // STEP 3: VALIDATE policyKeys and REHYDRATE deterministicIds
+      // Build dictionaries for O(1) lookup using simple policyKeys
+      const deterministicByKey = new Map(deterministicPolicyData.map(d => [d.policyKey, d]));
+      const narrativeByKey = new Map(aiNarratives.policyNarratives.map(n => [n.policyKey, n]));
 
-      // Validate: All deterministic IDs must have matching narratives
-      for (const [id, data] of deterministicById.entries()) {
-        if (!narrativeById.has(id)) {
-          throw new Error(`AI did not return narrative for deterministicId: ${id} (policy type: ${data.policyType})`);
+      // Validate: All expected policyKeys must have matching narratives
+      const expectedKeys = Array.from(deterministicByKey.keys());
+      const returnedKeys = Array.from(narrativeByKey.keys());
+      
+      for (const key of expectedKeys) {
+        if (!narrativeByKey.has(key)) {
+          throw new Error(`AI did not return narrative for policyKey: ${key}. Expected: ${expectedKeys.join(', ')}, Got: ${returnedKeys.join(', ')}`);
         }
       }
 
-      // Validate: All narrative IDs must match deterministic IDs (no extras)
-      for (const [id, narrative] of narrativeById.entries()) {
-        if (!deterministicById.has(id)) {
-          throw new Error(`AI returned narrative for unknown deterministicId: ${id} (policy type: ${narrative.policyType})`);
+      // Validate: AI must not return unexpected policyKeys
+      for (const key of returnedKeys) {
+        if (!deterministicByKey.has(key)) {
+          throw new Error(`AI returned narrative for unexpected policyKey: ${key}. Expected: ${expectedKeys.join(', ')}, Got: ${returnedKeys.join(', ')}`);
         }
       }
 
-      console.log(`[ComparisonOrchestrator] ✅ Validation passed: All ${deterministicById.size} IDs matched`);
+      console.log(`[ComparisonOrchestrator] ✅ policyKey validation passed: All ${expectedKeys.length} keys matched`);
 
-      // Perform merge: Deterministic data + AI narratives
+      // Perform merge: Deterministic data + AI narratives (rehydrate deterministicIds)
       const policyComparisons = deterministicPolicyData.map(deterministicData => {
-        const narrative = narrativeById.get(deterministicData.deterministicId)!;
+        const narrative = narrativeByKey.get(deterministicData.policyKey)!;
 
         // Merge: Deterministic data + AI narratives
         const merged = {

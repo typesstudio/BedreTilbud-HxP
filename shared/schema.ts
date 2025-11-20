@@ -485,7 +485,7 @@ export type PolicyComparison = z.infer<typeof policyComparisonSchema>;
 // These schemas define ONLY what the AI generates (narratives, not facts)
 
 export const aiPolicyNarrativeSchema = z.object({
-  deterministicId: z.string(), // Unique ID for 1:1 merge (prevents duplicate policy type collisions)
+  policyKey: z.string(), // Simple slot key (e.g. "policy-1") for AI to echo back - rehydrated to deterministicId server-side
   policyType: z.string(), // For logging/debugging
   missingInformation: z.array(missingInformationItemSchema),
   recommendations: z.array(z.string()),

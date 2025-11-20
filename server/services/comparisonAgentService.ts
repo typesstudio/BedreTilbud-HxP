@@ -20,7 +20,7 @@ const openai = new OpenAI({
  * DO NOT send coverage rows, highlights, or cost summaries - those are deterministic
  */
 interface PolicyForNarrative {
-  deterministicId: string; // UNIQUE ID for 1:1 merge (prevents duplicate policy type collisions)
+  policyKey: string; // Simple slot key (e.g. "policy-1") for AI to echo back - easy for models to copy
   policyType: string;
   label: string;
   currentCompany: string;
@@ -107,20 +107,20 @@ export class ComparisonAgentService {
 
     const startTime = Date.now();
 
-    // Extract deterministicIds for validation (prevent hallucination/omission)
-    const expectedIds = input.policies.map(p => p.deterministicId);
+    // Extract policyKeys for validation (prevent hallucination/omission)
+    const expectedKeys = input.policies.map(p => p.policyKey);
     const expectedPolicyTypes = input.policies.map(p => p.policyType);
-    console.log(`[ComparisonAgent] Expected ${expectedIds.length} policies with IDs: ${expectedIds.join(', ')}`);
+    console.log(`[ComparisonAgent] Expected ${expectedKeys.length} policies with keys: ${expectedKeys.join(', ')}`);
     console.log(`[ComparisonAgent] Policy types: ${expectedPolicyTypes.join(', ')}`);
 
     // TRY 1: Standard prompt
     try {
-      return await this.attemptNarrativeGeneration(input, expectedIds, false);
+      return await this.attemptNarrativeGeneration(input, expectedKeys, false);
     } catch (error: any) {
       // RETRY: If AI omitted policies, try again with reinforced prompt
       if (error.message?.includes('AI omitted required')) {
         console.warn(`[ComparisonAgent] ⚠️  First attempt failed (${error.message}), retrying with reinforced prompt...`);
-        return await this.attemptNarrativeGeneration(input, expectedIds, true);
+        return await this.attemptNarrativeGeneration(input, expectedKeys, true);
       }
       // For other errors, fail immediately
       throw error;
@@ -129,7 +129,7 @@ export class ComparisonAgentService {
 
   private async attemptNarrativeGeneration(
     input: ComparisonAgentInput,
-    expectedIds: string[],
+    expectedKeys: string[],
     reinforcePrompt: boolean
   ): Promise<AIComparisonNarrative> {
     const startTime = Date.now();
@@ -144,7 +144,7 @@ export class ComparisonAgentService {
 
     // Add reinforcement on retry
     if (reinforcePrompt) {
-      userPrompt = `⚠️ CRITICAL REMINDER: You MUST return narratives with EXACTLY ${expectedIds.length} deterministicIds. Do NOT omit any policies!\n\n` + userPrompt;
+      userPrompt = `⚠️ CRITICAL REMINDER: You MUST return narratives with EXACTLY ${expectedKeys.length} policyKeys (${expectedKeys.join(', ')}). Do NOT omit any policies!\n\n` + userPrompt;
     }
 
     const aiResponse = await this.callComparisonAgent(userPrompt);
@@ -170,8 +170,8 @@ export class ComparisonAgentService {
       throw new Error(`ComparisonAgent narrative validation failed: ${validationError.message}`);
     }
 
-    // Validate output matches expected deterministicIds (prevent hallucination)
-    this.validateNarrativeResult(parsedResult, expectedIds);
+    // Validate output matches expected policyKeys (prevent hallucination)
+    this.validateNarrativeResult(parsedResult, expectedKeys);
 
     logAIInvocation("ComparisonAgent (Narrative)" + (reinforcePrompt ? " (retry)" : ""), {
       model: aiResponse.model,
@@ -185,34 +185,34 @@ export class ComparisonAgentService {
 
   /**
    * Validates that AI narratives respect input constraints
-   * Prevents hallucination or omission of policies using unique IDs
+   * Prevents hallucination or omission of policies using simple policyKeys
    */
-  private validateNarrativeResult(result: AIComparisonNarrative, expectedIds: string[]): void {
-    const outputIds = result.policyNarratives.map(pn => pn.deterministicId);
+  private validateNarrativeResult(result: AIComparisonNarrative, expectedKeys: string[]): void {
+    const outputKeys = result.policyNarratives.map(pn => pn.policyKey);
     
-    // Check for hallucinated IDs
-    const hallucinated = outputIds.filter(id => !expectedIds.includes(id));
+    // Check for hallucinated keys
+    const hallucinated = outputKeys.filter(key => !expectedKeys.includes(key));
     if (hallucinated.length > 0) {
       console.error(
-        `[ComparisonAgent] ❌ HALLUCINATION DETECTED: AI added unexpected deterministicIds:`,
+        `[ComparisonAgent] ❌ HALLUCINATION DETECTED: AI added unexpected policyKeys:`,
         hallucinated.join(', '),
-        `| Expected: ${expectedIds.join(', ')}`
+        `| Expected: ${expectedKeys.join(', ')}`
       );
       throw new Error(
-        `AI hallucinated deterministicIds: ${hallucinated.join(', ')}. ` +
-        `Only expected: ${expectedIds.join(', ')}`
+        `AI hallucinated policyKeys: ${hallucinated.join(', ')}. ` +
+        `Only expected: ${expectedKeys.join(', ')}`
       );
     }
 
-    // Check for missing IDs - STRICT VALIDATION
-    const missing = expectedIds.filter(id => !outputIds.includes(id));
+    // Check for missing keys - STRICT VALIDATION
+    const missing = expectedKeys.filter(key => !outputKeys.includes(key));
     if (missing.length > 0) {
-      const errorMsg = `AI omitted required deterministicIds: ${missing.join(', ')}. Input had ${expectedIds.length} policies, output has ${outputIds.length} narratives.`;
+      const errorMsg = `AI omitted required policyKeys: ${missing.join(', ')}. Input had ${expectedKeys.length} policies, output has ${outputKeys.length} narratives.`;
       console.error(`[ComparisonAgent] ❌ ${errorMsg}`);
       throw new Error(errorMsg);
     }
 
-    console.log(`[ComparisonAgent] ✅ Narrative validation passed: All ${expectedIds.length} policies have narratives`);
+    console.log(`[ComparisonAgent] ✅ Narrative validation passed: All ${expectedKeys.length} policyKeys matched`);
   }
 
   private async callComparisonAgent(userPrompt: string): Promise<{
