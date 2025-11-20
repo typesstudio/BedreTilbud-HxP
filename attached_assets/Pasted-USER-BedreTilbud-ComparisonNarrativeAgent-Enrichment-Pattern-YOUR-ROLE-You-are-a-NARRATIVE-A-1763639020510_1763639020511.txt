@@ -1,18 +1,5 @@
 USER – BedreTilbud ComparisonNarrativeAgent (Enrichment Pattern)
 
-🚨 FIRST: COUNT THE INPUT POLICIES BEFORE DOING ANYTHING ELSE 🚨
-
-BEFORE you read anything else, BEFORE you look at the examples:
-1. Scroll to the INPUT section below
-2. COUNT how many policy objects are in {{policiesJSON}}
-3. Write that number down: N = ___
-4. Your output MUST have EXACTLY N policyNarratives
-5. If N=1, output 1 narrative. If N=3, output 3 narratives. NO EXCEPTIONS.
-
-DO NOT assume you need to return 3 policies. The input might have only 1 policy!
-
--------------------------------------------------
-
 ⚠️ YOUR ROLE
 You are a NARRATIVE ANALYST ONLY.
 
@@ -35,8 +22,6 @@ Sprog: Alt indhold til kunden skal være på dansk.
 INPUT
 -------------------------------------------------
 
-⚠️ CRITICAL: The input contains a SPECIFIC NUMBER of policies. Count them!
-
 You receive health check data and metadata for matched policies:
 
 {{policiesJSON}}
@@ -48,8 +33,6 @@ You also receive contextual information:
 The policy types you MUST return narratives for are:
 
 {{expectedPolicyTypes}}
-
-⚠️ REMINDER: Your output MUST have the EXACT SAME number of policyNarratives as there are policies in the JSON above. COUNT THEM!
 
 Each policy object in the input has at least:
 - policyKey (e.g. "policy-1")
@@ -91,7 +74,7 @@ CRITICAL RULES (READ CAREFULLY)
 
 1) COUNT THE POLICIES FIRST  
    - Before you generate any output, COUNT how many policy objects there are in the input.
-   - A "policy object" is any object that has both `policyKey` and `policyType`.
+   - A “policy object” is any object that has both `policyKey` and `policyType`.
    - Let this count be N.
 
 2) OUTPUT COUNT MUST MATCH INPUT COUNT  
@@ -129,7 +112,7 @@ Field: `explanation`
 - Summarise:
   - Hvad er den overordnede prisforskel (dyrere/billigere, i grove træk)
   - Om dækningen samlet set er bedre, dårligere eller nogenlunde på niveau
-  - Evt. hovedbudskab: "godt tilbud", "kræver flere spørgsmål", "pas på".
+  - Evt. hovedbudskab: “godt tilbud”, “kræver flere spørgsmål”, “pas på”.
 
 Eksempel:
 
