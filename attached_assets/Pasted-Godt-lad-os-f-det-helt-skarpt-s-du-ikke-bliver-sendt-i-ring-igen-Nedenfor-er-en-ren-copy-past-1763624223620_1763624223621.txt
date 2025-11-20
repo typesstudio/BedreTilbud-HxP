@@ -1,0 +1,245 @@
+Godt, lad os få det helt skarpt, så du ikke bliver sendt i ring igen.
+Nedenfor er en **ren copy-paste “task spec” til Replit**, hvor STEP 3 + 4 er defineret meget konkret med klare acceptance criteria.
+
+---
+
+### 📌 Copy-paste til Replit
+
+````text
+TASK: Fix HealthCheck Validator so comparisons are generated for all 3 policies (hus, indbo, ulykke) WITHOUT corrupt data
+
+Context (short):
+- We have a two-step pipeline: OCR → structured_policy → health_checks → matcher → comparison.
+- A new "Zero-Mismatch Validator" was added to block health checks when policy_type doesn’t match the coverages.
+- For the IF Forsikring offer (20.11.2025), this validator now blocks 2/3 policies (hus + indbo), so comparison status stays "pending".
+- We need the validator to be SAFE but NON-BLOCKING, and we need golden comparisons for:
+  - Privatsikring (current) vs Alm. Brand (offer)
+  - Privatsikring (current) vs IF Forsikring (offer)
+
+Please implement **STEP 3** and **STEP 4** below.
+
+====================================================
+STEP 3 – Make the Zero-Mismatch Validator SOFT, not blocking
+====================================================
+
+Goal:
+- The validator MUST NEVER block health check creation for borderline cases.
+- It should:
+  - Always create a health_check row for each snapshot
+  - Always keep health_checks.policy_type == offer_snapshots.policy_type
+  - Only LOG mismatches, not abort
+- We still want to catch *obviously wrong* data (for debugging), but NOT stop the pipeline.
+
+Files likely involved:
+- server/services/healthCheckOrchestrator.ts
+- server/services/policySegmentationService.ts (if the guess function lives here)
+- Maybe a helper like server/utils/policyTypeHeuristics.ts (you can create one if useful)
+
+### 3.1 Locate current validator
+
+1. Find where we currently do something like:
+   - guessPolicyTypeFromCoverages(whatsIncluded)
+   - if (detectedType !== snapshot.policy_type) { abort / throw / return }
+2. This is the "Zero-Mismatch Validator" described in the debug report for IF:
+   - It logged "Policy labeled Hus contains Indbo coverages → ABORT"
+   - It logged "Policy labeled Indbo contains Ulykke coverages → ABORT"
+   - As a result, only Ulykke got a health check, Hus + Indbo were blocked.
+
+### 3.2 Change behaviour to SOFT validation
+
+Replace the current “hard abort” logic with something like this (pseudocode):
+
+```ts
+const detectedType = guessPolicyTypeFromCoverages(healthCheckPayload.whatsIncluded);
+
+const snapshotType = snapshot.policy_type; // 'hus' | 'indbo' | 'ulykke'
+
+// Always store the DB snapshot type on the health_check
+const policyTypeForRow = snapshotType;
+
+// Soft validation only – NO aborts
+if (detectedType && detectedType !== snapshotType) {
+  logger.warn(
+    `[HealthCheckValidator] Policy type mismatch for snapshot=${snapshot.id}: ` +
+    `db=${snapshotType}, detected=${detectedType}, firstCoverage=${firstCoverageName}`
+  );
+  // OPTIONAL: embed debug info in result JSON
+  result._debug = {
+    ...(result._debug || {}),
+    detectedPolicyType: detectedType,
+    dbPolicyType: snapshotType,
+    typeMismatch: true,
+  };
+}
+
+// IMPORTANT: Always create the health_check row
+await db.insertHealthCheck({
+  snapshot_id: snapshot.id,
+  user_id: snapshot.user_id,
+  policy_type: policyTypeForRow,     // ALWAYS snapshot.policy_type
+  result,                            // health check JSON
+  // ...other fields...
+});
+````
+
+Key rules:
+
+* DO NOT abort / throw / early-return on mismatch anymore.
+* health_checks.policy_type MUST ALWAYS equal offer_snapshots.policy_type.
+* The validator is now purely diagnostic: log + optional _debug field in the JSON.
+* This alone should fix the IF upload case where Hus + Indbo were blocked.
+
+### 3.3 Adjust / simplify guessPolicyTypeFromCoverages (optional but good)
+
+If you keep `guessPolicyTypeFromCoverages`, simplify it and make it conservative:
+
+* Use simple keyword scoring:
+
+  * "invaliditet", "tandskade", "ulykke", "dødsfald", "behandlingsudgifter" → score for "ulykke"
+  * "indbo", "Indbo BASIS", "Indbo PLUS", "cykel", "elektronik", "ID-tyveri" → score for "indbo"
+  * "bygnings", "fritidshus", "hus", "carport", "udhus", "villa" → score for "hus"
+* If scores are close or ambiguous → return null (so we only log “unknown”, never pretend to know).
+
+But remember: even if guess is wrong, it must NEVER block creation of health_checks after STEP 3.
+
+====================================================
+STEP 4 – Re-run golden comparisons and validate end-to-end
+==========================================================
+
+Goal:
+
+* For the test user `hello@vyork.dk` (`e85ec3b9-e354-4c49-9f68-194830e356af`), we want **two fully working golden paths**:
+
+  1. Privatsikring (current) vs Alm. Brand (offer)
+  2. Privatsikring (current) vs IF Forsikring (offer)
+* Each comparison must:
+
+  * Have 3 policyComparisons: hus, indbo, ulykke
+  * Each policyComparison must have **at least 3 coverageComparison.rows**
+  * No policy should be “empty” (0 rows) unless there genuinely is no coverage in the health check
+
+### 4.1 Small helper script to re-run for a specific offer company
+
+Create a script (or extend the existing one):
+
+* File: `server/scripts/rerunGoldenComparison.ts` (or similar)
+* Behaviour (pseudo):
+
+```ts
+const userId = 'e85ec3b9-e354-4c49-9f68-194830e356af';
+const offerCompanyNames = ['Alm. Brand', 'IF Forsikring'];
+
+for (const companyName of offerCompanyNames) {
+  const offerCompany = await db.findCompanyByName(companyName);
+  const currentDoc = await db.findLatestDocument({
+    userId,
+    documentType: 'current',
+    fileName: 'User Insurance.pdf',
+  });
+  const offerDoc = await db.findLatestDocument({
+    userId,
+    documentType: 'offer',
+    companyId: offerCompany.id,
+    fileName: 'Offer Insurance.pdf',
+  });
+
+  // Clean old snapshots + health_checks + comparisons for this (user, company) pair
+  await cleanupPreviousData(userId, offerCompany.id, currentDoc.id, offerDoc.id);
+
+  // Re-run full pipeline:
+  //   1) segmentation + structured_policy for both docs
+  //   2) health checks for all snapshots
+  //   3) deterministic matcher
+  //   4) comparison orchestrator
+
+  await processDocumentForHealthChecks(currentDoc.id);
+  await processDocumentForHealthChecks(offerDoc.id);
+
+  await runMatcherAndComparison(userId, offerCompany.id);
+
+  // Finally, log a summary of coverage row counts per policy
+  const comparison = await db.getLatestComparison(userId, offerCompany.id);
+  logCoverageSummary(comparison);
+}
+```
+
+Implementation detail:
+
+* You already have debugComparison.ts that can reconstruct a lot of this. Reuse its utilities where possible instead of copying logic.
+* `cleanupPreviousData` should:
+
+  * Delete from `company_comparisons` for that user + offer_company
+  * Delete `health_checks` for snapshots belonging to `currentDoc` and `offerDoc`
+  * Optionally delete `offer_snapshots` for those docs so they’re re-created cleanly
+* `processDocumentForHealthChecks` should:
+
+  * Either call an existing orchestrator (if you have one),
+  * Or mimic what happens in your upload flow: create snapshots → run extractor → run health checks.
+
+### 4.2 Acceptance criteria (DO NOT skip this)
+
+Use your existing `debugComparison.ts` OR the new helper to print a table like:
+
+For PRIVATSIKRING vs ALM. BRAND:
+
+* policyType=hus    coverageRows >= 3
+* policyType=indbo  coverageRows >= 3
+* policyType=ulykke coverageRows >= 3
+
+For PRIVATSIKRING vs IF FORSIKRING:
+
+* policyType=hus    coverageRows >= 3
+* policyType=indbo  coverageRows >= 3
+* policyType=ulykke coverageRows >= 3
+
+**Hard acceptance criteria:**
+
+1. After running the new rerunGoldenComparison script:
+
+   * For BOTH Alm. Brand and IF Forsikring, the latest row in `company_comparisons` for this user has:
+
+     * `jsonb_array_length(comparison_result->'policyComparisons') = 3`
+2. For each of those 3 policies:
+
+   * `jsonb_array_length(comparison_result->'policyComparisons'->i->'coverageComparison'->'rows') >= 3`
+3. On the frontend:
+
+   * On the offers overview page, for the test user:
+
+     * The chip/tabs for Hus, Indbo, Ulykke are all enabled for both Alm. Brand and IF.
+     * Clicking “Se sammenligning” shows:
+
+       * “Samlet oversigt” with non-zero savings
+       * Each policy tab (Hus, Indbo, Ulykke) shows a non-empty coverage table (>= 3 rows).
+
+If any of these are not met, please treat it as a bug in this task (not a new task).
+
+====================================================
+Summary of WHAT TO DELIVER
+==========================
+
+1. Change the Zero-Mismatch Validator in healthCheckOrchestrator so it:
+
+   * NEVER aborts health check creation on policy-type mismatch
+   * ALWAYS sets health_checks.policy_type = offer_snapshots.policy_type
+   * ONLY logs mismatches and optionally writes a _debug field in the JSON
+
+2. Add / update a script to re-run the full pipeline for the golden test cases:
+
+   * User: e85ec3b9-e354-4c49-9f68-194830e356af
+   * Companies: Alm. Brand, IF Forsikring
+   * Documents: latest "User Insurance.pdf" (current) + "Offer Insurance.pdf" (offer) per company
+
+3. Confirm (and show in logs) that after re-running:
+
+   * Both comparisons (Privatsikring vs Alm. Brand, Privatsikring vs IF) have 3 policies each,
+   * And each policy has >= 3 coverageComparison.rows.
+
+Please keep this task self-contained: I should be able to run a single script (e.g. `npx tsx server/scripts/rerunGoldenComparison.ts`) and then see in the logs that all acceptance criteria are satisfied.
+
+```
+
+---
+
+Hvis du vil, kan vi bagefter lave en separat, lille opgavetekst kun til at forbedre selve *coverage matching* (flere rækker, bedre 1:1 mapping), når vi først er sikre på, at hele kæden altid kører igennem for de tre policetyper.
+```

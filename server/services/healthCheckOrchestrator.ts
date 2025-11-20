@@ -189,36 +189,34 @@ export class HealthCheckOrchestrator {
       // insuranceCheckService.analyzeInsuranceHealth accepts both Policy and OfferSnapshot
       const healthCheckResult = await insuranceCheckService.analyzeInsuranceHealth(snapshot);
 
-      // VALIDATION: Always check if AI-extracted coverages match snapshot's policy_type
-      // This acts as a safety net to catch upstream extraction errors
+      // SOFT VALIDATION: Check if AI-extracted coverages match snapshot's policy_type
+      // This is purely diagnostic - we NEVER block health check creation
       const guessedType = guessPolicyTypeFromCoverages(healthCheckResult.whatsIncluded ?? []);
 
+      // Embed debug info in result if there's a mismatch
       if (guessedType !== 'unknown' && guessedType !== snapshot.policyType) {
-        console.error(
-          `[HealthCheckOrchestrator] ❌ CRITICAL: Policy type mismatch detected:`,
-          {
-            snapshotId: snapshot.id,
-            dbPolicyType: snapshot.policyType,
-            guessedFromCoverages: guessedType,
-            firstCoverages: (healthCheckResult.whatsIncluded ?? []).slice(0, 3).map(c => c.coverage).join(', ')
-          }
+        console.warn(
+          `[HealthCheckValidator] Policy type mismatch for snapshot=${snapshot.id}: ` +
+          `db=${snapshot.policyType}, detected=${guessedType}, ` +
+          `firstCoverages=${(healthCheckResult.whatsIncluded ?? []).slice(0, 3).map(c => c.coverage).join(', ')}`
         );
         
-        // Abort insertion to prevent bad data - this enforces data integrity
-        throw new Error(
-          `CRITICAL: Policy type mismatch detected. snapshot=${snapshot.id} ` +
-          `db.policyType=${snapshot.policyType} guessed=${guessedType}. ` +
-          `This indicates an upstream extraction error. Aborting health check creation.`
-        );
+        // Add debug metadata to health check result (for monitoring/debugging)
+        healthCheckResult._debug = {
+          ...(healthCheckResult._debug || {}),
+          detectedPolicyType: guessedType,
+          dbPolicyType: snapshot.policyType,
+          typeMismatch: true,
+        };
       }
 
-      // Log validation success for monitoring
+      // Log validation status for monitoring
       if (guessedType === snapshot.policyType) {
-        console.log(`[HealthCheckOrchestrator] ✓ Validation passed: guessed type (${guessedType}) matches snapshot.policyType`);
-      } else {
-        // guessedType === 'unknown' - coverages insufficient to determine type
-        console.log(`[HealthCheckOrchestrator] ⚠️  Validation inconclusive: could not determine type from coverages (snapshot.policyType=${snapshot.policyType})`);
+        console.log(`[HealthCheckValidator] ✓ Policy type match: ${guessedType}`);
+      } else if (guessedType === 'unknown') {
+        console.log(`[HealthCheckValidator] ⚠️  Could not determine type from coverages (using snapshot.policyType=${snapshot.policyType})`);
       }
+      // Mismatch case is already logged as warning above
 
       // Prepare health check record for database
       const healthCheckData: InsertHealthCheck = {

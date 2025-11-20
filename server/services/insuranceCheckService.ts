@@ -124,6 +124,13 @@ export interface HealthCheckResult {
     description: string;
     estimatedImpact: string;
   }>;
+  // Optional debug metadata for validation monitoring
+  _debug?: {
+    detectedPolicyType?: string;
+    dbPolicyType?: string;
+    typeMismatch?: boolean;
+    [key: string]: any;
+  };
 }
 
 /**
