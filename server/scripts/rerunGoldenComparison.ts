@@ -72,13 +72,42 @@ async function findLatestDocumentForCompany(
   return result || null;
 }
 
+async function findAllDocumentsForCompany(
+  userId: string,
+  documentType: 'current' | 'offer',
+  companyId?: string
+): Promise<DocumentInfo[]> {
+  let query = db
+    .select({
+      id: documents.id,
+      fileName: documents.fileName,
+      companyId: documents.companyId,
+      snapshotCount: sql<number>`count(${offerSnapshots.id})::int`.as('snapshot_count')
+    })
+    .from(documents)
+    .leftJoin(offerSnapshots, eq(offerSnapshots.documentId, documents.id))
+    .where(
+      and(
+        eq(documents.userId, userId),
+        eq(documents.documentType, documentType),
+        companyId ? eq(documents.companyId, companyId) : sql`true`
+      )
+    )
+    .groupBy(documents.id, documents.fileName, documents.companyId)
+    .having(sql`count(${offerSnapshots.id}) > 0`)
+    .orderBy(sql`${documents.createdAt} DESC`);
+
+  return await query;
+}
+
 async function cleanupPreviousData(
   userId: string,
   offerCompanyId: string,
   currentDocId: string,
-  offerDocId: string
+  offerDocIds: string[]
 ): Promise<void> {
   console.log(`\n[Cleanup] Removing old data for user ${userId}, offer company ${offerCompanyId}`);
+  console.log(`[Cleanup] Processing ${offerDocIds.length} offer document(s)`);
   
   // 1. Delete company_comparisons for this user + offer company
   const deletedComparisons = await db
@@ -91,23 +120,24 @@ async function cleanupPreviousData(
     );
   console.log(`[Cleanup] Deleted comparisons: ${deletedComparisons.rowCount || 0}`);
 
-  // 2. Get snapshot IDs for both documents
+  // 2. Get snapshot IDs for current document
   const currentSnapshots = await db
     .select({ id: offerSnapshots.id })
     .from(offerSnapshots)
     .where(eq(offerSnapshots.documentId, currentDocId));
   
-  const offerSnapshotsData = await db
-    .select({ id: offerSnapshots.id })
-    .from(offerSnapshots)
-    .where(eq(offerSnapshots.documentId, offerDocId));
+  const allSnapshotIds = [...currentSnapshots.map(s => s.id)];
+  
+  // 3. Get snapshot IDs for ALL offer documents
+  for (const offerDocId of offerDocIds) {
+    const offerSnapshotsData = await db
+      .select({ id: offerSnapshots.id })
+      .from(offerSnapshots)
+      .where(eq(offerSnapshots.documentId, offerDocId));
+    allSnapshotIds.push(...offerSnapshotsData.map(s => s.id));
+  }
 
-  const allSnapshotIds = [
-    ...currentSnapshots.map(s => s.id),
-    ...offerSnapshotsData.map(s => s.id)
-  ];
-
-  // 3. Delete health_checks for these snapshots
+  // 4. Delete health_checks for these snapshots
   let deletedHealthCheckCount = 0;
   if (allSnapshotIds.length > 0) {
     for (const snapshotId of allSnapshotIds) {
@@ -270,25 +300,32 @@ async function main() {
       }
       console.log(`[Setup] Found company: ${company.id} - ${company.name}`);
 
-      // 2. Find offer document
-      const offerDoc = await findLatestDocumentForCompany(USER_ID, 'offer', company.id);
-      if (!offerDoc) {
-        console.error(`❌ No offer document found for ${companyName}, skipping`);
+      // 2. Find ALL offer documents for this company
+      const offerDocs = await findAllDocumentsForCompany(USER_ID, 'offer', company.id);
+      if (offerDocs.length === 0) {
+        console.error(`❌ No offer documents found for ${companyName}, skipping`);
         continue;
       }
-      console.log(`[Setup] Offer document: ${offerDoc.id} (${offerDoc.fileName}) - ${offerDoc.snapshotCount} snapshots`);
+      console.log(`[Setup] Found ${offerDocs.length} offer document(s):`);
+      for (const doc of offerDocs) {
+        console.log(`  - ${doc.id} (${doc.fileName}) - ${doc.snapshotCount} snapshots`);
+      }
 
       // 3. Clean up previous data
-      await cleanupPreviousData(USER_ID, company.id, currentDoc.id, offerDoc.id);
+      await cleanupPreviousData(USER_ID, company.id, currentDoc.id, offerDocs.map(d => d.id));
 
-      // 4. Re-run health checks for both documents
+      // 4. Re-run health checks for current document
       await processDocumentForHealthChecks(currentDoc.id, USER_ID, 'current_upload');
-      await processDocumentForHealthChecks(offerDoc.id, USER_ID, 'offer_upload');
+      
+      // 5. Re-run health checks for ALL offer documents
+      for (const offerDoc of offerDocs) {
+        await processDocumentForHealthChecks(offerDoc.id, USER_ID, 'offer_upload');
+      }
 
-      // 5. Run matcher and comparison
+      // 6. Run matcher and comparison
       const comparisonId = await runMatcherAndComparison(USER_ID, company.id);
 
-      // 6. Log coverage summary
+      // 7. Log coverage summary
       if (comparisonId) {
         await logCoverageSummary(comparisonId, company.name);
       } else {

@@ -32,8 +32,8 @@ Du modtager PRÆ-MATCHEDE policy-sammenligninger i dette format:
         "annualSavings": number,             // ✅ Allerede beregnet
         "annualSavingsPercent": number       // ✅ Allerede beregnet
       },
-      "highlights": [],                       // ❌ TOM - du skal udfylde
-      "coverageComparison": { "rows": [] },   // ❌ TOM - du skal udfylde
+      "highlights": [],                       // ✅ ALLEREDE UDFYLDT - BEVAR DISSE
+      "coverageComparison": { "rows": [...] }, // ✅ ALLEREDE UDFYLDT - BEVAR DISSE
       "missingInformation": [],               // ❌ TOM - du skal udfylde
       "recommendations": [],                  // ❌ TOM - du skal udfylde
       "_healthCheckData": {                   // ✅ Data til analyse
@@ -47,12 +47,15 @@ Du modtager PRÆ-MATCHEDE policy-sammenligninger i dette format:
 
 **Dit job:**  
 Du skal BEVARE nøjagtigt de policies, du modtager, og kun UDFYLDE de tomme felter:
-- `highlights` (højdepunkter for denne policy)
-- `coverageComparison.rows` (detaljeret dækningssammenligning)
 - `missingInformation` (spørgsmål til tilbuddet)
 - `recommendations` (anbefalinger til kunden)
 
-Du må IKKE ændre `policyType`, `label`, `currentCompany`, `offerCompany`, eller `costSummary`.
+**VIGTIGT - BEVAR DISSE FELTER:**
+- `highlights` - ALLEREDE udfyldt af systemet. KOPIER PRÆCIST til dit output.
+- `coverageComparison.rows` - ALLEREDE udfyldt af systemet. KOPIER PRÆCIST til dit output.
+- `policyType`, `label`, `currentCompany`, `offerCompany`, `costSummary` - KOPIER PRÆCIST til dit output.
+
+Du må ALDRIG ændre eller genopbygge disse felter. Bare kopier dem direkte fra input til output.
 
 ### _healthCheckData struktur
 
@@ -108,11 +111,14 @@ Du må IKKE ændre `policyType`, `label`, `currentCompany`, `offerCompany`, elle
 }
 ```
 
-### 4) Byg coverageComparison pr. policetype (policyComparisons[].coverageComparison.rows)
+### 4) BEVAR coverageComparison.rows (ALLEREDE BYGGET)
 
-**ALGORITME FOR MATCH AF DÆKNINGER**
+**⚠️ VIGTIGT: Dette felt er ALLEREDE udfyldt af systemet!**
 
-For hver policyComparison:
+Du skal **KOPIERE** `coverageComparison.rows` direkte fra input til output.  
+Genbyg IKKE dette array. Systemet har allerede matched dækninger deterministisk.
+
+~~For hver policyComparison:~~ (IGNORER DENNE SEKTION - BRUG ALLEREDE BYGGEDE ROWS)
 
 - currentList = _healthCheckData.current.whatsIncluded
 - offerList   = _healthCheckData.offer.whatsIncluded
@@ -154,13 +160,12 @@ Rækkefølge:
 - Hoveddækninger først (Brand, Kasko, Ansvar, Indbo osv.).
 - Herefter tilvalg/ekstra dækninger.
 
-### 5) Højdepunkter pr. policetype (policyComparisons[].highlights)
+### 5) BEVAR highlights pr. policetype (ALLEREDE BYGGET)
 
-- Udvælg 3–6 vigtigste forskelle for netop denne policetype:
-  - størst besparelse
-  - tydelige nye dækninger hos tilbuddet
-  - væsentligt lavere eller højere selvrisiko
-- Brug samme format som globalHighlights.
+**⚠️ VIGTIGT: Dette felt er ALLEREDE udfyldt af systemet!**
+
+Du skal **KOPIERE** `policyComparisons[].highlights` direkte fra input til output.  
+Genbyg IKKE dette array. Systemet har allerede genereret highlights deterministisk.
 
 ### 6) missingInformation pr. policetype
 

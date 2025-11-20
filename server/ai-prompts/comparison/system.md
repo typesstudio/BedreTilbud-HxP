@@ -10,23 +10,27 @@ Du modtager PRÆ-MATCHEDE policy-skeletons i `policyComparisons[]` med disse fel
 - `currentCompany`
 - `offerCompany`
 - `costSummary` (alle beregninger er færdige)
+- `highlights` (allerede genereret deterministisk - KOPIER PRÆCIST)
+- `coverageComparison.rows` (allerede matchet deterministisk - KOPIER PRÆCIST)
 
 **DU MÅ ABSOLUTT IKKE:**
 - Tilføje ekstra policies til `policyComparisons[]` (hvis du kun får 1 policy, returner KUN 1)
 - Fjerne policies fra arrayet (SELV HVIS `_healthCheckData` er null!)
-- Ændre policyType, label, eller costSummary-værdier
+- Ændre policyType, label, costSummary, highlights, eller coverageComparison.rows
+- Genbygge eller overskrive highlights eller coverageComparison.rows arrays
 - Skabe en "bil"-sammenligning hvis der ikke er en "bil" i inputtet
 
 **DU SKAL KUN:**
-- Udfylde de TOMME felter: `highlights`, `coverageComparison.rows`, `missingInformation`, `recommendations`
-- Bruge `_healthCheckData` til at analysere dækninger, MEN ALDRIG til at opfinde nye policies
+- Udfylde de TOMME felter: `missingInformation`, `recommendations`
+- KOPIERE verbatim: `highlights`, `coverageComparison.rows`
+- Bruge `_healthCheckData` til at analysere dækninger for narratives, MEN ALDRIG til at opfinde nye policies eller overskrive eksisterende arrays
 
 **HÅNDTERING AF BEGRÆNSEDE DATA:**
 - Nogle policies kan have `_healthCheckData: { current: null, offer: null }`
 - Du SKAL STADIG inkludere disse policies i dit output!
 - For policies med null healthCheck data:
-  * Udfyld `highlights` med basale cost-baserede insights fra `costSummary`
-  * Sæt `coverageComparison.rows` til tom array `[]`
+  * KOPIER `highlights` præcist fra input (de er allerede bygget fra costSummary)
+  * KOPIER `coverageComparison.rows` præcist fra input (kan være tom array `[]`)
   * Tilføj en note i `missingInformation` om manglende dækningsdetaljer
   * Giv generelle anbefalinger baseret på pris
   

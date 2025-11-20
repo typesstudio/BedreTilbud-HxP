@@ -6,6 +6,27 @@ BedreTilbud is a Danish insurance comparison platform simplifying insurance sele
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
+## Recent Changes (Nov 20, 2025)
+### STEP 3: Zero-Mismatch Validator - COMPLETE ✅
+- Converted validator to SOFT mode (non-blocking warnings instead of errors)
+- Always creates health checks regardless of coverage type mismatches
+- Added `_debug` field to health check JSON for monitoring
+- Updated `rerunGoldenComparison.ts` to process ALL documents per company (not just latest)
+
+### STEP 4: Golden Comparisons - IN PROGRESS 🔄
+**Fixes Applied:**
+1. Updated AI prompts (system.md + user.md) to preserve pre-built coverage rows and highlights
+2. Fixed `rerunGoldenComparison.ts` to process multiple documents per company
+3. Added debug logging to track coverage row flow through pipeline
+
+**Current Status:**
+- Code deterministically builds 16/16/4 coverage rows BEFORE AI call ✅
+- AI is still reducing output to 1/1/0 rows despite explicit "KOPIER PRÆCIST" instructions ❌
+- Architect identified prompt conflict issue - working on resolution
+
+**Known Issue:**
+AI prompt conflict: System prompt inadvertently instructs AI to "fill" coverage rows, conflicting with user prompt's "preserve" instruction. This causes AI to ignore pre-built deterministic data and regenerate simplified output.
+
 ## System Architecture
 The platform features a React and TypeScript frontend, optimized for mobile-first accessibility with large typography and high contrast, utilizing Shadcn/ui, Subframe, and TailwindCSS. It includes multi-step onboarding, an offers dashboard, and adaptive policy comparison. State management is handled by TanStack Query, and Wouter manages routing.
 

@@ -147,6 +147,13 @@ export class ComparisonAgentService {
     try {
       parsedResult = comparisonResultSchema.parse(aiResponse.result);
       console.log("[ComparisonAgent] ✅ Output schema validation passed");
+      
+      // DEBUG: Log coverage row counts returned by AI
+      const aiRowCounts = parsedResult.policyComparisons.map(pc => ({
+        type: pc.policyType,
+        rows: pc.coverageComparison.rows.length
+      }));
+      console.log("[ComparisonAgent] DEBUG: AI returned coverage rows:", JSON.stringify(aiRowCounts));
     } catch (error: any) {
       const validationError = fromZodError(error);
       console.error("[ComparisonAgent] ❌ Output schema validation failed:", validationError.message);

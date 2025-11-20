@@ -558,6 +558,21 @@ export class ComparisonOrchestrator {
 
       console.log(`[ComparisonOrchestrator] Built ${policyComparisons.length} policy comparison skeletons (code-driven)`);
 
+      // DEBUG: Log payload being sent to AI
+      console.log(`[ComparisonOrchestrator] DEBUG: Sending to AI:`, JSON.stringify({
+        context: {
+          currentCompany,
+          offerCompany,
+          currency: 'DKK'
+        },
+        policyComparisonsCount: policyComparisons.length,
+        policyTypes: policyComparisons.map(pc => pc.policyType),
+        coverageRowCounts: policyComparisons.map(pc => ({
+          type: pc.policyType,
+          rows: pc.coverageComparison.rows.length
+        }))
+      }, null, 2));
+
       // Phase 4: AI enriches the structure with narratives (AI cannot add/remove policies)
       const comparisonResult = await comparisonAgentService.generateComparison({
         context: {

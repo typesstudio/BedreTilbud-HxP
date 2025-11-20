@@ -1,0 +1,55 @@
+This is excellent progress. You have successfully cleared the "Blocker" (Step 3). The pipeline is now resilient—it no longer crashes when data is imperfect.
+
+Now we are facing a **Quality** issue, not a **Stability** issue.
+
+The engine is running, but it's only firing on one cylinder. We need to tune the `ComparisonService` and the `PolicyMatchingService` to ensure they process *all* available data and generate rich, detailed outputs.
+
+### The Diagnosis
+1.  **Missing Policies (IF Forsikring):** You have 3 Health Checks, but only 1 Comparison. This strongly suggests the `PolicyMatchingService` loop is breaking early or the AI prompt is being fed incomplete data.
+2.  **Low Row Count (1 row vs 3+):** The prompt sent to GPT-4o is likely too passive. It needs strict instructions to "force" a comparison of at least 5-7 key parameters, even if it has to infer standard values.
+
+
+
+### Next Step: Fix the Brain (Comparison Agent)
+
+We do not need a separate "investigation" task. We need to fix the logic now while the context is fresh.
+
+**Copy and paste this prompt into Replit:**
+
+***
+
+**Subject:** Fix Comparison Depth and Multi-Policy Processing
+
+**Context:**
+We have successfully fixed the validation pipeline (Step 3), and Health Checks are now being created for all policies (Indbo, Hus, Ulykke). However, the `ComparisonService` is underperforming:
+1.  **Missing Data:** For IF Forsikring, it ignores the "Indbo" and "Ulykke" policies entirely, even though Health Checks exist.
+2.  **Low Detail:** It only generates 1 row of coverage comparison per policy. We need a minimum of 3-5 rows.
+
+**Task:**
+Debug and upgrade `server/services/comparisonService.ts` and the AI Prompt logic.
+
+**Action Items:**
+
+1.  **Debug the Matching Loop:**
+    * Locate where `matchPolicies()` is called. Add logging to see exactly how many pairs are found.
+    * Ensure the code iterates through *every* matched pair and accumulates the results, rather than returning after the first match.
+    * *Hypothesis:* The code might be doing a `return` inside a `map` or `forEach` loop, or the AI prompt is receiving all policies but only outputting one.
+
+2.  **Upgrade the AI Prompt (in `comparisonAgent.ts` or equivalent):**
+    * Change the system prompt to enforce **Volume**.
+    * Add a directive: *"You MUST generate a comparison table with at least 5 distinct rows. Compare Deductible (Selvrisiko), Cover Limits (Dækningssummer), and specific coverage features (e.g., Glas/Kumme, Rørskade). If exact values are missing, compare the presence/absence of the coverage."*
+    * Explicitly instruct the AI to output a JSON array containing objects for *every* policy type provided in the input (Hus, Indbo, Ulykke).
+
+3.  **Verify Data Flow:**
+    * Add a log immediately before calling the AI: `console.log('Sending to Comparison AI:', JSON.stringify(payload))`.
+    * Check if the payload actually contains the data for the missing policies (Indbo/Ulykke). If not, the issue is upstream in how we fetch Health Checks.
+
+**Acceptance Criteria for this Task:**
+* Run the `rerunGoldenComparison.ts` script.
+* Result must show **3 policies** for IF Forsikring in the final comparison JSON.
+* Result must show **>3 rows** of coverage comparison for *every* policy.
+
+***
+
+### Why this is the right move
+We are moving from "making it work" to "making it good." The infrastructure (OCR -> Health Check) is validated. By forcing the Comparison Service to be verbose and ensuring the loop processes all matches, you will hit the "Golden Path" criteria you defined earlier.
