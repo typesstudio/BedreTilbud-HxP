@@ -1,0 +1,72 @@
+This is the **correct architectural decision**. You have hit on a fundamental truth of AI engineering: **LLMs are creative writers, not photocopiers.**
+
+Asking an LLM to "copy this data exactly" is a waste of tokens and an invitation for hallucinations. It will almost always try to "help" by summarizing, reformatting, or omitting what it thinks is redundant.
+
+We are moving to a **Enrichment Pattern**. The code handles the facts; the AI handles the feelings (narrative).
+
+I fully approve of your 6-step plan. It is solid. However, to ensure this goes smoothly in Replit, I want to give you the specific **technical blueprint** for the "Merge" step, because that is where this usually breaks if not done cleanly.
+
+Here is the specific prompt to give your Replit agent to execute this refactor.
+
+### The Replit Prompt
+
+**Subject:** Refactor Comparison Service to Protect Deterministic Data
+
+**Context:**
+We are refactoring the `ComparisonService`. Currently, we send calculated coverage rows to the AI and ask it to return them in the final JSON. The AI consistently simplifies or deletes these rows. We need to change this to a "Merge Pattern."
+
+**Technical Strategy:**
+
+1.  **Deterministic Layer:** The code calculates `coverage_rows`, `highlights`, and `numeric_savings`. We keep these in a variable (`deterministicData`).
+2.  **AI Layer:** We send the policy data to the AI but ask *only* for narrative fields (`analysis_text`, `good_to_know`, `missing_information_warnings`).
+3.  **Merge Layer:** The code combines `deterministicData` + `aiResponse` into the final object to save to the database.
+
+**Task:**
+Update `server/services/comparisonService.ts` and `server/agents/comparisonAgent.ts`.
+
+**Step 1: Update `comparisonAgent.ts` (The Prompt)**
+
+  * Modify the system prompt. **Remove** all instructions asking the AI to generate `coverage_rows` or `highlights`.
+  * Instruct the AI to return a JSON object containing **ONLY**:
+      * `analysis_text` (string)
+      * `recommendations` (array of strings)
+      * `missing_information` (array of strings)
+      * `good_to_know` (string - optional)
+  * The AI should focus purely on the qualitative comparison (strengths, weaknesses, gaps).
+
+**Step 2: Update `comparisonService.ts` (The Orchestrator)**
+Refactor the `comparePolicies` function.
+
+  * **Before AI Call:**
+      * Generate the coverage rows using `compareCoverageLines(...)`.
+      * Calculate price diffs/savings percentages.
+      * Generate highlights (if not using AI for this).
+      * Store these in a `const structuredResult` object.
+  * **The AI Call:**
+      * Call the AI agent.
+  * **The Merge:**
+      * Create the final result object by spreading both:
+    <!-- end list -->
+    ```typescript
+    const finalComparison = {
+      ...structuredResult, // The rows, numbers, and lists we trust
+      ...aiResponse,       // The text narrative from the AI
+      generated_at: new Date()
+    };
+    ```
+
+**Step 3: Verification**
+
+  * Run `rerunGoldenComparison.ts`.
+  * Verify that the final JSON output contains the **full** set of coverage rows (18-20 rows) AND the AI narrative.
+
+-----
+
+### Why this works
+
+1.  **Zero Latency on Rows:** Your table generation becomes instantaneous because it's just code.
+2.  **100% Integrity:** The AI literally cannot delete a row because it never touches the array.
+3.  **Focus:** The AI prompt becomes much shorter and clearer ("Analyze these two policies and tell me which is better"), leading to better narratives.
+
+**Next Step:**
+Paste the prompt above into Replit. This will likely be the final fix needed to get your "Golden Path" fully green.

@@ -1,5 +1,5 @@
 import OpenAI from "openai";
-import { ComparisonResult, comparisonResultSchema } from "@shared/schema";
+import { AIComparisonNarrative, aiComparisonNarrativeSchema } from "@shared/schema";
 import { retryAICall } from "../utils/retry";
 import { loadPrompt, replaceVariables } from "../ai-prompts/utils/promptLoader";
 import { fromZodError } from "zod-validation-error";
@@ -14,24 +14,20 @@ const openai = new OpenAI({
   maxRetries: 2,
 });
 
-interface PolicyComparisonSkeleton {
+/**
+ * ENRICHMENT PATTERN INPUT
+ * Only send health check data and identity fields to AI
+ * DO NOT send coverage rows, highlights, or cost summaries - those are deterministic
+ */
+interface PolicyForNarrative {
+  deterministicId: string; // UNIQUE ID for 1:1 merge (prevents duplicate policy type collisions)
   policyType: string;
   label: string;
   currentCompany: string;
   offerCompany: string;
-  costSummary: {
-    currentAnnualPremium: number;
-    offerAnnualPremium: number;
-    annualSavings: number;
-    annualSavingsPercent: number;
-  };
-  highlights: any[];
-  coverageComparison: { rows: any[] };
-  missingInformation: any[];
-  recommendations: string[];
-  _healthCheckData: {
-    current: any;
-    offer: any;
+  healthCheckData: {
+    current: any; // Health check result for current policy
+    offer: any;   // Health check result for offer policy
   };
 }
 
@@ -41,7 +37,7 @@ interface ComparisonAgentInput {
     offerCompany: string;
     currency: string;
   };
-  policyComparisons: PolicyComparisonSkeleton[];
+  policies: PolicyForNarrative[]; // Minimal data - just health checks for AI to analyze
 }
 
 function logAIInvocation(
@@ -75,16 +71,20 @@ function estimateCost(model: string, promptTokens: number, completionTokens: num
 }
 
 /**
- * Phase 4: ComparisonAgent
+ * Phase 4: ComparisonAgent (ENRICHMENT PATTERN)
  * 
- * Takes matched policy pairs with their health checks and generates comprehensive
- * comparison JSON for the UI (Samlet tab + per-policy tabs).
+ * ROLE: Generate ONLY narrative fields (analysis, recommendations, missing info)
+ * NO LONGER GENERATES: Coverage rows, highlights, cost summaries (those are deterministic)
  * 
- * Mirrors HealthCheckAnalyst pattern:
- * - Loads prompts from ai-prompts/comparison/
- * - Uses gpt-4o with fallback to gpt-4o-mini
- * - Validates output with Zod schema
- * - Tracks costs and latency
+ * Pattern:
+ * - INPUT: Health check data + identity fields only
+ * - OUTPUT: Narrative analysis (explanation, recommendations, missing information)
+ * - ORCHESTRATOR: Merges AI narratives with deterministic data
+ * 
+ * Benefits:
+ * - 100% preservation of deterministic data (AI can't modify what it doesn't see)
+ * - Faster AI calls (smaller prompts)
+ * - Better narratives (AI focuses on what it's good at: writing, not copying)
  */
 export class ComparisonAgentService {
   private systemPrompt: string;
@@ -95,47 +95,56 @@ export class ComparisonAgentService {
     this.userPromptTemplate = loadPrompt("comparison/user");
   }
 
-  async generateComparison(input: ComparisonAgentInput): Promise<ComparisonResult> {
+  /**
+   * Generate narrative-only comparison analysis
+   * Returns ONLY the AI-generated text (not coverage rows or highlights)
+   */
+  async generateNarrative(input: ComparisonAgentInput): Promise<AIComparisonNarrative> {
     console.log(
-      `[ComparisonAgent] Starting comparison: ${input.context.currentCompany} vs ${input.context.offerCompany}`,
-      `(${input.policyComparisons.length} comparisons)`
+      `[ComparisonAgent] Generating narratives for: ${input.context.currentCompany} vs ${input.context.offerCompany}`,
+      `(${input.policies.length} policies)`
     );
 
     const startTime = Date.now();
 
-    // Extract allowed policy types from input (prevent hallucination)
-    const allowedPolicyTypes = input.policyComparisons.map(pc => pc.policyType);
-    console.log(`[ComparisonAgent] Allowed policy types: ${allowedPolicyTypes.join(', ')}`);
+    // Extract deterministicIds for validation (prevent hallucination/omission)
+    const expectedIds = input.policies.map(p => p.deterministicId);
+    const expectedPolicyTypes = input.policies.map(p => p.policyType);
+    console.log(`[ComparisonAgent] Expected ${expectedIds.length} policies with IDs: ${expectedIds.join(', ')}`);
+    console.log(`[ComparisonAgent] Policy types: ${expectedPolicyTypes.join(', ')}`);
 
     // TRY 1: Standard prompt
     try {
-      return await this.attemptGeneration(input, allowedPolicyTypes, false);
+      return await this.attemptNarrativeGeneration(input, expectedIds, false);
     } catch (error: any) {
       // RETRY: If AI omitted policies, try again with reinforced prompt
-      if (error.message?.includes('AI omitted required policy types')) {
+      if (error.message?.includes('AI omitted required')) {
         console.warn(`[ComparisonAgent] ⚠️  First attempt failed (${error.message}), retrying with reinforced prompt...`);
-        return await this.attemptGeneration(input, allowedPolicyTypes, true);
+        return await this.attemptNarrativeGeneration(input, expectedIds, true);
       }
       // For other errors, fail immediately
       throw error;
     }
   }
 
-  private async attemptGeneration(
+  private async attemptNarrativeGeneration(
     input: ComparisonAgentInput,
-    allowedPolicyTypes: string[],
+    expectedIds: string[],
     reinforcePrompt: boolean
-  ): Promise<ComparisonResult> {
+  ): Promise<AIComparisonNarrative> {
     const startTime = Date.now();
 
+    const expectedPolicyTypes = input.policies.map(p => p.policyType).join(', ');
+
     let userPrompt = replaceVariables(this.userPromptTemplate, {
-      policyComparisonsJSON: JSON.stringify(input, null, 2),
-      allowedPolicyTypes: allowedPolicyTypes.join(', ')
+      policiesJSON: JSON.stringify(input.policies, null, 2),
+      context: JSON.stringify(input.context, null, 2),
+      expectedPolicyTypes: expectedPolicyTypes
     });
 
     // Add reinforcement on retry
     if (reinforcePrompt) {
-      userPrompt = `⚠️ CRITICAL REMINDER: You MUST return EXACTLY ${allowedPolicyTypes.length} policies in policyComparisons array: ${allowedPolicyTypes.join(', ')}. Do NOT omit any policies even if they have limited data!\n\n` + userPrompt;
+      userPrompt = `⚠️ CRITICAL REMINDER: You MUST return narratives with EXACTLY ${expectedIds.length} deterministicIds. Do NOT omit any policies!\n\n` + userPrompt;
     }
 
     const aiResponse = await this.callComparisonAgent(userPrompt);
@@ -143,27 +152,28 @@ export class ComparisonAgentService {
 
     console.log(`[ComparisonAgent] AI call completed in ${latencyMs}ms ${reinforcePrompt ? '(retry)' : ''}`);
 
-    let parsedResult: ComparisonResult;
+    let parsedResult: AIComparisonNarrative;
     try {
-      parsedResult = comparisonResultSchema.parse(aiResponse.result);
-      console.log("[ComparisonAgent] ✅ Output schema validation passed");
+      parsedResult = aiComparisonNarrativeSchema.parse(aiResponse.result);
+      console.log("[ComparisonAgent] ✅ Narrative schema validation passed");
       
-      // DEBUG: Log coverage row counts returned by AI
-      const aiRowCounts = parsedResult.policyComparisons.map(pc => ({
-        type: pc.policyType,
-        rows: pc.coverageComparison.rows.length
+      // DEBUG: Log narrative counts returned by AI
+      const narrativeCounts = parsedResult.policyNarratives.map(pn => ({
+        type: pn.policyType,
+        recommendations: pn.recommendations.length,
+        missingInfo: pn.missingInformation.length
       }));
-      console.log("[ComparisonAgent] DEBUG: AI returned coverage rows:", JSON.stringify(aiRowCounts));
+      console.log("[ComparisonAgent] DEBUG: AI returned narratives:", JSON.stringify(narrativeCounts));
     } catch (error: any) {
       const validationError = fromZodError(error);
-      console.error("[ComparisonAgent] ❌ Output schema validation failed:", validationError.message);
-      throw new Error(`ComparisonAgent output validation failed: ${validationError.message}`);
+      console.error("[ComparisonAgent] ❌ Narrative schema validation failed:", validationError.message);
+      throw new Error(`ComparisonAgent narrative validation failed: ${validationError.message}`);
     }
 
-    // Validate output matches input structure (prevent hallucination)
-    this.validateComparisonResult(parsedResult, allowedPolicyTypes);
+    // Validate output matches expected deterministicIds (prevent hallucination)
+    this.validateNarrativeResult(parsedResult, expectedIds);
 
-    logAIInvocation("ComparisonAgent" + (reinforcePrompt ? " (retry)" : ""), {
+    logAIInvocation("ComparisonAgent (Narrative)" + (reinforcePrompt ? " (retry)" : ""), {
       model: aiResponse.model,
       tokensUsed: aiResponse.tokensUsed,
       costUsd: aiResponse.costUsd,
@@ -174,35 +184,35 @@ export class ComparisonAgentService {
   }
 
   /**
-   * Validates that AI output respects input constraints
-   * Prevents hallucination of policy types that don't exist in matched pairs
+   * Validates that AI narratives respect input constraints
+   * Prevents hallucination or omission of policies using unique IDs
    */
-  private validateComparisonResult(result: ComparisonResult, allowedPolicyTypes: string[]): void {
-    const outputPolicyTypes = result.policyComparisons.map(pc => pc.policyType);
+  private validateNarrativeResult(result: AIComparisonNarrative, expectedIds: string[]): void {
+    const outputIds = result.policyNarratives.map(pn => pn.deterministicId);
     
-    // Check for hallucinated policy types
-    const hallucinated = outputPolicyTypes.filter(type => !allowedPolicyTypes.includes(type));
+    // Check for hallucinated IDs
+    const hallucinated = outputIds.filter(id => !expectedIds.includes(id));
     if (hallucinated.length > 0) {
       console.error(
-        `[ComparisonAgent] ❌ HALLUCINATION DETECTED: AI added policy types not in input:`,
+        `[ComparisonAgent] ❌ HALLUCINATION DETECTED: AI added unexpected deterministicIds:`,
         hallucinated.join(', '),
-        `| Allowed: ${allowedPolicyTypes.join(', ')}`
+        `| Expected: ${expectedIds.join(', ')}`
       );
       throw new Error(
-        `AI hallucinated policy types: ${hallucinated.join(', ')}. ` +
-        `Only allowed: ${allowedPolicyTypes.join(', ')}`
+        `AI hallucinated deterministicIds: ${hallucinated.join(', ')}. ` +
+        `Only expected: ${expectedIds.join(', ')}`
       );
     }
 
-    // Check for missing policy types - STRICT VALIDATION
-    const missing = allowedPolicyTypes.filter(type => !outputPolicyTypes.includes(type));
+    // Check for missing IDs - STRICT VALIDATION
+    const missing = expectedIds.filter(id => !outputIds.includes(id));
     if (missing.length > 0) {
-      const errorMsg = `AI omitted required policy types: ${missing.join(', ')}. Input had ${allowedPolicyTypes.length} policies, output has ${outputPolicyTypes.length} policies.`;
+      const errorMsg = `AI omitted required deterministicIds: ${missing.join(', ')}. Input had ${expectedIds.length} policies, output has ${outputIds.length} narratives.`;
       console.error(`[ComparisonAgent] ❌ ${errorMsg}`);
       throw new Error(errorMsg);
     }
 
-    console.log(`[ComparisonAgent] ✅ Hallucination check passed: All ${outputPolicyTypes.length} policy types valid`);
+    console.log(`[ComparisonAgent] ✅ Narrative validation passed: All ${expectedIds.length} policies have narratives`);
   }
 
   private async callComparisonAgent(userPrompt: string): Promise<{
@@ -257,11 +267,7 @@ export class ComparisonAgentService {
           response_format: { type: "json_object" },
           temperature: 0.3,
         }),
-      {
-        maxRetries: 3,
-        delayMs: 2000,
-        operationName: `ComparisonAgent-${model}`,
-      }
+      `ComparisonAgent-${model}`
     );
 
     const content = completion.choices[0]?.message?.content;

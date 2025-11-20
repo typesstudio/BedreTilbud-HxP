@@ -494,15 +494,26 @@ export class ComparisonOrchestrator {
         throw new Error('No matched policy pairs found');
       }
 
-      // Phase 4: Build policyComparisons structure from matched pairs (CODE-DRIVEN)
-      // This prevents AI from hallucinating policy types that don't exist
-      const policyComparisons = matchingResult.pairs.map(pair => {
+      // ========================================
+      // ENRICHMENT PATTERN IMPLEMENTATION
+      // ========================================
+      // STEP 1: Build DETERMINISTIC data (facts, numbers, coverage rows)
+      // STEP 2: Send ONLY health checks to AI for narrative generation
+      // STEP 3: MERGE AI narratives with cached deterministic data
+      // ========================================
+
+      // STEP 1: Cache deterministic data (coverage rows, highlights, cost summaries)
+      // Generate UNIQUE IDs for each policy to prevent duplicate policy type collisions
+      const deterministicPolicyData = matchingResult.pairs.map((pair, index) => {
         const currentPolicy = currentPolicies.find(p => p.snapshotId === pair.currentPolicyId);
         const offerPolicy = offerPolicies.find(p => p.snapshotId === pair.offerPolicyId);
         
         if (!currentPolicy || !offerPolicy) {
           throw new Error(`Missing policy data for pair: ${pair.policyType}`);
         }
+        
+        // Generate UNIQUE deterministicId (prevents duplicate policy type collisions)
+        const deterministicId = `${pair.currentPolicyId}-${pair.offerPolicyId}`;
         
         const currentAnnualPremium = parseFloat(currentPolicy.premium || '0');
         const offerAnnualPremium = parseFloat(offerPolicy.premium || '0');
@@ -511,16 +522,14 @@ export class ComparisonOrchestrator {
           ? (annualSavings / currentAnnualPremium) * 100 
           : 0;
         
-        // DETERMINISTIC COVERAGE MATCHING (Phase 4A)
-        // Extract whatsIncluded from health checks and match deterministically
+        // DETERMINISTIC COVERAGE MATCHING
         const currentCoverages = currentPolicy.healthCheck?.whatsIncluded || [];
         const offerCoverages = offerPolicy.healthCheck?.whatsIncluded || [];
         const coverageRows = matchCoverages(currentCoverages, offerCoverages);
         
-        console.log(`[ComparisonOrchestrator] Matched ${coverageRows.length} coverage rows for ${pair.policyType} (current: ${currentCoverages.length}, offer: ${offerCoverages.length})`);
+        console.log(`[ComparisonOrchestrator] Built ${coverageRows.length} deterministic coverage rows for ${pair.policyType} (ID: ${deterministicId})`);
         
-        // DETERMINISTIC HIGHLIGHTS GENERATION (Phase 4B)
-        // Generate highlights from coverage/cost differences BEFORE calling AI
+        // DETERMINISTIC HIGHLIGHTS GENERATION
         const highlights = generateHighlights({
           coverageRows,
           currentAnnualPremium,
@@ -528,9 +537,10 @@ export class ComparisonOrchestrator {
           policyType: pair.policyType
         });
         
-        console.log(`[ComparisonOrchestrator] Generated ${highlights.length} highlights for ${pair.policyType}`);
+        console.log(`[ComparisonOrchestrator] Built ${highlights.length} deterministic highlights for ${pair.policyType} (ID: ${deterministicId})`);
         
         return {
+          deterministicId, // UNIQUE ID for 1:1 merge
           policyType: pair.policyType,
           label: pair.label,
           currentCompany,
@@ -541,49 +551,153 @@ export class ComparisonOrchestrator {
             annualSavings,
             annualSavingsPercent: Math.round(annualSavingsPercent * 10) / 10
           },
-          // COVERAGE ROWS BUILT DETERMINISTICALLY (not by AI)
-          coverageComparison: { rows: coverageRows },
-          // HIGHLIGHTS BUILT DETERMINISTICALLY (not by AI)
-          highlights,
-          // AI will fill these narrative fields:
-          missingInformation: [],
-          recommendations: [],
-          // Include health checks for AI to analyze for narratives
-          _healthCheckData: {
+          coverageComparison: { rows: coverageRows }, // CACHED - NOT sent to AI
+          highlights, // CACHED - NOT sent to AI
+          healthCheckData: {
             current: currentPolicy.healthCheck,
             offer: offerPolicy.healthCheck
           }
         };
       });
 
-      console.log(`[ComparisonOrchestrator] Built ${policyComparisons.length} policy comparison skeletons (code-driven)`);
-
-      // DEBUG: Log payload being sent to AI
-      console.log(`[ComparisonOrchestrator] DEBUG: Sending to AI:`, JSON.stringify({
+      console.log(`[ComparisonOrchestrator] ✅ Cached deterministic data for ${deterministicPolicyData.length} policies`);
+      
+      // STEP 2: Build minimal AI input (only health checks + identity fields + unique IDs)
+      const aiInput = {
         context: {
           currentCompany,
           offerCompany,
           currency: 'DKK'
         },
-        policyComparisonsCount: policyComparisons.length,
-        policyTypes: policyComparisons.map(pc => pc.policyType),
-        coverageRowCounts: policyComparisons.map(pc => ({
-          type: pc.policyType,
-          rows: pc.coverageComparison.rows.length
+        policies: deterministicPolicyData.map(p => ({
+          deterministicId: p.deterministicId, // UNIQUE ID for 1:1 merge
+          policyType: p.policyType,
+          label: p.label,
+          currentCompany: p.currentCompany,
+          offerCompany: p.offerCompany,
+          healthCheckData: p.healthCheckData
         }))
-      }, null, 2));
+      };
 
-      // Phase 4: AI enriches the structure with narratives (AI cannot add/remove policies)
-      const comparisonResult = await comparisonAgentService.generateComparison({
-        context: {
-          currentCompany,
-          offerCompany,
-          currency: 'DKK'
-        },
-        policyComparisons // Pass pre-built structure instead of raw pairs
+      console.log(`[ComparisonOrchestrator] Calling AI for narratives (NO coverage rows or highlights sent)...`);
+
+      // STEP 2B: Call AI to generate ONLY narratives
+      const aiNarratives = await comparisonAgentService.generateNarrative(aiInput);
+
+      console.log(`[ComparisonOrchestrator] ✅ AI returned narratives for ${aiNarratives.policyNarratives.length} policies`);
+
+      // STEP 3: MERGE deterministic data with AI narratives (DICTIONARY-BASED)
+      // Build dictionaries for O(1) lookup and prevent duplicate ID issues
+      const deterministicById = new Map(deterministicPolicyData.map(d => [d.deterministicId, d]));
+      const narrativeById = new Map(aiNarratives.policyNarratives.map(n => [n.deterministicId, n]));
+
+      // Validate: All deterministic IDs must have matching narratives
+      for (const [id, data] of deterministicById.entries()) {
+        if (!narrativeById.has(id)) {
+          throw new Error(`AI did not return narrative for deterministicId: ${id} (policy type: ${data.policyType})`);
+        }
+      }
+
+      // Validate: All narrative IDs must match deterministic IDs (no extras)
+      for (const [id, narrative] of narrativeById.entries()) {
+        if (!deterministicById.has(id)) {
+          throw new Error(`AI returned narrative for unknown deterministicId: ${id} (policy type: ${narrative.policyType})`);
+        }
+      }
+
+      console.log(`[ComparisonOrchestrator] ✅ Validation passed: All ${deterministicById.size} IDs matched`);
+
+      // Perform merge: Deterministic data + AI narratives
+      const policyComparisons = deterministicPolicyData.map(deterministicData => {
+        const narrative = narrativeById.get(deterministicData.deterministicId)!;
+
+        // Merge: Deterministic data + AI narratives
+        const merged = {
+          policyType: deterministicData.policyType,
+          label: deterministicData.label,
+          currentCompany: deterministicData.currentCompany,
+          offerCompany: deterministicData.offerCompany,
+          costSummary: deterministicData.costSummary, // DETERMINISTIC (immutable)
+          highlights: deterministicData.highlights, // DETERMINISTIC (immutable)
+          coverageComparison: deterministicData.coverageComparison, // DETERMINISTIC (immutable)
+          missingInformation: narrative.missingInformation, // AI NARRATIVE
+          recommendations: narrative.recommendations, // AI NARRATIVE
+        };
+
+        // INTEGRITY VALIDATION: Ensure deterministic data wasn't mutated
+        // Deep equality check on coverage rows to catch any corruption
+        if (JSON.stringify(merged.coverageComparison.rows) !== JSON.stringify(deterministicData.coverageComparison.rows)) {
+          throw new Error(
+            `INTEGRITY VIOLATION: Coverage rows were mutated for ${deterministicData.policyType} (ID: ${deterministicData.deterministicId}). ` +
+            `Expected ${deterministicData.coverageComparison.rows.length} rows, got ${merged.coverageComparison.rows.length}.`
+          );
+        }
+
+        if (JSON.stringify(merged.highlights) !== JSON.stringify(deterministicData.highlights)) {
+          throw new Error(
+            `INTEGRITY VIOLATION: Highlights were mutated for ${deterministicData.policyType} (ID: ${deterministicData.deterministicId}). ` +
+            `Expected ${deterministicData.highlights.length} highlights, got ${merged.highlights.length}.`
+          );
+        }
+
+        if (JSON.stringify(merged.costSummary) !== JSON.stringify(deterministicData.costSummary)) {
+          throw new Error(
+            `INTEGRITY VIOLATION: Cost summary was mutated for ${deterministicData.policyType} (ID: ${deterministicData.deterministicId}).`
+          );
+        }
+
+        return merged;
       });
 
-      // Update record with completed status and result (clear statusReason on success)
+      // Build overall comparison (deterministic calculations + AI explanation)
+      const totalCurrentAnnualPremium = deterministicPolicyData.reduce((sum, p) => sum + p.costSummary.currentAnnualPremium, 0);
+      const totalOfferAnnualPremium = deterministicPolicyData.reduce((sum, p) => sum + p.costSummary.offerAnnualPremium, 0);
+      const annualSavings = totalCurrentAnnualPremium - totalOfferAnnualPremium;
+      const annualSavingsPercent = totalCurrentAnnualPremium > 0 ? (annualSavings / totalCurrentAnnualPremium) * 100 : 0;
+
+      const comparisonResult = {
+        overall: {
+          totalCurrentAnnualPremium,
+          totalOfferAnnualPremium,
+          annualSavings,
+          annualSavingsPercent: Math.round(annualSavingsPercent * 10) / 10,
+          explanation: aiNarratives.explanation, // AI NARRATIVE
+          perPolicySummary: deterministicPolicyData.map(p => ({
+            policyType: p.policyType,
+            label: p.label,
+            currentAnnualPremium: p.costSummary.currentAnnualPremium,
+            offerAnnualPremium: p.costSummary.offerAnnualPremium,
+            annualSavings: p.costSummary.annualSavings,
+            annualSavingsPercent: p.costSummary.annualSavingsPercent,
+          })),
+          globalHighlights: [], // Could aggregate from policy highlights if needed
+        },
+        policyComparisons, // MERGED: Deterministic + AI narratives
+        cumulativeSavings: {
+          totalOver10Years: annualSavings * 10,
+          monthlyRange: {
+            min: Math.floor(annualSavings / 12),
+            max: Math.ceil(annualSavings / 12),
+          },
+          after12Months: annualSavings,
+          after10Years: annualSavings * 10,
+          chartData: Array.from({ length: 120 }, (_, i) => ({
+            month: `Måned ${i + 1}`,
+            savings: annualSavings * (i + 1) / 12,
+          })),
+        },
+        meta: {
+          currentCompany,
+          offerCompany,
+        },
+      };
+
+      console.log(`[ComparisonOrchestrator] ✅ MERGE COMPLETE: Built final comparison with ${policyComparisons.length} policies`);
+      console.log(`[ComparisonOrchestrator] Coverage row counts (DETERMINISTIC, preserved):`, 
+        policyComparisons.map(pc => ({ type: pc.policyType, rows: pc.coverageComparison.rows.length }))
+      );
+
+      // Update record with completed status and result
       await this.storage.updateCompanyComparisonStatus(
         comparison.id,
         'completed',

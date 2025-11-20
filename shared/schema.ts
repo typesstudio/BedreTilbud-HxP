@@ -481,6 +481,25 @@ export const policyComparisonSchema = z.object({
 
 export type PolicyComparison = z.infer<typeof policyComparisonSchema>;
 
+// AI NARRATIVE OUTPUT SCHEMAS (Enrichment Pattern)
+// These schemas define ONLY what the AI generates (narratives, not facts)
+
+export const aiPolicyNarrativeSchema = z.object({
+  deterministicId: z.string(), // Unique ID for 1:1 merge (prevents duplicate policy type collisions)
+  policyType: z.string(), // For logging/debugging
+  missingInformation: z.array(missingInformationItemSchema),
+  recommendations: z.array(z.string()),
+});
+
+export type AIPolicyNarrative = z.infer<typeof aiPolicyNarrativeSchema>;
+
+export const aiComparisonNarrativeSchema = z.object({
+  explanation: z.string(), // Overall narrative explanation
+  policyNarratives: z.array(aiPolicyNarrativeSchema), // Per-policy narratives
+});
+
+export type AIComparisonNarrative = z.infer<typeof aiComparisonNarrativeSchema>;
+
 export const cumulativeSavingsSchema = z.object({
   totalOver10Years: z.number(),
   monthlyRange: z.object({

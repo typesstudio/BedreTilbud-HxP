@@ -13,19 +13,31 @@ Preferred communication style: Simple, everyday language.
 - Added `_debug` field to health check JSON for monitoring
 - Updated `rerunGoldenComparison.ts` to process ALL documents per company (not just latest)
 
-### STEP 4: Golden Comparisons - IN PROGRESS 🔄
-**Fixes Applied:**
-1. Updated AI prompts (system.md + user.md) to preserve pre-built coverage rows and highlights
-2. Fixed `rerunGoldenComparison.ts` to process multiple documents per company
-3. Added debug logging to track coverage row flow through pipeline
+### STEP 4: Golden Comparisons - ENRICHMENT PATTERN IMPLEMENTED ✅
+**Architectural Refactor Complete (Nov 20, 2025):**
+Implemented **Enrichment Pattern** to guarantee 100% preservation of deterministic data (coverage rows, highlights, cost summaries) by preventing AI from ever touching this data.
+
+**Implementation Details:**
+1. ✅ Created new schemas (`aiComparisonNarrativeSchema`, `aiPolicyNarrativeSchema`) for AI output
+2. ✅ Refactored `ComparisonOrchestrator` to cache deterministic data BEFORE AI call
+3. ✅ Refactored `ComparisonAgentService.generateNarrative()` to return ONLY narratives
+4. ✅ Implemented dictionary-based merging with unique `deterministicId` to prevent duplicate policy type collisions
+5. ✅ Added strict validation to ensure 1:1 mapping between cached data and AI narratives
+6. ✅ Updated AI prompts to ask for narratives only (no coverage rows or highlights)
+
+**Pattern Flow:**
+1. **CACHE**: Build coverage rows, highlights, cost summaries deterministically (code)
+2. **MINIMAL INPUT**: Send ONLY health check data + identity fields to AI
+3. **NARRATIVES**: AI generates explanation, recommendations, missingInformation
+4. **MERGE**: Combine cached deterministic data with AI narratives using unique IDs
+5. **VALIDATE**: Ensure all IDs match and no data was mutated
+
+**Key Benefit:**
+AI never sees coverage rows or highlights, so it **literally cannot** simplify or delete them. This guarantees deterministic preservation.
 
 **Current Status:**
-- Code deterministically builds 16/16/4 coverage rows BEFORE AI call ✅
-- AI is still reducing output to 1/1/0 rows despite explicit "KOPIER PRÆCIST" instructions ❌
-- Architect identified prompt conflict issue - working on resolution
-
-**Known Issue:**
-AI prompt conflict: System prompt inadvertently instructs AI to "fill" coverage rows, conflicting with user prompt's "preserve" instruction. This causes AI to ignore pre-built deterministic data and regenerate simplified output.
+- Enrichment Pattern implementation: COMPLETE ✅
+- Pending: Final testing to verify coverage rows are preserved in golden comparisons
 
 ## System Architecture
 The platform features a React and TypeScript frontend, optimized for mobile-first accessibility with large typography and high contrast, utilizing Shadcn/ui, Subframe, and TailwindCSS. It includes multi-step onboarding, an offers dashboard, and adaptive policy comparison. State management is handled by TanStack Query, and Wouter manages routing.
