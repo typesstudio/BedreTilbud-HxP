@@ -1,0 +1,303 @@
+ingle-policy deterministic narrative (no AI)
+
+Goal
+
+We want to make single-policy comparisons 100% reliable and simpler to maintain:
+
+If there is only 1 matched policy (hus/indbo/ulykke):
+
+Do NOT call the ComparisonNarrativeAgent (AI).
+
+Instead, build the narrative deterministically in code from costSummary + healthCheck.result.
+
+If there are 2 or 3 policies:
+
+Keep the existing AI-enrichment flow exactly as it is.
+
+Coverage rows, cost summaries, and comparison JSON structure must not change.
+
+This should be implemented as a small, local change in the comparison orchestration layer:
+👉 one new pure helper + one if (policiesWithHealthChecks.length === 1) branch.
+
+1. Context (what exists today)
+
+We already have a deterministic pipeline that builds:
+
+policyComparisons[].costSummary
+
+policyComparisons[].coverageComparison.rows[]
+
+We then call a “narrative agent” (LLM) that returns something like:
+
+type NarrativeResponse = {
+  explanation: string;
+  policyNarratives: Array<{
+    policyKey: string;
+    policyType: string;
+    recommendations: string[];
+    missingInformation: Array<{
+      severity: "critical" | "important" | "question";
+      question: string;
+      explanation: string;
+    }>;
+  }>;
+};
+
+
+This response is merged into the final comparison_json (e.g. under comparisonResult.narrative or similar).
+
+Multi-policy comparisons (3 policies) work perfectly today.
+
+Single-policy comparisons still cause hallucinations (the AI invents 2 extra policies).
+
+We do not want to fight that with more prompt-tuning.
+Instead we want a clean rule:
+
+1 policy → no AI, pure code.
+2–3 policies → keep current AI flow.
+
+2. What to implement
+2.1 New pure helper: buildSinglePolicyNarrative
+
+Create a new helper function (either in comparisonOrchestrator.ts or a small new file like singlePolicyNarrative.ts):
+
+Input: the single policy + its health check
+
+Output: the same shape as the narrative agent returns (explanation + policyNarratives[])
+
+Rough interface (adapt to your existing types):
+
+type SinglePolicyNarrativeInput = {
+  policyKey: string;
+  policyType: string; // "hus" | "indbo" | "ulykke"
+  currentCompany: string;
+  offerCompany: string;
+  costSummary: {
+    currentAnnualPremium: number;
+    offerAnnualPremium: number;
+    annualSavings: number;
+    annualSavingsPercent: number;
+  };
+  healthCheck: any; // hc.result for that policy (can type later)
+};
+
+type NarrativeResponse = {
+  explanation: string;
+  policyNarratives: Array<{
+    policyKey: string;
+    policyType: string;
+    recommendations: string[];
+    missingInformation: Array<{
+      severity: "critical" | "important" | "question";
+      question: string;
+      explanation: string;
+    }>;
+  }>;
+};
+
+
+Implementation requirements:
+
+explanation:
+
+Deterministic text, based only on currentCompany, offerCompany, policyType, annualSavings, annualSavingsPercent.
+
+Example logic:
+
+if (annualSavings > 0) {
+  explanation = `Tilbuddet fra ${offerCompany} er ca. ${roundedPercent}% billigere end din nuværende ${policyType}-forsikring hos ${currentCompany} og giver en årlig besparelse på ca. ${Math.round(annualSavings)} kr.`;
+} else if (annualSavings < 0) {
+  explanation = `Tilbuddet fra ${offerCompany} er ca. ${Math.abs(roundedPercent)}% dyrere end din nuværende ${policyType}-forsikring hos ${currentCompany}. Du bør kun overveje skift, hvis dækningen er mærkbart bedre på områder, der er vigtige for dig.`;
+} else {
+  explanation = `Tilbuddet fra ${offerCompany} koster omtrent det samme som din nuværende ${policyType}-forsikring hos ${currentCompany}. Her handler valget primært om forskelle i dækning og serviceniveau.`;
+}
+
+
+recommendations:
+
+Start with healthCheck.weaknesses and/or healthCheck.recommendations if they exist.
+
+Take 2–4 concrete, actionable items.
+
+If there are too few, fill up with generic ones based on policyType:
+
+hus: ask about vandskade/skybrud, skjulte rør, glas, etc.
+
+indbo: ask about forsikringssum, cykler, elektronik hjemme/ude, etc.
+
+ulykke: ask about invaliditetssum, fritid/arbejde, karens, etc.
+
+missingInformation:
+
+Use healthCheck.missingInformation if present.
+
+Map to schema:
+
+{
+  severity: "critical" | "important" | "question";
+  question: string;
+  explanation: string;
+}
+
+
+If the source only has field + reason, generate:
+
+question = item.question ?? item.field ?? "Hvad er de præcise vilkår her?";
+explanation = item.explanation ?? item.reason ?? "Det er uklart beskrevet i materialet, og det kan have betydning for din dækning.";
+
+
+The function must be pure:
+
+No DB calls.
+
+No network calls.
+
+Just input → output.
+
+Return value example:
+
+return {
+  explanation,
+  policyNarratives: [
+    {
+      policyKey,
+      policyType,
+      recommendations,
+      missingInformation,
+    },
+  ],
+};
+
+2.2 Orchestrator: branch on single vs multi
+
+In the orchestrator where you currently enrich the comparison with AI narratives (something like enrichComparisonWithNarrative or the place you call ComparisonNarrativeAgent):
+
+Collect policiesWithHealthChecks (you already do this today).
+
+Each entry should know:
+
+policyKey
+
+policyType
+
+currentCompany
+
+offerCompany
+
+costSummary
+
+healthCheckResult
+
+Add a branch:
+
+if (policiesWithHealthChecks.length === 1) {
+  const p = policiesWithHealthChecks[0];
+
+  const narrative = buildSinglePolicyNarrative({
+    policyKey: p.policyKey,
+    policyType: p.policyType,
+    currentCompany: p.currentCompany,
+    offerCompany: p.offerCompany,
+    costSummary: p.costSummary,
+    healthCheck: p.healthCheckResult,
+  });
+
+  // Merge into comparisonResult using the SAME shape as the AI response
+  // e.g.:
+  comparisonResult.narrative = narrative;
+
+  // IMPORTANT: Do NOT touch costSummary or coverageComparison.rows
+  // Return / persist comparisonResult as usual
+  return comparisonResult;
+}
+
+// Fallback to existing multi-policy AI enrichment for 2–3 policies:
+const aiResponse = await callComparisonNarrativeAgent({
+  policiesJSON: /* existing payload */,
+  context: /* existing context */,
+});
+
+// Existing logic to merge aiResponse into comparisonResult remains unchanged
+comparisonResult.narrative = aiResponse;
+return comparisonResult;
+
+
+Add a small log (optional, but helpful):
+
+logger.info(
+  `[Narrative] Using deterministic single-policy narrative builder for policyType=${p.policyType}`
+);
+
+3. Acceptance Criteria
+
+Functional
+
+Single-policy comparisons
+
+When there is exactly 1 matched policy:
+
+ComparisonNarrativeAgent (LLM) must NOT be called.
+
+comparisonResult.narrative must come from buildSinglePolicyNarrative.
+
+comparisonResult.narrative.policyNarratives.length === 1.
+
+policyNarratives[0].policyKey and .policyType must exactly match the input policy.
+
+Multi-policy comparisons (2–3 policies)
+
+For existing 3-policy comparisons (e.g. Privatsikring vs. Alm. Brand, Tryg, etc.):
+
+Behaviour must be unchanged.
+
+Same number of coverageComparison.rows as before.
+
+Same policyComparisons.length.
+
+No change in costSummary values.
+
+You still call the AI narrative agent as today.
+
+Coverage & costs are untouched
+
+policyComparisons[].coverageComparison.rows must remain byte-for-byte identical before/after this change for the same comparison.
+
+policyComparisons[].costSummary must remain identical.
+
+Only comparisonResult.narrative (explanation + policyNarratives) is impacted in the single-policy path.
+
+Technical
+
+buildSinglePolicyNarrative is:
+
+A pure function.
+
+Contains no DB access / network calls.
+
+Accepts all data as parameters.
+
+Reuses the same NarrativeResponse type that the AI agent returns, so downstream code doesn’t need to change.
+
+Error handling:
+
+If healthCheck is missing or has partial data:
+
+Fallback to generic recommendations and missingInformation.
+
+No runtime errors.
+
+4. Why this is the simplest & most maintainable approach
+
+Very small diff:
+
+1 helper function.
+
+1 if (length === 1) branch.
+
+No changes in DB schema or existing comparison JSON structure.
+
+Multi-policy (the complex case) stays on the AI path that already works.
+
+Single-policy (edge case) becomes completely deterministic, easy to reason about and test.
+
+👉 Please implement the above exactly, keep the code minimal and focused, and re-use the existing narrative response types so we don’t have to touch any downstream code.

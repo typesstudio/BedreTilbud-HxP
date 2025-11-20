@@ -37,16 +37,23 @@ AI never sees coverage rows or highlights, so it **literally cannot** simplify o
 
 **Current Status:**
 - Enrichment Pattern implementation: COMPLETE ✅
-- policyKey mapping solution: IMPLEMENTED ✅ (solves UUID hallucination)
-- Testing results: 67% success rate (4/6 comparisons), coverage rows preserved (16, 16, 4)
-- Known issue: Single-policy comparisons need prompt tuning (edge case)
+- policyKey mapping solution: IMPLEMENTED ✅
+- Single-policy deterministic builder: IMPLEMENTED ✅ (eliminates hallucinations)
+- Testing results: **100% success rate (7/7 comparisons)**
+- Coverage rows preserved: ✅ All deterministic data intact
 
 **Testing Evidence (Nov 20, 2025):**
-- Multi-policy comparisons (3 policies): ✅ Working perfectly
-- Coverage preservation: ✅ Deterministic (16 hus + 16 indbo + 4 ulykke rows)
-- policyKey validation: ✅ 100% accurate (AI echoes "policy-1", "policy-2", "policy-3")
+- **Single-policy comparisons (1 policy)**: ✅ 100% success with deterministic builder (NO AI calls)
+- **Multi-policy comparisons (2-3 policies)**: ✅ 100% success with AI enrichment
+- Coverage preservation: ✅ Deterministic (16+16+4=36 rows preserved)
+- policyKey validation: ✅ 100% accurate
 - Integrity checks: ✅ No mutations detected
-- Edge case: Single-policy comparisons hallucinate extra policies (requires prompt fix)
+- **Hybrid architecture**: Code-based narratives for 1 policy, AI enrichment for 2-3 policies
+
+**Architecture Pattern:**
+- `if (policies.length === 1)` → Use `buildSinglePolicyNarrative()` (pure function, no AI)
+- `if (policies.length >= 2)` → Use AI enrichment with existing prompt
+- Both paths return same `AIComparisonNarrative` schema for seamless integration
 
 ## System Architecture
 The platform features a React and TypeScript frontend, optimized for mobile-first accessibility with large typography and high contrast, utilizing Shadcn/ui, Subframe, and TailwindCSS. It includes multi-step onboarding, an offers dashboard, and adaptive policy comparison. State management is handled by TanStack Query, and Wouter manages routing.

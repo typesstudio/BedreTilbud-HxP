@@ -570,29 +570,52 @@ export class ComparisonOrchestrator {
       const keyToIdMap = new Map(deterministicPolicyData.map(d => [d.policyKey, d.deterministicId]));
       console.log(`[ComparisonOrchestrator] Created policyKey mapping: ${Array.from(keyToIdMap.keys()).join(', ')}`);
       
-      // STEP 2: Build minimal AI input (only health checks + identity fields + simple policyKey)
-      const aiInput = {
-        context: {
-          currentCompany,
-          offerCompany,
-          currency: 'DKK'
-        },
-        policies: deterministicPolicyData.map(p => ({
-          policyKey: p.policyKey, // SIMPLE key for AI to echo back (e.g. "policy-1")
-          policyType: p.policyType,
-          label: p.label,
-          currentCompany: p.currentCompany,
-          offerCompany: p.offerCompany,
-          healthCheckData: p.healthCheckData
-        }))
-      };
+      // STEP 2: Generate narratives (deterministic for single-policy, AI for multi-policy)
+      let aiNarratives;
+      
+      if (deterministicPolicyData.length === 1) {
+        // SINGLE-POLICY PATH: Use deterministic narrative builder (no AI, no hallucinations)
+        const { buildSinglePolicyNarrative } = await import('./comparisonNarrativeBuilder');
+        const policy = deterministicPolicyData[0];
+        
+        console.log(
+          `[ComparisonOrchestrator] Using deterministic single-policy narrative builder for policyType=${policy.policyType}`
+        );
+        
+        aiNarratives = buildSinglePolicyNarrative({
+          policyKey: policy.policyKey,
+          policyType: policy.policyType,
+          currentCompany: policy.currentCompany,
+          offerCompany: policy.offerCompany,
+          costSummary: policy.costSummary,
+          healthCheckData: policy.healthCheckData,
+        });
+        
+        console.log(`[ComparisonOrchestrator] ✅ Deterministic narrative built for 1 policy`);
+      } else {
+        // MULTI-POLICY PATH: Use AI enrichment (existing flow)
+        const aiInput = {
+          context: {
+            currentCompany,
+            offerCompany,
+            currency: 'DKK'
+          },
+          policies: deterministicPolicyData.map(p => ({
+            policyKey: p.policyKey, // SIMPLE key for AI to echo back (e.g. "policy-1")
+            policyType: p.policyType,
+            label: p.label,
+            currentCompany: p.currentCompany,
+            offerCompany: p.offerCompany,
+            healthCheckData: p.healthCheckData
+          }))
+        };
 
-      console.log(`[ComparisonOrchestrator] Calling AI for narratives (NO coverage rows or highlights sent)...`);
-
-      // STEP 2B: Call AI to generate ONLY narratives
-      const aiNarratives = await comparisonAgentService.generateNarrative(aiInput);
-
-      console.log(`[ComparisonOrchestrator] ✅ AI returned narratives for ${aiNarratives.policyNarratives.length} policies`);
+        console.log(`[ComparisonOrchestrator] Calling AI for narratives (NO coverage rows or highlights sent)...`);
+        
+        aiNarratives = await comparisonAgentService.generateNarrative(aiInput);
+        
+        console.log(`[ComparisonOrchestrator] ✅ AI returned narratives for ${aiNarratives.policyNarratives.length} policies`);
+      }
 
       // STEP 3: VALIDATE policyKeys and REHYDRATE deterministicIds
       // Build dictionaries for O(1) lookup using simple policyKeys
