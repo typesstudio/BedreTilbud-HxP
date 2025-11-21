@@ -1,0 +1,446 @@
+You’re not going crazy – this is exactly the kind of thing that’s hard to “hold in your head” once the pipeline gets this complex. A per-comparison debug report is a really good way to de-stress this.
+
+I’ll do two things:
+
+1. Outline **what the automatic debug report should contain** (so it’s actually useful for you + me).
+2. Give you a **copy-paste Replit prompt** that tells Replit exactly what to implement.
+
+---
+
+## 1. What the automatic comparison debug report should contain
+
+Goal:
+Every time a comparison finishes (or fails), the system writes a markdown file like:
+
+`/debug-reports/comparison-<comparisonId>.md`
+
+that answers:
+
+> “For this comparison, what happened in each phase, what data did we have, what went wrong, and what is the likely fix?”
+
+### Suggested structure of the MD file
+
+#### A. Header / Meta
+
+Top of the file:
+
+```md
+# BedreTilbud – Comparison Debug Report
+
+**Comparison ID:** df03ca4d-8203-4193-9b47-3a75b2d6327a  
+**User:** hello@vyork.dk (e85ec3b9-e354-4c49-9f68-194830e356af)  
+**Current company:** Privatsikring  
+**Offer company:** Alm. Brand  
+**Created at:** 2025-11-19T15:38:37.721Z  
+**Pipeline version:** v2.1.0  
+**Status:** ✅ completed / ⚠️ partial / ❌ failed
+```
+
+Then a tiny TL;DR block:
+
+```md
+## Executive Summary
+
+- Matcher: ✅ 3/3 policies matched (hus, indbo, ulykke)
+- Health checks: ⚠️ 2/3 policies mislabeled (indbo/ulykke)
+- Comparison JSON: ❌ 2 policies have 0 coverage rows
+- Main suspected cause: Health check policy_type mismatch for snapshots 9ad74ada, 2aefbdb7
+```
+
+---
+
+#### B. Phase 0 – Documents overview (only relevant docs)
+
+Show the documents that fed into this comparison (current + this offer):
+
+```md
+## Phase 0 – Documents
+
+| Role    | Document ID | Type    | File name           | Company        | Created at   |
+|---------|-------------|---------|---------------------|----------------|-------------|
+| current | f66209ca    | current | User Insurance.pdf  | N/A            | 2025-10-09  |
+| offer   | c93ed2b7    | offer   | Offer Insurance.pdf | Alm. Brand     | 2025-11-19  |
+```
+
+This helps me see **which PDF** was actually used.
+
+---
+
+#### C. Phase 1 – Snapshots matrix
+
+For just the snapshots involved in this comparison (those the matcher used), show:
+
+```md
+## Phase 1 – Snapshots
+
+| Snapshot ID | Doc type | Company        | policy_type | structured_policy | mainCoverages | addCoverages |
+|-------------|----------|----------------|------------|-------------------|---------------|-------------|
+| 4f1d13ae    | current  | Privatsikring  | hus        | ✅                | 12            | 4           |
+| 2610557a    | current  | Privatsikring  | indbo      | ❌                | 0             | 0           |
+| 20c6e2d4    | current  | Privatsikring  | ulykke     | ❌                | 0             | 0           |
+| 9ad74ada    | offer    | Alm. Brand     | indbo      | ✅                | 5             | 1           |
+| 2aefbdb7    | offer    | Alm. Brand     | ulykke     | ✅                | 4             | 0           |
+| f28e4d53    | offer    | Alm. Brand     | hus        | ✅                | 6             | 2           |
+```
+
+Plus a small bullet list if anything is missing:
+
+```md
+**Warnings**
+
+- ❌ current indbo (2610557a) has no structured_policy
+- ❌ current ulykke (20c6e2d4) has no structured_policy
+```
+
+---
+
+#### D. Phase 2 – Health checks & consistency
+
+For each snapshot used in the comparison, show what health_checks says:
+
+```md
+## Phase 2 – Health Checks
+
+| Snapshot ID | Doc type | Company       | snapshot.policy_type | health_check.policy_type | whatsIncluded count | First coverage                    | Status     |
+|-------------|----------|--------------|-----------------------|--------------------------|---------------------|-----------------------------------|------------|
+| 4f1d13ae    | current  | Privatsikring | hus                   | hus                      | 4                   | Invaliditet, Dødsfald             | ⚠️ MISMATCH (looks like ulykke) |
+| 9ad74ada    | offer    | Alm. Brand    | indbo                 | ulykke                   | 5                   | Indbo BASIS, Cykel inkl. tilbehør | ⚠️ MISMATCH (looks like indbo) |
+| 2aefbdb7    | offer    | Alm. Brand    | ulykke                | ulykke                   | 5                   | Indbo BASIS, Cykel inkl. tilbehør | ⚠️ MISMATCH (looks like indbo) |
+| f28e4d53    | offer    | Alm. Brand    | hus                   | hus                      | 6                   | Brand, Bygningsbeskadigelse       | ✅ OK      |
+```
+
+And a brief diagnosis:
+
+```md
+**Health Check Diagnosis**
+
+- 3 health checks have coverage names that don't match their policy_type.
+- This is the main reason why some policy comparisons end up with 0 coverage rows.
+```
+
+---
+
+#### E. Phase 3 – Matcher output
+
+Clearly log what the deterministic matcher actually decided:
+
+```md
+## Phase 3 – Matcher
+
+Matched pairs:
+
+- hus:    current=4f1d13ae ↔ offer=f28e4d53 (score=0, fallback=single-per-type)
+- indbo:  current=2610557a ↔ offer=9ad74ada (score=0, fallback=single-per-type)
+- ulykke: current=20c6e2d4 ↔ offer=2aefbdb7 (score=0, fallback=single-per-type)
+
+Unmatched snapshots: none
+
+**Matcher verdict:** ✅ All 3 policy types matched correctly (using fallback due to missing metadata).
+```
+
+This tells us *matching logic* is fine.
+
+---
+
+#### F. Phase 4 – Comparison JSON summary
+
+Now introspect `company_comparisons.comparison_json`:
+
+```md
+## Phase 4 – Comparison Result (JSON Summary)
+
+**Overall**
+
+- totalCurrentAnnualPremium: 8.500 kr
+- totalOfferAnnualPremium: 7.600 kr
+- annualSavings: 900 kr (10.6%)
+- globalHighlights: 4 items
+- cumulativeSavings.chartData length: 120 ✅
+
+**Per-policy**
+
+| policyType | label  | currentAnnual | offerAnnual | annualSavings | coverage rows | highlights | missingInfo | recommendations |
+|-----------|--------|--------------|------------|--------------|--------------|-----------|-------------|-----------------|
+| hus       | Hus    | 5.000 kr     | 4.500 kr   | 500 kr       | 1            | 3         | 2           | 3               |
+| indbo     | Indbo  | 2.000 kr     | 1.800 kr   | 200 kr       | 0            | 1         | 1           | 1               |
+| ulykke    | Ulykke | 1.500 kr     | 1.300 kr   | 200 kr       | 0            | 1         | 1           | 1               |
+
+**Red flags**
+
+- indbo: coverageComparison.rows = 0 ❌
+- ulykke: coverageComparison.rows = 0 ❌
+```
+
+---
+
+#### G. Auto-detected anomalies & suggested fixes
+
+This is the “so what?” section. Automatically derived rules like:
+
+```md
+## Phase 5 – Auto-Detected Anomalies & Suggested Fixes
+
+### Anomalies
+
+1. **Health check policy type mismatches**
+   - Snapshots 4f1d13ae, 9ad74ada, 2aefbdb7 have coverages that don't match their policy_type.
+   - This is almost certainly why indbo/ulykke comparisons have 0 coverage rows.
+
+2. **Missing structured_policy on current policies**
+   - current indbo (2610557a) and ulykke (20c6e2d4) have `structured_policy = NULL`.
+   - Matcher had to use fallback logic (single-per-type) instead of full scoring.
+
+3. **Coverage gaps in comparison**
+   - For policyType=indbo and ulykke, coverageComparison.rows is empty.
+   - Result: frontend shows “N/A” or empty tables, even though there is data in health checks.
+
+### Suggested Next Steps (for Replit dev)
+
+- Regenerate structured_policy for snapshots: 2610557a, 20c6e2d4.
+- Fix health_checks.policy_type for snapshots: 4f1d13ae, 9ad74ada, 2aefbdb7.
+- Add a guard in healthCheckOrchestrator:
+  - If extracted coverage names don't match snapshot.policy_type → log and abort.
+```
+
+This is what you and I need to quickly see “where it broke and what to fix”.
+
+---
+
+## 2. Copy-paste Replit prompt to implement this feature
+
+Here’s a prompt you can paste straight into Replit’s AI agent.
+
+---
+
+**REPLIT PROMPT (copy-paste this)**
+
+You are working in a TypeScript/Node monorepo for the BedreTilbud insurance app.
+
+### GOAL
+
+Implement an **automatic per-comparison debug report** that runs every time a comparison finishes and writes a **markdown file** to the repo, so we can easily inspect what happened in each phase of the pipeline.
+
+The report must be:
+
+* Read-only / observational (no pipeline mutations).
+* Written as a `.md` file in a predictable location.
+* Focused on **one specific comparison** (company_comparisons row).
+
+We already have a powerful debug script:
+
+* `server/scripts/debugComparison.ts`
+
+It does most of the heavy lifting (documents overview, snapshots matrix, health checks consistency, matcher output, comparison JSON summary, etc.). Your job is to **refactor this logic into a reusable service** and hook it into the comparison orchestrator.
+
+---
+
+### TASKS
+
+#### 1. Create a reusable debug report service
+
+Create a new file:
+
+* `server/services/comparisonDebugReportService.ts`
+
+Add a function (exported):
+
+```ts
+export async function generateComparisonDebugReport(
+  comparisonId: string,
+  options: { saveToDisk?: boolean; logToConsole?: boolean } = { saveToDisk: true, logToConsole: false }
+): Promise<{ markdown: string; filePath?: string }>;
+```
+
+**Requirements for this function:**
+
+1. **Input**
+
+   * `comparisonId` is the primary key from `company_comparisons.id`.
+
+2. **Data it must load**
+
+   Use existing DB client (same one used in `debugComparison.ts`):
+
+   * `company_comparisons` row for this `id` (includes `user_id`, `current_company_id`, `offer_company_id`, `comparison_json`, `status`, timestamps).
+   * All snapshots (from `offer_snapshots`) that participate in this comparison:
+
+     * Current snapshots for this user & current company.
+     * Offer snapshots for this user & this offer company.
+     * You can reuse the same logic that `debugComparison.ts` uses to find relevant snapshots, but **filter it to just this comparison’s companies**.
+   * `documents` for those snapshots (to get file names, document_type).
+   * `health_checks` for those snapshots.
+   * Any matcher information you already infer in `debugComparison.ts` (matched pairs, fallback use).
+   * The existing `comparison_json` for this comparison.
+
+3. **Markdown structure**
+
+Build a markdown string with these sections (see my previous message for content examples):
+
+* `# BedreTilbud – Comparison Debug Report`
+
+* **Header / meta**: comparison id, user id, user email (if available), current company, offer company, timestamps, status.
+
+* `## Executive Summary`: 3–6 bullet points with key findings (e.g. matcher ok, health checks mismatched, 0 coverage rows).
+
+* `## Phase 0 – Documents`: table of current/offer documents used in this comparison.
+
+* `## Phase 1 – Snapshots`: table like the existing snapshots matrix:
+
+  * columns: snapshot_id, doc_type, company, policy_type, has_structured_policy (yes/no), mainCoverageCount, additionalCoverageCount.
+
+* `## Phase 2 – Health Checks`:
+
+  * table with: snapshot_id, doc_type, company, snapshot.policy_type, health_check.policy_type, whatsIncluded count, first coverage(s), and a status column (`✅ MATCH` / `⚠️ MISMATCH`).
+  * Reuse the same “guessPolicyTypeFromCoverages” logic from `debugComparison.ts` to detect mismatches and annotate them.
+
+* `## Phase 3 – Matcher`:
+
+  * list of matched pairs (policyType + current_snapshot_id + offer_snapshot_id + score/fallback).
+  * any unmatched snapshots.
+
+* `## Phase 4 – Comparison Result (JSON Summary)`:
+
+  * From `comparison_json`, show:
+
+    * overall.totalCurrentAnnualPremium
+    * overall.totalOfferAnnualPremium
+    * overall.annualSavings
+    * overall.annualSavingsPercent
+    * length of `cumulativeSavings.chartData`
+  * Per-policy table:
+
+    * policyType, label, costSummary.currentAnnualPremium, costSummary.offerAnnualPremium, costSummary.annualSavings, coverageComparison.rows length, highlights length, missingInformation length, recommendations length.
+  * Flag any policy with `coverageComparison.rows.length === 0`.
+
+* `## Phase 5 – Auto-Detected Anomalies & Suggested Fixes`:
+
+  * Auto-generate bullet points like:
+
+    * “Health check policy type mismatch for snapshot X (snapshot says hus, coverages look like ulykke)”
+    * “Snapshot Y has `structured_policy IS NULL`”
+    * “Policy type ‘indbo’ has 0 coverage rows in comparison_json”
+  * These can be derived from the data above; they don’t need to be perfect, just helpful.
+
+4. **Output**
+
+If `options.saveToDisk === true`:
+
+* Ensure a folder exists in the repo root: `debug-reports` (create if needed).
+
+* Write the markdown to a file:
+
+  * `debug-reports/comparison-${comparisonId}.md`
+
+* Return `{ markdown, filePath }`.
+
+If `options.logToConsole === true`, also `console.log(markdown)` (for local debugging).
+
+Make sure any errors in this function are **caught and logged** but do **not** throw in a way that breaks the main comparison pipeline. The debug report is auxiliary.
+
+---
+
+#### 2. Refactor existing debug script to reuse the service
+
+Open:
+
+* `server/scripts/debugComparison.ts`
+
+Refactor it so that the core logic uses the new service function:
+
+```ts
+import { generateComparisonDebugReport } from '../services/comparisonDebugReportService';
+
+// example: using last completed comparison for a given user/company
+const { markdown, filePath } = await generateComparisonDebugReport(targetComparisonId, {
+  saveToDisk: true,
+  logToConsole: true,
+});
+```
+
+After refactor:
+
+* `debugComparison.ts` becomes a thin CLI wrapper around `generateComparisonDebugReport`.
+* It should still be possible to run:
+
+  ```bash
+  npx tsx server/scripts/debugComparison.ts
+  ```
+
+  to generate a report for a specific test comparison (use the same logic that’s already there to pick a test user & company).
+
+---
+
+#### 3. Hook the debug report into the comparison orchestrator
+
+Find the orchestrator that creates comparisons, likely:
+
+* `server/services/comparisonOrchestrator.ts`
+
+  * Or whatever file sets `company_comparisons.status = 'completed'` and stores `comparison_json`.
+
+After a comparison has been successfully written to the database (status = 'completed'), **call** the new debug service:
+
+```ts
+import { generateComparisonDebugReport } from './comparisonDebugReportService';
+
+// inside the function that finalizes a comparison:
+await db.companyComparisons.update({
+  // ... existing write of comparison_json, status, etc.
+});
+
+try {
+  const { filePath } = await generateComparisonDebugReport(comparison.id, {
+    saveToDisk: true,
+    logToConsole: false,
+  });
+  logger.info(`Comparison debug report generated for ${comparison.id}: ${filePath}`);
+} catch (err) {
+  logger.warn(`Failed to generate debug report for ${comparison.id}:`, err);
+}
+```
+
+Optional: gate this behind an env flag:
+
+* `ENABLE_COMPARISON_DEBUG_REPORTS=true`
+
+so that in production it can be toggled.
+
+---
+
+### ACCEPTANCE CRITERIA
+
+1. When a comparison finishes (status set to 'completed'), a markdown file is written to:
+
+   * `debug-reports/comparison-<comparisonId>.md`
+
+2. The markdown file contains at least these sections:
+
+   * Header/meta
+   * Executive Summary
+   * Phase 0 – Documents
+   * Phase 1 – Snapshots
+   * Phase 2 – Health Checks
+   * Phase 3 – Matcher
+   * Phase 4 – Comparison Result (JSON Summary)
+   * Phase 5 – Auto-Detected Anomalies & Suggested Fixes
+
+3. Running:
+
+   ```bash
+   npx tsx server/scripts/debugComparison.ts
+   ```
+
+   still works and now uses the shared `generateComparisonDebugReport` service.
+
+4. For the known problematic LB / Privatsikring comparison, the generated MD report **clearly shows**:
+
+   * Missing `structured_policy` for current indbo/ulykke.
+   * Health check policy_type mismatches.
+   * 0 coverage rows for indbo and ulykke.
+   * Suggested fixes section mentions these issues.
+
+5. If report generation fails, the comparison pipeline still completes; the error is logged but not thrown.
+
+---
+
+If you want, after Replit implements this, you can upload one of the generated `debug-reports/comparison-....md` files here, and I can read it and pinpoint the next fixes without you having to dump SQL or raw JSON again.

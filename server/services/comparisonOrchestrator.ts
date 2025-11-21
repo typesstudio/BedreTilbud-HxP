@@ -742,6 +742,20 @@ export class ComparisonOrchestrator {
 
       console.log(`[ComparisonOrchestrator] Comparison completed successfully (${comparison.id})`);
 
+      // Generate debug report for this comparison
+      try {
+        const { generateComparisonDebugReport } = await import('./comparisonDebugReportService');
+        const report = await generateComparisonDebugReport(comparison.id, { 
+          saveToDisk: true, 
+          logToConsole: false 
+        });
+        if (report.filePath) {
+          console.log(`[ComparisonOrchestrator] 📊 Debug report saved: ${report.filePath}`);
+        }
+      } catch (reportError) {
+        console.warn('[ComparisonOrchestrator] Failed to generate debug report:', reportError);
+      }
+
       return comparison.id;
 
     } catch (error) {
@@ -758,6 +772,20 @@ export class ComparisonOrchestrator {
         errorMessage,
         statusReason
       );
+      
+      // Generate debug report for failed comparison
+      try {
+        const { generateComparisonDebugReport } = await import('./comparisonDebugReportService');
+        const report = await generateComparisonDebugReport(comparison.id, { 
+          saveToDisk: true, 
+          logToConsole: false 
+        });
+        if (report.filePath) {
+          console.log(`[ComparisonOrchestrator] 📊 Debug report saved (FAILED): ${report.filePath}`);
+        }
+      } catch (reportError) {
+        console.warn('[ComparisonOrchestrator] Failed to generate debug report:', reportError);
+      }
       
       throw error;
     }
