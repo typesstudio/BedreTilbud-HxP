@@ -1,0 +1,309 @@
+Fedt – nu kan vi for alvor se, hvad der foregår 🚑
+
+### 1. Hvad den nye debug-report fortæller
+
+Fra din rapport:
+
+* Per policy:
+
+  * **Hus**: current 8.734,59 kr, **offer 0 kr** ❌
+  * **Indbo**: current 2.078,53 kr, **offer 0 kr** ❌
+  * **Ulykke**: current 1.059,58 kr, offer 995,1 kr ✅
+* Overall:
+
+  * totalCurrentAnnualPremium = 11.872,7 kr (summen af alle tre current – korrekt)
+  * totalOfferAnnualPremium = 995,1 kr (kun ulykke – de to andre er 0)
+  * annualSavings = 10.877,6 kr (91,6%) → helt misvisende
+
+Phase 5 siger også:
+
+> ❌ offerAnnualPremium is 0 for hus but no premium was extracted (this should never happen)
+
+Det betyder:
+
+* **Extraction-prompten virker**: den sætter `annualPremium = null` når den ikke kan finde pris.
+* Men **cost summary builder** sætter stadig `offerAnnualPremium = 0` som fallback, og **tager alle policies med i overall-beregningen**, selv når offer-siden mangler pris.
+
+Så vi er faktisk der, hvor du gerne vil være:
+Extraction er ok, validator fanger fejl – nu er det *kun* cost-summary logikken, der skal gøres sikker.
+
+---
+
+## 2. Hvad vi skal ændre i backenden
+
+Høj-niveau:
+
+1. **Aldrig brug 0 som “ukendt pris”**
+
+   * Hvis vi ikke har pris → `null`, ikke `0`.
+2. **Per policy:**
+
+   * `currentAnnualPremium` og `offerAnnualPremium` skal være `number | null`.
+   * `annualSavings` og `annualSavingsPercent` skal kun beregnes, hvis **begge** sider har tal.
+3. **Overall totals:**
+
+   * `totalCurrentAnnualPremium` og `totalOfferAnnualPremium` skal kun summere policies, hvor begge sider har pris.
+   * Hvis kun 1/3 policies har pris (som i Gjensidige-casen), skal overall kun reflektere den ene – ikke de 2 ukendte.
+
+Det gør din visning ærlig:
+– Du kan stadig vise full coverage-comparison for hus/indbo, men tydeligt markere, at pris/savings er baseret på delvis pris-info.
+
+---
+
+## 3. Copy-paste Replit prompt til at fixe cost summary builder
+
+Her er en samlet prompt du kan smide direkte i Replit:
+
+````md
+You are working on the BedreTilbud backend (Node/TS).
+
+Context:
+- We now have a comparison debug report that shows per-policy pricing.
+- For the Gjensidige test comparison (comparisonId = 84bcace4-9f50-4208-8b32-272f49c1822a) we see:
+
+  - Hus:  currentAnnual = 8734.59 kr, offerAnnual = 0 kr  ❌
+  - Indbo: currentAnnual = 2078.53 kr, offerAnnual = 0 kr ❌
+  - Ulykke: currentAnnual = 1059.58 kr, offerAnnual = 995.1 kr ✅
+
+  totalCurrentAnnualPremium = 11872.7  
+  totalOfferAnnualPremium   = 995.1  
+  annualSavings             = 10877.6 (91.6%)
+
+- The debug report also logs:
+
+  "❌ offerAnnualPremium is 0 for hus but no premium was extracted (this should never happen)"
+
+So extraction is fine (annualPremium is null when price cannot be found), but the **cost summary builder still uses 0 as a fallback** and includes those policies in the overall totals.
+
+Goal of this task:
+Make the pricing logic for comparisons safe and honest:
+
+1. Unknown price must be represented as `null`, **never** `0`.
+2. Per-policy `annualSavings` and `annualSavingsPercent` must only be computed when both sides have prices.
+3. Overall totals (`totalCurrentAnnualPremium`, `totalOfferAnnualPremium`, `annualSavings`, `annualSavingsPercent`) must be computed only from policies where both sides have valid prices.
+
+This should fix cases like Gjensidige where Hus/Indbo have no extracted offer-price.
+
+---
+
+## Step 1 – Find the cost summary builder
+
+1. Search for the type that describes the per-policy cost summary.  
+   Common candidates:
+
+   - `PolicyCostSummary`
+   - `CostSummary`
+   - fields like `currentAnnualPremium`, `offerAnnualPremium`, `annualSavings`, `annualSavingsPercent`
+
+   Likely places:
+
+   - `server/services/comparisonOrchestrator.ts`
+   - `server/services/comparisonBuilder.ts`
+   - `server/services/comparisonAgentService.ts`
+   - `server/domain/comparison/*.ts`
+
+2. Identify the function that builds the per-policy part of the comparison result, something like:
+
+   ```ts
+   {
+     policyType,
+     label,
+     costSummary: {
+       currentAnnualPremium: number,
+       offerAnnualPremium: number,
+       annualSavings: number,
+       annualSavingsPercent: number,
+     },
+     ...
+   }
+````
+
+This is the function we need to fix.
+
+---
+
+## Step 2 – Introduce a safe helper for annual premium
+
+Create a small helper function in the same module as the cost summary builder, for example:
+
+```ts
+function getAnnualPremiumFromSnapshot(
+  snapshot: OfferSnapshot | null | undefined
+): number | null {
+  if (!snapshot) return null;
+
+  const structured = snapshot.structuredPolicy as any | null | undefined;
+  const fromSnapshot = snapshot.premium ?? null;
+  const fromStructured =
+    typeof structured?.annualPremium === 'number'
+      ? structured.annualPremium
+      : null;
+
+  // Prefer explicit snapshot.premium if present, otherwise structured annualPremium
+  const value = fromSnapshot ?? fromStructured;
+
+  if (value == null) return null;
+
+  // Treat 0 as "unknown" – we never want 0 DKK as a default
+  if (value === 0) return null;
+
+  return value;
+}
+```
+
+Adjust the type names (`OfferSnapshot`, field names etc.) to match the actual codebase.
+
+Then, in the policy builder, replace any previous logic like:
+
+```ts
+const currentAnnual = snapshotCurrent.premium ?? 0;
+const offerAnnual = snapshotOffer.premium ?? 0;
+// or
+const currentAnnual = structuredCurrent?.annualPremium || 0;
+```
+
+with:
+
+```ts
+const currentAnnual = getAnnualPremiumFromSnapshot(currentSnapshot);
+const offerAnnual = getAnnualPremiumFromSnapshot(offerSnapshot);
+```
+
+Update the `costSummary` type so that `currentAnnualPremium` and `offerAnnualPremium` are `number | null`.
+
+---
+
+## Step 3 – Compute per-policy savings only when possible
+
+In the same builder, after you have `currentAnnual` and `offerAnnual`, compute savings like this:
+
+```ts
+let annualSavings: number | null = null;
+let annualSavingsPercent: number | null = null;
+
+if (currentAnnual != null && offerAnnual != null) {
+  annualSavings = currentAnnual - offerAnnual;
+  annualSavingsPercent =
+    currentAnnual > 0 ? (annualSavings / currentAnnual) * 100 : null;
+}
+```
+
+Then store:
+
+```ts
+costSummary: {
+  currentAnnualPremium: currentAnnual,
+  offerAnnualPremium: offerAnnual,
+  annualSavings,
+  annualSavingsPercent,
+}
+```
+
+Do **not** default `annualSavings` or `annualSavingsPercent` to `0` when the inputs are `null`.
+
+---
+
+## Step 4 – Fix the overall totals
+
+Find where the top-level `overall` block is built, something like:
+
+```ts
+overall: {
+  totalCurrentAnnualPremium,
+  totalOfferAnnualPremium,
+  annualSavings,
+  annualSavingsPercent,
+  ...
+}
+```
+
+This is usually computed from the array of per-policy summaries.
+
+Change the logic to:
+
+```ts
+const pricedPolicies = policyComparisons.filter(pc =>
+  pc.costSummary.currentAnnualPremium != null &&
+  pc.costSummary.offerAnnualPremium != null
+);
+
+let totalCurrentAnnualPremium: number | null = null;
+let totalOfferAnnualPremium: number | null = null;
+let overallAnnualSavings: number | null = null;
+let overallAnnualSavingsPercent: number | null = null;
+
+if (pricedPolicies.length > 0) {
+  const sumCurrent = pricedPolicies.reduce(
+    (sum, pc) => sum + (pc.costSummary.currentAnnualPremium as number),
+    0
+  );
+  const sumOffer = pricedPolicies.reduce(
+    (sum, pc) => sum + (pc.costSummary.offerAnnualPremium as number),
+    0
+  );
+
+  totalCurrentAnnualPremium = sumCurrent;
+  totalOfferAnnualPremium = sumOffer;
+
+  overallAnnualSavings = sumCurrent - sumOffer;
+  overallAnnualSavingsPercent =
+    sumCurrent > 0 ? (overallAnnualSavings / sumCurrent) * 100 : null;
+}
+```
+
+Then write these values into the `overall` section of the comparison JSON.
+
+Optionally, also add a small meta field:
+
+```ts
+pricingCoverage: {
+  pricedPolicies: pricedPolicies.length,
+  totalPolicies: policyComparisons.length,
+}
+```
+
+but this is optional for now.
+
+---
+
+## Step 5 – Keep the debug-report pricing checks
+
+The debug-report already has logic like:
+
+* Show `currentAnnual` and `offerAnnual` per policy.
+* Warn when `offerAnnualPremium === 0` and no premium exists behind it.
+
+After your changes:
+
+* `offerAnnualPremium` should be `null` instead of `0` when price is unknown.
+* The Phase 5 anomaly about “0 kr” should disappear.
+* New warnings may appear for missing (`null`) values – that is OK.
+
+Do **not** remove the pricing anomaly checks; they are still useful.
+
+---
+
+## ACCEPTANCE CRITERIA
+
+1. TypeScript compiles without errors.
+
+2. For a fresh Gjensidige comparison (re-run the upload + comparison):
+
+   * In the debug report:
+
+     * For Hus and Indbo: `offerAnnual` should be `null` (NOT `0 kr`).
+     * For Ulykke: `currentAnnual` and `offerAnnual` should still show ~1059.58 and 995.1.
+   * The "Pricing Errors: offerAnnualPremium is 0 ..." line should be gone.
+   * `overall.totalCurrentAnnualPremium` and `overall.totalOfferAnnualPremium` must be based only on the policies with both sides priced (most likely only Ulykke in this test).
+   * `overall.annualSavingsPercent` should now be a small percentage (around 6%) or null, but NOT 91.6%.
+
+3. The UI should no longer show "0 kr" as offer price for Hus/Indbo; instead it should treat the price as unknown (it’s OK if the frontend currently shows "—" or "ukendt pris" while we wire that up later).
+
+If anything is unclear, please locate the exact functions/types and adjust the names, but keep the behaviour and acceptance criteria above.
+
+```
+
+---
+
+Hvis du kører en ny Gjensidige-sammenligning efter denne ændring og smider den nye debug-rapport herind, kan vi sammen sanity-checke tallene og evt. lave en lille ekstra finpudsning – men det her burde fjerne de falske “0 kr” og de vilde 90% besparelser.
+```
