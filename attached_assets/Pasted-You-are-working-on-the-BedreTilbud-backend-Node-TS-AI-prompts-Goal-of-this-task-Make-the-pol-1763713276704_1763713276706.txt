@@ -1,0 +1,199 @@
+You are working on the BedreTilbud backend (Node/TS + AI prompts).
+
+Goal of this task:
+Make the *policy extraction prompt* much better at extracting the **annual premium** so that
+`structured_policy.annualPremium` is filled reliably for HUS, INDBO and ULYKKE – especially for
+Danish PDFs like Privatsikring, Alka, IF Forsikring.
+
+We already fixed the comparison code so that missing premiums are treated as `null` instead of `0`.
+Now we want to *improve the AI prompt* used in Phase 1 extraction, so annualPremium is found more often.
+
+### Files to edit
+
+- `server/ai-prompts/extraction/policy-extractor.md`
+
+This file defines the system prompt for the `policyExtractorService` (gpt-4o) that takes
+OCR markdown for a *single* policy segment and outputs `structured_policy`.
+
+### Constraints
+
+- Do **not** change the existing JSON schema fields that other code depends on.
+- `annualPremium` MUST stay as a top-level numeric field on the structured policy object.
+- You may ADD extra nested fields (e.g. `pricingDetails`) – that is safe.
+- The rest of the extraction (coverages, deductibles, etc.) should remain as-is.
+
+---
+
+## 1) Add a strong PRICING section to the prompt
+
+Open `server/ai-prompts/extraction/policy-extractor.md` and:
+
+1. Find where the output JSON is described (the section that mentions `annualPremium`, `defaultDeductible`, `coverageDetails`, etc.).
+2. Immediately **after** the output schema description, insert a new markdown section
+   called `PRICING EXTRACTION (CRITICAL)` with the following content (keep formatting):
+
+```md
+## PRICING EXTRACTION (CRITICAL)
+
+Your TOP priority for pricing is to correctly extract the **total annual premium in DKK** for this
+policy segment.
+
+You MUST always attempt to fill:
+
+- `annualPremium`: number | null  
+  - The total annual price in DKK for *this* policy only.
+  - Include taxes/fees if clearly part of the "Din pris" / "Samlet pris".
+- `pricingDetails`: object (may be omitted if you cannot find anything)
+  - `source`: `"annual"` | `"monthly_converted"` | `"sum_of_lines"` | `"unknown"`
+  - `rawLines`: array of strings with the raw text lines you used
+  - `hasTaxesIncluded`: true | false | null
+  - `confidence`: number between 0.0 and 1.0
+  - `notes`: short string explaining how you found the price (or why it is unknown)
+
+### What text to look for (Danish insurance PDFs)
+
+Search ONLY inside this policy segment for lines that look like total prices, for example:
+
+- "Din pris pr. år"
+- "Samlet pris pr. år"
+- "Årlig pris" / "Årlig præmie"
+- "Pris pr. år inkl. afgifter"
+- "Samlet årlig præmie"
+- "Årlig betaling"
+
+These often appear near the policy name or in a summary box.
+
+#### RULE 1 – Prefer annual totals
+
+If you see both an annual and a monthly amount, ALWAYS use the annual total as `annualPremium`.
+
+Examples:
+
+- "Din pris pr. år: 8.735,00 kr" → `annualPremium = 8735.00`
+- "Samlet pris pr. år inkl. afgifter: 2.078,53 kr" → `annualPremium = 2078.53`
+
+Keep decimals, but return the number as a plain JSON number (no "kr", no thousands separator).
+
+#### RULE 2 – If only monthly price is given
+
+If you only see a monthly price like:
+
+- "Pris pr. måned: 199 kr"
+- "Din pris: 175 kr/md"
+- "Månedlig præmie: 88,50 kr"
+
+then:
+
+- Compute `annualPremium = monthlyAmount * 12`
+- Set `pricingDetails.source = "monthly_converted"`
+- Put the raw line(s) in `pricingDetails.rawLines`
+- If you are not sure whether the monthly price is for this exact policy or a bundle, set `annualPremium = null` and explain in `pricingDetails.notes`.
+
+Examples:
+
+- "Din pris: 199 kr/md" → `annualPremium = 2388`
+- "Månedlig præmie: 88,50 kr" → `annualPremium = 1062`
+
+#### RULE 3 – Multiple components vs. total
+
+Some PDFs list multiple components (basis, tilvalg, gebyrer) *plus* a clear total:
+
+- If there is a clear total line (e.g. "Din pris pr. år", "I alt pr. år"), ALWAYS use that line.
+- Only sum lines manually if there is no explicit total for this policy.
+
+If you have to sum:
+
+- Only sum lines that clearly belong to THIS policy segment.
+- Ignore pure taxes/fees lines if there is also a "Din pris" total.
+
+When you sum, set `pricingDetails.source = "sum_of_lines"` and list the lines.
+
+#### RULE 4 – When you really cannot find a price
+
+If you cannot confidently identify **any** annual or monthly price for this policy:
+
+- Set `annualPremium = null`
+- Set `pricingDetails.source = "unknown"`
+- Leave a short explanation in `pricingDetails.notes`, e.g.
+  - "Kunne ikke finde prislinje for denne police i segmentet"
+  - "Kun bundlet samlet pris for flere policer – ikke entydigt for denne policy"
+
+#### RULE 5 – NEVER use 0 as a placeholder
+
+- `0` means "the annual premium is literally 0 DKK", which is almost never true.
+- If you do not find a price, use `null` – **never** `0`.
+- Do not invent prices or guess based on other policies; only use prices that appear in this segment.
+
+### PRICING FIELDS IN OUTPUT JSON
+
+Your final JSON MUST always include `annualPremium` at the top level, and MAY include `pricingDetails`:
+
+```json
+{
+  "policyType": "hus",
+  "policyName": "Alka Husforsikring",
+  "company": "Alka Forsikring",
+  "annualPremium": 8735.00,
+  "defaultDeductible": "2.834 kr",
+  "pricingDetails": {
+    "source": "annual",
+    "rawLines": [
+      "Din pris pr. år inkl. afgifter: 8.735,00 kr"
+    ],
+    "hasTaxesIncluded": true,
+    "confidence": 0.95,
+    "notes": "Direkte årlig prislinje med 'Din pris pr. år inkl. afgifter'"
+  },
+  "coverageDetails": {
+    "mainCoverages": [...],
+    "additionalCoverages": [...]
+  }
+}
+If you cannot find a price:
+
+json
+Copy code
+{
+  "policyType": "indbo",
+  "policyName": "Alka Indboforsikring",
+  "company": "Alka Forsikring",
+  "annualPremium": null,
+  "defaultDeductible": "1.000 kr",
+  "pricingDetails": {
+    "source": "unknown",
+    "rawLines": [],
+    "hasTaxesIncluded": null,
+    "confidence": 0.3,
+    "notes": "Ingen entydig prislinje for denne indbopolice i segmentet"
+  },
+  "coverageDetails": { ... }
+}
+yaml
+Copy code
+
+3. Make sure the rest of the prompt (coverage extraction rules etc.) stays unchanged.
+
+---
+
+### 2) Quick sanity checks in the prompt text
+
+Also ensure the prompt clearly states:
+
+- That it receives **one policy segment at a time**.
+- That `annualPremium` should be in DKK.
+- That the model must not mix prices from *other* policies in the document.
+
+You can add 1–2 short bullet points under the existing "CRITICAL RULES" section to remind the model:
+
+- "Use only price lines from this policy segment."
+- "Never copy prices from other policies or summary sections outside the segment."
+
+---
+
+### ACCEPTANCE CRITERIA
+
+- The file `server/ai-prompts/extraction/policy-extractor.md` contains a new section
+  `## PRICING EXTRACTION (CRITICAL)` with the content above (minor formatting differences are OK).
+- The output JSON examples in the prompt still include a top-level `annualPremium` field.
+- No other parts of the prompt are accidentally deleted or heavily modified.
+- TypeScript code does not need to be changed in this task – we only change the prompt.

@@ -8,6 +8,20 @@ Preferred communication style: Simple, everyday language.
 
 ## Recent Changes
 
+### Nov 21, 2025: Prompt Engineering & Production Reliability ✅
+
+**3. Enhanced Pricing Extraction Prompt**
+- **Problem:** AI often missed `annualPremium` for Danish PDFs (Privatsikring, Alka, IF)
+- **Solution:** Added comprehensive PRICING EXTRACTION (CRITICAL) section to policy-extractor prompt
+- **Implementation:**
+  - New section with 5 explicit rules for finding annual premiums
+  - Examples for annual vs monthly pricing, component summation, edge cases
+  - Introduced optional `pricingDetails` field for debugging (source, rawLines, confidence, notes)
+  - Added sanity checks to prevent cross-policy price contamination
+  - Updated EKSTRAKTIONSREGLER to reference new pricing section
+- **File:** `server/ai-prompts/extraction/policy-extractor.md`
+- **Expected Impact:** Higher success rate for `annualPremium` extraction in Phase 1
+
 ### Nov 21, 2025: Production Reliability Improvements ✅
 
 **1. Single-Policy Deterministic Builder**
