@@ -1,0 +1,158 @@
+## Comparison pipeline & debugging
+
+### 1. Single-policy deterministic builder
+
+**Problem før:**  
+Når der kun var **1 policetype** i en comparison (fx kun *hus*), havde vi en AI-drevet enrichment, som nogle gange hallucinerede ekstra policies (`hus + indbo + ulykke`) selv om input kun indeholdt én. Det ødelagde mapping tilbage til frontend og kunne gøre resultatet ugyldigt.
+
+**Løsning nu (v2.1.0):**
+
+- For **1 policy** bruger vi nu en **ren deterministisk builder i kode**:
+  - Ingen AI til struktur / rækker / keys.
+  - Vi bygger `comparison_json` direkte ud fra:
+    - `offer_snapshots`
+    - `health_checks`
+    - eksisterende costSummary.
+- AI bruges **kun** til tekstlig enrichment, hvis vi har **2–3 policies** (standard-case).
+- Det betyder:
+  - 100% stabilitet for single-policy comparisons.
+  - Ingen hallucinerede ekstra policy-typer.
+  - Frontend får altid præcis de policyKeys og policyTypes, som matcher input.
+
+**Hvor koden bor:**
+
+- Deterministisk builder:
+  - `server/services/comparisonOrchestrator.ts`
+  - Funktion (navn kan variere, søg efter noget ala `buildSinglePolicyComparison` / `buildDeterministicSinglePolicyComparison`)
+- AI-enrichment:
+  - `server/services/comparisonAgentService.ts`
+  - Prompt: `server/ai-prompts/comparison/user.md`
+
+**Hvordan det virker (kort):**
+
+- Orchestratoren tjekker antal policies i `policyComparisons`:
+  - Hvis `count === 1` → brug **kun deterministic builder**, spring AI-merge over.
+  - Hvis `count >= 2` → brug eksisterende AI-enrichment pattern.
+- Alle policyKeys og coverage rows kommer direkte fra health check + matcher, ikke fra AI.
+
+---
+
+### 2. Automatic comparison debug reports (markdown)
+
+Hver gang en **comparison** bliver lavet (status `completed`), genererer systemet nu automatisk en **debug-rapport i markdown**.
+
+**Filstruktur:**
+
+- Folder: `debug-reports/`
+- Filnavn: `comparison-<comparisonId>.md`
+  - fx: `debug-reports/comparison-3ddc78f1-5f66-4264-891e-b24eb0ca3ebb.md`
+
+**Hvor koden bor:**
+
+- Shared service:
+  - `server/services/comparisonDebugReportService.ts`
+  - Export:  
+    `generateComparisonDebugReport(comparisonId, options?)`
+- CLI wrapper / manuel kørsel:
+  - `server/scripts/debugComparison.ts`
+  - Kan køres med:
+    ```bash
+    npx tsx server/scripts/debugComparison.ts
+    ```
+- Hook i orchestrator:
+  - `server/services/comparisonOrchestrator.ts`
+  - Efter comparison er skrevet til `company_comparisons` med status `completed`, kaldes:
+    ```ts
+    await generateComparisonDebugReport(comparison.id, {
+      saveToDisk: true,
+      logToConsole: false,
+    });
+    ```
+
+**Indhold i rapporten:**
+
+Hver `.md` fil har fast struktur:
+
+1. **Header / meta**
+   - comparisonId
+   - userId + (hvis muligt) email
+   - currentCompany / offerCompany
+   - createdAt / updatedAt
+   - status (`completed` / `pending` / `failed`)
+2. **Executive Summary**
+   - 3–6 bullets med:
+     - matcher OK / ikke OK
+     - health check mismatches
+     - manglende `structured_policy`
+     - policies med 0 coverage rows
+3. **Phase 0 – Documents**
+   - Tabel over relevante `documents` (current + offer):
+     - role, document_id, type, file_name, company, created_at
+4. **Phase 1 – Snapshots**
+   - Tabel over `offer_snapshots` brugt i sammenligningen:
+     - snapshot_id, doc_type, company, policy_type
+     - has_structured_policy (✅/❌)
+     - mainCoverageCount, additionalCoverageCount
+5. **Phase 2 – Health Checks**
+   - Tabel over health checks pr. snapshot:
+     - snapshot.policy_type (fra DB)
+     - health_check.policy_type
+     - antal `whatsIncluded`
+     - første 1–2 coverages
+     - status: `✅ MATCH` / `⚠️ MISMATCH`
+   - Brug af intern helper (ala `guessPolicyTypeFromCoverages`) til at opdage mislabeled policer.
+6. **Phase 3 – Matcher**
+   - Liste over matchede par:
+     - fx: `hus: current=4f1d13ae ↔ offer=f28e4d53 (score=0, fallback=single-per-type)`
+   - Unmatched current/offer snapshots, hvis nogen.
+7. **Phase 4 – Comparison Result (JSON Summary)**
+   - Fra `company_comparisons.comparison_json`:
+     - overall.totalCurrentAnnualPremium
+     - overall.totalOfferAnnualPremium
+     - overall.annualSavings (+ %)
+     - længde på `cumulativeSavings.chartData` (skal være 120)
+   - Per policy:
+     - policyType, label
+     - costSummary.currentAnnualPremium / offerAnnualPremium / annualSavings
+     - `coverageComparison.rows.length`
+     - antal highlights / missingInformation / recommendations
+   - Flags:
+     - Policies med `coverageComparison.rows.length === 0` markeres som røde flag.
+8. **Phase 5 – Auto-Detected Anomalies & Suggested Fixes**
+   - Bullet-liste over typiske issues:
+     - mislabeled health checks (policy_type ≠ coverages)
+     - snapshots uden `structured_policy`
+     - policies med 0 coverage rows
+   - En kort liste over “next steps” for dev (fx regenerér health checks, fix policy_type, re-run comparison).
+
+**Fejl-tolerance:**
+
+- Hvis debug-rapporten fejler (DB problem, filsystem, osv.):
+  - Comparisons skal stadig fuldføres.
+  - Der logges en warning, men der kastes ikke en hard error i orchestratoren.
+
+---
+
+### 3. Sådan bruger du debug-rapporter i praksis
+
+Når du oplever noget mærkeligt i UI:
+
+1. Find comparisonId (fra DB, log, eller ved at kigge i `company_comparisons`).
+2. Åbn den tilsvarende fil:
+   - `debug-reports/comparison-<comparisonId>.md`
+3. Tjek hurtigst:
+   - **Executive Summary** – hvor peger den hen?
+   - Phase 2 & 5 – er der policy_type mismatches, manglende `structured_policy`, eller 0 coverage rows?
+4. Hvis du vil have hjælp fra ChatGPT:
+   - Upload den relevante `.md` fil her, så kan vi læse rapporten sammen uden at hive alt råt JSON og SQL frem.
+
+---
+
+Hvis du vil, kan jeg også lave et lille mini-afsnit til helt toppen af `replit.md` som “Changelog (short)” hvor du bare skriver:
+
+```md
+### Changelog (short)
+
+- 2025-11-20:
+  - Added deterministic single-policy comparison builder (no AI hallucinations).
+  - Added automatic markdown debug reports for each comparison (`debug-reports/comparison-*.md`).

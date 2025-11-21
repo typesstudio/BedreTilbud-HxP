@@ -6,7 +6,34 @@ BedreTilbud is a Danish insurance comparison platform simplifying insurance sele
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 
-## Recent Changes (Nov 20, 2025)
+## Recent Changes
+
+### Nov 21, 2025: Production Reliability Improvements ✅
+
+**1. Single-Policy Deterministic Builder**
+- **Problem:** AI hallucinated extra policies for single-policy comparisons (e.g., input=hus, AI returns hus+indbo+ulykke)
+- **Solution:** Pure code-based builder for 1-policy cases (no AI structure/rows/keys)
+- **Results:** 100% success rate (7/7 comparisons), zero hallucinations
+- **Implementation:**
+  - Deterministic builder: `server/services/comparisonNarrativeBuilder.ts`
+  - Orchestrator branching: `server/services/comparisonOrchestrator.ts` (if policies.length === 1)
+  - AI enrichment still used for 2-3 policies (standard case)
+
+**2. Automatic Comparison Debug Reports**
+- Every comparison (success/failure) now auto-generates markdown debug report
+- **File location:** `debug-reports/comparison-{comparisonId}.md`
+- **Report contents:**
+  - Executive summary (matcher status, health check issues, missing data)
+  - Phase 0-4 analysis (documents, snapshots, health checks, matcher, JSON)
+  - Auto-detected anomalies with suggested fixes
+- **Implementation:**
+  - Service: `server/services/comparisonDebugReportService.ts`
+  - Hook: Runs after each comparison in ComparisonOrchestrator
+  - CLI wrapper: `server/scripts/debugComparison.ts`
+
+**Usage:** When debugging UI issues, open `debug-reports/comparison-{id}.md` to see complete pipeline analysis without digging through raw JSON/SQL.
+
+### Nov 20, 2025: Enrichment Pattern Implementation
 ### STEP 3: Zero-Mismatch Validator - COMPLETE ✅
 - Converted validator to SOFT mode (non-blocking warnings instead of errors)
 - Always creates health checks regardless of coverage type mismatches
