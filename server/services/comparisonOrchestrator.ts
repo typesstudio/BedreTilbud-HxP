@@ -47,6 +47,50 @@ export class ComparisonOrchestrator {
   }
 
   /**
+   * Extract annual premium from policy snapshot
+   * Returns null if no valid premium found (never defaults to 0)
+   * 
+   * @param policy - Policy object with premium and structuredPolicy fields
+   * @returns number | null - Annual premium or null if not available
+   */
+  private getAnnualPremiumFromSnapshot(policy: any): number | null {
+    if (!policy) return null;
+
+    // Try snapshot.premium first
+    const fromSnapshot = policy.premium;
+    
+    // Try structuredPolicy.annualPremium as fallback
+    let fromStructured: any = null;
+    if (policy.structuredPolicy) {
+      try {
+        const structured = typeof policy.structuredPolicy === 'string'
+          ? JSON.parse(policy.structuredPolicy)
+          : policy.structuredPolicy;
+        
+        if (typeof structured?.annualPremium === 'number') {
+          fromStructured = structured.annualPremium;
+        }
+      } catch (e) {
+        // Ignore JSON parse errors
+      }
+    }
+
+    // Prefer explicit snapshot.premium if present, otherwise structured annualPremium
+    const value = fromSnapshot ?? fromStructured;
+
+    if (value == null) return null;
+
+    // Treat 0 as "unknown" – we never want 0 DKK as a default
+    if (value === 0) return null;
+
+    // Ensure it's a valid number
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return null;
+
+    return numValue;
+  }
+
+  /**
    * Run comparison for a specific user
    * 
    * Groups policies by company pair (currentCompany, offerCompany) and runs
