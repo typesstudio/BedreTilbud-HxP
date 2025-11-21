@@ -562,12 +562,20 @@ export class ComparisonOrchestrator {
         // Generate UNIQUE deterministicId (prevents duplicate policy type collisions) - KEPT SERVER-SIDE
         const deterministicId = `${pair.currentPolicyId}-${pair.offerPolicyId}`;
         
-        const currentAnnualPremium = parseFloat(currentPolicy.premium || '0');
-        const offerAnnualPremium = parseFloat(offerPolicy.premium || '0');
-        const annualSavings = currentAnnualPremium - offerAnnualPremium;
-        const annualSavingsPercent = currentAnnualPremium > 0 
-          ? (annualSavings / currentAnnualPremium) * 100 
-          : 0;
+        // Extract premiums using null-safe helper (never defaults to 0)
+        const currentAnnualPremium = this.getAnnualPremiumFromSnapshot(currentPolicy);
+        const offerAnnualPremium = this.getAnnualPremiumFromSnapshot(offerPolicy);
+        
+        // Compute savings only when both premiums are available
+        let annualSavings: number | null = null;
+        let annualSavingsPercent: number | null = null;
+        
+        if (currentAnnualPremium != null && offerAnnualPremium != null) {
+          annualSavings = currentAnnualPremium - offerAnnualPremium;
+          annualSavingsPercent = currentAnnualPremium > 0 
+            ? (annualSavings / currentAnnualPremium) * 100 
+            : null;
+        }
         
         // DETERMINISTIC COVERAGE MATCHING
         const currentCoverages = currentPolicy.healthCheck?.whatsIncluded || [];
@@ -577,10 +585,11 @@ export class ComparisonOrchestrator {
         console.log(`[ComparisonOrchestrator] Built ${coverageRows.length} deterministic coverage rows for ${pair.policyType} (ID: ${deterministicId})`);
         
         // DETERMINISTIC HIGHLIGHTS GENERATION
+        // Pass 0 as fallback for highlights calculation (highlights don't require exact pricing)
         const highlights = generateHighlights({
           coverageRows,
-          currentAnnualPremium,
-          offerAnnualPremium,
+          currentAnnualPremium: currentAnnualPremium ?? 0,
+          offerAnnualPremium: offerAnnualPremium ?? 0,
           policyType: pair.policyType
         });
         
@@ -597,7 +606,7 @@ export class ComparisonOrchestrator {
             currentAnnualPremium,
             offerAnnualPremium,
             annualSavings,
-            annualSavingsPercent: Math.round(annualSavingsPercent * 10) / 10
+            annualSavingsPercent: annualSavingsPercent != null ? Math.round(annualSavingsPercent * 10) / 10 : null
           },
           coverageComparison: { rows: coverageRows }, // CACHED - NOT sent to AI
           highlights, // CACHED - NOT sent to AI
