@@ -486,7 +486,19 @@ function buildPhase4ComparisonJSON(comparisonJson: any): string {
   const cumulativeSavings = comparisonJson?.cumulativeSavings || {};
 
   const table = policies
-    .map((pc: any) => `| ${pc.policyType} | ${pc.label || 'N/A'} | ${pc.costSummary?.currentAnnualPremium || 0} kr | ${pc.costSummary?.offerAnnualPremium || 0} kr | ${pc.costSummary?.annualSavings || 0} kr | ${pc.coverageComparison?.rows?.length || 0} | ${pc.highlights?.length || 0} | ${pc.missingInformation?.length || 0} | ${pc.recommendations?.length || 0} |`)
+    .map((pc: any) => {
+      const currentPremium = pc.costSummary?.currentAnnualPremium;
+      const offerPremium = pc.costSummary?.offerAnnualPremium;
+      
+      const currentDisplay = currentPremium === null || currentPremium === undefined 
+        ? 'null' 
+        : `${currentPremium} kr`;
+      const offerDisplay = offerPremium === null || offerPremium === undefined 
+        ? 'null' 
+        : `${offerPremium} kr`;
+      
+      return `| ${pc.policyType} | ${pc.label || 'N/A'} | ${currentDisplay} | ${offerDisplay} | ${pc.costSummary?.annualSavings || 0} kr | ${pc.coverageComparison?.rows?.length || 0} | ${pc.highlights?.length || 0} | ${pc.missingInformation?.length || 0} | ${pc.recommendations?.length || 0} |`;
+    })
     .join('\n');
 
   const redFlags = policies
@@ -526,6 +538,11 @@ function buildPhase5Anomalies(params: {
     ...params.offerSnapshots.map(s => s.offer_snapshots)
   ];
 
+  // Create map of snapshots by policy type for pricing checks
+  const offerSnapshotsByType = new Map(
+    params.offerSnapshots.map(s => [s.offer_snapshots.policyType, s.offer_snapshots])
+  );
+
   // Detect policy type mismatches
   const mismatched = allSnapshots.filter(s => {
     const hc = params.healthCheckMap.get(s.id);
@@ -563,6 +580,70 @@ function buildPhase5Anomalies(params: {
    - Result: frontend shows "N/A" or empty tables, even though there is data in health checks.`);
     
     fixes.push(`- Add a guard in healthCheckOrchestrator to abort if extracted coverage names don't match snapshot.policy_type.`);
+  }
+
+  // Detect pricing anomalies
+  const pricingWarnings: string[] = [];
+  const pricingErrors: string[] = [];
+
+  for (const pc of policies) {
+    const offerPremium = pc.costSummary?.offerAnnualPremium;
+    const policyType = pc.policyType;
+    
+    // Get the corresponding offer snapshot
+    const offerSnapshot = offerSnapshotsByType.get(policyType);
+    
+    // Check for missing offer premium
+    if (offerPremium === null || offerPremium === undefined) {
+      pricingWarnings.push(`- ⚠️ Missing offerAnnualPremium for ${policyType} – price could not be extracted from PDF`);
+    }
+    
+    // Check for zero premium when no extraction happened
+    if (offerPremium === 0 && offerSnapshot) {
+      let hasExtractedPremium = false;
+      
+      // Check structured_policy for extracted premium
+      if (offerSnapshot.structuredPolicy) {
+        try {
+          const structured = typeof offerSnapshot.structuredPolicy === 'string'
+            ? JSON.parse(offerSnapshot.structuredPolicy)
+            : offerSnapshot.structuredPolicy;
+          
+          const extractedPremium = structured?.annualPremium;
+          if (extractedPremium !== null && extractedPremium !== undefined) {
+            hasExtractedPremium = true;
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+      
+      // Also check snapshot.premium field
+      if (offerSnapshot.premium !== null && offerSnapshot.premium !== undefined) {
+        hasExtractedPremium = true;
+      }
+      
+      // Flag as error if no premium was extracted
+      if (!hasExtractedPremium) {
+        pricingErrors.push(`- ❌ offerAnnualPremium is 0 for ${policyType} but no premium was extracted (this should never happen)`);
+      }
+    }
+  }
+
+  if (pricingWarnings.length > 0 || pricingErrors.length > 0) {
+    const pricingAnomalies = [
+      ...(pricingWarnings.length > 0 ? [`**Pricing Warnings:**\n${pricingWarnings.join('\n')}`] : []),
+      ...(pricingErrors.length > 0 ? [`**Pricing Errors:**\n${pricingErrors.join('\n')}`] : [])
+    ].join('\n\n');
+    
+    anomalies.push(`4. **Pricing Extraction Issues**\n\n${pricingAnomalies}`);
+    
+    if (pricingWarnings.length > 0) {
+      fixes.push(`- Check Phase 1 extraction prompt and OCR quality for policies with missing premiums.`);
+    }
+    if (pricingErrors.length > 0) {
+      fixes.push(`- Investigate zero premium calculation – this indicates a code bug in cost summary builder.`);
+    }
   }
 
   return `## Phase 5 – Auto-Detected Anomalies & Suggested Fixes

@@ -1,0 +1,74 @@
+Now add pricing visibility to the automatic comparison debug reports.
+
+Goal:
+Whenever a comparison debug report is generated, I want to SEE clearly:
+
+- For each policy (hus/indbo/ulykke): do we have current and offer annual premiums?
+- Where are premiums missing (null)?
+- If any policy ended up with `offerAnnualPremium === 0`, that should be flagged as an anomaly.
+
+This makes it easy to see if the improved extraction prompt for `annualPremium` is working.
+
+### Files to edit
+
+- `server/services/comparisonDebugReport.ts` (or whatever file is responsible for generating
+  the markdown debug reports under `debug-reports/comparison-{id}.md`)
+
+You already add phases like:
+
+- Phase 1 – Snapshots
+- Phase 2 – Health Checks
+- Phase 3 – Matcher
+- Phase 4 – Comparison Result
+- Phase 5 – Auto-Detected Anomalies
+
+### TASKS
+
+1) Extend Phase 4 section with pricing columns
+
+In the Phase 4 part of the report (where per-policy summary is shown), add two extra columns:
+
+- `currentAnnualPremium`
+- `offerAnnualPremium`
+
+For each policyComparison, render a markdown table row like:
+
+| policyType | label | currentAnnual | offerAnnual | annualSavings | coverage rows | ... |
+
+Where:
+
+- `currentAnnual` = value of `policy.costSummary.currentAnnualPremium` (or "null" / "ukendt" if null)
+- `offerAnnual`   = value of `policy.costSummary.offerAnnualPremium` (or "null" / "ukendt" if null)
+
+2) Add pricing anomalies to Phase 5
+
+In the Phase 5 "Auto-Detected Anomalies" section, add logic:
+
+For each policyComparison:
+
+- If `offerAnnualPremium === null`:
+  - Add a warning line, e.g.
+    `- ⚠️ Missing offerAnnualPremium for ${policyType} – price could not be extracted from PDF`
+- If `offerAnnualPremium === 0` AND both:
+  - `snapshot.premium` is null/undefined AND
+  - `structuredPolicy.annualPremium` is null/undefined
+  THEN:
+  - Add an **error** line, e.g.
+    `- ❌ offerAnnualPremium is 0 but no premium was extracted (this should never happen)`
+
+(If the code that builds the debug report does not currently have access to the raw snapshots
+for each policy, you can just check what is available in the comparison result; but prefer to
+use structured_policy if it is already being loaded.)
+
+3) Keep formatting consistent
+
+- Stay with the existing markdown structure used in other phases of the report.
+- Use bullet lists for anomalies, and small tables for per-policy overviews.
+
+### ACCEPTANCE CRITERIA
+
+- When I run a comparison and open a fresh debug report (e.g. a new Alka/IF comparison),
+  Phase 4 contains a table showing `currentAnnualPremium` and `offerAnnualPremium` per policy.
+- If at least one policy has `offerAnnualPremium === null`, Phase 5 lists a `⚠️` warning for it.
+- If any policy has `offerAnnualPremium === 0` AND no extracted premium behind it, Phase 5 lists a `❌` anomaly.
+- Existing sections (phases 0–3 and other Phase 4 columns) are still present and readable.

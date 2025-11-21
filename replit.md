@@ -33,19 +33,23 @@ Preferred communication style: Simple, everyday language.
   - Orchestrator branching: `server/services/comparisonOrchestrator.ts` (if policies.length === 1)
   - AI enrichment still used for 2-3 policies (standard case)
 
-**2. Automatic Comparison Debug Reports**
+**2. Automatic Comparison Debug Reports (Enhanced with Pricing Visibility)**
 - Every comparison (success/failure) now auto-generates markdown debug report
 - **File location:** `debug-reports/comparison-{comparisonId}.md`
 - **Report contents:**
   - Executive summary (matcher status, health check issues, missing data)
   - Phase 0-4 analysis (documents, snapshots, health checks, matcher, JSON)
+  - **Phase 4:** Now shows `currentAnnual` and `offerAnnual` columns (displays "null" for missing premiums)
+  - **Phase 5:** Auto-detects pricing anomalies:
+    - ⚠️ Warning if `offerAnnualPremium` is missing (not extracted from PDF)
+    - ❌ Error if `offerAnnualPremium` is 0 but no premium was extracted (code bug)
   - Auto-detected anomalies with suggested fixes
 - **Implementation:**
   - Service: `server/services/comparisonDebugReportService.ts`
   - Hook: Runs after each comparison in ComparisonOrchestrator
   - CLI wrapper: `server/scripts/debugComparison.ts`
 
-**Usage:** When debugging UI issues, open `debug-reports/comparison-{id}.md` to see complete pipeline analysis without digging through raw JSON/SQL.
+**Usage:** When debugging UI issues or testing extraction prompt improvements, open `debug-reports/comparison-{id}.md` to see complete pipeline analysis including pricing extraction success/failure without digging through raw JSON/SQL.
 
 ### Nov 20, 2025: Enrichment Pattern Implementation
 ### STEP 3: Zero-Mismatch Validator - COMPLETE ✅
