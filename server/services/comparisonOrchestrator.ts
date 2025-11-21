@@ -737,17 +737,41 @@ export class ComparisonOrchestrator {
       });
 
       // Build overall comparison (deterministic calculations + AI explanation)
-      const totalCurrentAnnualPremium = deterministicPolicyData.reduce((sum, p) => sum + p.costSummary.currentAnnualPremium, 0);
-      const totalOfferAnnualPremium = deterministicPolicyData.reduce((sum, p) => sum + p.costSummary.offerAnnualPremium, 0);
-      const annualSavings = totalCurrentAnnualPremium - totalOfferAnnualPremium;
-      const annualSavingsPercent = totalCurrentAnnualPremium > 0 ? (annualSavings / totalCurrentAnnualPremium) * 100 : 0;
+      // Filter to only include policies where BOTH premiums are available
+      const pricedPolicies = deterministicPolicyData.filter(p =>
+        p.costSummary.currentAnnualPremium != null &&
+        p.costSummary.offerAnnualPremium != null
+      );
+
+      let totalCurrentAnnualPremium: number | null = null;
+      let totalOfferAnnualPremium: number | null = null;
+      let annualSavings: number | null = null;
+      let annualSavingsPercent: number | null = null;
+
+      if (pricedPolicies.length > 0) {
+        const sumCurrent = pricedPolicies.reduce(
+          (sum, p) => sum + (p.costSummary.currentAnnualPremium as number),
+          0
+        );
+        const sumOffer = pricedPolicies.reduce(
+          (sum, p) => sum + (p.costSummary.offerAnnualPremium as number),
+          0
+        );
+
+        totalCurrentAnnualPremium = sumCurrent;
+        totalOfferAnnualPremium = sumOffer;
+        annualSavings = sumCurrent - sumOffer;
+        annualSavingsPercent = sumCurrent > 0 ? (annualSavings / sumCurrent) * 100 : null;
+      }
+
+      console.log(`[ComparisonOrchestrator] Overall pricing coverage: ${pricedPolicies.length}/${deterministicPolicyData.length} policies have both current and offer premiums`);
 
       const comparisonResult = {
         overall: {
           totalCurrentAnnualPremium,
           totalOfferAnnualPremium,
           annualSavings,
-          annualSavingsPercent: Math.round(annualSavingsPercent * 10) / 10,
+          annualSavingsPercent: annualSavingsPercent != null ? Math.round(annualSavingsPercent * 10) / 10 : null,
           explanation: aiNarratives.explanation, // AI NARRATIVE
           perPolicySummary: deterministicPolicyData.map(p => ({
             policyType: p.policyType,
@@ -760,7 +784,7 @@ export class ComparisonOrchestrator {
           globalHighlights: [], // Could aggregate from policy highlights if needed
         },
         policyComparisons, // MERGED: Deterministic + AI narratives
-        cumulativeSavings: {
+        cumulativeSavings: annualSavings != null ? {
           totalOver10Years: annualSavings * 10,
           monthlyRange: {
             min: Math.floor(annualSavings / 12),
@@ -772,7 +796,7 @@ export class ComparisonOrchestrator {
             month: `Måned ${i + 1}`,
             savings: annualSavings * (i + 1) / 12,
           })),
-        },
+        } : null,
         meta: {
           currentCompany,
           offerCompany,

@@ -17,10 +17,10 @@ export interface SinglePolicyNarrativeInput {
   currentCompany: string;
   offerCompany: string;
   costSummary: {
-    currentAnnualPremium: number;
-    offerAnnualPremium: number;
-    annualSavings: number;
-    annualSavingsPercent: number;
+    currentAnnualPremium: number | null;
+    offerAnnualPremium: number | null;
+    annualSavings: number | null;
+    annualSavingsPercent: number | null;
   };
   healthCheckData: {
     current: any;
@@ -89,8 +89,8 @@ function buildExplanation(params: {
   currentCompany: string;
   offerCompany: string;
   policyType: string;
-  annualSavings: number;
-  annualSavingsPercent: number;
+  annualSavings: number | null;
+  annualSavingsPercent: number | null;
 }): string {
   const {
     currentCompany,
@@ -100,8 +100,14 @@ function buildExplanation(params: {
     annualSavingsPercent,
   } = params;
 
-  const roundedPercent = Math.abs(Math.round(annualSavingsPercent));
   const policyTypeLabel = getPolicyTypeLabel(policyType);
+
+  // Handle missing pricing data
+  if (annualSavings == null || annualSavingsPercent == null) {
+    return `Vi kan sammenligne dækningerne mellem ${offerCompany} og ${currentCompany} for din ${policyTypeLabel}-forsikring, men prisoplysninger kunne ikke udtrækkes fra tilbuddet. Kontakt venligst ${offerCompany} for at få bekræftet prisen.`;
+  }
+
+  const roundedPercent = Math.abs(Math.round(annualSavingsPercent));
 
   if (annualSavings > 500) {
     // Significant savings
