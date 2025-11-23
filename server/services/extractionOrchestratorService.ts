@@ -184,6 +184,10 @@ export class ExtractionOrchestratorService {
           segmentationStage
         );
         
+        // NEW: Create PolicySnapshots immediately after segmentation
+        // This creates canonical snapshot records for both current and offer policies
+        await this.createPolicySnapshotsFromSegments(document, this.extractionStagesData);
+        
         // Stage 3b: Segment-based Extraction
         const extractionStage = this.createStage("segment_extraction");
         stages.push(extractionStage);
@@ -880,6 +884,38 @@ export class ExtractionOrchestratorService {
       stage.error = error instanceof Error ? error.message : String(error);
       console.error(`[Orchestrator] Phase 1 PolicyExtractor failed:`, error);
       // Don't throw - allow pipeline to complete without Phase 1 (falls back to legacy)
+    }
+  }
+
+  /**
+   * NEW REFACTORED ARCHITECTURE (Dec 2025):
+   * Create PolicySnapshots from segmentation data.
+   * 
+   * This creates the CANONICAL representation of all policies (current + offers).
+   * PolicySnapshots replace the old OfferSnapshots → HealthCheck → Comparison flow
+   * with a simpler, more robust architecture.
+   */
+  private async createPolicySnapshotsFromSegments(
+    document: any,
+    extractionStages: ExtractionStagesData
+  ): Promise<void> {
+    try {
+      console.log(`[Orchestrator] Creating PolicySnapshots from segmentation data...`);
+      
+      const { policySnapshotService } = await import("./policySnapshots/PolicySnapshotService");
+      
+      const snapshots = await policySnapshotService.createSnapshotsFromDocument(
+        document,
+        extractionStages
+      );
+      
+      console.log(
+        `[Orchestrator] ✓ Created ${snapshots.length} PolicySnapshots ` +
+        `(kind=${document.documentType}, doc=${document.id})`
+      );
+    } catch (error) {
+      console.error(`[Orchestrator] Failed to create PolicySnapshots:`, error);
+      // Don't throw - this is a new feature, shouldn't break existing pipeline
     }
   }
 
