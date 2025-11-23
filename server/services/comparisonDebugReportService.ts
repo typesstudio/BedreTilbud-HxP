@@ -787,6 +787,145 @@ function buildPhase5Anomalies(params: {
     }
   }
 
+  // ========================================
+  // PRICING CONSISTENCY CHECKS
+  // ========================================
+  
+  const pricingConsistencyLines: string[] = [];
+  const pricingMismatches: string[] = [];
+  let sumAgentOfferAnnual = 0;
+  let sumCostSummaryOfferAnnual = 0;
+  let hasAnyAgentPricing = false;
+
+  // Create maps for easier lookup
+  const currentSnapshotsByType = new Map(
+    params.currentSnapshots.map(s => [s.offer_snapshots.policyType, s.offer_snapshots])
+  );
+
+  for (const pc of policies) {
+    const policyType = pc.policyType;
+    const csCurrentAnnual = pc.costSummary?.currentAnnualPremium;
+    const csOfferAnnual = pc.costSummary?.offerAnnualPremium;
+
+    // Get snapshots for this policy type
+    const currentSnapshot = currentSnapshotsByType.get(policyType);
+    const offerSnapshot = offerSnapshotsByType.get(policyType);
+
+    // Extract PricingAgent data from snapshots
+    let agentCurrentAnnual: number | null = null;
+    let agentOfferAnnual: number | null = null;
+
+    if (currentSnapshot?.structuredPolicy) {
+      try {
+        const structured = typeof currentSnapshot.structuredPolicy === 'string'
+          ? JSON.parse(currentSnapshot.structuredPolicy)
+          : currentSnapshot.structuredPolicy;
+        const pricing = structured?.pricing;
+        if (pricing?.pricingStatus === 'ok' && pricing.annualPremium !== null && pricing.annualPremium !== undefined) {
+          agentCurrentAnnual = pricing.annualPremium;
+        }
+      } catch (e) {}
+    }
+
+    if (offerSnapshot?.structuredPolicy) {
+      try {
+        const structured = typeof offerSnapshot.structuredPolicy === 'string'
+          ? JSON.parse(offerSnapshot.structuredPolicy)
+          : offerSnapshot.structuredPolicy;
+        const pricing = structured?.pricing;
+        if (pricing?.pricingStatus === 'ok' && pricing.annualPremium !== null && pricing.annualPremium !== undefined) {
+          agentOfferAnnual = pricing.annualPremium;
+          hasAnyAgentPricing = true;
+        }
+      } catch (e) {}
+    }
+
+    // Per-policy consistency check (offer side)
+    if (agentOfferAnnual !== null) {
+      sumAgentOfferAnnual += agentOfferAnnual;
+
+      if (csOfferAnnual !== null && csOfferAnnual !== undefined) {
+        sumCostSummaryOfferAnnual += csOfferAnnual;
+
+        const diff = Math.abs(agentOfferAnnual - csOfferAnnual);
+        if (diff > 1) {
+          pricingMismatches.push(`- ❌ **Offer pricing mismatch for ${policyType.toUpperCase()}**:
+  - PricingAgent annualPremium: ${agentOfferAnnual.toFixed(2)} DKK
+  - costSummary.offerAnnualPremium: ${csOfferAnnual.toFixed(2)} DKK
+  - Difference: ${diff.toFixed(2)} DKK`);
+        } else {
+          pricingConsistencyLines.push(`- ${policyType.toUpperCase()}: PricingAgent=${agentOfferAnnual.toFixed(2)}  costSummary=${csOfferAnnual.toFixed(2)} ✅`);
+        }
+      } else if (csOfferAnnual === 0) {
+        pricingMismatches.push(`- ❌ **Offer pricing mismatch for ${policyType.toUpperCase()}**:
+  - PricingAgent annualPremium: ${agentOfferAnnual.toFixed(2)} DKK
+  - costSummary.offerAnnualPremium: 0 DKK (ZERO!)`);
+      } else {
+        pricingMismatches.push(`- ❌ **Offer pricing mismatch for ${policyType.toUpperCase()}**:
+  - PricingAgent annualPremium: ${agentOfferAnnual.toFixed(2)} DKK
+  - costSummary.offerAnnualPremium: null (MISSING!)`);
+      }
+    }
+
+    // Per-policy consistency check (current side) - if available
+    if (agentCurrentAnnual !== null) {
+      if (csCurrentAnnual !== null && csCurrentAnnual !== undefined) {
+        const diff = Math.abs(agentCurrentAnnual - csCurrentAnnual);
+        if (diff > 1) {
+          pricingMismatches.push(`- ⚠️  **Current pricing mismatch for ${policyType.toUpperCase()}**:
+  - PricingAgent annualPremium: ${agentCurrentAnnual.toFixed(2)} DKK
+  - costSummary.currentAnnualPremium: ${csCurrentAnnual.toFixed(2)} DKK
+  - Difference: ${diff.toFixed(2)} DKK`);
+        }
+      }
+    }
+  }
+
+  // Global consistency check
+  const overall = params.comparisonJson?.overall || {};
+  const comparisonOverallOffer = overall.totalOfferAnnualPremium;
+
+  if (hasAnyAgentPricing && comparisonOverallOffer !== null && comparisonOverallOffer !== undefined) {
+    const globalDiff = Math.abs(sumAgentOfferAnnual - comparisonOverallOffer);
+    if (globalDiff > 1) {
+      pricingMismatches.push(`\n- ❌ **Global pricing mismatch**:
+  - Sum of PricingAgent offer annual premiums: ${sumAgentOfferAnnual.toFixed(2)} DKK
+  - comparison_result.overall.totalOfferAnnualPremium: ${comparisonOverallOffer.toFixed(2)} DKK
+  - Difference: ${globalDiff.toFixed(2)} DKK`);
+    } else {
+      pricingConsistencyLines.push(`\n✅ **Global totals consistent**: PricingAgent sum=${sumAgentOfferAnnual.toFixed(2)} DKK, comparison_result.overall=${comparisonOverallOffer.toFixed(2)} DKK`);
+    }
+  }
+
+  // Build pricing consistency section
+  if (hasAnyAgentPricing) {
+    let pricingConsistencySection = `### Pricing Consistency Check\n\n`;
+
+    if (pricingMismatches.length > 0) {
+      pricingConsistencySection += pricingMismatches.join('\n\n');
+      pricingConsistencySection += `\n\n**Suggested fix:**\n- Ensure costSummary uses structured_policy.pricing.annualPremium for matched snapshots.\n- Re-run comparison after fixing costSummary builder.`;
+      
+      anomalies.push(`5. **Pricing Consistency Issues**\n\n${pricingConsistencySection.substring(34)}`); // Remove header
+      fixes.push(`- Update comparisonOrchestrator.ts to use structured_policy.pricing.annualPremium instead of legacy snapshot.premium field.`);
+    } else {
+      pricingConsistencySection += pricingConsistencyLines.join('\n');
+      pricingConsistencySection += `\n\n✅ **No pricing inconsistencies detected.**`;
+    }
+
+    // Insert pricing consistency section at the beginning of anomalies section
+    return `## Phase 5 – Auto-Detected Anomalies & Suggested Fixes
+
+${pricingConsistencySection}
+
+### Other Anomalies
+
+${anomalies.length > 0 ? anomalies.join('\n\n') : 'No other anomalies detected! ✅'}
+
+### Suggested Next Steps (for Replit dev)
+
+${fixes.length > 0 ? fixes.join('\n') : '- No action needed. System is healthy!'}`;
+  }
+
   return `## Phase 5 – Auto-Detected Anomalies & Suggested Fixes
 
 ### Anomalies
