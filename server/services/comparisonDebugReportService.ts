@@ -477,10 +477,10 @@ function buildPhase1BPricingDetails(params: {
 
       let section = `### ${policyLabel}\n`;
       section += `Snapshot: ${shortId}\n\n`;
-      section += `- **pricingStatus**: ${pricing.pricingStatus}\n`;
+      section += `- **pricingStatus**: ${pricing.pricingStatus || 'N/A'}\n`;
       section += `- **billingFrequency**: ${pricing.billingFrequency || 'N/A'}\n`;
       section += `- **annualPremium**: ${pricing.annualPremium !== null && pricing.annualPremium !== undefined ? `${pricing.annualPremium} DKK` : 'null'}\n`;
-      section += `- **confidence**: ${pricing.pricingConfidence}%\n`;
+      section += `- **pricingConfidence**: ${pricing.pricingConfidence !== null && pricing.pricingConfidence !== undefined ? `${pricing.pricingConfidence}%` : 'N/A'}\n`;
       
       if (pricing.hasIntroPrice) {
         section += `- **hasIntroPrice**: true\n`;
