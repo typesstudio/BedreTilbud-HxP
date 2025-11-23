@@ -1,0 +1,301 @@
+Nice – nu er vi dér, hvor vi gerne ville være 🙌
+Vi har nu:
+
+* `policy_snapshots` med **LB + Privatsikring**, hver med `fritidshus`, `indbo`, `ulykke`.
+* Alle 9 snapshots har **pricing** (`status = "exact"`, `annualPremium` osv.).
+
+Det betyder: vi skal **ikke** rode mere med OCR/health-check-lag nu. Vi kan bygge comparison direkte ovenpå `policy_snapshots`.
+
+Næste skridt = **Phase C: PolicyComparisonService + API**, som bare parrer `current` vs `offer` per policetype og regner besparelse.
+
+Her er en Replit-prompt, du kan copy/paste direkte til agenten 👇
+
+---
+
+### Replit-prompt: Phase C – Build PolicyComparisonService + API
+
+````text
+We have now completed Phase A + B for the PolicySnapshots architecture:
+
+- policy_snapshots table is populated (9 snapshots total)
+- All snapshots are enriched with pricing:
+  - Lærerstandens Brandforsikring: fritidshus, indbo, ulykke
+  - Privatsikring: fritidshus, indbo, ulykke
+- pricing JSON has:
+  - status: "exact" | "components_only" | "missing"
+  - annualPremium: number | null
+  - currency: "DKK"
+  - confidence: number | null
+  - components: [{ label, amount }]
+
+Now we want Phase C:
+
+────────────────────────
+GOAL – SIMPLE COMPARISON LAYER
+────────────────────────
+
+We want a **very simple comparison service** that:
+
+1. Works directly on `policy_snapshots` (no more health_check layers, no company_comparisons magic).
+2. For a given user, groups snapshots by:
+   - policy_type (fritidshus, indbo, ulykke, etc.)
+   - coverage_address (where relevant)
+3. For each (policy_type, coverage_address) pair:
+   - Identify the "current" snapshot (kind = 'current') if it exists.
+   - Identify one or more "offer" snapshots (kind = 'offer').
+4. For each offer, compute:
+   - deltaAnnual = offer.annualPremium - current.annualPremium
+   - savingsAnnual = current.annualPremium - offer.annualPremium
+   - cheaperThanCurrent = true/false/null (null if we can’t compare).
+
+We ONLY care about **pricing** in this phase. Coverage comparisons come later.
+
+────────────────────────
+STEP 1 – Define Types
+────────────────────────
+
+Create a new file for types, or reuse an existing types file if appropriate. Suggested types (adjust to your code style):
+
+```ts
+// server/types/policyComparison.ts
+
+export type PricingComponent = {
+  label: string;
+  amount: number;
+};
+
+export type SnapshotPricing = {
+  status: "exact" | "components_only" | "missing";
+  annualPremium: number | null;
+  currency: "DKK";
+  confidence: number | null;
+  components: PricingComponent[];
+};
+
+export type PolicySnapshotSummary = {
+  snapshotId: string;
+  documentId: string;
+  kind: "current" | "offer";
+  companyName: string;
+  policyType: string;          // "fritidshus" | "indbo" | "ulykke" | ...
+  coverageAddress: string | null;
+  pricing: SnapshotPricing | null;
+};
+
+export type PolicyOfferWithDelta = PolicySnapshotSummary & {
+  deltaAnnual: number | null;    // offer - current
+  savingsAnnual: number | null;  // current - offer
+  cheaperThanCurrent: boolean | null;
+};
+
+export type PolicyComparisonRow = {
+  policyType: string;
+  coverageAddress: string | null;
+  current: PolicySnapshotSummary | null;
+  offers: PolicyOfferWithDelta[];
+};
+````
+
+────────────────────────
+STEP 2 – Implement PolicyComparisonService
+────────────────────────
+
+Create a new service:
+
+* `server/services/policySnapshots/PolicyComparisonService.ts`
+
+Responsibilities:
+
+1. Fetch all policy_snapshots for a given user.
+
+   * Join `policy_snapshots` with `documents` on `document_id`.
+   * Filter on `documents.user_id = <userId>`.
+2. Group snapshots by `(policy_type, coverage_address)`.
+3. Within each group:
+
+   * Find `current` snapshot(s): `kind = 'current'`.
+
+     * For now assume **max 1** per group. If there are more, pick the latest created_at or log a warning.
+   * Find `offer` snapshots: `kind = 'offer'`.
+4. Build `PolicyComparisonRow` objects.
+5. Compute deltas based on pricing.
+
+Implementation details:
+
+* Use the existing drizzle schema for `policy_snapshots` and `documents`.
+* Map DB JSON → `SnapshotPricing` type safely (handle nulls).
+* Protect against missing pricing:
+
+  * If either `current.pricing.annualPremium` or `offer.pricing.annualPremium` is null:
+
+    * deltaAnnual = null
+    * savingsAnnual = null
+    * cheaperThanCurrent = null
+
+Pseudo-code for the main method:
+
+```ts
+class PolicyComparisonService {
+  async getComparisonsForUser(userId: string): Promise<PolicyComparisonRow[]> {
+    // 1) Load snapshots + documents
+    const rows = await db
+      .select({
+        snapshotId: policySnapshots.id,
+        documentId: policySnapshots.documentId,
+        kind: policySnapshots.kind,
+        companyName: policySnapshots.companyName,
+        policyType: policySnapshots.policyType,
+        coverageAddress: policySnapshots.coverageAddress,
+        pricing: policySnapshots.pricing,
+      })
+      .from(policySnapshots)
+      .innerJoin(documents, eq(policySnapshots.documentId, documents.id))
+      .where(eq(documents.userId, userId));
+
+    // 2) Group by (policyType, coverageAddress)
+    const groups = new Map<string, PolicySnapshotSummary[]>();
+
+    for (const row of rows) {
+      const key = `${row.policyType}::${row.coverageAddress ?? ""}`;
+      const summary: PolicySnapshotSummary = {
+        snapshotId: row.snapshotId,
+        documentId: row.documentId,
+        kind: row.kind as "current" | "offer",
+        companyName: row.companyName,
+        policyType: row.policyType,
+        coverageAddress: row.coverageAddress,
+        pricing: row.pricing as SnapshotPricing | null,
+      };
+      const arr = groups.get(key) ?? [];
+      arr.push(summary);
+      groups.set(key, arr);
+    }
+
+    // 3) Build comparison rows
+    const result: PolicyComparisonRow[] = [];
+
+    for (const [key, summaries] of groups.entries()) {
+      if (summaries.length === 0) continue;
+
+      const [policyType, addressPart] = key.split("::");
+      const coverageAddress = addressPart || null;
+
+      const current = summaries.find(s => s.kind === "current") ?? null;
+      const offers = summaries.filter(s => s.kind === "offer");
+
+      const offerWithDeltas: PolicyOfferWithDelta[] = offers.map(offer => {
+        const currentPrem = current?.pricing?.annualPremium ?? null;
+        const offerPrem = offer.pricing?.annualPremium ?? null;
+
+        let deltaAnnual: number | null = null;
+        let savingsAnnual: number | null = null;
+        let cheaperThanCurrent: boolean | null = null;
+
+        if (currentPrem != null && offerPrem != null) {
+          deltaAnnual = offerPrem - currentPrem;
+          savingsAnnual = currentPrem - offerPrem;
+          cheaperThanCurrent = offerPrem < currentPrem;
+        }
+
+        return {
+          ...offer,
+          deltaAnnual,
+          savingsAnnual,
+          cheaperThanCurrent,
+        };
+      });
+
+      result.push({
+        policyType,
+        coverageAddress,
+        current,
+        offers: offerWithDeltas,
+      });
+    }
+
+    return result;
+  }
+}
+```
+
+Please implement this for real using the actual schema imports and types.
+
+────────────────────────
+STEP 3 – API Endpoint
+────────────────────────
+
+Create a new API route that exposes these comparisons to the frontend. For example:
+
+* File: `server/routes/policies/comparisons.ts` (or follow your existing routing conventions).
+
+Requirements:
+
+* Method: `GET /api/policies/comparisons`
+* Auth: use the existing auth middleware to get the current `userId`.
+* Call: `PolicyComparisonService.getComparisonsForUser(userId)`
+* Return JSON in the shape:
+
+```json
+{
+  "comparisons": [ ...PolicyComparisonRow[] ]
+}
+```
+
+Error handling:
+
+* If user is not authenticated → 401.
+* If something fails → 500 with a simple error message and log the details server-side.
+
+────────────────────────
+STEP 4 – Minimal Frontend Wiring (Optional but nice)
+
+If possible, add a very minimal frontend hook for now:
+
+* Create a simple React hook or data fetcher:
+
+  * `usePolicyComparisons()` that hits `/api/policies/comparisons`.
+* For now, just log the result to the console or render a simple debug table in whatever page currently renders comparisons/health check.
+
+The goal is not final UI, just to prove the new API works end-to-end.
+
+────────────────────────
+STEP 5 – Verify with Real Data
+
+After implementation, please:
+
+1. Call `GET /api/policies/comparisons` for my user (the same one that has:
+
+   * Privatsikring: fritidshus, indbo, ulykke
+   * Lærerstandens Brandforsikring: fritidshus, indbo, ulykke
+
+2. Paste (or log) one example `PolicyComparisonRow` for:
+
+   * policyType = "fritidshus"
+   * policyType = "indbo"
+   * policyType = "ulykke"
+
+I expect for each:
+
+* `current` to be the current insurer (e.g. Privatsikring or LB, depending on how kind is set).
+* `offers` to contain the other company as an offer with:
+
+  * annualPremium
+  * savingsAnnual filled in
+  * cheaperThanCurrent = true/false
+
+Stop after everything compiles, the API is wired, and you have shown example JSON from `/api/policies/comparisons`.
+
+```
+
+---
+
+Når de har lavet det, har du:
+
+- Ét simpelt lag (PolicySnapshots)  
+- Ét simpelt comparison-lag (PolicyComparisonService + API)  
+- Ingen flere mystiske mellemtabeller for at lave “Tryg vs nuværende”.
+
+Når det spiller, kan vi bagefter lave **Phase D**:  
+coverage-comparison (hvad er inkluderet, hvor er du bedre/dårligere dækket) ovenpå samme struktur.
+::contentReference[oaicite:0]{index=0}
+```

@@ -7,6 +7,7 @@ import { insuranceCheckService } from "./services/insuranceCheckService";
 import { emailService } from "./services/emailService";
 import { gmailOAuthService } from "./services/gmailOAuthService";
 import { PolicyMatchingService } from "./services/policyMatchingService";
+import { policyComparisonService } from "./services/policySnapshots/PolicyComparisonService";
 import { requireAuth, requireOwnership } from "./middleware/auth";
 import { validateFileUpload } from "./middleware/uploadValidation";
 import { uploadLimiter, emailLimiter, aiLimiter } from "./middleware/rateLimiting";
@@ -1006,6 +1007,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       logger.error('[Policies] Failed to fetch user policies', error, { userId: req.params.userId });
       res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Policy Comparisons (new simplified architecture based on policy_snapshots)
+  app.get("/api/policies/comparisons", requireAuth, async (req, res) => {
+    try {
+      // Get authenticated user ID
+      const userId = req.headers['x-user-id'] as string;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      logger.info('[PolicyComparisons] Fetching comparisons', { userId });
+
+      // Get comparisons from PolicyComparisonService
+      const comparisons = await policyComparisonService.getComparisonsForUser(userId);
+
+      logger.info('[PolicyComparisons] Comparisons retrieved', { 
+        userId, 
+        comparisonCount: comparisons.length,
+        policyTypes: comparisons.map(c => c.policyType)
+      });
+
+      res.json({ comparisons });
+    } catch (error: any) {
+      logger.error('[PolicyComparisons] Failed to fetch comparisons', error, { 
+        userId: req.headers['x-user-id'] 
+      });
+      res.status(500).json({ message: "Failed to fetch policy comparisons" });
     }
   });
 
