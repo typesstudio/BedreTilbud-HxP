@@ -1,0 +1,235 @@
+REPLIT TASK – Make Comparison Debug Report Inspect AI Pricing Structure
+
+You are working on the BedreTilbud insurance comparison app.
+
+We recently added an AI-based PricingAgent that writes a detailed pricing object into offer_snapshots.structured_policy (and eventually current snapshots as well).
+
+The current debug report (in server/scripts/debugComparison.ts) only shows a flattened view:
+
+pricing_status
+
+annualPremium
+
+confidence
+
+This is not enough to see where things go wrong when pricing is missing or inconsistent.
+
+GOAL
+
+Extend the comparison debug report so that it:
+
+Reads the full structured_policy.pricing object for each relevant snapshot
+
+Shows the important parts of the PricingAgent output (candidates, selected amount, billing period, etc.)
+
+Performs consistency checks between:
+
+structured_policy.pricing
+
+company_comparisons.comparison_result.costSummary
+
+comparison_result.overall.total*
+
+Clearly flags pricing anomalies in Phase 5 – Auto-Detected Anomalies & Suggested Fixes
+
+Use the existing Alm. Brand vs Privatsikring debug report (comparison ID: 3ddc78f1-5f66-4264-891e-b24eb0ca3ebb) as the main golden test.
+
+1. Inspect existing pricing schema
+
+Search for pricing fields:
+
+rg "pricing_status" -n
+rg "annualPremium" -n
+rg "\"pricing\"" -n server
+
+
+Identify the actual structured_policy.pricing schema that the PricingAgent produces (likely in a service such as pricingAgentService.ts or similar).
+It should include fields like:
+
+pricingStatus
+
+annualPremium
+
+monthlyPremium
+
+billingPeriod
+
+currency
+
+confidence
+
+optionally: candidates, selectedCandidateIndex, notes
+
+Do not change the schema now – just read and use it.
+
+2. Extend Phase 1 in the debug report (Snapshot table + PricingAgent details)
+
+File: server/scripts/debugComparison.ts
+
+In Phase 1 – Snapshots, we already log:
+
+snapshot_id
+
+doc_type
+
+company
+
+policy_type
+
+has_structured
+
+mainCoverages
+
+addCoverages
+
+pricing_status
+
+annualPremium
+
+confidence
+
+Add a Phase 1B – PricingAgent Details section below the snapshot table.
+
+For each snapshot that:
+
+belongs to the current comparison (current or offer), and
+
+has structured_policy.pricing not null,
+
+print a compact block like:
+
+### Phase 1B – PricingAgent Details
+
+Policy: Hus (offer, Alm. Brand)
+Snapshot: d13c5a99
+
+- pricing.pricingStatus: ok
+- currency: DKK
+- billingPeriod: annual
+- annualPremium: 5049.13
+- monthlyPremium: 421
+- confidence: 0.90
+- selectedCandidateIndex: 0
+- selectedCandidate:
+  - rawText: "4.049,13 kr. årligt"
+  - billingPeriod: annual
+  - confidence: 0.90
+
+Other candidates (truncated):
+- #1: "337,43 kr. pr. måned" (monthly, confidence 0.70)
+
+
+Implementation details:
+
+Read the pricing object from snapshot.structured_policy.pricing.
+
+For candidates, print only the first 1–2 items, and truncate rawText / sourceSnippet to avoid huge output.
+
+If no pricing object is present, skip this snapshot.
+
+3. Implement Pricing Consistency Checks
+
+Still in debugComparison.ts, enhance Phase 5 – Auto-Detected Anomalies & Suggested Fixes with a new subsection:
+
+a) Per-policy consistency
+
+For the current comparison:
+
+Iterate over comparisonResult.policyComparisons[].
+
+For each item:
+
+Get policyType, costSummary.currentAnnualPremium, costSummary.offerAnnualPremium.
+
+Map back to the matched current + offer snapshots (from Phase 3).
+
+For those snapshots, read structured_policy.pricing.annualPremium (if present).
+
+For each policyType (hus / indbo / ulykke):
+
+Compare:
+
+const agentOfferAnnual = offerSnapshot.structured_policy?.pricing?.annualPremium ?? null;
+const csOfferAnnual = costSummary.offerAnnualPremium ?? null;
+
+
+If agentOfferAnnual is a number and csOfferAnnual is 0 or null → log a red anomaly:
+
+- ❌ Offer pricing mismatch for HUS:
+  - PricingAgent annualPremium: 5049.13
+  - costSummary.offerAnnualPremium: 0 (or null)
+
+
+If both numbers exist but differ by more than 1 kr → log a warning.
+
+Do the same for currentAnnualPremium once current snapshots also use PricingAgent.
+
+b) Global consistency
+
+Compute:
+
+sumAgentOfferAnnual = sum(agentOfferAnnual for all policyComparisons where defined)
+
+comparisonOverallOffer = comparisonResult.overall.totalOfferAnnualPremium
+
+If both are defined and differ by more than 1 kr:
+
+- ❌ Global pricing mismatch:
+  - Sum of PricingAgent offer annual premiums: X kr
+  - comparison_result.overall.totalOfferAnnualPremium: Y kr
+
+
+If they match (within 1 kr), log:
+
+✅ PricingAgent and comparison_result totals are consistent.
+
+4. Classification of anomalies in Phase 5
+
+In the Phase 5 section, extend the anomaly block with a clear “Pricing Consistency Check” subsection:
+
+If any mismatches are detected:
+
+### Pricing Consistency Check
+
+- ❌ Offer pricing mismatch for HUS:
+  - PricingAgent annualPremium: 5049.13
+  - costSummary.offerAnnualPremium: 0
+
+- ❌ Global pricing mismatch:
+  - Sum of PricingAgent offer premiums: 6548.92
+  - comparison_result.overall.totalOfferAnnualPremium: 995.10
+
+Suggested fix:
+- Ensure costSummary uses structured_policy.pricing.annualPremium for matched snapshots.
+- Re-run comparison after fixing costSummary builder.
+
+
+If everything is consistent:
+
+### Pricing Consistency Check
+
+- Hus: PricingAgent=5049.13  costSummary=5049.13 ✅
+- Indbo: PricingAgent=504.69  costSummary=504.69 ✅
+- Ulykke: PricingAgent=995.1  costSummary=995.1 ✅
+
+✅ No pricing inconsistencies detected.
+
+5. Acceptance Criteria (very important)
+
+After implementing this:
+
+Run the debug script for Alm. Brand vs Privatsikring (3ddc78f1-...) and Gjensidige vs Privatsikring.
+
+The markdown report must now contain:
+
+A “Phase 1B – PricingAgent Details” block with per-snapshot pricing info.
+
+A “Pricing Consistency Check” subsection in Phase 5.
+
+In the current buggy state (before costSummary is fully fixed), the report MUST show red pricing mismatches (to prove the checks work).
+
+After we later fix costSummary to use PricingAgent consistently, the same report should show:
+
+Correct non-zero offerAnnualPremium per policy
+
+✅ “No pricing inconsistencies detected.”
