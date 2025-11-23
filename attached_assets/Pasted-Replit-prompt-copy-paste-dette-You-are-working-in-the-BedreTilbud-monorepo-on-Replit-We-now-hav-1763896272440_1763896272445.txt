@@ -1,0 +1,364 @@
+Replit prompt (copy-paste dette)
+
+You are working in the BedreTilbud monorepo on Replit.
+
+We now have a working AI PricingAgent that writes rich pricing info into offer_snapshots.structured_policy.pricing. The latest debug report for Types Studio shows:
+
+PricingAgent found correct prices:
+
+HUS: 5049.13 DKK (snapshot 61af3354)
+
+INDBO: 504.69 DKK (snapshot 9f4a5884)
+
+ULYKKE: 995.10 DKK (snapshot fc20de0f)
+
+But the matcher and costSummary are using different snapshots:
+
+Matcher pairs with: af99ba79 (hus), bcb688d6 (indbo), dddd58d5 (ulykke)
+
+Only ULYKKE costSummary uses AI pricing; HUS/INDBO end up as 0 kr
+
+Debug Phase 5 shows:
+
+Sum of PricingAgent premiums: 6548.92 DKK
+
+overall.totalOfferAnnualPremium in comparison result: 995.10 DKK
+
+-> pricing mismatch of 5553.82 DKK
+
+We want a robust, long-term stable architecture where:
+
+The matcher always chooses the best version of each offer snapshot per policy_type (the one with pricing + health check).
+
+costSummary and overall comparison pricing use only the AI PricingAgent’s structured_policy.pricing.annualPremium as source of truth (with clear handling if it’s missing).
+
+The debug report explicitly validates that pricing from costSummary and PricingAgent are aligned and never silently fall back to 0 kr.
+
+High-level target architecture
+
+Please read this carefully and then implement it step by step.
+
+1) Canonical selection of offer snapshots per policy_type
+
+For a given (user, offer_company) we can have multiple offer_snapshots per policy_type (because the user might have uploaded multiple PDFs for the same company).
+
+We want the matcher to always pick the snapshot that is “most ready”:
+
+For each policy_type (hus, indbo, ulykke) and given offer_company:
+
+Prefer snapshots where structured_policy.pricing.pricingStatus === 'ok'
+
+Among those, prefer snapshots that have a health check (health_checks row exists)
+
+Among remaining ties, pick the newest snapshot (created_at DESC)
+
+If there are no snapshots with pricingStatus === 'ok', we fall back to the existing scoring logic / existing behaviour.
+
+2) costSummary MUST use structured_policy.pricing.annualPremium
+
+The new pricing structure looks like this (already stored on snapshot):
+
+structured_policy = {
+  ...,
+  pricing: {
+    pricingStatus: "ok" | "missing" | "ambiguous" | "error",
+    billingFrequency: "year" | "month" | "quarter" | "unknown",
+    annualPremium: number | null,      // always in DKK
+    rawPrices: [...],                  // for debug
+    pricingConfidence: number,         // 0–100
+    notes: string
+  }
+}
+
+
+From now on:
+
+currentAnnualPremium and offerAnnualPremium in costSummary must be derived from this structure, not from legacy fields like snapshot.premium or hardcoded 0.
+
+If billingFrequency is month, you must convert to annual (monthly * 12).
+
+If pricing is missing or ambiguous, do not fake 0 kr; use null and propagate that clearly.
+
+TASKS
+Task 1 – Update the matcher to prefer snapshots with pricing + health checks
+
+Files to inspect:
+
+server/services/deterministicMatcher.ts (or equivalent matcher service)
+
+Any helper functions the matcher uses to pick snapshots per policy_type
+
+Goal:
+
+When there are multiple offer_snapshots for the same (user, company_id, policy_type), the matcher must select the best one using this scoring:
+
+hasPricing = (structured_policy?.pricing?.pricingStatus === 'ok')
+
+hasHealthCheck = (there exists a health_checks row for this snapshot_id)
+
+created_at newest
+
+Implementation steps:
+
+Find where offer snapshots are collected and filtered by policy_type inside deterministicMatcher.
+
+Introduce a small helper function, for example:
+
+function scoreOfferSnapshot(snapshot: OfferSnapshot & { hasHealthCheck?: boolean }): number {
+  let score = 0;
+
+  const pricingStatus = snapshot.structured_policy?.pricing?.pricingStatus;
+  const hasPricing = pricingStatus === 'ok';
+
+  if (hasPricing) score += 1000;           // strong bonus
+  if (snapshot.hasHealthCheck) score += 100;
+  // optionally, more points for newer date if needed
+
+  // small tiebreaker on date
+  const createdAt = new Date(snapshot.created_at).getTime() || 0;
+  score += createdAt / 1_000_000_000;      // keeps ordering but small impact
+
+  return score;
+}
+
+
+Ensure that when you fetch snapshots, you either:
+
+join in a flag hasHealthCheck (COUNT from health_checks > 0), or
+
+compute it using a preloaded map snapshotId → hasHealthCheck.
+
+Before the matcher chooses a single offer snapshot for a given policy_type, sort the candidates by scoreOfferSnapshot(snapshot) descending, and pick the first one.
+
+Keep the rest of the matcher logic unchanged (policy_type grouping, fallback matching, etc.).
+
+Acceptance criteria:
+
+For the Types Studio comparison (from debug report 48617277-6567-4f5f-a95c-0981bfc67ae9):
+
+The matcher must choose snapshots with pricingStatus = 'ok' as the matched offers:
+
+HUS → snapshot 61af3354
+
+INDBO → snapshot 9f4a5884
+
+ULYKKE → snapshot fc20de0f
+
+Phase 3 in the debug report should reflect that those snapshots are used as the matched pairs.
+
+No matcher behaviour should regress for Alm. Brand, Tryg, Gjensidige, etc.
+
+Task 2 – Refactor costSummary to use AI pricing only
+
+Files to inspect:
+
+server/services/comparisonOrchestrator.ts
+
+Possibly server/services/comparisonAgentService.ts or wherever comparison_result.overall and per-policy costSummary are built.
+
+Goal:
+
+costSummary.currentAnnualPremium and costSummary.offerAnnualPremium must be based on structured_policy.pricing from the matched snapshots.
+
+Legacy fallback to snapshot.premium or 0 must be removed or clearly marked as “legacy/approximate”.
+
+overall.totalCurrentAnnualPremium and overall.totalOfferAnnualPremium are sums of these values (over all policies with a non-null value).
+
+Implementation steps:
+
+In the code that builds policyComparisons[].costSummary, locate where currentAnnualPremium and offerAnnualPremium are set.
+
+Replace the logic with something like:
+
+function getAnnualPremiumFromPricing(pricing?: PricingInfo): number | null {
+  if (!pricing || pricing.pricingStatus !== 'ok' || pricing.annualPremium == null) {
+    return null;
+  }
+  return pricing.annualPremium;
+}
+
+const currentPricing = currentSnapshot.structured_policy?.pricing;
+const offerPricing = offerSnapshot.structured_policy?.pricing;
+
+const currentAnnualPremium = getAnnualPremiumFromPricing(currentPricing);
+const offerAnnualPremium = getAnnualPremiumFromPricing(offerPricing);
+
+
+If you still want legacy fallback for current policies for now, do it explicitly and mark the source, e.g.:
+
+const currentAnnualPremium =
+  getAnnualPremiumFromPricing(currentPricing) ??
+  (currentSnapshot.premium ?? null); // legacy fallback, but NOT 0
+
+
+Important: Never silently treat “no data” as 0 kr. Use null.
+
+When computing overall totals:
+
+const currentAnnuals = policySummaries
+  .map(p => p.costSummary.currentAnnualPremium)
+  .filter((v): v is number => typeof v === 'number');
+
+const offerAnnuals = policySummaries
+  .map(p => p.costSummary.offerAnnualPremium)
+  .filter((v): v is number => typeof v === 'number');
+
+const totalCurrentAnnualPremium = currentAnnuals.reduce((a, b) => a + b, 0);
+const totalOfferAnnualPremium = offerAnnuals.reduce((a, b) => a + b, 0);
+
+
+Add a simple flag for debugging inside comparison_result.meta (or similar):
+
+meta: {
+  pricingStatus: "complete" | "partial" | "missing",
+  ...
+}
+
+
+Logic:
+
+complete → all policies have both current and offer premiums
+
+partial → some premiums null, some non-null
+
+missing → all premiums null
+
+Ensure the single-policy deterministic builder still works — it should just inherit the new costSummary values (no changes to the enrichment logic).
+
+Acceptance criteria:
+
+For the Types Studio comparison (48617277-6567-4f5f-a95c-0981bfc67ae9), after re-running the pipeline:
+
+Phase 4 – Overall should show:
+
+totalOfferAnnualPremium ≈ 6548.92 kr (5049.13 + 504.69 + 995.10)
+
+Per-policy lines must show:
+
+HUS → offerAnnual ≈ 5049.13 kr
+
+INDBO → offerAnnual ≈ 504.69 kr
+
+ULYKKE → offerAnnual ≈ 995.10 kr
+
+Phase 5 must no longer report pricing mismatches for Types Studio.
+
+For Alm. Brand / Gjensidige / Tryg:
+
+Once PricingAgent has populated structured_policy.pricing for those snapshots, the same logic should work without code changes.
+
+If some policies have no AI pricing yet, the debug report should show null (not 0 kr) and label pricing status as partial or missing.
+
+Task 3 – Tighten the debug report pricing checks
+
+File to inspect:
+
+server/services/comparisonDebugReportService.ts (or wherever the markdown report is generated)
+
+server/scripts/debugComparison.ts
+
+Goal:
+
+The debug report already prints pricing mismatches. Please adjust it so it understands the new rules:
+
+It should explicitly compare only:
+
+matchedOffer.structured_policy.pricing.annualPremium
+
+comparison_result.policyComparisons[].costSummary.offerAnnualPremium
+
+comparison_result.overall.totalOfferAnnualPremium vs sum of policy offerAnnualPremiums
+
+It should no longer expect/encourage legacy snapshot.premium or 0-fallback.
+
+Implementation steps:
+
+In Phase 1B, keep printing the PricingAgent details per snapshot (as you do now).
+
+In Phase 4/5, update the “Pricing Consistency Check” to:
+
+For each matched policy:
+
+const ai = matchedOffer.structured_policy?.pricing?.annualPremium ?? null;
+const cs = policyComparison.costSummary.offerAnnualPremium ?? null;
+
+
+Flag mismatch if:
+
+ai and cs are both numbers but differ by more than a tiny epsilon (e.g. 1 DKK)
+
+or ai is non-null and cs is null
+
+Also verify that:
+
+const sumOfPolicyOffers = policyComparisons
+  .map(p => p.costSummary.offerAnnualPremium)
+  .filter((v): v is number => typeof v === 'number')
+  .reduce((a, b) => a + b, 0);
+
+const overall = comparisonResult.overall.totalOfferAnnualPremium;
+
+
+and flag mismatch if they differ.
+
+If overall.meta.pricingStatus === 'missing' or 'partial', mention that explicitly in Phase 5.
+
+Acceptance criteria:
+
+For Types Studio:
+
+After your matcher + costSummary changes, re-run the comparison.
+
+The debug report should show:
+
+No pricing mismatches for HUS/INDBO/ULYKKE
+
+overall.totalOfferAnnualPremium equal to sum of policy offerAnnualPremiums
+
+For Tryg (where current pricing is still missing):
+
+The debug should say something like:
+
+“Pricing status: partial – 1/3 policy prices missing”
+
+Offer premiums must be null where PricingAgent hasn’t populated them; not 0 kr.
+
+Don’t break existing behaviour
+
+The health check pipeline (Phase 2) is now consistent – do not change any of that logic here.
+
+The single-policy deterministic builder for comparisons must remain intact and just reuse the new costSummary.
+
+The Enrichment Pattern (narrative agent) is unchanged; it only consumes the existing comparison JSON.
+
+Final sanity checklist after implementation
+
+After you implement all tasks:
+
+Run the comparison pipeline for:
+
+Types Studio
+
+Alm. Brand
+
+Gjensidige
+
+Tryg
+
+Inspect the generated MD debug reports under debug-reports/ and confirm:
+
+For any company where PricingAgent has pricingStatus: "ok" on all three policies:
+
+totalOfferAnnualPremium matches the sum of those three annual premiums.
+
+No pricing mismatch errors in Phase 5.
+
+For any company where some prices are missing:
+
+Those policies show offerAnnualPremium: null (not 0 kr).
+
+meta.pricingStatus is "partial" or "missing" as appropriate.
+
+Debug report clearly explains that pricing is incomplete.
+
+Please make these changes carefully and keep the code clean and well-documented so we can extend it later with “active offer version per company” if needed.
