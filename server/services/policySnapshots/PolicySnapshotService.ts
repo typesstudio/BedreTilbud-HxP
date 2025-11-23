@@ -20,9 +20,9 @@
  * ═══════════════════════════════════════════════════════════════════
  */
 
-import { db } from "@db";
-import { policySnapshots, companies } from "@shared/schema";
-import type { Document, InsertPolicySnapshot, PolicySnapshot } from "@shared/schema";
+import { db } from "../../db";
+import { policySnapshots, companies } from "../../../shared/schema";
+import type { Document, InsertPolicySnapshot, PolicySnapshot } from "../../../shared/schema";
 import { eq, and } from "drizzle-orm";
 
 interface SegmentedPolicy {

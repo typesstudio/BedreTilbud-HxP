@@ -9,10 +9,10 @@
  *   npx tsx server/scripts/backfillPolicySnapshots.ts --document-id=<id>
  */
 
-import { db } from "../db.js";
-import { documents, policySnapshots } from "../../shared/schema.js";
-import { policySnapshotService } from "../services/policySnapshots/PolicySnapshotService.js";
-import { eq } from "drizzle-orm";
+import { db } from "../db";
+import { documents, policySnapshots } from "@shared/schema";
+import { policySnapshotService } from "../services/policySnapshots/PolicySnapshotService";
+import { eq, isNotNull } from "drizzle-orm";
 
 async function backfillPolicySnapshots(documentId?: string) {
   console.log("=".repeat(70));
@@ -36,6 +36,9 @@ async function backfillPolicySnapshots(documentId?: string) {
       }
     } else {
       console.log(`\n📄 Processing all completed documents with extraction stages...`);
+      // Fetch documents where:
+      // - extraction_status = 'completed'
+      // - AND extraction_stages->'stage2_segmentation' is NOT NULL
       docsToProcess = await db
         .select()
         .from(documents)

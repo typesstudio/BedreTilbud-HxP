@@ -14,7 +14,7 @@
  */
 
 import { policySnapshotService } from "./PolicySnapshotService";
-import type { PolicySnapshot } from "@shared/schema";
+import type { PolicySnapshot } from "../../../shared/schema";
 
 export class EnrichmentService {
   /**

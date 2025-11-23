@@ -1,0 +1,271 @@
+Fedt – nu begynder arkitekturen faktisk at ligne det, vi ville have 💚
+
+Lad mig først lige sige kort, hvor vi står, og så får du en ny Replit-prompt, der tager arbejdet videre.
+
+---
+
+## Hvor vi står nu (kort)
+
+Ud fra Replit-loggen har agenten allerede:
+
+* ✅ Oprettet **`policy_snapshots`**-tabellen i schemaet.
+* ✅ Lavet **`PolicySnapshotService`** og integreret den i **`ExtractionOrchestratorService`** lige efter `stage2_segmentation`.
+* ✅ Oprettet en skelet-**`EnrichmentService`** til senere at enrich’e snapshots (pricing/structured).
+* ✅ Lavet en **backfill-script** `backfillPolicySnapshots.ts`, men:
+
+  * ❌ Den fejler pga. import-paths (`@db`, `@shared` osv.) når du kører `tsx`.
+  * ❌ Derfor er der stadig **0 rows** i `policy_snapshots` for dine eksisterende dokumenter.
+
+Det betyder:
+
+* **Nye uploads** burde nu lave `policy_snapshots` automatisk.
+* Men alle dine eksisterende Tryg/Privatsikring + LB-dokumenter er endnu ikke backfilled → ingen snapshots → ingen comparison på dem.
+
+Så det giver ikke mening at bede Replit “vælge” mellem ting – vi vil have **alt**:
+
+1. Fiks backfill, 2) kør den, 3) enrich snapshots, 4) byg comparison.
+
+---
+
+## Hvad du skal gøre nu
+
+Her er en færdig prompt, du kan smide direkte i **Replit “Ask Agent”**.
+Jeg holder den fokuseret på næste naturlige skridt:
+
+1. Få backfill til at virke og kør den.
+2. Berig `policy_snapshots` med pricing/structured.
+3. Verificer med SQL, at LB + Privatsikring er med.
+
+---
+
+### Replit-prompt (copy/paste)
+
+````text
+You already implemented the new `policy_snapshots` architecture (table + PolicySnapshotService + basic EnrichmentService), but the backfill script is not running yet and the enrichment is not wired up.
+
+I want you to continue from the current state and do the following steps:
+
+────────────────────────
+PHASE A – FIX & RUN BACKFILL
+────────────────────────
+
+1. Open the backfill script:
+   - `server/scripts/backfillPolicySnapshots.ts`
+
+2. Fix the import issues by:
+   - Using the SAME import style as other scripts in `server/scripts` that already work.
+   - If other scripts are using relative imports (e.g. `../db`, `../services/...`), copy that pattern.
+   - Avoid using path aliases like `@db`, `@shared` inside this script, since `npx tsx` doesn’t respect the TS path aliases by default.
+
+   The script should:
+   - Fetch documents where:
+     - `extraction_status = 'completed'`
+     - AND `extraction_stages->'stage2_segmentation'` is NOT NULL.
+   - For each such document:
+     - Load `extraction_stages` from the row.
+     - Call `PolicySnapshotService.createSnapshotsFromDocument(document, extractionStages)`.
+     - Log something like:
+       - `Backfilled document <id> (<file_name>): created <N> policy snapshots`.
+
+3. Run the backfill script:
+
+   - `npx tsx server/scripts/backfillPolicySnapshots.ts`
+
+4. After the script runs, execute these SQL queries and paste the results into the console logs (or at least show counts in logs):
+
+   a) Overall count:
+   ```sql
+   SELECT COUNT(*) AS snapshot_count FROM policy_snapshots;
+````
+
+b) Show a few rows (id, documentId, companyName, policyType, coverageAddress):
+
+```sql
+SELECT
+  id,
+  document_id,
+  kind,
+  company_name,
+  policy_type,
+  coverage_address
+FROM policy_snapshots
+ORDER BY created_at DESC
+LIMIT 20;
+```
+
+c) Specifically verify we have snapshots for the two important documents (user LB and Privatsikring offer). Use their document IDs if available in the DB, or locate by file_name:
+
+```sql
+SELECT
+  d.id AS document_id,
+  d.file_name,
+  ps.id AS snapshot_id,
+  ps.kind,
+  ps.company_name,
+  ps.policy_type,
+  ps.coverage_address
+FROM documents d
+JOIN policy_snapshots ps ON ps.document_id = d.id
+ORDER BY d.created_at DESC
+LIMIT 30;
+```
+
+The goal: confirm we have separate snapshots for:
+
+* LB / Lærerstandens Brandforsikring (current) – with fritidshus/indbo/ulykke.
+* Privatsikring (offer) – with fritidshus/indbo/ulykke.
+
+────────────────────────
+PHASE B – WIRE UP ENRICHMENT (PRICING + STRUCTURED)
+────────────────────────
+
+We now want to enrich each policy snapshot with:
+
+* `pricing` (from the existing PricingAgent)
+* optionally `structuredPolicy` (from stage3_extraction or a per-snapshot extractor)
+
+We already have:
+
+* `server/services/policySnapshots/EnrichmentService.ts`
+* `server/services/policySnapshots/PolicySnapshotService.ts`
+* `server/services/policyPricingService.ts`
+* `server/types/pricing.ts`
+
+Please do this:
+
+5. In `EnrichmentService`:
+
+   * Implement a function, e.g. `enrichSnapshot(snapshotId: string)`, that:
+
+   a) Loads the snapshot via `PolicySnapshotService.getSnapshotById(snapshotId)`.
+   b) Uses the existing pricing agent logic to extract pricing from `snapshot.rawText`.
+
+   You can either:
+
+   * Directly call `policyPricingService.extractPricingForPolicy(...)`, or
+   * If there is already a helper used in `ExtractionOrchestratorService` for pricing, reuse that.
+
+   Input should include:
+
+   * `policyType` (hus/fritidshus/indbo/ulykke)
+   * `companyName`
+   * `rawText` = snapshot.rawText
+   * currency = "DKK"
+
+   c) Map the existing pricing result into our new `policy_snapshots.pricing` shape:
+
+   Our target shape is:
+
+   ```ts
+   type SnapshotPricing = {
+     status: "exact" | "components_only" | "missing";
+     annualPremium: number | null;
+     currency: "DKK";
+     confidence: number | null;
+     components: { label: string; amount: number }[];
+   }
+   ```
+
+   Map from existing pricing types as follows (adapt to the current implementation in `server/types/pricing.ts`):
+
+   * If the pricing result has a clear annual premium and status "ok":
+
+     * status = "exact"
+     * annualPremium = that premium
+     * components = map from any `rawPrices` / `components` array if available
+     * confidence = pricing.confidence or null
+
+   * Else, if there is no explicit total, but there are multiple price components (e.g. Bygningsbrand, Bygningsbeskadigelse, etc.) and they each have an amount:
+
+     * status = "components_only"
+     * annualPremium = sum of the components (ONLY if that sum clearly represents the full annual premium)
+     * components = list of { label, amount }
+     * confidence = something reasonable (e.g. 80) or whatever the underlying pricing result gives us
+
+   * Else (no usable price found):
+
+     * status = "missing"
+     * annualPremium = null
+     * components = []
+     * confidence = null
+
+   d) (Optional for now but nice to support) Enrich `structuredPolicy`:
+
+   * If there is already a stage3_extraction result for this document, you can match the corresponding policy by:
+
+     * policyType + companyName + sourcePageRange
+   * Or create a per-snapshot extraction based on `snapshot.rawText`.
+   * Store the result JSON in `policy_snapshots.structuredPolicy`.
+
+   e) Persist the enriched data:
+
+   * Add an update method in `PolicySnapshotService`, e.g. `updateSnapshotPricingAndStructure(id, { pricing, structuredPolicy })`.
+   * `EnrichmentService.enrichSnapshot` should call this to save the JSON into `policy_snapshots.pricing` and `policy_snapshots.structured_policy`.
+
+6. Add a new script:
+
+   * `server/scripts/enrichPolicySnapshots.ts`
+
+   This script should:
+
+   * Use the same working import pattern as the backfill script (relative imports).
+   * Select snapshots that need enrichment, for example:
+
+     ```ts
+     SELECT * FROM policy_snapshots
+     WHERE pricing IS NULL
+     ORDER BY created_at ASC
+     LIMIT 50;
+     ```
+   * For each snapshot, call `EnrichmentService.enrichSnapshot(snapshot.id)`.
+   * Log progress: "Enriched snapshot <id> (<company_name>, <policy_type>)".
+
+7. Run the enrichment script:
+
+   * `npx tsx server/scripts/enrichPolicySnapshots.ts`
+
+8. Verify enrichment via SQL:
+
+   ```sql
+   SELECT
+     id,
+     company_name,
+     policy_type,
+     pricing->>'status' AS status,
+     pricing->>'annualPremium' AS annual_premium
+   FROM policy_snapshots
+   ORDER BY created_at DESC
+   LIMIT 20;
+   ```
+
+   And ideally, inspect at least one LB and one Privatsikring snapshot to see:
+
+   * Privatsikring fritidshus/indbo/ulykke should have `status = 'exact'` and non-null annualPremium.
+   * LB (Lærerstandens Brandforsikring) policies where no explicit total price exists may have:
+
+     * `status = 'components_only'` (if you can safely sum components), OR
+     * `status = 'missing'` with components = [] if we cannot estimate.
+
+────────────────────────
+
+Stop after Phase A + B and provide a summary of:
+
+* How many policy_snapshots were backfilled.
+* Example rows for LB and Privatsikring (to prove we have correct policyType/kind/companyName).
+* Example pricing JSON for at least one LB snapshot and one Privatsikring snapshot.
+
+Do NOT start implementing the comparison service yet – we’ll do that in a separate step once we know snapshots + pricing look good.
+
+```
+
+---
+
+Hvis du vil, kan vi bagefter tage **Phase C**: en Replit-prompt kun til at bygge `PolicyComparisonService` + API-route, der matcher snapshots (current vs offer) og kalder en ComparisonAgent.
+
+Men lige nu er den vigtigste sekvens:
+
+1. **Backfill → få data ind i `policy_snapshots`.**  
+2. **Enrich → få pricing/structured på snapshots.**  
+3. Så kan vi bygge comparison ovenpå noget, der faktisk eksisterer.
+::contentReference[oaicite:0]{index=0}
+```
