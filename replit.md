@@ -32,6 +32,7 @@ The system employs a **Two-Step Pipeline** for robust extraction:
 
 A **Two-Phase Health Check Architecture** ensures deterministic deductible display in the UI:
 -   **Phase 1: PolicyExtractor**: Extracts OCR markdown to structured policy JSON, preserving exact deductible strings.
+-   **Phase 1b: PricingAgent**: A dedicated AI agent (`gpt-4o`) extracts and normalizes pricing information with Zod schema validation, confidence scoring (0-100), and status tracking ("ok", "unknown", "package_only", "conflict"). The agent handles Danish insurance pricing edge cases (intro prices, binding periods, package vs per-policy pricing) and rejects invalid responses (never returns 0 as premium). Results are attached to `structuredPolicy.pricing` with comprehensive telemetry for observability.
 -   **Phase 2: HealthCheckAnalyst**: Maps coverages 1:1, populating mandatory deductibles, and assigns UI variants.
 This architecture provides deterministic mapping, reprocessability, and cost-efficiency, enabled by `ENABLE_TWO_PHASE_HEALTHCHECK=true`. The Health Check Orchestrator includes **Zero-Mismatch Validation** to prevent corrupt data, ensuring `snapshot.policyType` drives policy type assignment in health checks.
 
