@@ -1823,6 +1823,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Generate debug report for a comparison
+  app.post("/api/company-comparisons/:id/debug-report", requireAuth, async (req, res) => {
+    try {
+      const comparisonId = req.params.id;
+      
+      // Verify comparison exists
+      const comparison = await storage.getCompanyComparison(comparisonId);
+      if (!comparison) {
+        return res.status(404).json({ message: "Comparison not found" });
+      }
+
+      logger.info('Generating debug report', { comparisonId });
+      
+      // Generate debug report
+      const { generateComparisonDebugReport } = await import('./services/comparisonDebugReportService');
+      const report = await generateComparisonDebugReport(comparisonId, { 
+        saveToDisk: true, 
+        logToConsole: false 
+      });
+
+      logger.info('Debug report generated', { comparisonId, filePath: report.filePath });
+
+      res.json({
+        success: true,
+        filePath: report.filePath,
+        message: 'Debug report generated successfully'
+      });
+    } catch (error: any) {
+      logger.error('Failed to generate debug report', error, { comparisonId: req.params.id });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // OLD: Get comparison by ID (legacy comparisons table - deprecated)
   app.get("/api/comparisons/:id", requireAuth, async (req, res) => {
     try {
