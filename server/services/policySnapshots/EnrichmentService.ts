@@ -18,6 +18,23 @@ import type { PolicySnapshot } from "../../../shared/schema";
 
 export class EnrichmentService {
   /**
+   * Main entry point: Enrich a single PolicySnapshot with all available enrichments.
+   * 
+   * Currently enriches with:
+   * - Pricing data (from PricingAgent)
+   * - TODO: Structured policy data (from PolicyExtractor)
+   */
+  async enrichSnapshot(snapshotId: string): Promise<void> {
+    console.log(`[EnrichmentService] Enriching snapshot ${snapshotId}...`);
+    
+    // Run enrichments
+    await this.enrichWithPricing(snapshotId);
+    // await this.enrichWithStructuredPolicy(snapshotId); // TODO: Implement when needed
+    
+    console.log(`[EnrichmentService] ✓ Completed enrichment for snapshot ${snapshotId}`);
+  }
+
+  /**
    * Enrich a PolicySnapshot with pricing information.
    * 
    * This calls PricingAgent on the snapshot's rawText (not the full document).
