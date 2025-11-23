@@ -1,0 +1,405 @@
+You are working in the Replit project `typesstudio/BedreTilbud-HxP`.
+
+We want to refactor the insurance extraction & comparison architecture to be simpler, more robust, and easier to scale.
+
+Below is all the context you need about the current system, the raw OCR data, and the target architecture. Please read it carefully and then implement the changes step-by-step.
+
+────────────────────────
+CURRENT ARCHITECTURE
+────────────────────────
+
+Conceptually, the app does this:
+
+1. User uploads PDFs:
+   - "current" policies (their existing insurances).
+   - "offers" returned from insurance companies.
+
+2. For each uploaded PDF, the backend runs an extraction pipeline:
+   - Calls Mistral OCR → gets full markdown text.
+   - Runs segmentation → splits the document into “policies” (fritidshus/hus, indbo, ulykke, etc.).
+   - Runs a structured extraction agent → maps each policy segment into JSON (coverages, limits, deductibles, etc.).
+   - Runs a pricing agent → tries to find the annual premium in the document.
+
+3. The results are currently stored in the `documents` table under `extraction_stages`, and in an `offer_snapshots` table for offers.
+
+4. A separate “HealthCheck” layer takes the structured data and produces a user-facing health check report.
+
+5. A “Comparison” layer tries to use these health checks to compare the user’s current policies with offers.
+
+Important: the current design has become too complex. Comparison depends too much on the health check layer and on perfectly structured data, instead of just using the segmented policies directly.
+
+────────────────────────
+ACTUAL DATA WE HAVE (VERY IMPORTANT)
+────────────────────────
+
+The `documents` table has a JSONB column `extraction_stages` with this logical structure (simplified):
+
+{
+  "stage1_ocr": {
+    "metadata": {
+      "source": "fresh_extraction",
+      "latencyMs": 2171,
+      "pageCount": 0,
+      "markdownLength": 28691
+    },
+    "rawOutput": "<full markdown OCR>",
+    "timestamp": "..."
+  },
+  "stage2_segmentation": {
+    "metadata": {
+      "segmentCount": 3,
+      "confidence": 0.95,
+      "extractedFields": { ... }
+    },
+    "rawOutput": [
+      {
+        "policyType": "Fritidshus" | "Ulykke" | "Indbo",
+        "rawContent": "## Tilbud på din fritidshusforsikring\n...",
+        "metadata": {
+          "pageSpan": "1-3",
+          "confidence": 0.95,
+          "extractedFields": {
+            "annualPrice": 8734.59 | null,
+            "monthlyPrice": 727.88 | null,
+            "policyNumber": "...",
+            "coverageAddress": "...",
+            "insuranceCompany": "Privatsikring" | "Lærerstandens Brandforsikring"
+          },
+          "notableSections": [...]
+        },
+        "policySubtype": null
+      },
+      ...
+    ],
+    "timestamp": "..."
+  },
+  "stage3_extraction": {
+    "metadata": {
+      "policyCount": 3,
+      "failureCount": 0,
+      "successCount": 3,
+      "latencyMs": 7608
+    },
+    "rawOutput": [
+      {
+        "premium": 8734.59 | 2078.53 | 1059.58 | 0,
+        "confidence": 0.95,
+        "deductible": 2600 | 1300 | null,
+        "policyType": "hus" | "indbo" | "ulykke",
+        "companyName": "Privatsikring" | "Lærerstandens Brandforsikring",
+        "coverageDetails": {
+          "mainCoverages": [...],
+          "additionalCoverages": [...]
+        },
+        "sourcePageRange": "3-5"
+      },
+      ...
+    ],
+    "timestamp": "..."
+  }
+}
+
+Example raw OCR markdown (stage1_ocr.rawOutput) we know is being stored (shortened):
+
+- For LB (user’s current insurances):
+
+  - Contains “Tilbud på din fritidshusforsikring”, “Tilbud på din ulykkesforsikring”, “Tilbud på din indboforsikring”.
+  - Contains all coverages, sums, deductibles.
+  - For some policies, **there is no explicit annual total price**; only per-coverage prices like:
+    - Bygningsbrand, herunder el-skade ….. 2.758,79 kr.
+    - Bygningsbeskadigelse, herunder ansvar og retshjælp ….. 947,46 kr.
+    - etc.
+
+- For Privatsikring (offer):
+
+  - Fritidshus:
+    - “Årlig pris inklusiv 1,1 % skadesforsikringsafgift er 8.734,59 kr.”
+  - Indbo:
+    - “Årlig pris inklusiv 1,1 % skadesforsikringsafgift er 2.078,53 kr.”
+  - Ulykke:
+    - “Årlig pris inklusiv 1,1 % skadesforsikringsafgift er 1.059,58 kr.”
+
+So OCR + segmentation are good. The issue is not Mistral. The issue is that:
+- Some companies give total annual price, some don’t.
+- The current app architecture is over-coupled: comparison depends on health check and “perfect” structured data.
+
+────────────────────────
+TARGET ARCHITECTURE (WHAT WE WANT YOU TO IMPLEMENT)
+────────────────────────
+
+We want to refactor to a MUCH simpler, more canonical model:
+
+1. Introduce a new core table: `policy_snapshots`.
+
+   This is a unified representation of a single insurance policy in our system, regardless of whether it comes from:
+   - A user’s current document, or
+   - An offer from a company.
+
+   Canonical TypeScript model:
+
+   type PolicySnapshot = {
+     id: string;
+     documentId: string;         // FK -> documents.id
+     userId: string | null;      // FK -> users, if available
+     kind: "current" | "offer";  // where it comes from
+     companyName: string;        // "Lærerstandens Brandforsikring", "Privatsikring", etc.
+     policyType: "hus" | "fritidshus" | "indbo" | "ulykke" | string;
+     coverageAddress?: string | null;  // address for house/fritidshus, if known
+
+     rawText: string;            // stage2_segmentation.rawOutput[X].rawContent
+
+     structuredPolicy: jsonb | null;   // from stage3_extraction (coverages, sums, deductibles, etc.)
+     pricing: jsonb | null;            // from PricingAgent, format below
+
+     sourceSegmentMeta: jsonb;  // pageSpan, segmentIndex, etc.
+
+     createdAt: timestamptz;
+     updatedAt: timestamptz;
+   };
+
+   `pricing` should have this shape:
+
+   {
+     "status": "exact" | "components_only" | "missing",
+     "annualPremium": number | null,
+     "currency": "DKK",
+     "confidence": number | null,          // 0–100
+     "components": [
+       { "label": "Bygningsbrand, el-skade", "amount": 2758.79 },
+       { "label": "Bygningsbeskadigelse", "amount": 947.46 },
+       ...
+     ]
+   }
+
+   NOTE:
+   - For LB where no explicit total price is present, PricingAgent should set:
+     - status = "components_only" and annualPremium = sum(components) if that makes sense, OR
+     - status = "missing" if we really cannot estimate safely.
+
+2. Change the extraction pipeline to create PolicySnapshots for **both** current and offer documents.
+
+   After OCR + segmentation, do THIS:
+
+   - For a given `documents` row:
+     - Read `extraction_stages.stage2_segmentation.rawOutput` (segments array).
+     - For each segment:
+       - Determine `policyType` from `segment.policyType`. Map “Fritidshus” → "fritidshus", “Indbo” → "indbo", “Ulykke” → "ulykke", etc.
+       - Determine `companyName` from `segment.metadata.extractedFields.insuranceCompany`.
+       - Determine `coverageAddress` from `segment.metadata.extractedFields.coverageAddress` (if present).
+       - Insert a new row into `policy_snapshots` with:
+         - documentId = documents.id
+         - userId = documents.user_id (if you have it)
+         - kind = "current" or "offer" (depending on document_type)
+         - companyName
+         - policyType
+         - coverageAddress
+         - rawText = segment.rawContent
+         - structuredPolicy = NULL (for now)
+         - pricing = NULL (for now)
+         - sourceSegmentMeta including:
+           - pageSpan
+           - segmentIndex
+           - confidence
+           - extractedFields
+
+   This should be implemented in a dedicated service file, e.g.:
+
+   - `src/server/services/policySnapshots/PolicySnapshotService.ts`
+     - `createSnapshotsFromDocument(document: Document, extractionStages: any): Promise<PolicySnapshot[]>`
+
+   And called from the existing extraction orchestrator after stage2_segmentation has succeeded.
+
+3. Use stage3_extraction and PricingAgent as *optional enrichment* on top of PolicySnapshots.
+
+   Instead of making stage3 and pricing a hard requirement for comparison:
+
+   - For each `policy_snapshot` you create, you MAY (async / background) enrich:
+     - `structuredPolicy` using the current stage3_extraction logic (gpt-4o).
+       - Input: just the segment’s `rawText` and `policyType`.
+       - Output: JSON with coverages, deductibles, sums, etc.
+       - Store it in `policy_snapshots.structuredPolicy`.
+
+     - `pricing` using the existing PricingAgent logic, but:
+       - Input: the segment’s `rawText` (not the whole document).
+       - Require the agent to:
+         1. Try to find an explicit annual price.
+         2. If none exists but multiple price components are present, try to sum them and set status = "components_only".
+         3. If neither is possible, set status = "missing" and leave annualPremium = null.
+
+   Important: the app must work even when `structuredPolicy` and/or `pricing` are NULL or incomplete.
+
+4. Redesign the comparison layer to operate on PolicySnapshots instead of health checks.
+
+   We want comparison to be dead simple and robust:
+
+   For a given user and a given offer company:
+
+   - Fetch all current snapshots:
+     - `SELECT * FROM policy_snapshots WHERE user_id = $1 AND kind = 'current';`
+
+   - Fetch all offer snapshots from that company:
+     - `SELECT * FROM policy_snapshots WHERE user_id = $1 AND kind = 'offer' AND company_name = $2;`
+
+   - Match them by `policyType` and (for houses) optionally by `coverageAddress`:
+
+     - Example: for each current snapshot C, find offers O where:
+       - O.policyType = C.policyType
+       - AND (for fritidshus/hus) O.coverageAddress is similar to C.coverageAddress (same address or same postal code).
+
+   - For each matched pair (C, O), call a ComparisonAgent with this input:
+
+     {
+       "policyType": "fritidshus",
+       "current": {
+         "companyName": C.companyName,
+         "rawText": C.rawText,
+         "structured": C.structuredPolicy,
+         "pricing": C.pricing
+       },
+       "offer": {
+         "companyName": O.companyName,
+         "rawText": O.rawText,
+         "structured": O.structuredPolicy,
+         "pricing": O.pricing
+       }
+     }
+
+     Expected output from ComparisonAgent (store in a `policy_comparisons` table or inline in an API response):
+
+     {
+       "pricingComparison": {
+         "status": "exact" | "partial" | "no_current_price",
+         "currentAnnual": number | null,
+         "offerAnnual": number | null,
+         "estimatedSavings": number | null,
+         "notes": [ "Some explanation text..." ]
+       },
+       "coverageComparison": {
+         "betterWithOffer": [...],
+         "worseWithOffer": [...],
+         "same": [...]
+       },
+       "summary": {
+         "headline": "Short human readable summary",
+         "verdict": "offer_better" | "current_better" | "neutral"
+       }
+     }
+
+   - Frontend should render comparison based on this JSON. It does NOT have to rely on HealthCheck as an input – health check is just another view on a single snapshot.
+
+5. Treat HealthCheck as a view on PolicySnapshots.
+
+   HealthCheck should no longer be the “core” representation. Instead:
+
+   - HealthCheckAgent input:
+     {
+       "policyType": snapshot.policyType,
+       "companyName": snapshot.companyName,
+       "rawText": snapshot.rawText,
+       "structured": snapshot.structuredPolicy,
+       "pricing": snapshot.pricing,
+       "context": {
+         "kind": snapshot.kind  // "current" or "offer"
+       }
+     }
+
+   - Output: whatever JSON the existing health check UI expects (sections, badges, scores, etc.).
+
+   - You can keep the existing health check tables/endpoints if needed, but they should reference `policy_snapshots.id` instead of raw `documents`.
+
+────────────────────────
+WHAT YOU SHOULD IMPLEMENT (STEP-BY-STEP TASKS)
+────────────────────────
+
+Please now:
+
+1. Locate the relevant parts of the codebase:
+   - The `documents` table schema and any existing `offer_snapshots` / `health_checks` / `company_comparisons` tables.
+   - The extraction orchestrator service that:
+     - Writes to `documents.extraction_stages` (stage1_ocr, stage2_segmentation, stage3_extraction).
+     - Creates `offer_snapshots` / health checks / comparisons.
+   - The PricingAgent code that currently extracts pricing.
+   - Any Comparison/HealthCheck orchestrator or services.
+
+2. Database changes:
+   - Create a new table `policy_snapshots` in the database with the structure described above.
+     - Use PostgreSQL JSONB for `structuredPolicy`, `pricing`, and `sourceSegmentMeta`.
+     - Add appropriate indexes on (user_id, kind, company_name, policy_type).
+
+   - Optionally:
+     - Keep `offer_snapshots` for now to avoid breaking existing flows.
+     - We can later migrate or deprecate it after the new system is stable.
+
+3. Implement PolicySnapshotService:
+   - New file (or set of files), e.g.:
+     - `src/server/services/policySnapshots/PolicySnapshotService.ts`
+
+   - Implement:
+     - `createSnapshotsFromDocument(document: Document, extractionStages: any): Promise<PolicySnapshot[]>`
+       - Reads `stage2_segmentation.rawOutput`.
+       - For each segment, maps it into a `policy_snapshots` row as described.
+     - Helper to map policyType strings ("Fritidshus", "Indbo", "Ulykke") into canonical lower case values.
+
+4. Wire PolicySnapshotService into the extraction pipeline:
+   - In the main extraction orchestrator (where we currently:
+     - run OCR,
+     - run segmentation,
+     - run stage3_extraction,
+     - create offer snapshots,
+     - etc.),
+
+   - After successful stage2_segmentation, call:
+     - `PolicySnapshotService.createSnapshotsFromDocument(document, extractionStages);`
+
+   - Use `document.document_type` (or similar field) to set `kind = 'current' | 'offer'`.
+
+5. Update PricingAgent usage:
+   - Add a new function, e.g. `extractPricingForSnapshot(snapshot: PolicySnapshot)`, which:
+     - Uses `snapshot.rawText` and `snapshot.policyType` as input to the pricing model.
+     - Implements the “status: exact / components_only / missing” logic.
+   - Create a background job / queue / simple loop that:
+     - Finds policy_snapshots where `pricing IS NULL`.
+     - Calls PricingAgent for each snapshot.
+     - Stores the result in `policy_snapshots.pricing`.
+
+6. (Optional but recommended) Update structured extraction:
+   - Instead of using stage3_extraction only at document level, add a per-snapshot enrichment:
+     - For each policy_snapshot, call the existing structure-extraction logic with `snapshot.rawText` and `snapshot.policyType`.
+     - Store the result in `policy_snapshots.structuredPolicy`.
+
+7. Implement a new comparison service based on PolicySnapshots:
+   - New service file, e.g. `src/server/services/comparison/PolicyComparisonService.ts`.
+   - For a given user + companyName:
+     - Fetch current snapshots.
+     - Fetch offer snapshots.
+     - Match by policyType (+ coverageAddress for houses).
+     - Call a ComparisonAgent per pair with the input structure described above.
+   - Expose this via an API route the frontend can call, e.g.:
+     - `GET /api/comparisons/:companyName`
+
+8. Make HealthCheck use PolicySnapshots:
+   - If there is a HealthCheckOrchestrator or similar:
+     - Change it to accept a `policy_snapshot.id` instead of a document id.
+     - Fetch the snapshot, then call the existing health check agent with:
+       - `policyType`, `companyName`, `rawText`, `structuredPolicy`, `pricing`, `kind`.
+
+9. Keep everything backwards-compatible where reasonable:
+   - Do NOT delete `extraction_stages` – they are still our raw source of truth.
+   - Do NOT delete `offer_snapshots` / `health_checks` yet – we can keep them alive while the new pipeline is stabilized.
+   - When adding new tables / services, write small integration tests or logs to verify:
+     - PolicySnapshots are created as expected for both LB (user) and Privatsikring (offer) documents.
+     - The pricing agent behaves correctly for:
+       - Privatsikring (explicit annual prices).
+       - LB (no explicit annual price for some policies).
+
+10. Once you’ve implemented the above:
+   - Please also add clear comments in the new service files explaining the architecture:
+     - That PolicySnapshots are now the canonical representation of a policy.
+     - That health check and comparison are views on top of PolicySnapshots.
+     - That OCR + segmentation remain the stable upstream data source.
+
+────────────────────────
+
+Please proceed step-by-step. Start with creating the `policy_snapshots` table and PolicySnapshotService, then wire it into the extraction pipeline, and finally implement the new comparison service and adjust health check to use snapshots.
+
+If something in the codebase already partially implements this pattern (e.g. `offer_snapshots`), please reuse and adapt it rather than duplicating logic.
