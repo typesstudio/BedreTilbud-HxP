@@ -91,7 +91,7 @@ Marker:
   - Der kun findes samlede pakkepriser, som dækker flere policer samlet uden tydelig opdeling
 
 **pricingConfidence**:
-- Tal mellem 0 og 1 (fx 0.9 for meget sikker, 0.6 for lidt usikker)
+- Tal mellem 0 og 100 (fx 90 for meget sikker, 60 for lidt usikker)
 
 ## OUTPUT FORMAT
 
@@ -100,7 +100,7 @@ Returnér KUN gyldig JSON i præcis dette format:
 ```json
 {
   "pricingStatus": "ok" | "unknown" | "conflict" | "package_only",
-  "pricingConfidence": 0.0-1.0,
+  "pricingConfidence": 0-100,
   "annualPremium": number | null,
   "billingFrequency": "year" | "month" | "quarter" | "half_year" | "single" | "mixed" | "unknown",
   "rawPrices": [

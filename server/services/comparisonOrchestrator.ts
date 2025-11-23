@@ -53,11 +53,19 @@ export class ComparisonOrchestrator {
    * NEW: Exclusively uses structuredPolicy.pricing (PricingAgent output)
    * Old brittle logic (snapshot.premium) is no longer used.
    * 
+   * Telemetry: Logs detailed reasons when premium is rejected for observability.
+   * 
    * @param policy - Policy object with structuredPolicy.pricing field
    * @returns number | null - Annual premium or null if not available
    */
   private getAnnualPremiumFromSnapshot(policy: any): number | null {
-    if (!policy || !policy.structuredPolicy) return null;
+    const policyId = policy?.id?.substring(0, 8) || 'unknown';
+    const policyType = policy?.policyType || 'unknown';
+
+    if (!policy || !policy.structuredPolicy) {
+      console.warn(`[ComparisonOrchestrator] No structuredPolicy for ${policyType} (${policyId})`);
+      return null;
+    }
 
     try {
       const structured = typeof policy.structuredPolicy === 'string'
@@ -68,27 +76,35 @@ export class ComparisonOrchestrator {
       const pricing = structured?.pricing;
       
       if (!pricing) {
-        console.warn(`[ComparisonOrchestrator] No pricing data found for policy`);
+        console.warn(`[ComparisonOrchestrator] No pricing object for ${policyType} (${policyId}) - PricingAgent may have failed`);
         return null;
       }
 
       // Only accept pricing when status is "ok"
       if (pricing.pricingStatus !== 'ok') {
-        console.warn(`[ComparisonOrchestrator] Pricing status is "${pricing.pricingStatus}", rejecting annualPremium`);
+        console.warn(`[ComparisonOrchestrator] Pricing status="${pricing.pricingStatus}" for ${policyType} (${policyId}), rejecting premium. Notes: ${pricing.notes || 'N/A'}`);
         return null;
       }
 
       // Extract annualPremium
       const premium = pricing.annualPremium;
       
-      if (typeof premium !== 'number') return null;
+      if (typeof premium !== 'number') {
+        console.warn(`[ComparisonOrchestrator] annualPremium is not a number for ${policyType} (${policyId}): ${typeof premium}`);
+        return null;
+      }
 
       // Treat 0 as "unknown" – we never want 0 DKK as a default
-      if (premium <= 0) return null;
+      if (premium <= 0) {
+        console.warn(`[ComparisonOrchestrator] annualPremium=${premium} is invalid for ${policyType} (${policyId}), treating as null`);
+        return null;
+      }
 
+      // Success path - emit telemetry
+      console.log(`[ComparisonOrchestrator] ✅ Using PricingAgent premium for ${policyType} (${policyId}): ${premium} DKK (confidence=${pricing.pricingConfidence}%)`);
       return premium;
     } catch (e) {
-      console.error(`[ComparisonOrchestrator] Failed to extract pricing:`, e);
+      console.error(`[ComparisonOrchestrator] Failed to extract pricing for ${policyType} (${policyId}):`, e);
       return null;
     }
   }

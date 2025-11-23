@@ -792,6 +792,10 @@ export class ExtractionOrchestratorService {
       console.log(`[Orchestrator] Phase 1b: Running PricingAgent for ${extractionResult.policies.length} policies...`);
       
       const pricingResults: any[] = [];
+      let pricingSuccessCount = 0;
+      let pricingFailureCount = 0;
+      const pricingFailures: { policyType: string; reason: string }[] = [];
+      
       for (const structuredPolicy of extractionResult.policies) {
         try {
           const pricing = await policyPricingService.extractPricingForPolicy({
@@ -814,14 +818,36 @@ export class ExtractionOrchestratorService {
             confidence: pricing.pricingConfidence
           });
 
-          console.log(`[Orchestrator] PricingAgent result for ${structuredPolicy.policyType}: status=${pricing.pricingStatus}, premium=${pricing.annualPremium}, confidence=${pricing.pricingConfidence}`);
+          // Telemetry: Track success/failure
+          if (pricing.pricingStatus === 'ok') {
+            pricingSuccessCount++;
+            console.log(`[Orchestrator] ✅ PricingAgent SUCCESS for ${structuredPolicy.policyType}: premium=${pricing.annualPremium} DKK, confidence=${pricing.pricingConfidence}%`);
+          } else {
+            pricingFailureCount++;
+            const reason = `status=${pricing.pricingStatus}, notes=${pricing.notes}`;
+            pricingFailures.push({ policyType: structuredPolicy.policyType, reason });
+            console.warn(`[Orchestrator] ⚠️ PricingAgent DEGRADED for ${structuredPolicy.policyType}: ${reason}`);
+          }
         } catch (error) {
-          console.error(`[Orchestrator] PricingAgent failed for ${structuredPolicy.policyType}:`, error);
+          pricingFailureCount++;
+          const errorMsg = error instanceof Error ? error.message : 'Unknown error';
+          pricingFailures.push({ policyType: structuredPolicy.policyType, reason: `Exception: ${errorMsg}` });
+          console.error(`[Orchestrator] ❌ PricingAgent EXCEPTION for ${structuredPolicy.policyType}:`, error);
           // Continue - pricing is optional, don't block entire extraction
         }
       }
 
-      console.log(`[Orchestrator] Phase 1b completed: ${pricingResults.length}/${extractionResult.policies.length} policies priced`);
+      // Emit comprehensive telemetry summary
+      const successRate = extractionResult.policies.length > 0 
+        ? ((pricingSuccessCount / extractionResult.policies.length) * 100).toFixed(1)
+        : '0.0';
+
+      console.log(`[Orchestrator] Phase 1b completed: ${pricingResults.length}/${extractionResult.policies.length} policies processed`);
+      console.log(`[Orchestrator] PricingAgent Telemetry: ${pricingSuccessCount} OK, ${pricingFailureCount} degraded/failed (${successRate}% success rate)`);
+      
+      if (pricingFailures.length > 0) {
+        console.warn(`[Orchestrator] PricingAgent Failures:`, JSON.stringify(pricingFailures, null, 2));
+      }
 
       // Match extracted policies (with pricing) to snapshots by policy type
       // Assumption: policies are in same order as snapshots (both created from same extraction)

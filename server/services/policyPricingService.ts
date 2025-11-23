@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { loadPrompt, replaceVariables } from "../ai-prompts/utils/promptLoader";
 import { retryAICall } from "../utils/retry";
 import type { PolicyPricing } from "../types/pricing";
+import { PolicyPricingSchema } from "../types/pricing";
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
@@ -76,41 +77,39 @@ class PolicyPricingService {
 
       const result = JSON.parse(response.choices[0].message.content || "{}");
       
-      // Validation & safety checks
-      if (!result || typeof result !== "object") {
-        throw new Error("Empty pricing result from AI");
+      // ========================================
+      // ZOD VALIDATION: Reject AI response if schema doesn't match
+      // ========================================
+      
+      // Force extractionVersion before validation
+      if (!result.extractionVersion) {
+        result.extractionVersion = "pricing_agent_v1";
       }
 
-      // CRITICAL: Never accept 0 as a valid annualPremium unless explicitly intended
-      if (
-        typeof result.annualPremium === "number" &&
-        result.annualPremium <= 0
-      ) {
-        console.warn(`[PricingAgent] ⚠️ AI returned annualPremium=${result.annualPremium}, converting to null`);
-        result.annualPremium = null;
-        if (result.pricingStatus === "ok") {
-          result.pricingStatus = "unknown";
+      // Validate AI response against PolicyPricing schema
+      const validationResult = PolicyPricingSchema.safeParse(result);
+
+      if (!validationResult.success) {
+        // Validation failed - log detailed error and return explicit failure
+        const errors = validationResult.error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join(', ');
+        console.error(`[PricingAgent] ❌ Schema validation failed for ${input.policyType}:`, errors);
+        console.error(`[PricingAgent] Raw AI output:`, JSON.stringify(result, null, 2));
+        
+        throw new Error(`Schema validation failed: ${errors}`);
+      }
+
+      // Schema validation passed - use the validated data
+      const pricing = validationResult.data;
+
+      // Additional post-validation checks
+      // CRITICAL: Never accept 0 or negative as a valid annualPremium
+      if (pricing.annualPremium !== null && pricing.annualPremium <= 0) {
+        console.warn(`[PricingAgent] ⚠️ AI returned annualPremium=${pricing.annualPremium}, converting to null`);
+        pricing.annualPremium = null;
+        if (pricing.pricingStatus === "ok") {
+          pricing.pricingStatus = "unknown";
         }
       }
-
-      // Force extractionVersion to ensure tracking
-      result.extractionVersion = "pricing_agent_v1";
-
-      // Ensure all required fields exist with defaults
-      const pricing: PolicyPricing = {
-        pricingStatus: result.pricingStatus || "unknown",
-        pricingConfidence: result.pricingConfidence || 0,
-        annualPremium: result.annualPremium ?? null,
-        billingFrequency: result.billingFrequency || "unknown",
-        rawPrices: result.rawPrices || [],
-        bindingMonths: result.bindingMonths ?? null,
-        hasIntroPrice: result.hasIntroPrice || false,
-        introPeriodMonths: result.introPeriodMonths ?? null,
-        introAnnualPremium: result.introAnnualPremium ?? null,
-        postBindingIncreasePercent: result.postBindingIncreasePercent ?? null,
-        notes: result.notes || "No notes provided",
-        extractionVersion: "pricing_agent_v1"
-      };
 
       console.log(`[PricingAgent] ✅ Extracted pricing for ${input.policyType}:`, {
         status: pricing.pricingStatus,

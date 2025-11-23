@@ -5,6 +5,8 @@
  * from insurance policy documents.
  */
 
+import { z } from "zod";
+
 export type PolicyPricingStatus =
   | "ok"           // Clear, unambiguous pricing found
   | "unknown"      // No pricing information could be extracted
@@ -28,7 +30,7 @@ export interface RawPriceExpression {
 
 export interface PolicyPricing {
   pricingStatus: PolicyPricingStatus;
-  pricingConfidence: number;         // 0–1 (0 = no confidence, 1 = very confident)
+  pricingConfidence: number;         // 0–100 (0 = no confidence, 100 = very confident)
   annualPremium: number | null;      // Always in DKK, converted if needed
   billingFrequency:
     | "year"
@@ -47,3 +49,31 @@ export interface PolicyPricing {
   notes: string;                     // Explanation of pricing extraction
   extractionVersion: string;         // e.g. "pricing_agent_v1"
 }
+
+// ========================================
+// Zod Schemas for Runtime Validation
+// ========================================
+
+const RawPriceExpressionSchema = z.object({
+  label: z.string().min(1),
+  amount: z.number().nonnegative(),
+  currency: z.literal("DKK"),
+  frequency: z.enum(["year", "month", "quarter", "half_year", "single", "unknown"]),
+  isPerPolicy: z.boolean().nullable(),
+  isTotalForAllPolicies: z.boolean().nullable()
+});
+
+export const PolicyPricingSchema = z.object({
+  pricingStatus: z.enum(["ok", "unknown", "conflict", "package_only"]),
+  pricingConfidence: z.number().min(0).max(100),
+  annualPremium: z.number().positive().nullable(),
+  billingFrequency: z.enum(["year", "month", "quarter", "half_year", "single", "mixed", "unknown"]),
+  rawPrices: z.array(RawPriceExpressionSchema),
+  bindingMonths: z.number().positive().nullable(),
+  hasIntroPrice: z.boolean(),
+  introPeriodMonths: z.number().positive().nullable(),
+  introAnnualPremium: z.number().positive().nullable(),
+  postBindingIncreasePercent: z.number().nullable(),
+  notes: z.string(),
+  extractionVersion: z.string()
+});
