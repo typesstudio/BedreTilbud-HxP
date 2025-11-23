@@ -200,6 +200,14 @@ export async function generateComparisonDebugReport(
     offerCompanyName
   }));
 
+  // Phase 1B: PricingAgent Details
+  sections.push(buildPhase1BPricingDetails({
+    currentSnapshots,
+    offerSnapshots: offerSnapshotsData,
+    currentCompanyName,
+    offerCompanyName
+  }));
+
   // Phase 2: Health Checks
   sections.push(buildPhase2HealthChecks({
     currentSnapshots,
@@ -438,6 +446,92 @@ ${table}
 ${warnings ? `**Warnings**\n\n${warnings}` : ''}
 ${pricingWarnings ? `\n**Pricing Warnings**\n\n${pricingWarnings}` : ''}
 ${!warnings && !pricingWarnings ? '**No warnings**' : ''}`;
+}
+
+function buildPhase1BPricingDetails(params: {
+  currentSnapshots: any[];
+  offerSnapshots: any[];
+  currentCompanyName: string;
+  offerCompanyName: string;
+}): string {
+  const allSnapshots = [
+    ...params.currentSnapshots.map(s => ({ ...s.offer_snapshots, role: 'current', company: params.currentCompanyName })),
+    ...params.offerSnapshots.map(s => ({ ...s.offer_snapshots, role: 'offer', company: params.offerCompanyName }))
+  ];
+
+  const sections: string[] = [];
+
+  for (const snapshot of allSnapshots) {
+    if (!snapshot.structuredPolicy) continue;
+
+    try {
+      const structured = typeof snapshot.structuredPolicy === 'string' 
+        ? JSON.parse(snapshot.structuredPolicy) 
+        : snapshot.structuredPolicy;
+
+      const pricing = structured?.pricing;
+      if (!pricing) continue;
+
+      const shortId = snapshot.id.substring(0, 8);
+      const policyLabel = `${snapshot.policyType} (${snapshot.role}, ${snapshot.company})`;
+
+      let section = `### ${policyLabel}\n`;
+      section += `Snapshot: ${shortId}\n\n`;
+      section += `- **pricingStatus**: ${pricing.pricingStatus}\n`;
+      section += `- **billingFrequency**: ${pricing.billingFrequency || 'N/A'}\n`;
+      section += `- **annualPremium**: ${pricing.annualPremium !== null && pricing.annualPremium !== undefined ? `${pricing.annualPremium} DKK` : 'null'}\n`;
+      section += `- **confidence**: ${pricing.pricingConfidence}%\n`;
+      
+      if (pricing.hasIntroPrice) {
+        section += `- **hasIntroPrice**: true\n`;
+        section += `  - introPeriodMonths: ${pricing.introPeriodMonths || 'N/A'}\n`;
+        section += `  - introAnnualPremium: ${pricing.introAnnualPremium || 'N/A'} DKK\n`;
+      }
+      
+      if (pricing.bindingMonths) {
+        section += `- **bindingMonths**: ${pricing.bindingMonths}\n`;
+      }
+      
+      if (pricing.postBindingIncreasePercent) {
+        section += `- **postBindingIncreasePercent**: ${pricing.postBindingIncreasePercent}%\n`;
+      }
+
+      // Show raw prices (limit to first 3)
+      if (pricing.rawPrices && pricing.rawPrices.length > 0) {
+        section += `\n**Raw Prices** (${pricing.rawPrices.length} found):\n`;
+        const displayPrices = pricing.rawPrices.slice(0, 3);
+        for (let i = 0; i < displayPrices.length; i++) {
+          const price = displayPrices[i];
+          const label = price.label.length > 60 ? price.label.substring(0, 60) + '...' : price.label;
+          section += `  ${i + 1}. "${label}"\n`;
+          section += `     - amount: ${price.amount} ${price.currency}\n`;
+          section += `     - frequency: ${price.frequency}\n`;
+          if (price.isPerPolicy !== null) {
+            section += `     - isPerPolicy: ${price.isPerPolicy}\n`;
+          }
+        }
+        if (pricing.rawPrices.length > 3) {
+          section += `  ... and ${pricing.rawPrices.length - 3} more\n`;
+        }
+      }
+
+      // Show notes (truncated)
+      if (pricing.notes) {
+        const notes = pricing.notes.length > 150 ? pricing.notes.substring(0, 150) + '...' : pricing.notes;
+        section += `\n**Notes**: ${notes}\n`;
+      }
+
+      sections.push(section);
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+
+  if (sections.length === 0) {
+    return `## Phase 1B – PricingAgent Details\n\nNo pricing data available.`;
+  }
+
+  return `## Phase 1B – PricingAgent Details\n\n${sections.join('\n')}`;
 }
 
 function buildPhase2HealthChecks(params: {
