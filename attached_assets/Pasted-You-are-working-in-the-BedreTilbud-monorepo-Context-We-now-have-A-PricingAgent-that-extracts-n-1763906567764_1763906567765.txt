@@ -1,0 +1,207 @@
+You are working in the BedreTilbud monorepo.
+
+Context:
+
+We now have:
+
+A PricingAgent that extracts normalized pricing into
+offer_snapshots.structured_policy.pricing.
+
+The comparison layer uses only structured_policy.pricing.annualPremium (with null if missing).
+
+The debug report (2025-11-23.c8e94c9f.md) for Tryg shows:
+
+All matched Tryg snapshots have pricing_status: N/A, annualPremium: N/A.
+
+Phase 1B: “No pricing data available.”
+
+Phase 4: “Pricing Status: missing ❌ (0/3 policies have offer pricing)” and all per-policy premiums are null.
+
+For Types Studio & Alm. Brand (newer uploads) we already saw good PricingAgent output in debug.
+
+Replit’s own analysis shows:
+
+ENABLE_TWO_PHASE_HEALTHCHECK / PricingAgent is not applied to older snapshots.
+
+PricingAgent only runs on new uploads and doesn’t backfill existing snapshots.
+
+Goal:
+
+Make pricing stable and complete by:
+
+Ensuring PricingAgent is always enabled for all future snapshots.
+
+Backfilling pricing for all existing snapshots that have structured_policy but no pricing.
+
+Please implement the following tasks carefully and keep code clean and well documented.
+
+Task 1 – Ensure PricingAgent + two-phase flow are enabled
+
+Search the codebase for:
+
+ENABLE_TWO_PHASE_HEALTHCHECK
+
+PricingAgent
+
+any pricing-related service (pricingAgent, extractPolicyPricing, etc.)
+
+Confirm where the env flag is read (probably in healthCheckOrchestrator or an extraction pipeline service).
+
+Update the configuration so that in our Replit environment (the one running scripts and backend):
+
+ENABLE_TWO_PHASE_HEALTHCHECK=true
+
+Any other required flags for PricingAgent are also set.
+
+Verify by:
+
+Running the normal document processing / health check flow on a fresh test PDF (e.g. upload a new offer).
+
+Confirm in the DB (and via a debug report) that for the new document:
+
+structured_policy.pricing is present.
+
+Phase 1 – Snapshots shows pricing_status: ok, annualPremium and confidence.
+
+Acceptance:
+
+New uploads (e.g. a new Tryg or Alm. Brand PDF) have PricingAgent data visible in Phase 1 & Phase 1B in the debug report.
+
+Task 2 – Implement server/scripts/backfillPricing.ts
+
+We need a one-time (but reusable) script that backfills pricing for existing snapshots.
+
+Requirements
+
+Location: server/scripts/backfillPricing.ts
+
+Behaviour (high-level):
+
+Connect to the existing DB client (same as other scripts).
+
+Find all relevant snapshots:
+
+Preferably all offer_snapshots (document_type = 'offer') where:
+
+structured_policy IS NOT NULL AND
+
+(structured_policy->'pricing' IS NULL OR pricing.pricingStatus != 'ok')
+
+Optionally include current snapshots too (same condition), but offers are highest priority.
+
+For each snapshot:
+
+Load associated document OCR/text:
+
+Use documents.extraction_stages->'stage1_ocr' or whichever field is already used by PricingAgent in the normal flow.
+
+Call the same PricingAgent service used in the “new” flow, for example:
+
+const pricing = await pricingAgent.extractPolicyPricing({
+  ocrText,
+  policyType: snapshot.policy_type,
+  companyName: company.name,
+  structuredPolicy: snapshot.structured_policy
+});
+
+
+(Use the actual function signature from existing code.)
+
+Merge the returned pricing into snapshot.structured_policy under .pricing:
+
+const updatedStructured = {
+  ...snapshot.structured_policy,
+  pricing
+};
+
+
+Update offer_snapshots.structured_policy in the DB.
+
+Rate-limit calls (e.g. 2–3 PricingAgent calls per second) to avoid API throttling.
+
+Log clear progress:
+
+Total snapshots to process.
+
+Count of successful pricing updates.
+
+Count of failures (and which snapshot_ids).
+
+The script should be idempotent:
+
+Skip snapshots where pricing.pricingStatus === 'ok' already.
+
+If you want, add a --force CLI flag to recompute pricing for all snapshots.
+
+Implementation details
+
+Follow patterns from existing scripts like debugComparison.ts or any previous migration/backfill scripts.
+
+Use TypeScript + tsx (like other server scripts).
+
+Export a main function and then call it at the bottom:
+
+async function main() {
+  // ...
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
+
+Acceptance criteria
+
+Run the script once (without --force) against the current DB.
+
+After it completes:
+
+For Types Studio / Alm. Brand / Gjensidige / Tryg offers:
+
+offer_snapshots.structured_policy.pricing should exist for each matched snapshot.
+
+pricing.pricingStatus should be "ok" for cases where the price is clearly extractable.
+
+The Tryg debug report (c8e94c9f-... when re-run) must no longer show:
+
+“No pricing data available” in Phase 1B.
+
+“Pricing Status: missing (0/3 policies have offer pricing)” in Phase 4.
+
+Task 3 – Re-run comparisons and verify via debug reports
+
+Re-run the comparison pipeline (exactly how you currently do it, e.g. rerunGoldenComparison.ts or similar) for at least:
+
+Types Studio
+
+Alm. Brand
+
+Tryg
+
+Gjensidige
+
+Open the newly generated debug reports in debug-reports/ for those companies.
+
+Verify:
+
+Phase 1 – Snapshots:
+
+Matched offer snapshots have pricing_status: ok and a non-null annualPremium.
+
+Phase 1B – PricingAgent Details:
+
+Shows the same annualPremium values you expect from the PDF (e.g. Tryg’s yearly prices, Alm. Brand’s etc.).
+
+Phase 4 – Comparison Result:
+
+overall.totalOfferAnnualPremium equals the sum of per-policy offerAnnual (within rounding).
+
+No more 0 kr placeholders when PricingAgent found a price.
+
+Phase 5 – Auto-Detected Anomalies:
+
+No pricing mismatches where PricingAgent had a clear price.
+
+If some older/pseudo documents genuinely don’t contain a clear price, they should be marked as pricingStatus: "missing" with offerAnnualPremium: null.
+
+If anything still shows “No pricing data available” for a company where the PDF clearly contains a price, then we can refine the PricingAgent prompt itself later. But the architecture (always-on + full backfill + comparison uses only AI pricing) should stay as is.

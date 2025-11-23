@@ -100,3 +100,8 @@ author = "agent"
 task = "shell.exec"
 args = "npm run dev"
 waitForPort = 5000
+
+[userenv]
+
+[userenv.shared]
+ENABLE_TWO_PHASE_HEALTHCHECK = "true"
