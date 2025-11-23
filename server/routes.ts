@@ -1013,10 +1013,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Policy Comparisons (new simplified architecture based on policy_snapshots)
   app.get("/api/policies/comparisons", requireAuth, async (req, res) => {
     try {
-      // Get authenticated user ID
+      // Get authenticated user ID from headers (set by requireAuth middleware)
       const userId = req.headers['x-user-id'] as string;
       
+      // Validate userId exists
       if (!userId) {
+        logger.warn('[PolicyComparisons] Missing user ID in authenticated request');
         return res.status(401).json({ message: "User not authenticated" });
       }
 

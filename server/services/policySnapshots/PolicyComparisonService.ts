@@ -21,7 +21,7 @@
 
 import { db } from "../../db";
 import { policySnapshots, documents } from "../../../shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, desc } from "drizzle-orm";
 import type {
   PolicySnapshotSummary,
   PolicyOfferWithDelta,
@@ -38,6 +38,7 @@ export class PolicyComparisonService {
    */
   async getComparisonsForUser(userId: string): Promise<PolicyComparisonRow[]> {
     // 1) Load snapshots + documents for this user
+    // Order by createdAt DESC to get latest snapshots first (for deterministic current selection)
     const rows = await db
       .select({
         snapshotId: policySnapshots.id,
@@ -51,7 +52,8 @@ export class PolicyComparisonService {
       })
       .from(policySnapshots)
       .innerJoin(documents, eq(policySnapshots.documentId, documents.id))
-      .where(eq(documents.userId, userId));
+      .where(eq(documents.userId, userId))
+      .orderBy(desc(policySnapshots.createdAt));
 
     if (rows.length === 0) {
       return [];
