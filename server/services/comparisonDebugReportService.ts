@@ -239,7 +239,16 @@ export async function generateComparisonDebugReport(
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    filePath = path.join(dir, `comparison-${comparisonId}.md`);
+    
+    // Generate filename in format: DD.MM.YY.XXXX.md
+    const createdAt = comp.createdAt || new Date();
+    const day = String(createdAt.getDate()).padStart(2, '0');
+    const month = String(createdAt.getMonth() + 1).padStart(2, '0');
+    const year = String(createdAt.getFullYear()).slice(-2);
+    const shortId = comparisonId.slice(0, 8);
+    const filename = `${day}.${month}.${year}.${shortId}.md`;
+    
+    filePath = path.join(dir, filename);
     fs.writeFileSync(filePath, markdown, 'utf-8');
   }
 
