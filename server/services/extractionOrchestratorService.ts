@@ -754,6 +754,8 @@ export class ExtractionOrchestratorService {
    * Runs after offer_snapshots are created. Extracts structured policy JSON
    * from OCR markdown and stores it in offer_snapshots.structuredPolicy.
    * 
+   * Phase 1b: PricingAgent extracts and normalizes pricing for each policy.
+   * 
    * This enables Phase 2 (HealthCheckAnalyst) to use deterministic 1:1 coverage mapping.
    */
   private async runPolicyExtractorStage(
@@ -768,6 +770,7 @@ export class ExtractionOrchestratorService {
       console.log(`[Orchestrator] Stage 5 (Phase 1): Running PolicyExtractor for ${snapshots.length} snapshots...`);
 
       const { policyExtractorService } = await import("./policyExtractorService");
+      const { policyPricingService } = await import("./policyPricingService");
       const { coverageValidator } = await import("../utils/coverageValidator");
 
       // Run Phase 1 extraction on OCR markdown
@@ -785,7 +788,42 @@ export class ExtractionOrchestratorService {
         console.warn(`[Orchestrator] Phase 1 warnings:`, validation.warnings);
       }
 
-      // Match extracted policies to snapshots by policy type
+      // Phase 1b: Run PricingAgent for each policy and attach pricing
+      console.log(`[Orchestrator] Phase 1b: Running PricingAgent for ${extractionResult.policies.length} policies...`);
+      
+      const pricingResults: any[] = [];
+      for (const structuredPolicy of extractionResult.policies) {
+        try {
+          const pricing = await policyPricingService.extractPricingForPolicy({
+            policyType: structuredPolicy.policyType,
+            companyName: structuredPolicy.company || null,
+            currency: "DKK",
+            rawText: ocrOutput.markdown // Full OCR markdown - PricingAgent will filter relevant sections
+          });
+
+          // Attach pricing to structuredPolicy
+          structuredPolicy.pricing = pricing;
+          
+          // Mirror annualPremium at top level for backward compatibility
+          structuredPolicy.annualPremium = pricing.annualPremium ?? null;
+
+          pricingResults.push({
+            policyType: structuredPolicy.policyType,
+            status: pricing.pricingStatus,
+            annualPremium: pricing.annualPremium,
+            confidence: pricing.pricingConfidence
+          });
+
+          console.log(`[Orchestrator] PricingAgent result for ${structuredPolicy.policyType}: status=${pricing.pricingStatus}, premium=${pricing.annualPremium}, confidence=${pricing.pricingConfidence}`);
+        } catch (error) {
+          console.error(`[Orchestrator] PricingAgent failed for ${structuredPolicy.policyType}:`, error);
+          // Continue - pricing is optional, don't block entire extraction
+        }
+      }
+
+      console.log(`[Orchestrator] Phase 1b completed: ${pricingResults.length}/${extractionResult.policies.length} policies priced`);
+
+      // Match extracted policies (with pricing) to snapshots by policy type
       // Assumption: policies are in same order as snapshots (both created from same extraction)
       for (let i = 0; i < Math.min(snapshots.length, extractionResult.policies.length); i++) {
         const snapshot = snapshots[i];
@@ -793,7 +831,7 @@ export class ExtractionOrchestratorService {
 
         console.log(`[Orchestrator] Updating snapshot ${snapshot.id} with structured policy (${structuredPolicy.policyType})`);
 
-        // Update snapshot with structured policy
+        // Update snapshot with structured policy (includes pricing)
         await this.storage.updateOfferSnapshot(snapshot.id, {
           structuredPolicy: structuredPolicy as any
         });
@@ -804,7 +842,8 @@ export class ExtractionOrchestratorService {
       stage.output = {
         policiesExtracted: extractionResult.policies.length,
         snapshotsUpdated: Math.min(snapshots.length, extractionResult.policies.length),
-        validationWarnings: validation.warnings
+        validationWarnings: validation.warnings,
+        pricingResults // Include pricing stats in stage output
       };
 
       console.log(`[Orchestrator] Phase 1 completed: ${extractionResult.policies.length} policies extracted, ${validation.warnings.length} warnings`);
