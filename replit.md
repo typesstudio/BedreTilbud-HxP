@@ -64,3 +64,8 @@ File uploads are handled by Multer (PDFs up to 10MB). The database uses Drizzle 
 -   **Multer**: File uploads.
 -   **Connect-pg-simple**: PostgreSQL-backed session management.
 -   **Third-Party UI Libraries**: react-dropzone, react-hook-form with Zod, date-fns.
+
+## Developer Scripts
+-   **`server/scripts/backfillPricing.ts`**: Backfills pricing data for existing snapshots using PricingAgent (supports `--force` flag).
+-   **`server/scripts/regenerate-debug-reports.ts`**: Regenerates debug reports for specific comparisons to reflect updated pricing data.
+-   **`server/scripts/resetTestUser.ts`**: Safely deletes all insurance-related data for a test user (defaults to `hello@vyork.dk`) while preserving the user account. Usage: `npx tsx server/scripts/resetTestUser.ts [email]`.
