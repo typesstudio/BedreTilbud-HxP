@@ -47,47 +47,50 @@ export class ComparisonOrchestrator {
   }
 
   /**
-   * Extract annual premium from policy snapshot
+   * Extract annual premium from policy snapshot using PricingAgent
    * Returns null if no valid premium found (never defaults to 0)
    * 
-   * @param policy - Policy object with premium and structuredPolicy fields
+   * NEW: Exclusively uses structuredPolicy.pricing (PricingAgent output)
+   * Old brittle logic (snapshot.premium) is no longer used.
+   * 
+   * @param policy - Policy object with structuredPolicy.pricing field
    * @returns number | null - Annual premium or null if not available
    */
   private getAnnualPremiumFromSnapshot(policy: any): number | null {
-    if (!policy) return null;
+    if (!policy || !policy.structuredPolicy) return null;
 
-    // Try snapshot.premium first
-    const fromSnapshot = policy.premium;
-    
-    // Try structuredPolicy.annualPremium as fallback
-    let fromStructured: any = null;
-    if (policy.structuredPolicy) {
-      try {
-        const structured = typeof policy.structuredPolicy === 'string'
-          ? JSON.parse(policy.structuredPolicy)
-          : policy.structuredPolicy;
-        
-        if (typeof structured?.annualPremium === 'number') {
-          fromStructured = structured.annualPremium;
-        }
-      } catch (e) {
-        // Ignore JSON parse errors
+    try {
+      const structured = typeof policy.structuredPolicy === 'string'
+        ? JSON.parse(policy.structuredPolicy)
+        : policy.structuredPolicy;
+      
+      // NEW: Only use PricingAgent output (structuredPolicy.pricing)
+      const pricing = structured?.pricing;
+      
+      if (!pricing) {
+        console.warn(`[ComparisonOrchestrator] No pricing data found for policy`);
+        return null;
       }
+
+      // Only accept pricing when status is "ok"
+      if (pricing.pricingStatus !== 'ok') {
+        console.warn(`[ComparisonOrchestrator] Pricing status is "${pricing.pricingStatus}", rejecting annualPremium`);
+        return null;
+      }
+
+      // Extract annualPremium
+      const premium = pricing.annualPremium;
+      
+      if (typeof premium !== 'number') return null;
+
+      // Treat 0 as "unknown" – we never want 0 DKK as a default
+      if (premium <= 0) return null;
+
+      return premium;
+    } catch (e) {
+      console.error(`[ComparisonOrchestrator] Failed to extract pricing:`, e);
+      return null;
     }
-
-    // Prefer explicit snapshot.premium if present, otherwise structured annualPremium
-    const value = fromSnapshot ?? fromStructured;
-
-    if (value == null) return null;
-
-    // Treat 0 as "unknown" – we never want 0 DKK as a default
-    if (value === 0) return null;
-
-    // Ensure it's a valid number
-    const numValue = typeof value === 'string' ? parseFloat(value) : value;
-    if (isNaN(numValue)) return null;
-
-    return numValue;
   }
 
   /**
