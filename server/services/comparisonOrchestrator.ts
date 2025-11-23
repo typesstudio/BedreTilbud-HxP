@@ -423,6 +423,103 @@ export class ComparisonOrchestrator {
   }
 
   /**
+   * Score an offer snapshot based on data quality/completeness
+   * Prefers snapshots with:
+   * 1. Pricing data (pricingStatus === 'ok') - highest priority
+   * 2. Health check available
+   * 3. Newest created_at
+   * 
+   * Returns a numeric score (higher = better)
+   */
+  private scoreOfferSnapshot(snapshot: any): number {
+    let score = 0;
+
+    // Extract pricing status
+    const hasPricing = (() => {
+      if (!snapshot.structuredPolicy) return false;
+      try {
+        const structured = typeof snapshot.structuredPolicy === 'string'
+          ? JSON.parse(snapshot.structuredPolicy)
+          : snapshot.structuredPolicy;
+        return structured?.pricing?.pricingStatus === 'ok';
+      } catch (e) {
+        return false;
+      }
+    })();
+
+    // Strong bonus for having pricing data
+    if (hasPricing) score += 1000;
+
+    // Bonus for having health check
+    if (snapshot.healthCheck) score += 100;
+
+    // Small tiebreaker based on created_at (newer = better)
+    // Divide by 1 billion to keep it small relative to other bonuses
+    const createdAt = snapshot.createdAt || snapshot.created_at;
+    if (createdAt) {
+      const timestamp = new Date(createdAt).getTime();
+      if (!isNaN(timestamp)) {
+        score += timestamp / 1_000_000_000;
+      }
+    }
+
+    return score;
+  }
+
+  /**
+   * Select the best offer snapshot for each policy type
+   * When multiple snapshots exist for the same (companyId, policyType), 
+   * prefer the one with:
+   * 1. Pricing data (pricingStatus === 'ok')
+   * 2. Health check
+   * 3. Newest created_at
+   */
+  private selectBestOfferSnapshots(offerPolicies: any[]): any[] {
+    // Group by policyType
+    const byType = new Map<string, any[]>();
+    for (const policy of offerPolicies) {
+      const policyType = policy.policyType;
+      if (!policyType) continue;
+      
+      if (!byType.has(policyType)) {
+        byType.set(policyType, []);
+      }
+      byType.get(policyType)!.push(policy);
+    }
+
+    // For each type, select the best snapshot
+    const bestSnapshots: any[] = [];
+    for (const [policyType, snapshots] of byType.entries()) {
+      if (snapshots.length === 1) {
+        bestSnapshots.push(snapshots[0]);
+        continue;
+      }
+
+      // Multiple snapshots for this type - score and pick best
+      const scored = snapshots.map(s => ({
+        snapshot: s,
+        score: this.scoreOfferSnapshot(s)
+      }));
+
+      scored.sort((a, b) => b.score - a.score);
+      const best = scored[0].snapshot;
+
+      console.log(`[ComparisonOrchestrator] Selected best ${policyType} snapshot: ${best.id?.substring(0, 8)} (score=${scored[0].score.toFixed(2)}) from ${snapshots.length} candidates`, {
+        candidates: scored.map(s => ({
+          id: s.snapshot.id?.substring(0, 8),
+          score: s.score.toFixed(2),
+          hasPricing: this.scoreOfferSnapshot(s.snapshot) >= 1000,
+          hasHealthCheck: !!s.snapshot.healthCheck
+        }))
+      });
+
+      bestSnapshots.push(best);
+    }
+
+    return bestSnapshots;
+  }
+
+  /**
    * Group policies by company pair (currentCompany, offerCompany)
    */
   private groupByCompanyPair(
@@ -463,7 +560,12 @@ export class ComparisonOrchestrator {
     // Populate each pair with relevant policies
     for (const [pairKey, pair] of Array.from(pairs.entries())) {
       pair.currentPolicies = currentPolicies.filter(p => (p.companyId || 'unknown') === pair.currentCompany);
-      pair.offerPolicies = offerPolicies.filter(p => (p.companyId || 'unknown') === pair.offerCompany);
+      
+      // For offer policies, select the BEST snapshot per policy type
+      const candidateOffers = offerPolicies.filter(p => (p.companyId || 'unknown') === pair.offerCompany);
+      pair.offerPolicies = this.selectBestOfferSnapshots(candidateOffers);
+      
+      console.log(`[ComparisonOrchestrator] Company pair ${pair.currentCompany} → ${pair.offerCompany}: selected ${pair.offerPolicies.length} best offer snapshots from ${candidateOffers.length} candidates`);
     }
     
     return Array.from(pairs.values());
