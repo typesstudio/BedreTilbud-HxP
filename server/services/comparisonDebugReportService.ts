@@ -365,6 +365,10 @@ function buildPhase1Snapshots(params: {
     const hasStructured = s.structuredPolicy ? '✅' : '❌';
     let mainCount = 0;
     let addCount = 0;
+    let pricingStatus = 'N/A';
+    let annualPremium = 'N/A';
+    let pricingConfidence = 'N/A';
+    let pricingNotes = 'N/A';
 
     if (s.structuredPolicy) {
       try {
@@ -373,10 +377,19 @@ function buildPhase1Snapshots(params: {
           : s.structuredPolicy;
         mainCount = structured?.coverageDetails?.mainCoverages?.length || 0;
         addCount = structured?.coverageDetails?.additionalCoverages?.length || 0;
+
+        // Extract PricingAgent output
+        const pricing = structured?.pricing;
+        if (pricing) {
+          pricingStatus = pricing.pricingStatus || 'N/A';
+          annualPremium = pricing.annualPremium != null ? `${pricing.annualPremium} DKK` : 'null';
+          pricingConfidence = pricing.pricingConfidence != null ? `${pricing.pricingConfidence}%` : 'N/A';
+          pricingNotes = pricing.notes?.slice(0, 50) || 'N/A';
+        }
       } catch (e) {}
     }
 
-    return `| ${s.id.substring(0, 8)} | ${s.role} | ${s.company} | ${s.policyType} | ${hasStructured} | ${mainCount} | ${addCount} |`;
+    return `| ${s.id.substring(0, 8)} | ${s.role} | ${s.company} | ${s.policyType} | ${hasStructured} | ${mainCount} | ${addCount} | ${pricingStatus} | ${annualPremium} | ${pricingConfidence} |`;
   }).join('\n');
 
   const warnings = allSnapshots
@@ -384,13 +397,38 @@ function buildPhase1Snapshots(params: {
     .map(s => `- ❌ ${s.role} ${s.policyType} (${s.id.substring(0, 8)}) has no structured_policy`)
     .join('\n');
 
-  return `## Phase 1 – Snapshots
+  const pricingWarnings = allSnapshots
+    .filter(s => {
+      if (!s.structuredPolicy) return false;
+      try {
+        const structured = typeof s.structuredPolicy === 'string' ? JSON.parse(s.structuredPolicy) : s.structuredPolicy;
+        const pricing = structured?.pricing;
+        return !pricing || pricing.pricingStatus !== 'ok';
+      } catch (e) {
+        return false;
+      }
+    })
+    .map(s => {
+      try {
+        const structured = typeof s.structuredPolicy === 'string' ? JSON.parse(s.structuredPolicy) : s.structuredPolicy;
+        const pricing = structured?.pricing;
+        const status = pricing?.pricingStatus || 'missing';
+        return `- ⚠️ ${s.role} ${s.policyType} (${s.id.substring(0, 8)}) pricing status: ${status}`;
+      } catch (e) {
+        return `- ⚠️ ${s.role} ${s.policyType} (${s.id.substring(0, 8)}) pricing parse error`;
+      }
+    })
+    .join('\n');
 
-| Snapshot ID | Doc type | Company        | policy_type | structured_policy | mainCoverages | addCoverages |
-|-------------|----------|----------------|------------|-------------------|---------------|-------------|
+  return `## Phase 1 – Snapshots (with PricingAgent output)
+
+| Snapshot ID | Doc type | Company        | policy_type | structured_policy | mainCoverages | addCoverages | pricing_status | annualPremium | confidence |
+|-------------|----------|----------------|------------|-------------------|---------------|-------------|----------------|---------------|-----------|
 ${table}
 
-${warnings ? `**Warnings**\n\n${warnings}` : '**No warnings**'}`;
+${warnings ? `**Warnings**\n\n${warnings}` : ''}
+${pricingWarnings ? `\n**Pricing Warnings**\n\n${pricingWarnings}` : ''}
+${!warnings && !pricingWarnings ? '**No warnings**' : ''}`;
 }
 
 function buildPhase2HealthChecks(params: {
