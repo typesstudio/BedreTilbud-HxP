@@ -489,23 +489,23 @@ export class ComparisonOrchestrator {
 
     // For each type, select the best snapshot
     const bestSnapshots: any[] = [];
-    for (const [policyType, snapshots] of byType.entries()) {
+    for (const [policyType, snapshots] of Array.from(byType.entries())) {
       if (snapshots.length === 1) {
         bestSnapshots.push(snapshots[0]);
         continue;
       }
 
       // Multiple snapshots for this type - score and pick best
-      const scored = snapshots.map(s => ({
+      const scored = snapshots.map((s: any) => ({
         snapshot: s,
         score: this.scoreOfferSnapshot(s)
       }));
 
-      scored.sort((a, b) => b.score - a.score);
+      scored.sort((a: any, b: any) => b.score - a.score);
       const best = scored[0].snapshot;
 
       console.log(`[ComparisonOrchestrator] Selected best ${policyType} snapshot: ${best.id?.substring(0, 8)} (score=${scored[0].score.toFixed(2)}) from ${snapshots.length} candidates`, {
-        candidates: scored.map(s => ({
+        candidates: scored.map((s: any) => ({
           id: s.snapshot.id?.substring(0, 8),
           score: s.score.toFixed(2),
           hasPricing: this.scoreOfferSnapshot(s.snapshot) >= 1000,
@@ -902,7 +902,28 @@ export class ComparisonOrchestrator {
 
       console.log(`[ComparisonOrchestrator] Overall pricing coverage: ${pricedPolicies.length}/${deterministicPolicyData.length} policies have both current and offer premiums`);
 
+      // Calculate pricing status for metadata
+      const policiesWithOfferPricing = deterministicPolicyData.filter(p => 
+        p.costSummary.offerAnnualPremium != null
+      );
+      
+      let pricingStatus: 'complete' | 'partial' | 'missing';
+      if (policiesWithOfferPricing.length === 0) {
+        pricingStatus = 'missing';
+      } else if (policiesWithOfferPricing.length < deterministicPolicyData.length) {
+        pricingStatus = 'partial';
+      } else {
+        pricingStatus = 'complete';
+      }
+
+      console.log(`[ComparisonOrchestrator] Pricing status: ${pricingStatus} (${policiesWithOfferPricing.length}/${deterministicPolicyData.length} policies have offer pricing)`);
+
       const comparisonResult = {
+        meta: {
+          pricingStatus,
+          totalPolicies: deterministicPolicyData.length,
+          policiesWithOfferPricing: policiesWithOfferPricing.length,
+        },
         overall: {
           totalCurrentAnnualPremium,
           totalOfferAnnualPremium,
