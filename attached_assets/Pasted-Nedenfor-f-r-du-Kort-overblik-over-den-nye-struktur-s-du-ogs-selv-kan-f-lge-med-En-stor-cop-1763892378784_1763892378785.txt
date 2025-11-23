@@ -1,0 +1,605 @@
+Nedenfor får du:
+
+Kort overblik over den nye struktur (så du også selv kan følge med).
+
+En stor, copy-paste Replit-prompt der:
+
+Opretter PricingAgent (prompt + service)
+
+Opdaterer structuredPolicy-strukturen
+
+Refaktorerer costSummary / pricing i comparison
+
+Opdaterer debug report til at vise pricing
+
+Du kan bare smide hele prompten i Replit.
+
+1. Ny struktur – hvad vi vil have
+a) Hvor PricingAgent passer ind
+
+For hver policy (hus / indbo / ulykke), både current og offer:
+
+PDF → OCR + segmentation (har du allerede).
+
+PolicyExtractor → structured_policy (har du allerede).
+
+PricingAgent (NY):
+
+Input:
+
+policyType (hus/indbo/ulykke)
+
+companyName
+
+currency (DKK)
+
+fuld rå tekst for det policy-segment
+
+Output: pricing JSON.
+
+structured_policy udvides med pricing.
+
+Comparison-pipeline bruger kun structured_policy.pricing.annualPremium osv. til at bygge costSummary.
+
+b) Ny pricing struktur (inde i structured_policy)
+
+Vi vil have noget i stil med:
+
+export type PolicyPricingStatus =
+  | "ok"
+  | "unknown"
+  | "conflict"
+  | "package_only";
+
+export interface RawPriceExpression {
+  label: string;              // kort beskrivelse / linje fra PDF
+  amount: number;             // 8734.59 (DKK)
+  currency: "DKK";
+  frequency:
+    | "year"
+    | "month"
+    | "quarter"
+    | "half_year"
+    | "single"
+    | "unknown";
+  isPerPolicy: boolean | null;
+  isTotalForAllPolicies: boolean | null;
+}
+
+export interface PolicyPricing {
+  pricingStatus: PolicyPricingStatus;
+  pricingConfidence: number;         // 0–1
+  annualPremium: number | null;      // altid i DKK
+  billingFrequency:
+    | "year"
+    | "month"
+    | "quarter"
+    | "half_year"
+    | "single"
+    | "mixed"
+    | "unknown";
+  rawPrices: RawPriceExpression[];
+  bindingMonths: number | null;
+  hasIntroPrice: boolean;
+  introPeriodMonths: number | null;
+  introAnnualPremium: number | null;
+  postBindingIncreasePercent: number | null;
+  notes: string;
+  extractionVersion: string;         // fx "pricing_agent_v1"
+}
+
+
+Og structuredPolicy får fx:
+
+export interface StructuredPolicy {
+  policyType: "hus" | "indbo" | "ulykke" | string;
+  policyName: string | null;
+  company: string | null;
+  annualPremium?: number | null;   // spejler pricing.annualPremium
+  defaultDeductible?: string | null;
+  coverageDetails: { ... };
+  pricing?: PolicyPricing;         // 👈 NY
+}
+
+
+Vigtigt:
+
+Vi gemmer pricing ind i offer_snapshots.structured_policy JSON (ingen DB-migration nødvendig).
+
+comparison.costSummary læser KUN fra structuredPolicy.pricing.
+
+2. Copy-paste Replit-prompt – implementer PricingAgent end-to-end
+
+Her kommer prompten du kan give til Replit:
+
+REPLIT PROMPT (COPY/PASTE HELE BLOKKEN):
+
+You are working in a TypeScript/Node monorepo for the BedreTilbud insurance comparison app.
+
+Goal:
+Replace the current brittle pricing logic with a robust PricingAgent per policy. The PricingAgent should:
+
+Look at the full policy segment text.
+
+Extract and normalize annual premium and related pricing info.
+
+Attach a pricing object onto structured_policy for each snapshot (both current & offer).
+
+Be the only source of truth for costSummary.currentAnnualPremium and costSummary.offerAnnualPremium.
+
+Cost per run is not a concern right now. Robustness, debuggability, and future extensibility are more important than micro-optimization.
+
+1) Find current pricing logic and prepare for refactor
+
+Search for where costSummary.currentAnnualPremium, costSummary.offerAnnualPremium, and annualSavings are computed.
+
+Likely in or under:
+
+server/services/comparisonOrchestrator.ts
+
+or a helper like buildCostSummary / computePricing / similar.
+
+Also search for any pricing heuristics based on regex or string scanning in:
+
+policyExtractorService.ts
+
+comparisonOrchestrator.ts
+
+or other pricing-related helpers.
+
+We will replace these heuristics with a call to a new PolicyPricing structure powered by an LLM.
+
+Do NOT delete old code until new logic is wired and tested. You can isolate old logic into helper functions and stop calling them.
+
+2) Extend types: StructuredPolicy + Pricing
+
+Create or extend a shared type file (if one exists, use it; otherwise create one):
+
+Look for existing interfaces like StructuredPolicy, ExtractedPolicy, etc.
+
+Extend them to include pricing as described below.
+
+Add the following types (or merge into existing ones in a sensible place, e.g. server/types/policies.ts or similar):
+
+export type PolicyPricingStatus =
+  | "ok"
+  | "unknown"
+  | "conflict"
+  | "package_only";
+
+export interface RawPriceExpression {
+  label: string;              // short description or snippet from PDF
+  amount: number;             // e.g. 8734.59
+  currency: "DKK";
+  frequency:
+    | "year"
+    | "month"
+    | "quarter"
+    | "half_year"
+    | "single"
+    | "unknown";
+  isPerPolicy: boolean | null;
+  isTotalForAllPolicies: boolean | null;
+}
+
+export interface PolicyPricing {
+  pricingStatus: PolicyPricingStatus;
+  pricingConfidence: number;         // 0–1
+  annualPremium: number | null;      // always in DKK, converted if needed
+  billingFrequency:
+    | "year"
+    | "month"
+    | "quarter"
+    | "half_year"
+    | "single"
+    | "mixed"
+    | "unknown";
+  rawPrices: RawPriceExpression[];
+  bindingMonths: number | null;
+  hasIntroPrice: boolean;
+  introPeriodMonths: number | null;
+  introAnnualPremium: number | null;
+  postBindingIncreasePercent: number | null;
+  notes: string;
+  extractionVersion: string;         // e.g. "pricing_agent_v1"
+}
+
+
+Now extend StructuredPolicy (or equivalent) to include:
+
+export interface StructuredPolicy {
+  policyType: string;                // "hus" | "indbo" | "ulykke" | ...
+  policyName?: string | null;
+  company?: string | null;
+  annualPremium?: number | null;     // mirror pricing.annualPremium
+  defaultDeductible?: string | null;
+  coverageDetails: {
+    mainCoverages: any[];
+    additionalCoverages: any[];
+  };
+  pricing?: PolicyPricing;           // NEW
+}
+
+
+Make sure any code that reads structured_policy still compiles (pricing can be optional).
+
+3) Create PricingAgent prompt file
+
+Create a new prompt file:
+
+server/ai-prompts/extraction/policy-pricing.md
+
+Content (you can adjust wording slightly for style, but keep structure and rules):
+
+SYSTEM – BedreTilbud PolicyPricingAgent (DK)
+
+ROLLE
+Du er en dansk forsikringsspecialist med fokus på PRISER. Du får hele tekstuddraget for ÉN forsikringspolice (hus, indbo eller ulykke) fra et PDF-tilbud eller nuværende police.
+
+Din opgave er KUN at identificere og normalisere ALLE relevante prisoplysninger for denne ENKELTE police og returnere dem som struktureret JSON.
+
+VIGTIGT:
+- Du må KUN bruge oplysninger, der findes i teksten.
+- Hvis du er i tvivl, skal du være konservativ og markere pricingStatus som "unknown" i stedet for at gætte.
+- Returnér ALDRIG 0 som pris, medmindre det tydeligt står, at prisen er 0 kr (fx "gratis"). Hvis du ikke kan finde en pris, brug annualPremium = null og pricingStatus = "unknown".
+
+INPUT
+Du får:
+
+- policyType: "hus" | "indbo" | "ulykke"
+- companyName: navn på forsikringsselskab
+- currency: altid "DKK"
+- rawText: fuld tekst for denne police (inkl. prisafsnit, vilkår osv.)
+
+OPGAVE
+1) Find ALLE prisudtryk i teksten:
+   - Eksempler:
+     - "Årlig præmie: 8.734,59 kr"
+     - "Præmie pr. måned: 995 kr"
+     - "Samlet pris pr. år: 10.200 kr"
+     - "Intropris 6 måneder: 450 kr/md"
+   - Uddrag hele linjen eller sætningen som "label".
+   - Konverter beløb til tal i DKK:
+     - "8.734,59 kr" → 8734.59
+     - "995 kr" → 995
+   - Identificér FREKVENS:
+     - Hvis der står "pr. år"/"årligt" → frequency = "year"
+     - Hvis der står "pr. måned"/"md" → frequency = "month"
+     - Hvis der står "pr. kvartal" → "quarter"
+     - Hvis der står "pr. halvår" → "half_year"
+     - Hvis der står "engangsbeløb", "et gebyr" osv. → "single"
+     - Hvis uklart → "unknown"
+
+2) Vurder om pris er for:
+   - Denne ENKELTE police (hus/indbo/ulykke)
+   - Eller en samlet pakke for flere policer
+   - markers:
+     - isPerPolicy = true/false/null
+     - isTotalForAllPolicies = true/false/null
+
+3) Beregn ÅRLIG præmie (annualPremium):
+   - Hvis du har en klar årlig præmie for netop denne police:
+     - Brug den direkte.
+   - Hvis du har en månedlig pris for netop denne police:
+     - annualPremium = monthly * 12
+   - Hvis du kun har kvartalspris:
+     - annualPremium = quarterly * 4
+   - Hvis du kun har halvårlig pris:
+     - annualPremium = halfYear * 2
+   - Hvis prisen tydeligt er en samlet pakke for flere policer, og du IKKE med sikkerhed kan splitte den ud:
+     - annualPremium = null
+     - pricingStatus = "package_only"
+     - Forklar hvorfor i notes.
+
+4) Binding og intropris:
+   - bindingMonths:
+     - Find evt. binding (fx "12 måneders binding" → 12)
+   - hasIntroPrice:
+     - true, hvis der findes en introduktionspris/rabatperiode
+   - introPeriodMonths:
+     - Længde af introperiode i måneder, hvis angivet (fx "6 måneder" → 6)
+   - introAnnualPremium:
+     - Omregnet årlig intropris for denne police (samme logik som ovenfor)
+   - postBindingIncreasePercent:
+     - Hvis der tydeligt står, at prisen stiger efter binding (fx "stiger til 1.200 kr/md" → beregn ca. % forskel)
+
+5) Sæt pricingStatus og pricingConfidence:
+   - pricingStatus = "ok" hvis:
+     - Du har en klar, entydig årlig præmie for netop denne police.
+   - pricingStatus = "unknown" hvis:
+     - Du ikke entydigt kan finde prisen for denne police.
+   - pricingStatus = "conflict" hvis:
+     - Der findes flere modstridende prisangivelser for denne police, og du ikke kan vælge én sikkert.
+   - pricingStatus = "package_only" hvis:
+     - Der kun findes samlede pakkepriser, som dækker flere policer samlet uden tydelig opdeling.
+   - pricingConfidence:
+     - Tal mellem 0 og 1 (fx 0.9 for meget sikker, 0.6 for lidt usikker)
+
+OUTPUT FORMAT
+Returnér KUN gyldig JSON i præcis dette format:
+
+{
+  "pricingStatus": "ok" | "unknown" | "conflict" | "package_only",
+  "pricingConfidence": number,
+  "annualPremium": number | null,
+  "billingFrequency": "year" | "month" | "quarter" | "half_year" | "single" | "mixed" | "unknown",
+  "rawPrices": [
+    {
+      "label": "string",
+      "amount": number,
+      "currency": "DKK",
+      "frequency": "year" | "month" | "quarter" | "half_year" | "single" | "unknown",
+      "isPerPolicy": true | false | null,
+      "isTotalForAllPolicies": true | false | null
+    }
+  ],
+  "bindingMonths": number | null,
+  "hasIntroPrice": boolean,
+  "introPeriodMonths": number | null,
+  "introAnnualPremium": number | null,
+  "postBindingIncreasePercent": number | null,
+  "notes": "string",
+  "extractionVersion": "pricing_agent_v1"
+}
+
+REGLER
+- Brug altid DKK som currency.
+- Hvis du ikke kan finde nogen pris: annualPremium = null, pricingStatus = "unknown".
+- Returnér ALDRIG 0 som annualPremium, medmindre teksten klart siger, at prisen er 0 kr.
+- Brug hellere "unknown" end at gætte.
+- Alle beløb skal være tal (ikke strings) og uden "kr" eller tusindtalsseparatorer.
+
+4) Implement PricingAgent service
+
+Create a new service:
+
+server/services/policyPricingService.ts
+
+Example implementation sketch (adapt to your existing AI client patterns):
+
+import { StructuredPolicy, PolicyPricing } from "../types/policies"; // adjust path
+import { callJsonModel } from "../services/aiClient"; // or whatever helper you use
+
+export interface PricingAgentInput {
+  policyType: string;
+  companyName: string | null;
+  currency: "DKK";
+  rawText: string;
+}
+
+export async function extractPricingForPolicy(
+  input: PricingAgentInput
+): Promise<PolicyPricing> {
+  try {
+    const systemPrompt = await loadPrompt("extraction/policy-pricing.md"); // reuse your existing prompt loader
+    const userPayload = {
+      policyType: input.policyType,
+      companyName: input.companyName,
+      currency: input.currency,
+      rawText: input.rawText
+    };
+
+    const result = await callJsonModel<PolicyPricing>({
+      systemPrompt,
+      userContent: JSON.stringify(userPayload),
+      model: "gpt-4o", // or your configured model
+      temperature: 0.1
+    });
+
+    // Basic validation & safety
+    if (!result || typeof result !== "object") {
+      throw new Error("Empty pricing result");
+    }
+
+    // Never accept 0 as a valid annualPremium unless status explicitly ok and notes mention 0
+    if (
+      typeof result.annualPremium === "number" &&
+      result.annualPremium <= 0
+    ) {
+      result.annualPremium = null;
+      if (result.pricingStatus === "ok") {
+        result.pricingStatus = "unknown";
+      }
+    }
+
+    // Force extractionVersion
+    result.extractionVersion = "pricing_agent_v1";
+
+    return result;
+  } catch (err) {
+    // Fallback: mark as unknown
+    return {
+      pricingStatus: "unknown",
+      pricingConfidence: 0,
+      annualPremium: null,
+      billingFrequency: "unknown",
+      rawPrices: [],
+      bindingMonths: null,
+      hasIntroPrice: false,
+      introPeriodMonths: null,
+      introAnnualPremium: null,
+      postBindingIncreasePercent: null,
+      notes: `PricingAgent failed: ${(err as Error).message}`,
+      extractionVersion: "pricing_agent_v1"
+    };
+  }
+}
+
+
+Adjust to fit your actual AI client and prompt loading helpers.
+
+5) Wire PricingAgent into extraction pipeline
+
+We want PricingAgent to run right after structured_policy extraction for each policy segment.
+
+Look for:
+
+server/services/policyExtractorService.ts (or similar) where each policy segment is:
+
+Parsed by the extraction model into a structuredPolicy
+
+Then stored into offer_snapshots.structured_policy
+
+In that function:
+
+Ensure you have access to the full raw text for the segment (from segmentation stage). If segmentation result doesn’t include raw text, load it from documents.extraction_stages.stage2_segmentation or whatever structure is used.
+
+After you have structuredPolicy:
+
+const pricing = await extractPricingForPolicy({
+  policyType: structuredPolicy.policyType,
+  companyName: structuredPolicy.company ?? snapshotCompanyName ?? null,
+  currency: "DKK",
+  rawText: segmentRawText
+});
+
+structuredPolicy.pricing = pricing;
+structuredPolicy.annualPremium = pricing.annualPremium ?? null;
+
+
+Save structuredPolicy including .pricing into offer_snapshots.structured_policy as normal.
+
+Do this for both:
+
+Current policies (document_type = "current")
+
+Offer policies (document_type = "offer")
+
+6) Refactor costSummary builder to use PolicyPricing ONLY
+
+Now update the comparison logic.
+
+Find where comparison costSummary is currently built. Something like:
+
+costSummary: {
+  currentAnnualPremium: number;
+  offerAnnualPremium: number;
+  annualSavings: number;
+  annualSavingsPercent: number;
+}
+
+
+Replace existing pricing extraction logic with this pattern:
+
+function getAnnualPremiumFromStructuredPolicy(
+  structuredPolicy: StructuredPolicy | null | undefined
+): number | null {
+  if (!structuredPolicy || !structuredPolicy.pricing) return null;
+  const p = structuredPolicy.pricing;
+  if (p.pricingStatus !== "ok") return null;
+  if (typeof p.annualPremium !== "number") return null;
+  if (p.annualPremium <= 0) return null;
+  return p.annualPremium;
+}
+
+
+In the comparison builder, for each matched pair:
+
+const currentAnnual = getAnnualPremiumFromStructuredPolicy(
+  currentSnapshot.structured_policy as StructuredPolicy
+);
+const offerAnnual = getAnnualPremiumFromStructuredPolicy(
+  offerSnapshot.structured_policy as StructuredPolicy
+);
+
+let annualSavings: number | null = null;
+let annualSavingsPercent: number | null = null;
+
+if (typeof currentAnnual === "number" && typeof offerAnnual === "number") {
+  annualSavings = currentAnnual - offerAnnual;
+  annualSavingsPercent =
+    currentAnnual > 0 ? (annualSavings / currentAnnual) * 100 : null;
+}
+
+costSummary.currentAnnualPremium = currentAnnual;
+costSummary.offerAnnualPremium = offerAnnual;
+costSummary.annualSavings = annualSavings;
+costSummary.annualSavingsPercent = annualSavingsPercent;
+
+
+For the overall totals:
+
+Sum only non-null currentAnnualPremium and offerAnnualPremium.
+
+If totals end up as null or 0 because no policy had valid pricing, mark this explicitly in the comparison JSON (e.g. add a pricingStatus: "unknown" on the overall level).
+
+Do NOT default to 0 when pricing is unknown.
+
+Update the cumulativeSavings builder:
+
+If overall.annualSavings is null or not a finite number:
+
+cumulativeSavings.chartData can either be an empty array or all zeros, but mark this in debug report as “pricing unknown”.
+
+Only build a 120-month chart when annualSavings is a valid number.
+
+7) Update Comparison Debug Report to show PricingAgent
+
+Open the debug report service (you already have something like server/services/comparisonDebugReportService.ts).
+
+Add a new section in the markdown output, e.g.:
+
+Phase 1b – PricingAgent Output
+For each policy (current + offer), log:
+
+pricingStatus, pricingConfidence
+
+annualPremium
+
+billingFrequency
+
+rawPrices (truncated, e.g. first 2 entries)
+
+notes
+
+Also in Phase 5 – Auto-Detected Anomalies, add checks:
+
+If pricingStatus !== "ok" for either side, or annualPremium === null:
+
+Add a warning:
+
+⚠️ Missing or uncertain pricing for {policyType} ({side=current/offer}) – pricingStatus={...}, notes={...}
+
+If costSummary.offerAnnualPremium === null but PricingAgent found some prices, surface that.
+
+8) Acceptance Criteria
+
+When you are done, the following should hold:
+
+For a healthy comparison (like Privatsikring vs Gjensidige where prices are clearly stated):
+
+structured_policy.pricing.annualPremium is a non-zero number for each policy on both sides.
+
+costSummary.currentAnnualPremium and offerAnnualPremium match these values.
+
+overall.totalCurrentAnnualPremium and totalOfferAnnualPremium are non-zero.
+
+annualSavings and annualSavingsPercent reflect the correct math.
+
+cumulativeSavings.chartData has length 120.
+
+When a PDF truly does not contain a clear price for a policy:
+
+pricingStatus is "unknown" or "package_only".
+
+annualPremium is null (NOT 0).
+
+costSummary uses null for that side and does not fake a 0.
+
+Debug report clearly shows why pricing is unknown (via pricing.notes and anomalies section).
+
+No remaining regex-only pricing logic is used for costSummary:
+
+All pricing for comparison comes via StructuredPolicy.pricing.
+
+The system still works for multi-policy setups:
+
+3 policies (hus, indbo, ulykke) → 3 costSummary blocks + 1 overall, all respecting the new pricing.
+
+Please implement all of the above, run existing tests, and then create at least one new comparison debug report to verify that:
+
+PricingAgent fields appear in the report.
+
+costSummary is populated based on pricing.annualPremium.
+
+No “0 kr” where the price is actually unknown.

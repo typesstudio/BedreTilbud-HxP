@@ -15,6 +15,7 @@ type PromptName =
   | 'emails/system-prompt'
   | 'ocr/policy-extraction'
   | 'extraction/policy-extractor'
+  | 'extraction/policy-pricing'
   | 'health-check/analysis';
 
 const promptCache: Map<string, string> = new Map();
@@ -31,6 +32,7 @@ const FALLBACK_PROMPTS: Record<PromptName, string> = {
   'emails/system-prompt': `You are a helpful AI assistant for BedreTilbud, a Danish insurance comparison platform.`,
   'ocr/policy-extraction': `You are an expert at extracting insurance policy information from documents. Identify ALL distinct insurance policies in the document and extract each one separately.`,
   'extraction/policy-extractor': `You are an expert Danish insurance parsing engine. Extract policies with perfect accuracy from OCR text. Return only valid JSON.`,
+  'extraction/policy-pricing': `You are a Danish insurance pricing expert. Extract and normalize pricing information from policy text. Return only valid JSON.`,
   'health-check/analysis': `You are a Danish insurance expert analyzing a user's current insurance policy. Perform a comprehensive health check analysis.`
 };
 

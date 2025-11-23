@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { loadPrompt, replaceVariables } from "../ai-prompts/utils/promptLoader";
 import { retryAICall } from "../utils/retry";
+import type { PolicyPricing } from "../types/pricing";
 
 if (!process.env.OPENAI_API_KEY) {
   throw new Error("OPENAI_API_KEY environment variable is required");
@@ -36,6 +37,7 @@ export interface StructuredPolicy {
     rawPolicyTypeLabel: string | null;
     indexYear: string | null;
   };
+  pricing?: PolicyPricing; // NEW: PricingAgent output
 }
 
 export interface PolicyExtractorResult {
