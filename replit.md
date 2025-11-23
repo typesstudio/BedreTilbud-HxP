@@ -40,12 +40,14 @@ An **Extraction Stages Debugging System** persists intermediate outputs (OCR, Se
 
 ### Comparison Pipeline Architecture
 This pipeline generates comprehensive comparison analyses:
-1.  **Phase 3: Deterministic Policy Matching**: Pairs current and offer policies using scoring heuristics, with fallback logic for single-policy-per-type pairs.
+1.  **Phase 3: Deterministic Policy Matching**: Pairs current and offer policies using scoring heuristics, with fallback logic for single-policy-per-type pairs. The matcher implements **Snapshot Quality Scoring** to select the best offer snapshots: +1000 points for snapshots with pricing data (`pricingStatus ≠ 'missing'`), +100 points for health check presence. This ensures PricingAgent-backed snapshots are prioritized over legacy snapshots without pricing data.
 2.  **Phase 4: ComparisonAgent**: An AI-powered agent (`gpt-4o` with `gpt-4o-mini` fallback) generates validated ComparisonResult JSON using matched pairs and health check data, focusing on 1:1 coverage mapping and deductible preservation.
 
 An **Anti-Hallucination System** constructs the policy structure in code before AI calls, preventing the AI from generating non-existent policy types. **Retry Logic** automatically retries with reinforced prompts if the AI omits required policy types. The **ComparisonOrchestrator** manages this pipeline, groups policies, and stores results in `company_comparisons`, with idempotency checks enabled by `ENABLE_COMPARISON=true`.
 
 The platform implements an **Enrichment Pattern** to guarantee the preservation of deterministic data (coverage rows, highlights, cost summaries) by ensuring the AI only generates narratives. This involves caching deterministic data, sending minimal input to the AI, merging AI narratives with cached data, and strict validation. For single-policy comparisons, a pure code-based deterministic builder is used, bypassing AI calls for 100% success rate and zero hallucinations in such cases.
+
+**Pricing Coverage Metadata**: Comparison results include `meta.pricingStatus` field indicating pricing data quality: 'complete' (all policies have offer pricing), 'partial' (some policies have pricing), or 'missing' (no pricing data). This metadata is surfaced in Phase 4 debug reports for operational visibility. All cost calculations exclusively use `structuredPolicy.pricing.annualPremium` from PricingAgent, treating missing premiums as `null` to ensure accurate savings calculations.
 
 ### AI Model Configuration
 A centralized configuration (`server/config/aiModels.ts`) manages AI models and enables easy switching and cost tracking. Supported models include `gpt-4o-mini`, `gpt-4o`, `gpt-4o-reasoning` (`o1-mini`), `mistral-large-latest`, and `mistral-ocr-latest`. Different configurations (Premium, Balanced, Budget) are available for varying quality and cost.
