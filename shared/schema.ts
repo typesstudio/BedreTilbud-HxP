@@ -189,6 +189,46 @@ export const policies = pgTable("policies", {
   userIdIsOwnIdx: index("policies_user_id_is_own_idx").on(table.userId, table.isOwnPolicy),
 }));
 
+// NEW CANONICAL TABLE: Policy Snapshots (Dec 2025 Refactor)
+// This is the single source of truth for all policy data (current + offers)
+// Replaces the over-coupled OfferSnapshots → HealthCheck → Comparison architecture
+export const policySnapshots = pgTable("policy_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  documentId: varchar("document_id").references(() => documents.id).notNull(),
+  userId: varchar("user_id").references(() => users.id),
+  
+  // Core classification
+  kind: text("kind").notNull(), // "current" or "offer" - where this policy came from
+  companyName: text("company_name").notNull(), // e.g., "Lærerstandens Brandforsikring", "Privatsikring"
+  policyType: text("policy_type").notNull(), // "hus", "fritidshus", "indbo", "ulykke", etc.
+  coverageAddress: text("coverage_address"), // For hus/fritidshus - used for matching
+  
+  // RAW segmented policy text from stage2_segmentation
+  rawText: text("raw_text").notNull(), // The markdown segment for this specific policy
+  
+  // OPTIONAL enrichment data (can be NULL - system works without them)
+  structuredPolicy: jsonb("structured_policy"), // From stage3 extraction (coverages, limits, etc.)
+  pricing: jsonb("pricing"), // From PricingAgent: { status, annualPremium, currency, confidence, components }
+  
+  // Source traceability - where in the original document did this come from?
+  sourceSegmentMeta: jsonb("source_segment_meta").notNull(), // { pageSpan, segmentIndex, confidence, extractedFields }
+  
+  // Timestamps
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => ({
+  documentIdIdx: index("policy_snapshots_document_id_idx").on(table.documentId),
+  userIdIdx: index("policy_snapshots_user_id_idx").on(table.userId),
+  kindIdx: index("policy_snapshots_kind_idx").on(table.kind),
+  policyTypeIdx: index("policy_snapshots_policy_type_idx").on(table.policyType),
+  companyNameIdx: index("policy_snapshots_company_name_idx").on(table.companyName),
+  // Composite indexes for common query patterns
+  userIdKindIdx: index("policy_snapshots_user_id_kind_idx").on(table.userId, table.kind),
+  userIdKindTypeIdx: index("policy_snapshots_user_id_kind_type_idx").on(table.userId, table.kind, table.policyType),
+  userIdKindCompanyIdx: index("policy_snapshots_user_id_kind_company_idx").on(table.userId, table.kind, table.companyName),
+}));
+
+// LEGACY TABLE: Keep for backward compatibility during migration
 export const offerSnapshots = pgTable("offer_snapshots", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   documentId: varchar("document_id").references(() => documents.id).notNull(),
@@ -316,6 +356,12 @@ export const insertPolicySchema = createInsertSchema(policies).omit({
   updatedAt: true,
 });
 
+export const insertPolicySnapshotSchema = createInsertSchema(policySnapshots).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertOfferSnapshotSchema = createInsertSchema(offerSnapshots).omit({
   id: true,
   createdAt: true,
@@ -350,6 +396,8 @@ export type HouseholdMember = typeof householdMembers.$inferSelect;
 export type InsertHouseholdMember = z.infer<typeof insertHouseholdMemberSchema>;
 export type Policy = typeof policies.$inferSelect;
 export type InsertPolicy = z.infer<typeof insertPolicySchema>;
+export type PolicySnapshot = typeof policySnapshots.$inferSelect;
+export type InsertPolicySnapshot = z.infer<typeof insertPolicySnapshotSchema>;
 export type OfferSnapshot = typeof offerSnapshots.$inferSelect;
 export type InsertOfferSnapshot = z.infer<typeof insertOfferSnapshotSchema>;
 export type OnboardingProgress = typeof onboardingProgress.$inferSelect;
