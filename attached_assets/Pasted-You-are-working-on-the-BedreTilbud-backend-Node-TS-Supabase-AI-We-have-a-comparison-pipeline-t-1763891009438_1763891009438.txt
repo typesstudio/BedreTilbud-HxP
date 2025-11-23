@@ -1,0 +1,228 @@
+You are working on the BedreTilbud backend (Node/TS, Supabase, AI).
+
+We have a comparison pipeline that already works very well for:
+- Policy extraction
+- Health checks
+- Coverage matching
+- Comparison JSON (coverageMatrix, highlights, etc.)
+
+The **remaining weak spot is pricing extraction**.  
+For the latest Gjensidige comparison (comparisonId = aad677e7-fff7-4484-a614-2f614c51ac06), the debug report shows:
+
+- Per policy:
+  - Hus:  currentAnnual = 8734.59 kr, offerAnnual = null
+- Overall:
+  - totalCurrentAnnualPremium = 0
+  - totalOfferAnnualPremium = 0
+  - annualSavings = 0
+  - cumulativeSavings.chartData length = 0
+
+So: coverages are fine, matching is fine, but the offer price is missing and the overall block returns fake "0 kr" savings.
+
+Goal of this task:
+Implement a robust, multi-stage pricing system and connect it to the comparison builder so the system is stable and honest for all edge cases.
+
+### ARCHITECTURE TO IMPLEMENT
+
+#### 1) Add pricing metadata to structured_policy
+
+Extend the structured policy type to include a `pricing` block:
+
+```ts
+type PolicyPricing = {
+  annualPremium: number | null;        // per-policy annual premium if known
+  billingFrequency: 'year' | 'month' | 'quarter' | 'unknown';
+  feesAnnualized: number | null;       // admin fees etc. annualised
+  bindingMonths: number | null;
+  postBindingIncreasePercent: number | null;
+  hasIntroPrice: boolean;
+  pricingStatus: 'ok' | 'partial' | 'packageOnly' | 'unknown';
+  pricingConfidence: number;           // 0..1
+  notes: string | null;
+  computedFrom?: {
+    label: string;
+    weight: number;
+  }[];
+};
+Add this to whatever TS type is used for structured_policy in offer_snapshots.
+
+2) Deterministic price candidate extractor (regex pass)
+Create a helper (e.g. in server/services/pricingExtractorService.ts):
+
+ts
+Copy code
+export type RawPriceCandidate = {
+  rawText: string;
+  value: number;
+  currency: 'DKK';
+  frequency: 'year' | 'month' | 'quarter' | 'unknown';
+  context: string;
+  lineIndex: number;
+};
+
+export function extractRawPriceCandidatesFromMarkdown(
+  policyMarkdown: string
+): RawPriceCandidate[] {
+  // 1) split into lines
+  // 2) search for keywords: 'Årlig præmie', 'Årspræmie', 'Årlig pris',
+  //    'Månedlig præmie', 'Samlet præmie', 'Samlet pris' etc.
+  // 3) regex-match amounts like `10.734 kr`, `1.059,58 kr`, `995 kr/md.`
+  // 4) parse to number (DK style), detect frequency, build RawPriceCandidate[]
+}
+Use this as a pre-processing step for each policy segment (both current + offer).
+
+3) AI PriceElementExtractor prompt & service
+Create a new prompt file, e.g.:
+
+server/ai-prompts/pricing/price-elements.md:
+
+Input: policyType, company, policyName, OCR markdown snippet, rawPriceCandidates[].
+
+Output: JSON { "pricingElements": [...] } where each element has:
+
+label, amount, currency, frequency, appliesTo, kind ('premium' | 'fee' | 'discount'), isIntroPrice, rawText, confidence.
+
+Create a corresponding service:
+
+server/services/priceElementsService.ts:
+
+ts
+Copy code
+export async function extractPricingElementsForPolicy(
+  args: { policyType: string; company: string; policyName?: string; markdown: string; candidates: RawPriceCandidate[]; }
+): Promise<PricingElementResult> {
+  // calls OpenAI / Mistral with the prompt + args and parses JSON
+}
+Wire this into the existing extraction flow right after segmentation and coverage extraction. Persist the raw pricingElements to a new JSON column if helpful (e.g. offer_snapshots.pricing_elements).
+
+4) AI PriceResolver
+New prompt: server/ai-prompts/pricing/price-resolver.md
+
+Input: policyType, company, policyName, pricingElements, plus any hints from structured_policy.
+
+Output: the PolicyPricing object (without the pricingStatus / pricingConfidence – those will be added in code).
+
+Implement resolvePricingForPolicy():
+
+ts
+Copy code
+export async function resolvePricingForPolicy(
+  args: { policyType: string; company: string; policyName?: string; elements: PricingElement[]; }
+): Promise<PolicyPricing> {
+  // call AI price-resolver prompt
+  // then run deterministic validation:
+  // - if annualPremium <= 0 => set to null
+  // - if obviously crazy => set pricingStatus = 'unknown'
+  // - otherwise set pricingStatus = 'ok' and pricingConfidence = max(elements.confidence)
+}
+Attach this pricing block to structured_policy before saving offer_snapshots.
+
+5) Update comparison builder to use pricing
+Find the place where we build:
+
+ts
+Copy code
+costSummary: {
+  currentAnnualPremium: number | null;
+  offerAnnualPremium: number | null;
+  annualSavings: number | null;
+  annualSavingsPercent: number | null;
+}
+Replace all ad-hoc logic with:
+
+Grab pricing from current + offer snapshots:
+
+currentPricing = currentSnapshot.structured_policy.pricing
+
+offerPricing = offerSnapshot.structured_policy.pricing
+
+Define:
+
+ts
+Copy code
+const currentAnnual = currentPricing?.annualPremium ?? null;
+const offerAnnual   = offerPricing?.annualPremium ?? null;
+
+const bothOk =
+  currentPricing?.pricingStatus === 'ok' &&
+  offerPricing?.pricingStatus === 'ok' &&
+  currentAnnual != null &&
+  offerAnnual != null;
+If bothOk:
+
+compute annualSavings and annualSavingsPercent as before.
+
+Otherwise:
+
+leave annualSavings and annualSavingsPercent as null.
+
+still expose currentAnnualPremium / offerAnnualPremium when they exist.
+
+add an optional field pricingStatus and pricingExplanation per policy:
+
+ts
+Copy code
+pricingStatus: 'ok' | 'partial' | 'unknown';
+pricingExplanation?: string;
+6) Fix overall totals & cumulative savings
+In the overall builder:
+
+Collect only policies with both sides pricingStatus === 'ok'.
+
+ts
+Copy code
+const pricedPolicies = policyComparisons.filter(pc =>
+  pc.costSummary.currentAnnualPremium != null &&
+  pc.costSummary.offerAnnualPremium != null &&
+  pc.pricingStatus === 'ok'
+);
+If pricedPolicies.length === 0:
+
+ts
+Copy code
+overall.totalCurrentAnnualPremium = null;
+overall.totalOfferAnnualPremium = null;
+overall.annualSavings = null;
+overall.annualSavingsPercent = null;
+cumulativeSavings = {
+  totalOver10Years: null,
+  monthlyRange: { min: null, max: null },
+  after12Months: null,
+  after10Years: null,
+  chartData: []
+};
+overall.pricingStatus = 'unknown';
+Else compute sums and 120-month chartData exactly as before.
+
+Update the debug report generator:
+
+Treat null totals as “no pricing data”, not as anomaly.
+
+Only flag anomalies when:
+
+a pricingStatus is 'ok' but annualPremium === null, or
+
+a 0 value appears where it should be null.
+
+7) Acceptance Criteria
+TypeScript compiles.
+
+Run a fresh Gjensidige comparison for user hello@vyork.dk:
+
+Hus/Indbo:
+
+Either now have a non-null offerAnnualPremium (best case), OR
+
+offerAnnualPremium = null, pricingStatus = 'unknown', and pricingExplanation present.
+
+Overall:
+
+If still no policies with both prices, totals and savings are null, not 0, and cumulativeSavings.chartData has length 0 with overall.pricingStatus = 'unknown'.
+
+Debug report for this comparison:
+
+Shows per-policy pricingStatus and pricingExplanation.
+
+No more “fake 0 kr” values; any missing price is explicitly marked as such.
+
+If anything is unclear, first locate the actual builder functions/files and adapt type names, but please preserve the behaviour and acceptance criteria above.
