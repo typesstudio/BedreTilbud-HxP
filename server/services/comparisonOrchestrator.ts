@@ -494,7 +494,22 @@ export class ComparisonOrchestrator {
       );
       
       if (existing && existing.status === 'completed') {
-        console.log(`[ComparisonOrchestrator] Comparison already exists (${existing.id}), skipping`);
+        console.log(`[ComparisonOrchestrator] Comparison already exists (${existing.id}), generating debug report...`);
+        
+        // Always generate debug report (even for existing comparisons)
+        try {
+          const { generateComparisonDebugReport } = await import('./comparisonDebugReportService');
+          const report = await generateComparisonDebugReport(existing.id, { 
+            saveToDisk: true, 
+            logToConsole: false 
+          });
+          if (report.filePath) {
+            console.log(`[ComparisonOrchestrator] 📊 Debug report saved: ${report.filePath}`);
+          }
+        } catch (reportError) {
+          console.warn('[ComparisonOrchestrator] Failed to generate debug report:', reportError);
+        }
+        
         return existing.id;
       }
     }
