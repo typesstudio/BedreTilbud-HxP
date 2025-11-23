@@ -625,6 +625,7 @@ function buildPhase4ComparisonJSON(comparisonJson: any): string {
   const overall = comparisonJson?.overall || {};
   const policies = comparisonJson?.policyComparisons || [];
   const cumulativeSavings = comparisonJson?.cumulativeSavings || {};
+  const meta = comparisonJson?.meta || {};
 
   const table = policies
     .map((pc: any) => {
@@ -647,11 +648,18 @@ function buildPhase4ComparisonJSON(comparisonJson: any): string {
     .map((pc: any) => `- ${pc.policyType}: coverageComparison.rows = 0 ❌`)
     .join('\n');
 
+  // Pricing status indicator
+  let pricingStatusLine = '';
+  if (meta.pricingStatus) {
+    const statusEmoji = meta.pricingStatus === 'complete' ? '✅' : meta.pricingStatus === 'partial' ? '⚠️' : '❌';
+    pricingStatusLine = `- **Pricing Status**: ${meta.pricingStatus} ${statusEmoji} (${meta.policiesWithOfferPricing || 0}/${meta.totalPolicies || 0} policies have offer pricing)\n`;
+  }
+
   return `## Phase 4 – Comparison Result (JSON Summary)
 
 **Overall**
 
-- totalCurrentAnnualPremium: ${overall.totalCurrentAnnualPremium || 0} kr
+${pricingStatusLine}- totalCurrentAnnualPremium: ${overall.totalCurrentAnnualPremium || 0} kr
 - totalOfferAnnualPremium: ${overall.totalOfferAnnualPremium || 0} kr
 - annualSavings: ${overall.annualSavings || 0} kr (${overall.annualSavingsPercent || 0}%)
 - cumulativeSavings.chartData length: ${cumulativeSavings.chartData?.length || 0} ${cumulativeSavings.chartData?.length > 0 ? '✅' : '❌'}

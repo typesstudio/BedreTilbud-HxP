@@ -923,6 +923,8 @@ export class ComparisonOrchestrator {
           pricingStatus,
           totalPolicies: deterministicPolicyData.length,
           policiesWithOfferPricing: policiesWithOfferPricing.length,
+          currentCompany,
+          offerCompany,
         },
         overall: {
           totalCurrentAnnualPremium,
@@ -954,10 +956,6 @@ export class ComparisonOrchestrator {
             savings: annualSavings * (i + 1) / 12,
           })),
         } : null,
-        meta: {
-          currentCompany,
-          offerCompany,
-        },
       };
 
       console.log(`[ComparisonOrchestrator] ✅ MERGE COMPLETE: Built final comparison with ${policyComparisons.length} policies`);
