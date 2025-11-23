@@ -1,0 +1,264 @@
+You are working in a TypeScript/Node monorepo for BedreTilbud.
+
+We already have these scripts and patterns you should reuse:
+
+server/scripts/debugComparison.ts
+
+server/scripts/backfillPricing.ts
+
+server/scripts/regenerate-debug-reports.ts
+
+They already show how to:
+
+Connect to the DB
+
+Use the existing ORM / query layer
+
+Run “maintenance scripts” via npx tsx ...
+
+GOAL
+
+Create a safe reset script that deletes all insurance-related data for a single test user (e.g. hello@vyork.dk) without deleting the user row itself.
+
+I want to:
+
+Keep the users table entry for this user.
+
+Delete all their insurance content so I can:
+
+Upload a new current “User Insurance.pdf” from the profile dashboard.
+
+Upload a new offer “Offer Insurance.pdf” from the upload-offer page.
+
+Make sure these new uploads go through the new pipeline (two-phase health check + PricingAgent), not any legacy path.
+
+Think of this as “wipe all policies, snapshots, documents, health checks & comparisons for this user so I can test from scratch”.
+
+1. New Script: server/scripts/resetTestUser.ts
+
+Create a new script: server/scripts/resetTestUser.ts.
+
+1.1. Script behavior
+
+It should accept either:
+
+userEmail as CLI arg (e.g. hello@vyork.dk), or
+
+fall back to default hello@vyork.dk if no arg is given.
+
+Example usage:
+
+npx tsx server/scripts/resetTestUser.ts
+# or
+npx tsx server/scripts/resetTestUser.ts hello@vyork.dk
+
+1.2. Steps in the script
+
+Resolve user ID
+
+Look up the user in the users table by email.
+
+If not found: log a clear message and exit.
+
+If found: log Found user {email} with id {id}.
+
+Log a dry-run overview
+Before deleting anything, log how many rows exist for this user in the relevant tables:
+
+documents (by user_id)
+
+offer_snapshots (by user_id)
+
+health_checks (by user_id or via snapshot_id in those snapshots)
+
+company_comparisons (by user_id)
+
+Any additional policy-related table you already use (e.g. policies, comparison_narratives, etc. if present in the codebase).
+
+Deletion order (respect foreign keys)
+
+Use a deletion order that avoids FK issues, similar to this:
+
+company_comparisons
+
+DELETE FROM company_comparisons WHERE user_id = :userId
+
+health_checks
+
+Either DELETE FROM health_checks WHERE user_id = :userId
+
+Or DELETE FROM health_checks WHERE snapshot_id IN (SELECT id FROM offer_snapshots WHERE user_id = :userId)
+
+Any other derived tables that reference offer_snapshots or documents (if they exist in the schema)
+
+offer_snapshots
+
+DELETE FROM offer_snapshots WHERE user_id = :userId
+
+documents
+
+DELETE FROM documents WHERE user_id = :userId
+
+Important:
+
+Do NOT delete from users.
+
+Do NOT delete from companies.
+
+Only remove rows that are directly tied to this user_id.
+
+Confirmation / safety
+
+Print a summary like:
+
+This will delete X documents, Y snapshots, Z health checks, W comparisons for user {email} ({id}).
+
+For now you can skip interactive confirmation (since this is a dev/test script), but structure it cleanly so it’s obvious what is being deleted.
+
+Final verification
+
+After deletion, run the same count queries again and log that all counts are now 0 for that user:
+
+documents count
+
+offer_snapshots count
+
+health_checks count
+
+company_comparisons count
+
+etc.
+
+Example:
+
+After reset:
+- documents: 0
+- offer_snapshots: 0
+- health_checks: 0
+- company_comparisons: 0
+✅ Reset completed for user hello@vyork.dk (id=...)
+
+1.3. Implementation details
+
+Reuse the same DB connection / ORM pattern as in debugComparison.ts and backfillPricing.ts (don’t open a new raw pg client differently).
+
+Keep everything strongly typed using the existing table definitions (e.g. companyComparisons, offerSnapshots, documents, etc.).
+
+Handle errors gracefully: log any errors and exit with non-zero code if something fails.
+
+2. Make sure new uploads use the NEW pipeline
+
+After the reset, I want to:
+
+Upload a new current insurance from the profile dashboard (user’s own “User Insurance.pdf”).
+
+Upload a new offer insurance from the /upload-offer page.
+
+Have BOTH flows go through the new architecture:
+
+OCR
+
+structured_policy extraction
+
+health_checks (two-phase health check if enabled)
+
+PricingAgent (pricing stored in structured_policy.pricing)
+
+deterministic matcher
+
+comparison orchestrator
+
+comparison debug report (Markdown file)
+
+2.1. Verification / Guards
+
+Please:
+
+Check the upload handlers / services:
+
+The endpoint used by the profile dashboard to upload the user’s own insurance (current).
+
+The endpoint used by the upload-offer page.
+
+Ensure both call into the same new pipeline path:
+
+The one that:
+
+writes to documents
+
+creates offer_snapshots
+
+runs healthCheckOrchestrator (two-phase)
+
+runs PricingAgent and stores pricing in structured_policy.pricing
+
+Confirm that no legacy “one-shot health check” or “old pricing fields” path is used anymore for these uploads.
+
+You don’t need to rewrite the whole pipeline – just verify that new uploads for this test user use the same standardized path that our latest debug reports are based on.
+
+3. Acceptance Criteria
+
+For the script + wiring, these should all be true:
+
+Running:
+
+npx tsx server/scripts/resetTestUser.ts hello@vyork.dk
+
+
+results in:
+
+All documents for that user deleted.
+
+All offer_snapshots for that user deleted.
+
+All health_checks for that user deleted.
+
+All company_comparisons for that user deleted.
+
+No deletion from users.
+
+After running the script, if I:
+
+Upload a new current “User Insurance.pdf” from the profile dashboard, and
+
+Upload a new offer “Offer Insurance.pdf” from the upload-offer page, and
+
+Trigger a comparison,
+
+then a new debug report (e.g. debug-reports/comparison-*.md) should show:
+
+Phase 0: Only the new current & offer documents.
+
+Phase 1 + 1B:
+
+Exactly 1 current snapshot per policy type (hus, indbo, ulykke) for this user.
+
+Exactly 1 offer snapshot per policy type for the chosen offer company.
+
+pricingStatus: "ok" and valid annualPremium for all 3 offer policies (and ideally for current too).
+
+Phase 3 (matcher):
+
+3/3 policies matched (hus, indbo, ulykke), using those snapshots.
+
+Phase 4 (comparison):
+
+totalCurrentAnnualPremium and totalOfferAnnualPremium are non-zero and equal to the sum of structured_policy.pricing.annualPremium from the matched snapshots.
+
+Per policy:
+
+currentAnnual = current snapshot pricing
+
+offerAnnual = offer snapshot pricing
+
+annualSavings = currentAnnual - offerAnnual (or vice versa, depending on your existing convention).
+
+When I upload again later, I can re-run the reset script and get the same clean behavior.
+
+Please implement:
+
+server/scripts/resetTestUser.ts
+
+Any minimal changes needed to ensure profile dashboard upload + upload-offer both use the new flow (healthCheckOrchestrator + PricingAgent).
+
+Keep everything as simple and deterministic as possible – treat the matched snapshots from the matcher as the single source of truth for pricing and coverage in the comparison.
