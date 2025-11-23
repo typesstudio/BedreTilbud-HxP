@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { documents, offerSnapshots, companies } from "@shared/schema";
-import { eq, and, sql, isNull, or, ne } from "drizzle-orm";
+import { eq, and, sql, isNull, isNotNull, or, ne } from "drizzle-orm";
 import { policyPricingService } from "../services/policyPricingService";
 
 /**
@@ -72,7 +72,7 @@ async function findSnapshotsToProcess(): Promise<SnapshotToProcess[]> {
     .where(
       and(
         eq(documents.documentType, 'offer'), // Only offer snapshots
-        ne(offerSnapshots.structuredPolicy, null) // Must have structuredPolicy
+        isNotNull(offerSnapshots.structuredPolicy) // Must have structuredPolicy
       )
     )
     .orderBy(offerSnapshots.createdAt); // Process oldest first
