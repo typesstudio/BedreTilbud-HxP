@@ -259,6 +259,19 @@ export class PolicySnapshotService {
   }
 
   /**
+   * Get a single snapshot by ID
+   */
+  async getSnapshotById(snapshotId: string): Promise<PolicySnapshot | null> {
+    const results = await db
+      .select()
+      .from(policySnapshots)
+      .where(eq(policySnapshots.id, snapshotId))
+      .limit(1);
+    
+    return results[0] || null;
+  }
+
+  /**
    * Update a snapshot's enrichment data (structuredPolicy and/or pricing)
    */
   async updateSnapshotEnrichment(

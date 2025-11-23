@@ -22,13 +22,31 @@ The backend is developed with Node.js and Express.js, providing a RESTful API. K
 -   **Insurance Health Check Service**: Analyzes single policies for health scores.
 -   **Health Check Orchestrator**: Automatically creates health checks for all offer_snapshots.
 
-### Extraction Pipeline Architecture
-The system employs a **Two-Step Pipeline** for robust extraction:
-1.  **OCR**: Converts PDFs to raw markdown text (Mistral OCR).
-2.  **Validation**: Ensures document quality.
-3.  **Policy Segmentation**: Identifies and splits multiple policies (`o1-mini`).
-4.  **Structured Extraction**: Extracts data per segment (`gpt-4o`) with pre-extracted hints.
-5.  **OfferSnapshot Creation**: Persists data to the database.
+### Extraction Pipeline Architecture (REFACTORED Dec 2025)
+
+The system now uses a **Simplified, Canonical Architecture** centered around `policy_snapshots`:
+
+**Phase 1: OCR & Segmentation** (Always runs, fast, cheap)
+1.  **OCR**: Converts PDFs to raw markdown text (Mistral OCR) → stored in `documents.extraction_stages.stage1_ocr.rawOutput`
+2.  **Validation**: Ensures document quality
+3.  **Policy Segmentation**: Identifies and splits multiple policies (`o1-mini`) → stored in `documents.extraction_stages.stage2_segmentation.rawOutput`
+4.  **PolicySnapshot Creation**: **NEW** - Creates one `policy_snapshots` row per segment with:
+    - `kind`: "current" or "offer" (from document type)
+    - `companyName`, `policyType`, `coverageAddress`
+    - `rawText`: The segment's markdown (single source of truth)
+    - `structuredPolicy`: NULL initially
+    - `pricing`: NULL initially
+    - `sourceSegmentMeta`: Provenance (pageSpan, confidence, etc.)
+
+**Phase 2: Optional Enrichment** (Async, expensive, can fail gracefully)
+5.  **Structured Extraction**: Runs on `snapshot.rawText` to populate `structuredPolicy` (coverages, limits)
+6.  **Pricing Extraction**: PricingAgent runs on `snapshot.rawText` to populate `pricing` ({ status, annualPremium, components })
+
+**KEY ARCHITECTURAL CHANGE**: PolicySnapshots are the **CANONICAL** representation of all policies. The old flow (OfferSnapshots → HealthCheck → Comparison) is being deprecated in favor of:
+- **PolicySnapshots** (core data) → **HealthCheck** (view) + **Comparison** (view)
+- Both "current" and "offer" policies use the same table/schema
+- System works even when `structuredPolicy` or `pricing` are NULL
+- Enables robust comparison using raw text as fallback
 
 A **Two-Phase Health Check Architecture** ensures deterministic deductible display in the UI:
 -   **Phase 1: PolicyExtractor**: Extracts OCR markdown to structured policy JSON, preserving exact deductible strings.
@@ -66,6 +84,7 @@ File uploads are handled by Multer (PDFs up to 10MB). The database uses Drizzle 
 -   **Third-Party UI Libraries**: react-dropzone, react-hook-form with Zod, date-fns.
 
 ## Developer Scripts
+-   **`server/scripts/backfillPolicySnapshots.ts`**: **NEW** - Backfills `policy_snapshots` table from existing documents with `extraction_stages` data. Usage: `npx tsx server/scripts/backfillPolicySnapshots.ts` or `npx tsx server/scripts/backfillPolicySnapshots.ts --document-id=<id>`.
 -   **`server/scripts/backfillPricing.ts`**: Backfills pricing data for existing snapshots using PricingAgent (supports `--force` flag).
 -   **`server/scripts/regenerate-debug-reports.ts`**: Regenerates debug reports for specific comparisons to reflect updated pricing data.
 -   **`server/scripts/resetTestUser.ts`**: Safely deletes all insurance-related data for a test user (defaults to `hello@vyork.dk`) while preserving the user account. Usage: `npx tsx server/scripts/resetTestUser.ts [email]`.
