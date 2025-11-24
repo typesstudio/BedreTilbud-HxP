@@ -1,0 +1,682 @@
+Here’s a Replit prompt you can copy-paste straight in.
+
+---
+
+You are working on the **BedreTilbud** app.
+Goal: introduce a **consistent pattern for all Subframe-generated pages**:
+
+* Subframe components = **pure layout** (no fetching, only props).
+* Small container pages = **data + transforms**, then render the layout.
+* Keep the existing **API & business logic**; only wire data into the new layouts.
+* Do **not** change visual design, classNames, or structure unless absolutely necessary.
+
+Use the **comparison pages** as the first end-to-end example, then apply the same pattern to other pages.
+
+---
+
+## 0. Pre-step – Sync Subframe
+
+Run:
+
+```bash
+npx @subframe/cli@latest sync --all -p 34bd735365b5
+```
+
+Make sure everything compiles before continuing.
+
+---
+
+## 1. Fix the backend comparison API (quick bugfix)
+
+We have two comparison systems:
+
+* `company_comparisons` table → legacy `/api/comparisons/:id` (links like `/sammenligning/:id`)
+* `policy_snapshots` + `/api/policies/comparisons` → new pricing / policy snapshot architecture
+
+Right now `/api/comparisons/:id` returns **0 kr** because of wrong field names and wrong storage method.
+
+### 1.1 Use the correct storage method
+
+In `server/routes.ts`, find the route handler for:
+
+```ts
+app.get("/api/comparisons/:id", requireAuth, async (req, res) => { ... })
+```
+
+Inside it you will see something like:
+
+```ts
+const comparison = await storage.getComparison(req.params.id);
+```
+
+Change it to use the **company comparison** method:
+
+```ts
+const comparison = await storage.getCompanyComparison(req.params.id);
+```
+
+Do not touch `getComparison` itself; just call `getCompanyComparison` here.
+
+### 1.2 Fix field names from `comparison_json.overall`
+
+The JSON stored in `company_comparisons.comparison_json` has this shape in `overall`:
+
+```json
+{
+  "annualSavings": 5323.78,
+  "totalCurrentAnnualPremium": 11872.7,
+  "totalOfferAnnualPremium": 6548.92,
+  "savingsPercent": 44.8,
+  ...
+}
+```
+
+In `server/routes.ts`, still inside the `/api/comparisons/:id` handler, find where you map `comparisonJson` into the response, something like:
+
+```ts
+savings: comparisonJson.overall?.totalSavingsAnnual || 0,
+currentDocument: {
+  ocrData: {
+    annualPremium: comparisonJson.overall?.totalCurrentAnnual || 0,
+  },
+},
+offerDocument: {
+  ocrData: {
+    annualPremium: comparisonJson.overall?.totalOfferAnnual || 0,
+  },
+},
+```
+
+Update to match the real fields:
+
+```ts
+const overall = comparisonJson.overall ?? {};
+
+const responsePayload = {
+  ...,
+  overall: {
+    annualSavings: overall.annualSavings ?? 0,
+    totalCurrentAnnualPremium: overall.totalCurrentAnnualPremium ?? 0,
+    totalOfferAnnualPremium: overall.totalOfferAnnualPremium ?? 0,
+    savingsPercent: overall.savingsPercent ?? 0,
+  },
+  // keep exposing the original comparison_json as today if needed
+};
+```
+
+Use this `overall` object in the response that the frontend consumes (do not break existing fields the frontend already relies on; add or rename carefully so the new layout can read them).
+
+Run the tests / dev server and verify `/api/comparisons/:id` returns non-zero values for the comparison id `0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1`.
+
+---
+
+## 2. Introduce a reusable Subframe layout for comparisons
+
+We already have two Subframe pages:
+
+* `client/src/pages/offer-comparison-all.tsx` (overview)
+* `client/src/pages/offer-comparison-table.tsx` (detail)
+
+They currently contain **hardcoded demo data** and fetch nothing.
+We want to:
+
+* Extract the **layout** into a reusable component.
+* Feed it a strongly typed **view model**.
+* Reuse that layout from both:
+
+  * the legacy URL `/sammenligning/:id` (company comparison)
+  * any new pages using `/api/policies/comparisons`.
+
+### 2.1 Create a shared view model & layout component
+
+Create a new folder:
+
+```bash
+mkdir -p client/src/components/comparison
+```
+
+Create `client/src/components/comparison/ComparisonPageLayout.tsx` with:
+
+```tsx
+"use client";
+
+import React from "react";
+import { AreaChart } from "@/ui/components/AreaChart";
+import { Badge } from "@/ui/components/Badge";
+import { Button } from "@/ui/components/Button";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { ListingsTabs } from "@/ui/components/ListingsTabs";
+import { Table } from "@/ui/components/Table";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import {
+  FeatherArrowUp,
+  FeatherArrowRight,
+  FeatherBuilding,
+  FeatherCar,
+  FeatherDroplet,
+  FeatherHome,
+  FeatherPlane,
+  FeatherShield,
+  FeatherStar,
+  FeatherTrendingDown,
+  FeatherTrendingUp,
+  FeatherTruck,
+} from "@subframe/core";
+
+// 1) View model types – keep these extremely generic, we’ll map APIs into this
+export type ComparisonPolicyRow = {
+  policyType: string; // "hus", "indbo", "ulykke", etc.
+  label: string;
+  icon: React.ReactNode;
+  currentAnnual: number | null;
+  offerAnnual: number | null;
+  annualSavings: number | null;
+  statusLabel?: string; // e.g. "Afventer"
+  statusVariant?: "success" | "warning" | "neutral" | "error";
+};
+
+export type ComparisonCoverageRow = {
+  label: string;
+  description?: string;
+  currentBadge?: { label: string; variant: "success" | "error" | "neutral" };
+  offerBadge?: { label: string; variant: "success" | "error" | "neutral" };
+};
+
+export type ComparisonHighlight = {
+  icon: React.ReactNode;
+  variant?: "success" | "warning" | "neutral";
+  title: string;
+  subtitle: string;
+};
+
+export type ComparisonSavingsSummary = {
+  monthlySavingsLabel: string;
+  yearlySavingsLabel: string;
+  tenYearSavingsLabel: string;
+};
+
+export type ComparisonViewModel = {
+  // Top hero
+  title: string; // e.g. "Sammenlign forsikrings tilbud"
+  subtitle: string; // e.g. "Sammenlign dit nuværende tilbud med Alka Forsikring"
+  currentCompanyName: string;
+  offerCompanyName: string;
+
+  // Aggregated numbers
+  totalAnnualSavings: number;
+  totalSavingsPercent: number;
+  totalCurrentAnnual: number;
+  totalOfferAnnual: number;
+
+  // Policy table
+  policies: ComparisonPolicyRow[];
+
+  // Coverage matrix
+  coverageRows: ComparisonCoverageRow[];
+
+  // Highlights (cards)
+  highlights: ComparisonHighlight[];
+
+  // Cumulative / chart
+  cumulativeSavings?: ComparisonSavingsSummary;
+  chartData?: {
+    indexKey: string;
+    categories: string[];
+    data: Record<string, unknown>[];
+  };
+
+  // Optional messaging
+  canOpenMessages?: boolean;
+  messageCtaLabel?: string;
+};
+
+export type ComparisonPageLayoutProps = {
+  view: ComparisonViewModel;
+  onSeeMessages?: () => void;
+  onChooseOffer?: () => void;
+};
+
+// 2) IMPLEMENTATION NOTE:
+// Copy the JSX from the Subframe page (OfferComparisonAll / OfferComparisonTable)
+// and replace ONLY hardcoded text/numbers with `view.*` & props.
+// Do NOT change className, flex, paddings, or nesting, to preserve design.
+export function ComparisonPageLayout({
+  view,
+  onSeeMessages,
+  onChooseOffer,
+}: ComparisonPageLayoutProps) {
+  // Helper to format currency (DKK, no decimals for now)
+  const formatCurrency = (amount: number | null | undefined) =>
+    amount == null ? "—" : `${amount.toLocaleString("da-DK")} kr`;
+
+  const savingsPercentLabel =
+    view.totalSavingsPercent != null
+      ? `${view.totalSavingsPercent.toFixed(1)}%`
+      : "";
+
+  return (
+    <DefaultPageLayout>
+      <div className="flex w-full flex-col items-center justify-center bg-default-background px-4 py-4 mobile:px-3 mobile:py-3">
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4">
+          {/* Header – copy from Subframe and bind to view */}
+          <div className="flex w-full items-start gap-2 px-2 py-2 mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:py-2">
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 mobile:px-0 mobile:py-0">
+              <span className="text-heading-1 font-heading-1 text-default-font mobile:text-heading-2 mobile:font-heading-2">
+                {view.title}
+              </span>
+              <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                {view.subtitle}
+              </span>
+            </div>
+            {onSeeMessages && view.canOpenMessages && (
+              <Button
+                className="mobile:w-full"
+                variant="brand-secondary"
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                  event.preventDefault();
+                  onSeeMessages();
+                }}
+              >
+                {view.messageCtaLabel ?? "Se beskeder"}
+              </Button>
+            )}
+          </div>
+
+          {/* Tabs – keep static for now, we can wire filtering later */}
+          <div className="flex w-full items-center gap-2 overflow-x-auto">
+            <ListingsTabs>
+              <ListingsTabs.Item icon={<FeatherStar />}>Samlet</ListingsTabs.Item>
+              <ListingsTabs.Item icon={<FeatherHome />}>
+                Indbo
+              </ListingsTabs.Item>
+              <ListingsTabs.Item icon={<FeatherShield />}>
+                Ulykke
+              </ListingsTabs.Item>
+              <ListingsTabs.Item icon={<FeatherBuilding />}>
+                Hus
+              </ListingsTabs.Item>
+              <ListingsTabs.Item icon={<FeatherCar />}>Bil</ListingsTabs.Item>
+              <ListingsTabs.Item icon={<FeatherPlane />}>
+                Rejse
+              </ListingsTabs.Item>
+            </ListingsTabs>
+          </div>
+
+          {/* Top stats cards – use view.totals */}
+          <div className="flex w-full items-start gap-4 flex-wrap">
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-success-50 px-6 py-6">
+              <span className="text-body-bold font-body-bold text-neutral-600">
+                Samlet besparelse
+              </span>
+              <span className="text-heading-1 font-heading-1 text-success-600">
+                {formatCurrency(view.totalAnnualSavings)}
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                {savingsPercentLabel} billigere
+              </span>
+            </div>
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6">
+              <span className="text-body-bold font-body-bold text-neutral-600">
+                {view.offerCompanyName}
+              </span>
+              <span className="text-heading-1 font-heading-1 text-default-font">
+                {formatCurrency(view.totalOfferAnnual)}
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                Per år
+              </span>
+            </div>
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6">
+              <span className="text-body-bold font-body-bold text-neutral-600">
+                Din nuværende ({view.currentCompanyName})
+              </span>
+              <span className="text-heading-1 font-heading-1 text-default-font">
+                {formatCurrency(view.totalCurrentAnnual)}
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                Per år
+              </span>
+            </div>
+          </div>
+
+          {/* QUICK COMPARISON TABLE */}
+          <div className="flex w-full flex-col items-start gap-4">
+            <span className="text-heading-2 font-heading-2 text-default-font">
+              Hurtig sammenligning
+            </span>
+            <div className="flex w-full flex-col items-start rounded-lg border border-solid border-neutral-border bg-default-background overflow-x-auto">
+              <Table
+                header={
+                  <Table.HeaderRow>
+                    <Table.HeaderCell>Kategori</Table.HeaderCell>
+                    <Table.HeaderCell>Nuværende</Table.HeaderCell>
+                    <Table.HeaderCell>Tilbud</Table.HeaderCell>
+                    <Table.HeaderCell>Besparelse</Table.HeaderCell>
+                    <Table.HeaderCell>Status</Table.HeaderCell>
+                  </Table.HeaderRow>
+                }
+              >
+                {view.policies.map((policy) => (
+                  <Table.Row key={policy.policyType}>
+                    <Table.Cell>
+                      <div className="flex items-center gap-2">
+                        <IconWithBackground size="small" icon={policy.icon} />
+                        <span className="whitespace-nowrap text-body-bold font-body-bold text-default-font">
+                          {policy.label}
+                        </span>
+                      </div>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="whitespace-nowrap text-body font-body text-default-font">
+                        {formatCurrency(policy.currentAnnual)}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="whitespace-nowrap text-body font-body text-default-font">
+                        {formatCurrency(policy.offerAnnual)}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <span className="whitespace-nowrap text-body-bold font-body-bold text-success-600">
+                        {formatCurrency(policy.annualSavings)}
+                      </span>
+                    </Table.Cell>
+                    <Table.Cell>
+                      <Button
+                        variant="brand-tertiary"
+                        size="small"
+                        onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                          event.preventDefault();
+                          // separate navigation handled in container if needed
+                        }}
+                      >
+                        {policy.statusLabel ?? "Se detaljer"}
+                      </Button>
+                    </Table.Cell>
+                  </Table.Row>
+                ))}
+              </Table>
+            </div>
+          </div>
+
+          {/* HIGHLIGHTS, COVERAGE TABLE, CHART, CTA */}
+          {/* Reuse the rest of your Subframe JSX here,
+              but bind to view.highlights, view.coverageRows, view.cumulativeSavings, etc.
+              Preserve all layout / classes, just replace literals with props. */}
+          {/* ... */}
+          {/* At the bottom: */}
+          <div className="flex w-full flex-col items-center gap-4 border-t border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:py-4">
+            <Button
+              className="h-10 w-full flex-none"
+              size="large"
+              onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+                event.preventDefault();
+                onChooseOffer?.();
+              }}
+            >
+              Vælg dette tilbud
+            </Button>
+            <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption mobile:text-center">
+              Sikker data. Du kan annullere når som helst før aktivering
+            </span>
+          </div>
+        </div>
+      </div>
+    </DefaultPageLayout>
+  );
+}
+```
+
+**Important:**
+
+* Copy **all remaining JSX** from your Subframe comparison pages (highlights, detailed coverage matrix, chart, “forstå det med småt” section) into this component.
+* Replace hardcoded content with props from `view` where appropriate, but do **not** change classes, layout, or overall structure.
+
+---
+
+## 3. Add transformer: API → view model
+
+Create a helper file:
+
+```bash
+mkdir -p client/src/utils
+```
+
+`client/src/utils/transformComparison.ts`:
+
+```ts
+import {
+  ComparisonViewModel,
+  ComparisonPolicyRow,
+} from "@/components/comparison/ComparisonPageLayout";
+import {
+  FeatherHome,
+  FeatherBuilding,
+  FeatherShield,
+  FeatherCar,
+  FeatherPlane,
+} from "@subframe/core";
+
+const policyIconForType: Record<string, React.ReactNode> = {
+  indbo: <FeatherHome />,
+  hus: <FeatherBuilding />,
+  ulykke: <FeatherShield />,
+  bil: <FeatherCar />,
+  rejse: <FeatherPlane />,
+};
+
+export function transformCompanyComparisonToViewModel(apiData: any): ComparisonViewModel {
+  const overall = apiData.overall ?? {};
+  const policies = (apiData.policies ?? []) as any[];
+
+  const policyRows: ComparisonPolicyRow[] = policies.map((p) => {
+    const icon = policyIconForType[p.policyType] ?? <FeatherHome />;
+
+    return {
+      policyType: p.policyType,
+      label: p.label ?? p.policyType,
+      icon,
+      currentAnnual: p.currentAnnual ?? null,
+      offerAnnual: p.offerAnnual ?? null,
+      annualSavings: p.annualSavings ?? null,
+      statusLabel: "Se detaljer",
+      statusVariant: "success",
+    };
+  });
+
+  return {
+    title: "Sammenlign forsikrings tilbud",
+    subtitle: `Sammenlign dit nuværende tilbud med ${apiData.offerCompany ?? ""}`,
+    currentCompanyName: apiData.currentCompany ?? "",
+    offerCompanyName: apiData.offerCompany ?? "",
+    totalAnnualSavings: overall.annualSavings ?? 0,
+    totalSavingsPercent: overall.savingsPercent ?? 0,
+    totalCurrentAnnual: overall.totalCurrentAnnualPremium ?? 0,
+    totalOfferAnnual: overall.totalOfferAnnualPremium ?? 0,
+    policies: policyRows,
+    coverageRows: [], // can be filled from apiData.policyComparisons later
+    highlights: [],   // same
+    cumulativeSavings: undefined,
+    chartData: undefined,
+    canOpenMessages: !!apiData.threadId,
+    messageCtaLabel: "Se beskeder",
+  };
+}
+```
+
+Do **not** over-engineer coverage/highlights yet – just wire the top metrics and per-policy rows so we can see real values.
+
+---
+
+## 4. Wire the layout into the legacy comparison page
+
+We already have a page for `/sammenligning/:id` (likely `client/src/pages/comparison.tsx` or similar).
+Refactor that page so it becomes a **container** that:
+
+1. Reads the `id` from the route.
+2. Calls the existing `useCompanyComparison(id)` hook (if present) or fetches `/api/comparisons/:id`.
+3. Uses the transformer and layout.
+
+Example (adapt to your actual file name and router):
+
+```tsx
+"use client";
+
+import React from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import { ComparisonPageLayout } from "@/components/comparison/ComparisonPageLayout";
+import { transformCompanyComparisonToViewModel } from "@/utils/transformComparison";
+import { useCompanyComparison } from "@/hooks/useCompanyComparison"; // if not existing, create it
+
+export default function CompanyComparisonPage() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { data, isLoading, error } = useCompanyComparison(id!);
+
+  if (isLoading) {
+    return (
+      <DefaultPageLayout>
+        <div className="p-4">Indlæser sammenligning…</div>
+      </DefaultPageLayout>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <DefaultPageLayout>
+        <div className="p-4">Sammenligning ikke fundet.</div>
+      </DefaultPageLayout>
+    );
+  }
+
+  const view = transformCompanyComparisonToViewModel(data);
+
+  return (
+    <ComparisonPageLayout
+      view={view}
+      onSeeMessages={
+        data.threadId
+          ? () => navigate(`/messages/${data.threadId}`)
+          : undefined
+      }
+      onChooseOffer={() => {
+        // keep existing CTA behaviour (if there is some),
+        // or navigate to the “switch” flow
+      }}
+    />
+  );
+}
+```
+
+Ensure `client/src/App.tsx` routes `/sammenligning/:id` to this container, **not** directly to the old static Subframe page.
+
+---
+
+## 5. Apply the same pattern to `policy_snapshots` comparison
+
+We already have `usePolicyComparisons` and `/api/policies/comparisons`.
+Create another transformer to map that API into `ComparisonViewModel` (e.g. sum premiums to fill totals and set one row per policy type).
+
+Example:
+
+```ts
+export function transformPolicyComparisonsToViewModel(apiData: any): ComparisonViewModel {
+  const rows = apiData.comparisons ?? [];
+
+  let totalCurrent = 0;
+  let totalOffer = 0;
+  rows.forEach((row: any) => {
+    const current = row.current?.pricing?.annualPremium ?? 0;
+    const bestOffer = row.offers?.[0]?.pricing?.annualPremium ?? 0;
+    totalCurrent += current;
+    totalOffer += bestOffer;
+  });
+
+  const annualSavings = totalCurrent - totalOffer;
+  const savingsPercent = totalCurrent > 0 ? (annualSavings / totalCurrent) * 100 : 0;
+
+  const policies: ComparisonPolicyRow[] = rows.map((row: any) => {
+    const icon = policyIconForType[row.policyType] ?? <FeatherHome />;
+    const current = row.current?.pricing?.annualPremium ?? null;
+    const bestOffer = row.offers?.[0]?.pricing?.annualPremium ?? null;
+    const savings = current != null && bestOffer != null ? current - bestOffer : null;
+
+    return {
+      policyType: row.policyType,
+      label: row.policyTypeLabel ?? row.policyType,
+      icon,
+      currentAnnual: current,
+      offerAnnual: bestOffer,
+      annualSavings: savings,
+      statusLabel: "Se detaljer",
+      statusVariant: "success",
+    };
+  });
+
+  return {
+    title: "Dine samlede tilbud",
+    subtitle: "Se hvad du kan spare på tværs af alle forsikringer",
+    currentCompanyName: "", // could be “Nuværende selskaber”
+    offerCompanyName: "",   // could be “Bedste tilbud”
+    totalAnnualSavings: annualSavings,
+    totalSavingsPercent: savingsPercent,
+    totalCurrentAnnual: totalCurrent,
+    totalOfferAnnual: totalOffer,
+    policies,
+    coverageRows: [],
+    highlights: [],
+    cumulativeSavings: undefined,
+    chartData: undefined,
+    canOpenMessages: false,
+  };
+}
+```
+
+Then in `client/src/pages/offer-comparison-all.tsx`:
+
+* Turn it into a container that calls `usePolicyComparisons`.
+* Transform `data` with `transformPolicyComparisonsToViewModel`.
+* Render `<ComparisonPageLayout view={view} />`.
+
+Do **not** keep any hardcoded numbers in this page; all layout should now live in `ComparisonPageLayout`.
+
+---
+
+## 6. Generalize this pattern for all Subframe pages
+
+Once the comparison pages are working end-to-end:
+
+1. **Identify all Subframe pages** under `client/src/pages` that are mostly static design (health check, offers list, etc.).
+2. For each:
+
+   * Move the JSX into `client/src/components/.../XYZPageLayout.tsx`.
+   * Define a `XYZViewModel` type.
+   * Create `transformXYZApiToViewModel` helper(s) under `client/src/utils`.
+   * Turn the page file into a **thin container**:
+
+     * Fetch data (using existing hooks / APIs).
+     * Map it with the transformer.
+     * Render the layout component with the view model.
+3. Throughout this process:
+
+   * Do not change the Figma/Subframe layout: preserve classNames, spacing, structure.
+   * Only replace static text/numbers with props.
+
+---
+
+**Key constraints**
+
+* **Do not invent new design.** Subframe’s classNames & structure are the source of truth.
+* Focus on **clean separation**:
+
+  * Layout components: `components/...PageLayout.tsx`
+  * Data + transforms: hooks + `utils/transform*.ts`
+  * Container pages: `pages/*.tsx`
+* Keep existing business logic & API contracts intact; only fix the minimal bugs mentioned and wire the data into the new layouts.
+
+When you’re done, I should be able to:
+
+* Open `/sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1`
+* See the **Subframe design**, but with **real numbers** from the API (no 0 kr),
+* And reuse the same layout in the new “all offers” comparison page powered by `policy_snapshots`.

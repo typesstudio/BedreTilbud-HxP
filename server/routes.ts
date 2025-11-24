@@ -1906,6 +1906,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Extract data from comparison_json
         const comparisonJson = companyComparison.comparisonJson as any || {};
+        const overall = comparisonJson.overall ?? {};
         
         // Transform to old format
         res.json({
@@ -1913,19 +1914,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId: companyComparison.userId,
           companyId: companyComparison.offerCompany,
           company: offerCompany,
-          savings: comparisonJson.overall?.totalSavingsAnnual || 0,
-          savingsPercentage: comparisonJson.overall?.savingsPercentage || 0,
+          savings: overall.annualSavings ?? 0,
+          savingsPercentage: overall.annualSavingsPercent ?? 0,
           comparisonData: comparisonJson,
           currentDocument: {
             ocrData: {
               companyName: currentCompany?.name || 'Din nuværende forsikring',
-              annualPremium: comparisonJson.overall?.totalCurrentAnnual || 0
+              annualPremium: overall.totalCurrentAnnualPremium ?? 0
             }
           },
           offerDocument: {
             ocrData: {
               companyName: offerCompany?.name || 'Tilbud',
-              annualPremium: comparisonJson.overall?.totalOfferAnnual || 0
+              annualPremium: overall.totalOfferAnnualPremium ?? 0
             }
           },
           createdAt: companyComparison.createdAt
