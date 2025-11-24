@@ -1,0 +1,292 @@
+Replit context to integrate the two comparison pages
+
+You are working on the BedreTilbud frontend.
+I have pasted TWO Subframe-generated page components:
+
+OfferComparisonAll – full “Samlet” overview page with:
+
+header (“Tryg sammenligning”)
+
+tabs (Samlet / Indbo / Ulykke / Hus / Bil / Rejse)
+
+“Samlet besparelse / Tryg tilbud / Din nuværende” cards
+
+“Hurtig sammenligning” table
+
+highlights (“Højdepunkter hvor anbefalingen er bedre”)
+
+detailed coverage matrix
+
+savings chart (“Din besparelse”) + 3 cards
+
+CTA at bottom
+
+OfferComparisonTable – detail page focused on one category (Indbo) with:
+
+header (“Tryg sammenligning”)
+
+tabs where Indbo is selected
+
+yearly cost comparison (“Årlig omkostning sammenligning”)
+
+same highlight section
+
+same detailed comparison matrix
+
+“Forstå det med småt” (questions + answers)
+
+savings chart + cards
+
+CTA at bottom
+
+These TWO files are design sources from Subframe.
+Your job is to integrate them into the existing app without breaking the visual design.
+
+Hard constraints
+
+Do NOT redesign anything.
+
+Keep all classNames, spacing, structure, and component usage from the Subframe code.
+
+You may:
+
+extract JSX into smaller components
+
+add props
+
+connect them to hooks / API
+
+But the rendered DOM/layout must stay visually the same.
+
+We already have:
+
+DefaultPageLayout
+
+Subframe UI components under @/ui/components/...
+
+React Query setup
+
+A hook: client/src/hooks/usePolicyComparisons.ts
+
+This calls /api/policies/comparisons and returns the comparison rows for fritidshus/hus, indbo, ulykke with:
+
+current company + annualPremium
+
+offer company + annualPremium
+
+savingsAnnual, cheaperThanCurrent, etc.
+
+Use that instead of hard-coded numbers.
+
+Assume this is a Next.js App Router project ("use client"; at the top of pages).
+
+Goal
+
+Have two real pages:
+
+Overview: “Samlet” comparison over all policies
+→ uses the OfferComparisonAll layout.
+
+Detail: comparison for a single policy type (e.g. indbo)
+→ uses the OfferComparisonTable layout.
+
+Extract shared pieces into reusable components so the design stays in sync.
+
+Replace the static numbers with real data from usePolicyComparisons, but keep the design.
+
+Wire the “Se detaljer” buttons so you can click from the overview to a detail page.
+
+Step 1 – Create / place the pages
+
+Put OfferComparisonAll into a route page, for example:
+
+client/src/app/offers/comparison/page.tsx
+
+
+(If the project uses a different folder for pages, adjust accordingly but keep the structure consistent.)
+
+Put OfferComparisonTable into a dynamic route for a single policy type, e.g.:
+
+client/src/app/offers/comparison/[policyType]/page.tsx
+
+
+policyType will be "indbo" | "hus" | "ulykke" | "bil" | "rejse" etc.
+
+Use the existing App Router conventions in this repo.
+
+Make sure both pages still wrap content in <DefaultPageLayout> and keep all the Subframe JSX.
+
+Step 2 – Extract shared layout components (without changing design)
+
+From the two pasted TSX components, identify the big sections that are visually identical or almost identical:
+
+Header section with:
+
+“Tryg sammenligning”
+
+subtitle “Compare and review insurance offers tailored for you”
+
+right-aligned buttons (Se beskeder, Se detaljer)
+
+Tabs (ListingsTabs) with Samlet / Indbo / Ulykke / Hus / Bil / Rejse.
+
+“Højdepunkter hvor anbefalingen er bedre” card row.
+
+Detailed comparison matrix (“Detaljeret sammenligning”).
+
+Savings chart block (“Din besparelse” + AreaChart + 3 cards).
+
+Do this:
+
+Create a folder for comparison components, e.g.:
+
+client/src/components/comparison/
+
+
+Extract the shared JSX into components like (names are examples, you can choose better ones):
+
+ComparisonHeader.tsx
+
+ComparisonTabs.tsx
+
+ComparisonHighlights.tsx
+
+ComparisonCoverageMatrix.tsx
+
+ComparisonSavingsChart.tsx
+
+Each component should:
+
+Contain exactly the JSX and classNames from the original pages.
+
+Receive minimal props for dynamic text (e.g. company names, numbers) but default to the current hard-coded text so design is preserved while we wire data.
+
+Update both OfferComparisonAll and OfferComparisonTable to use these components instead of duplicating the JSX.
+
+Important: while refactoring, always copy-paste the JSX chunks directly into the new components first, then replace them in the pages with <ComponentName ... />. Do not rewrite markup from scratch.
+
+Step 3 – Connect OfferComparisonAll to usePolicyComparisons
+
+Import and use the existing hook:
+
+import { usePolicyComparisons } from "@/client/src/hooks/usePolicyComparisons"; // adjust path based on repo
+
+
+Inside OfferComparisonAll:
+
+Call the hook:
+
+const { data, isLoading, error } = usePolicyComparisons();
+
+
+While loading: keep layout but show skeletons or a simple “Loader” where the numbers and table rows go.
+
+When data is available:
+
+Compute:
+
+const overallCurrent = sum of all current annualPremium;
+const overallOffer   = sum of cheapest offer per policyType;
+const overallSavings = overallCurrent - overallOffer;
+const overallPct     = overallSavings / overallCurrent * 100;
+
+
+Use these values to replace:
+
+“Samlet besparelse” (amount + percent)
+
+“Tryg tilbud” amount (overallOffer)
+
+“Din nuværende” amount (overallCurrent)
+
+For the “Hurtig sammenligning” table:
+
+Map each comparison row into a <Table.Row>:
+
+Icon based on policyType
+
+“Nuværende” column → current annualPremium
+
+“Tilbud” column → offer annualPremium (for that company)
+
+“Besparelse” column → savingsAnnual
+
+“Status” column → “Se detaljer” button
+
+Wiring the “Se detaljer” button:
+
+Use Next.js router (useRouter from next/navigation) to navigate to the detail page:
+
+const router = useRouter();
+// ...
+<Button
+  variant="brand-tertiary"
+  size="small"
+  onClick={() => router.push(`/offers/comparison/${policyType}`)}
+>
+  Se detaljer
+</Button>
+
+
+policyType must match the [policyType] route.
+
+Step 4 – Make OfferComparisonTable generic per policyType
+
+In the [policyType]/page.tsx version of OfferComparisonTable, read the route param:
+
+import { useParams } from "next/navigation";
+
+const params = useParams();
+const policyType = params.policyType as string;
+
+
+Use usePolicyComparisons() again:
+
+Find the comparison entry for this policyType.
+
+Use its data to fill the dynamic parts:
+
+The yearly cost comparison block (“Årlig omkostning sammenligning”):
+
+“Nuværende (Alm. Brand)” → current companyName + annualPremium
+
+“Ny pris (Tryg)” → offer companyName + annualPremium
+
+“Din årlige besparelse” → savingsAnnual + derived percent.
+
+The detailed comparison matrix:
+
+For now you can leave the static coverage rows (Brand, Kasko, etc.) as placeholders.
+
+Later we can wire them to real coverage comparison.
+
+Keep the rest of the layout (highlights, questions, chart) exactly as in the Subframe code, just with data-driven numbers where it makes sense.
+
+Step 5 – Keep Subframe sync safe
+
+Assume npx @subframe/cli@latest sync --all -p 34bd735365b5 is run before development.
+
+Place your new shared components in a folder that Subframe does not overwrite (e.g. client/src/components/comparison).
+
+Do not modify generated Subframe component files under @/ui/components/...; only use them.
+
+What to show me when you’re done
+
+Final file paths for:
+
+Overview page (OfferComparisonAll)
+
+Detail page (OfferComparisonTable)
+
+All new shared components you created
+
+Short summary of:
+
+How usePolicyComparisons is used in each page
+
+How the “Se detaljer” navigation works
+
+Which parts of the layout are now shared between the two pages
+
+Use the two pasted TSX files strictly as design truth.
+Refactor by extraction + data wiring only, never by redesign.
