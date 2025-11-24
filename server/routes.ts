@@ -1889,9 +1889,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // OLD: Get comparison by ID (legacy comparisons table - deprecated)
+  // Get comparison by ID (checks both new company_comparisons and legacy comparisons tables)
   app.get("/api/comparisons/:id", requireAuth, async (req, res) => {
     try {
+      // First try new company_comparisons table
+      const companyComparison = await storage.getCompanyComparison(req.params.id);
+      
+      if (companyComparison) {
+        // Transform company_comparisons data to match old format expected by frontend
+        const currentCompany = companyComparison.currentCompany 
+          ? await storage.getCompany(companyComparison.currentCompany) 
+          : null;
+        const offerCompany = companyComparison.offerCompany 
+          ? await storage.getCompany(companyComparison.offerCompany) 
+          : null;
+
+        // Extract data from comparison_json
+        const comparisonJson = companyComparison.comparisonJson as any || {};
+        
+        // Transform to old format
+        res.json({
+          id: companyComparison.id,
+          userId: companyComparison.userId,
+          companyId: companyComparison.offerCompany,
+          company: offerCompany,
+          savings: comparisonJson.overall?.totalSavingsAnnual || 0,
+          savingsPercentage: comparisonJson.overall?.savingsPercentage || 0,
+          comparisonData: comparisonJson,
+          currentDocument: {
+            ocrData: {
+              companyName: currentCompany?.name || 'Din nuværende forsikring',
+              annualPremium: comparisonJson.overall?.totalCurrentAnnual || 0
+            }
+          },
+          offerDocument: {
+            ocrData: {
+              companyName: offerCompany?.name || 'Tilbud',
+              annualPremium: comparisonJson.overall?.totalOfferAnnual || 0
+            }
+          },
+          createdAt: companyComparison.createdAt
+        });
+        return;
+      }
+
+      // Fallback to legacy comparisons table
       const comparison = await storage.getComparison(req.params.id);
       if (!comparison) {
         return res.status(404).json({ message: "Comparison not found" });

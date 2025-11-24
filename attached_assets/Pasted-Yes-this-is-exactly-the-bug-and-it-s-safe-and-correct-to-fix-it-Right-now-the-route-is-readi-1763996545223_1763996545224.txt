@@ -1,0 +1,55 @@
+Yes – this is exactly the bug, and it’s safe (and correct) to fix it.
+Right now the **route is reading from the wrong table**, so your comparison exists in `company_comparisons` but the API looks in `comparisons` and returns 404 → “Sammenligning ikke fundet”.
+
+The fix is:
+
+* Keep your new `policy_snapshots` stuff as-is
+* For `/api/comparisons/:id`, use `getCompanyComparison` (which reads from `company_comparisons`) instead of `getComparison`.
+
+Here’s a short “context prompt” you can paste to Replit so it actually does the right change:
+
+---
+
+**Prompt to Replit**
+
+You already found the root cause of the “Sammenligning ikke fundet” issue:
+
+* The URL `/sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1` calls the old comparison page
+* That page calls `/api/comparisons/:id`
+* The route handler currently uses `storage.getComparison(id)`, which reads from the `comparisons` table
+* But my data (including `0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1`) actually lives in the **`company_comparisons`** table, and I already have a method `getCompanyComparison(id)` for that
+
+Please implement the following **minimal, targeted fix**:
+
+1. **Update the API route**
+
+   * In `server/routes.ts`, find the handler for `GET /api/comparisons/:id`.
+   * Change it so it calls `storage.getCompanyComparison(req.params.id)` instead of `storage.getComparison(req.params.id)`.
+   * Keep the rest of the response shape the same (status codes, JSON structure), so the existing frontend still works.
+
+2. **Do NOT:**
+
+   * Do not change the DB schema.
+   * Do not change the `company_comparisons` table.
+   * Do not remove `getComparison` yet – other code might still use it for the new per-policy comparisons.
+
+3. **Check for other places**
+
+   * Search for `getComparison(` in the codebase.
+   * For now, only the **API route for `/api/comparisons/:id`** should switch to `getCompanyComparison`. If anything else is depending on the old `comparisons` table, leave that as is.
+
+4. **Test**
+
+   * Run `npm run dev`.
+   * Log in as the usual test user (`hello@vyork.dk`).
+   * Open `/sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1`.
+   * Confirm:
+
+     * The API call `GET /api/comparisons/0f0d18ad-...` returns **200** with the existing comparison JSON.
+     * The page no longer shows “Sammenligning ikke fundet” or a blank screen.
+
+Finally, show me the updated code for the `/api/comparisons/:id` route and confirm the HTTP status and response body for that comparison ID after the fix.
+
+---
+
+Når Replit har kørt det og viser dig, at `/api/comparisons/:id` nu returnerer 200 med data, så burde din sammenligningsside dukke op igen (eller i det mindste vise UI + data i stedet for blank side). Hvis du så stadig ser layout-issues, kan vi bagefter fokusere 100% på frontend/Subframe delen.
