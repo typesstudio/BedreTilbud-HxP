@@ -179,15 +179,25 @@ export default function Comparison() {
                 Sammenlign dit nuværende tilbud med {companyName}
               </span>
             </div>
-            <Button
-              className="h-12 mobile:w-full touch-target"
-              variant="brand-secondary"
-              onClick={() => threadId && setLocation(`/emails/${threadId}`)}
-              disabled={!threadId}
-              data-testid="button-view-messages"
-            >
-              Se beskeder
-            </Button>
+            <div className="flex items-center gap-2 mobile:w-full mobile:flex-col">
+              <Button
+                className="h-12 mobile:w-full touch-target"
+                variant="brand-secondary"
+                onClick={() => setLocation('/check')}
+                data-testid="button-view-healthcheck"
+              >
+                Se sundhedstjek
+              </Button>
+              <Button
+                className="h-12 mobile:w-full touch-target"
+                variant="brand-secondary"
+                onClick={() => threadId && setLocation(`/emails/${threadId}`)}
+                disabled={!threadId}
+                data-testid="button-view-messages"
+              >
+                Se beskeder
+              </Button>
+            </div>
           </div>
 
           {/* Annual Cost Comparison */}
