@@ -1,0 +1,331 @@
+You are working in my BedreTilbud repo.
+
+Goal
+- The comparison page at /sammenligning/:id must use my Subframe design EXACTLY and be fully data-driven.
+- All sections must render with real data from company_comparisons.comparison_json:
+  - Top summary (total savings, current price, new price)
+  - “Hurtig sammenligning” table
+  - “Detaljeret sammenligning” coverage matrix
+  - “Din besparelse” savings-over-time chart
+- The layout + components must be reusable so I can use the same building blocks on other pages.
+
+VERY IMPORTANT PRINCIPLES
+- Subframe TSX is the design source of truth. Do NOT freestyle new layouts.
+- Use small, reusable components in client/src/components/comparison/.
+- Keep business logic (data mapping, fetching) separate from presentation.
+- Don’t break existing APIs or backend types.
+
+You already have:
+- Subframe comparison TSX examples:
+  - client/src/pages/offer-comparison-all.tsx
+  - client/src/pages/offer-comparison-table.tsx (or similar – search for “Tryg sammenligning” and “Hurtig sammenligning”)
+- New comparison route:
+  - client/src/pages/comparison.tsx (used for /sammenligning/:id)
+- New comparison data in DB:
+  - company_comparisons.comparison_json
+  - The debug report shows:
+    - comparison_json.overall:
+      - annualSavings
+      - totalCurrentAnnualPremium
+      - totalOfferAnnualPremium
+      - cumulativeSavings.chartData (length ~120)
+    - comparison_json.policyComparisons[]:
+      - policyType (e.g. "hus", "indbo", "ulykke")
+      - label
+      - currentAnnual
+      - offerAnnual
+      - annualSavings
+      - coverageRows[] (for detailed comparison)
+      - highlights[]
+      - missingInfo[]
+      - recommendations[]
+
+High-level tasks
+1) Confirm data shape from DB
+2) Create a typed “view model” transformer
+3) Extract the Subframe design into reusable components
+4) Wire comparison.tsx to use those components + real data
+5) Make sure “Detaljeret sammenligning” and savings chart show correctly
+6) Keep everything clean and reusable for other pages.
+
+--------------------------------
+STEP 1 – Inspect the existing comparison code & data
+--------------------------------
+
+1. Open the comparison page:
+   - client/src/pages/comparison.tsx
+
+2. Open any existing comparison helpers:
+   - client/src/utils/transformComparison.ts (or similarly named file – search for "transformCompanyComparisonToViewModel")
+   - If it doesn’t exist, we’ll create one in this step.
+
+3. Inspect the Subframe example designs:
+   - client/src/pages/offer-comparison-all.tsx
+   - client/src/pages/offer-comparison-table.tsx
+   These contain:
+   - Summary cards ("Samlet besparelse", "Tryg tilbud", "Din nuværende")
+   - “Hurtig sammenligning” table
+   - “Detaljeret sammenligning” coverage matrix
+   - Savings-over-time section with AreaChart
+
+4. Confirm the DB JSON shape with a quick query (you’ve done this before, just re-confirm and keep it in mind while coding):
+   - comparison_json->'overall'
+   - comparison_json->'policyComparisons'
+
+Do NOT change the database schema or the comparison_json shape.
+
+--------------------------------
+STEP 2 – Define a typed comparison view model
+--------------------------------
+
+Create or update: client/src/utils/transformComparison.ts
+
+1. Define TypeScript types that represent what the front-end needs:
+
+   - ComparisonOverallView:
+     - companyName: string
+     - annualSavings: number
+     - totalCurrentAnnual: number
+     - totalOfferAnnual: number
+     - savingsPercent: number | null
+     - cumulativeSavings: { label: string; value: number }[]  // mapped from overall.cumulativeSavings.chartData
+
+   - ComparisonPolicyRowView (for “Hurtig sammenligning” table):
+     - policyType: "hus" | "indbo" | "ulykke" | string
+     - label: string
+     - currentAnnual: number | null
+     - offerAnnual: number | null
+     - savingsAnnual: number | null
+     - cheaperThanCurrent: boolean | null
+
+   - ComparisonCoverageRowView (for “Detaljeret sammenligning” matrix):
+     - coverageLabel: string
+     - coverageDescription: string | null
+     - currentValue: string | null  // “inkluderet” / amount / "-"
+     - offerValue: string | null
+     - currentVariant: "success" | "error" | "neutral"
+     - offerVariant: "success" | "error" | "neutral"
+
+   - ComparisonFinePrintItemView (for “Forstå det med småt” section – if available):
+     - category: string
+     - icon: "dollar" | "shield" | "clock" | "help" | string
+     - question: string
+     - answer?: string
+
+   - ComparisonViewModel:
+     - id: string
+     - offerCompanyName: string
+     - currentCompanyName: string
+     - overall: ComparisonOverallView
+     - policies: ComparisonPolicyRowView[]
+     - coverageRows: ComparisonCoverageRowView[]   // all coverage rows for selected policy or combined
+     - finePrintItems: ComparisonFinePrintItemView[]
+
+2. Implement a single function:
+
+   - function transformCompanyComparisonToViewModel(raw: any): ComparisonViewModel
+
+   This should:
+   - Take the raw company comparison record (including comparison_json)
+   - Map fields using the REAL names in comparison_json:
+     - overall.annualSavings      → overall.annualSavings
+     - overall.totalCurrentAnnualPremium → overall.totalCurrentAnnual
+     - overall.totalOfferAnnualPremium   → overall.totalOfferAnnual
+     - overall.cumulativeSavings.chartData → overall.cumulativeSavings[]
+   - Map policyComparisons[] into policies[]:
+     - policyType
+     - label
+     - currentAnnual
+     - offerAnnual
+     - annualSavings
+     - cheaperThanCurrent
+   - Map policyComparisons[].coverageRows to coverageRows:
+     - Decide simple rules:
+       - if row.currentStatus === "included" → Badge variant "success" & label "inkluderet"
+       - if row.currentStatus === "excluded" → Badge variant "error" & label "ikke inkluderet"
+       - else → "neutral"
+   - Map missingInfo / recommendations into finePrintItems[] if present.
+
+Don’t import any React or JSX in this file. It must be pure TypeScript.
+
+--------------------------------
+STEP 3 – Extract reusable comparison components from Subframe TSX
+--------------------------------
+
+We want canonical UI components in:
+- client/src/components/comparison/
+
+Create/ensure the following components, reusing the Subframe JSX from offer-comparison-all.tsx / offer-comparison-table.tsx:
+
+1) ComparisonHeader.tsx
+   - Props: { offerCompanyName: string; onViewHealthCheck?: () => void; onViewMessages?: () => void; activeTab: string; onTabChange: (tab: string) => void; }
+   - Use the Subframe header layout:
+     - H1 "Alka Forsikring sammenligning"
+     - Subtitle
+     - Tabs (Samlet, Indbo, Ulykke, Hus, Bil, Rejse) using <ListingsTabs>
+     - “Se sundhedstjek” + “Se beskeder” buttons (use callbacks, don’t contain business logic).
+
+2) ComparisonSummaryRow.tsx
+   - Props: {
+       overall: ComparisonOverallView;
+       currentCompanyName: string;
+       offerCompanyName: string;
+     }
+   - Use the 3-card layout from the first design (“Samlet besparelse”, “Alka tilbud”, “Din nuværende”).
+   - Bind numbers:
+     - overall.annualSavings
+     - overall.totalOfferAnnual
+     - overall.totalCurrentAnnual
+
+3) ComparisonQuickTable.tsx
+   - Props: { policies: ComparisonPolicyRowView[]; onSelectPolicy?: (policyType: string) => void; }
+   - Use the "Hurtig sammenligning" table Subframe JSX.
+   - For each row:
+     - Category icon + label (use policyType to pick icon)
+     - Current / Offer / Besparelse
+     - “Se detaljer” button calling onSelectPolicy(policyType).
+
+4) ComparisonDetailedMatrix.tsx
+   - This likely already exists (you created it earlier). If so, refactor it to:
+   - Props: {
+       currentCompanyName: string;
+       offerCompanyName: string;
+       coverageRows: ComparisonCoverageRowView[];
+     }
+   - Use the Subframe “Detaljeret sammenligning” JSX:
+     - Sticky header row with “Dækning / Nuværende / Nyt tilbud”
+     - For each coverage row, render:
+       - Left: coverageLabel + coverageDescription
+       - Middle: Badge with currentValue + variant
+       - Right: Badge with offerValue + variant
+   - Hide this section if coverageRows.length === 0.
+
+5) ComparisonSavingsChart.tsx
+   - Props: { overall: ComparisonOverallView; }
+   - Use the Subframe “Din besparelse” section:
+     - Title + badge “X kr over 10 år”
+     - AreaChart with:
+       - index="label"
+       - categories={["Savings"]} or similar
+       - data = overall.cumulativeSavings mapped to:
+         { label, Savings: value }
+   - Below, show the 3 cards (“Månedlig besparelse”, “Total efter 12 måneder”, “Forventet efter 10 år”) using simple derived numbers based on annualSavings and cumulativeSavings if available. If you don’t have perfect logic, use approximate but consistent math:
+     - monthly = annualSavings / 12
+     - 12 months = annualSavings
+     - 10 years = annualSavings * 10
+
+6) ComparisonFinePrint.tsx
+   - Props: { items: ComparisonFinePrintItemView[]; offerCompanyName: string; }
+   - Use the Subframe “Forstå det med småt” section.
+   - For now, it’s OK if items is empty and the section hides.
+
+All of these components must be purely presentational: no data fetching, minimal logic.
+
+--------------------------------
+STEP 4 – Wire comparison.tsx to the new components
+--------------------------------
+
+Open: client/src/pages/comparison.tsx
+
+1. Make this page responsible only for:
+   - Reading the comparisonId from the route.
+   - Fetching /api/comparisons/:id (existing API).
+   - Calling transformCompanyComparisonToViewModel(raw) to get a ComparisonViewModel.
+   - Managing local UI state: activeTab, selectedPolicyType, etc.
+   - Rendering the comparison layout using the reusable components.
+
+2. Replace the big inline layout with something like:
+
+   - Fetch + loading/error handling (keep whatever was there before, just return early for loading/error).
+   - Once you have `viewModel`, render:
+
+     <DefaultPageLayout>
+       <div className="...page container classes from Subframe...">
+
+         <ComparisonHeader
+           offerCompanyName={viewModel.offerCompanyName}
+           activeTab={activeTab}
+           onTabChange={setActiveTab}
+           onViewHealthCheck={...existing logic or TODO}
+           onViewMessages={...existing logic or TODO}
+         />
+
+         {activeTab === "samlet" && (
+           <>
+             <ComparisonSummaryRow
+               overall={viewModel.overall}
+               currentCompanyName={viewModel.currentCompanyName}
+               offerCompanyName={viewModel.offerCompanyName}
+             />
+
+             <ComparisonQuickTable
+               policies={viewModel.policies}
+               onSelectPolicy={setSelectedPolicyType}
+             />
+
+             <ComparisonSavingsChart overall={viewModel.overall} />
+
+             <ComparisonDetailedMatrix
+               currentCompanyName={viewModel.currentCompanyName}
+               offerCompanyName={viewModel.offerCompanyName}
+               coverageRows={viewModel.coverageRows /* filtered to relevant policy if needed */}
+             />
+
+             <ComparisonFinePrint
+               items={viewModel.finePrintItems}
+               offerCompanyName={viewModel.offerCompanyName}
+             />
+           </>
+         )}
+
+         {/* For Indbo/Hus/Ulykke tabs, filter policies/coverageRows by policyType */}
+       </div>
+     </DefaultPageLayout>
+
+3. Make sure you are using the real fields from comparison_json:
+   - overall.annualSavings
+   - overall.totalCurrentAnnualPremium
+   - overall.totalOfferAnnualPremium
+   - overall.cumulativeSavings.chartData
+   - policyComparisons[].*
+
+Don’t hardcode any numbers (no “0 kr” in JSX). Everything must be driven from the view model.
+
+--------------------------------
+STEP 5 – Verify with the existing Alka comparison
+--------------------------------
+
+Use the existing comparison ID that already has a full debug report (for example:
+0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1).
+
+1. Run the app.
+2. Login as the test user (hello@vyork.dk).
+3. Open /sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1
+
+Verify that:
+- The top cards show the ACTUAL numbers:
+  - total savings ~ 5.3k DKK
+  - current annual ~ 11.872,70 DKK
+  - offer annual ~ 6.548,92 DKK
+- “Hurtig sammenligning” table shows one row per policy (hus, indbo, ulykke) with correct prices.
+- “Detaljeret sammenligning” renders at least 5–10 coverage rows with green/red badges.
+- Savings chart shows a curve using cumulativeSavings.chartData (not dummy Biology/Business/Psychology data).
+- No section shows “0 kr” unless the data is genuinely missing.
+
+If anything is still hardcoded or empty while relevant data exists in comparison_json, adjust the transformer or props to pass the correct fields.
+
+--------------------------------
+STEP 6 – Reusability for other pages
+--------------------------------
+
+Finally, ensure that:
+- All the core UI pieces live in client/src/components/comparison/ and accept data via props.
+- The comparison page is just one “consumer” of these components.
+- Do NOT couple these components tightly to /sammenligning – they should be usable later from other pages (for example, a multi-offer overview page).
+
+When you’re done, summarise:
+- The final ComparisonViewModel shape
+- Where each section gets its data from
+- Any TODOs for future pages.
+
+END OF INSTRUCTIONS
