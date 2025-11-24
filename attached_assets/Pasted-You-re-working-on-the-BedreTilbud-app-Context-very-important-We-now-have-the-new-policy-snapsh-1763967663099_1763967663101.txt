@@ -1,0 +1,323 @@
+You’re working on the BedreTilbud app.
+
+Context (very important):
+
+We now have the new policy_snapshots architecture in place:
+
+Table: policy_snapshots with:
+
+id
+
+user_id
+
+document_id
+
+company_name
+
+policy_type (e.g. "hus", "indbo", "ulykke")
+
+kind ("current" | "offer")
+
+coverage_address
+
+pricing JSON (status, annualPremium, confidence, components, etc.)
+
+plus other metadata fields you already created
+
+Snapshots exist for:
+
+Current: Privatsikring (hus, indbo, ulykke)
+
+Offer: other companies (e.g. Alka / LB) with matching policy_types
+
+We also have:
+
+Health checks per snapshot (as used in the comparison debug report)
+
+PolicyComparisonService and /api/policies/comparisons
+
+A Subframe-generated UI page that shows the user’s current insurance health check (this already renders all the “what’s included”, benefits, weaknesses, etc.)
+
+Goal
+
+I want to:
+
+Reuse the exact same health-check layout (the Subframe-generated UI) for both:
+
+the user’s current insurance, and
+
+any offer insurance (policy_snapshot with kind='offer').
+
+Ensure there is one shared layout component so that:
+
+if I change the layout/design in one place,
+
+it automatically updates both current and offer views.
+
+Add a single “policy overview” page that:
+
+takes a snapshotId (for either current or offer),
+
+fetches the relevant data from the backend,
+
+renders it using that shared layout.
+
+Please follow these steps carefully and keep the Subframe layout intact:
+
+Step 1 – Backend: Add single-policy overview endpoint
+
+Create a new endpoint:
+
+GET /api/policies/:snapshotId/overview
+
+
+Requirements:
+
+Use the existing requireAuth / auth pattern from server/routes.ts.
+
+Look up the policy_snapshots row by id = :snapshotId, but only if it belongs to the authenticated user.
+
+From that snapshot, include at least:
+
+id
+
+kind ("current" | "offer")
+
+company_name
+
+policy_type
+
+coverage_address
+
+pricing (status, annualPremium, confidence, components, etc.)
+
+created_at
+
+Attach the health check for this snapshot (the same data that is used in the debug report):
+
+what’s included / coverages
+
+highlights / “what’s good”
+
+“could be better” / weaknesses
+
+missing information, etc.
+Use the existing health-check storage you already implemented (don’t invent a new structure, just expose the existing one in the response).
+
+(Nice to have, but please implement if feasible with existing code):
+Add a comparisonContext object:
+
+Find the matching counterpart snapshot (same user, same policy_type, opposite kind):
+
+If this snapshot is kind='offer', find the latest kind='current' snapshot with the same policy_type.
+
+If this snapshot is kind='current', find the latest kind='offer' snapshot with the same policy_type.
+
+Compute:
+
+currentAnnualPremium
+
+offerAnnualPremium
+
+savingsAnnual (positive if offer is cheaper than current)
+
+cheaperThanCurrent (boolean)
+You can reuse the logic from PolicyComparisonService so behaviour is consistent.
+
+Return a JSON response like:
+
+{
+  snapshot: {
+    id: string;
+    kind: "current" | "offer";
+    companyName: string;
+    policyType: string;
+    coverageAddress?: string | null;
+    pricing: {
+      status: string;
+      annualPremium: number | null;
+      confidence: number | null;
+      components?: Array<{ label: string; amount: number }>;
+    } | null;
+    createdAt: string;
+  };
+  healthCheck: {
+    // reuse the existing shape you already use in the current health check UI
+    whatsIncluded: any[];
+    benefits: any[];
+    couldBeBetter: any[];
+    missingInfo: any[];
+    // plus whatever fields you already have
+  } | null;
+  comparisonContext?: {
+    hasMatch: boolean;
+    currentCompanyName?: string;
+    currentAnnualPremium?: number | null;
+    offerCompanyName?: string;
+    offerAnnualPremium?: number | null;
+    savingsAnnual?: number | null;
+    cheaperThanCurrent?: boolean;
+  };
+}
+
+
+Put the service logic in a sensible place, e.g.:
+
+server/services/policySnapshots/PolicyOverviewService.ts
+
+or a method on an existing service for policy snapshots.
+
+Wire the route into server/routes.ts using the same routing conventions you already use.
+
+Step 2 – Frontend: Create a shared health-check layout component
+
+I am using Subframe.ai to generate the UI. There is already a page that shows the current insurance health check.
+
+Tasks:
+
+Locate the existing current health check page/component in the client code (likely something like:
+
+client/src/pages/..., or
+
+client/src/app/..., or
+
+a Subframe-generated component under client/src/components/...).
+
+Refactor that page so that:
+
+All pure layout / visual structure is moved into a shared component, e.g.:
+
+// example path – choose the most idiomatic location in this project
+client/src/components/insurance/PolicyHealthCheckLayout.tsx
+
+
+This layout component should receive data via props, not fetch anything by itself. For example:
+
+export type PolicyHealthCheckLayoutProps = {
+  snapshot: { ... };      // companyName, policyType, pricing, etc.
+  healthCheck: { ... };   // whatsIncluded, benefits, etc.
+  comparisonContext?: { ... }; // optional savings banner
+};
+
+export function PolicyHealthCheckLayout(props: PolicyHealthCheckLayoutProps) {
+  // Reuse the existing Subframe-generated layout:
+  // - hero/header section with company, policy type, price
+  // - sections for "Hvad er inkluderet", benefits, weaknesses, etc.
+  // DO NOT change the visual design, just parameterize it.
+}
+
+
+The existing “current health check” page should then:
+
+Fetch the current policy data as it does today,
+
+Map that data into PolicyHealthCheckLayoutProps,
+
+Render <PolicyHealthCheckLayout {...mappedProps} />.
+
+Keep the Subframe structure and styling:
+
+Do not rewrite the layout from scratch.
+
+Just extract the JSX into a reusable component.
+
+Keep the same classNames / Tailwind / Subframe sections, so future Subframe edits are easy.
+
+Step 3 – Frontend: New page for single snapshot (current and offer)
+
+Create a new page that shows a single policy snapshot using the new backend endpoint and the shared layout.
+
+Requirements:
+
+Add a route for something like:
+
+If using React Router:
+/policies/:snapshotId
+
+If using Next.js App Router:
+client/src/app/policies/[snapshotId]/page.tsx
+
+Or match the routing conventions already used in this project.
+
+Implement a hook (following the pattern of usePolicyComparisons):
+
+// client/src/hooks/usePolicyOverview.ts
+import { useQuery } from '@tanstack/react-query';
+
+export function usePolicyOverview(snapshotId: string) {
+  return useQuery({
+    queryKey: ['policy-overview', snapshotId],
+    queryFn: async () => {
+      const res = await fetch(`/api/policies/${snapshotId}/overview`);
+      if (!res.ok) throw new Error('Failed to fetch policy overview');
+      return res.json();
+    },
+  });
+}
+
+
+In the new page component:
+
+Read snapshotId from the route params.
+
+Call usePolicyOverview(snapshotId).
+
+While loading: show the same loading state style as other pages.
+
+On success: map the response into PolicyHealthCheckLayoutProps and render:
+
+<PolicyHealthCheckLayout
+  snapshot={data.snapshot}
+  healthCheck={data.healthCheck}
+  comparisonContext={data.comparisonContext}
+/>
+
+
+If comparisonContext?.hasMatch is true, show a small banner at the top (inside the shared layout) like:
+
+“Compared to your current insurance, you save X DKK/year”
+or
+“This is Y DKK/year more expensive than your current”.
+Keep it simple and reuse existing typography/spacing from the current UI.
+
+Step 4 – Wire from existing views
+
+Finally, connect this new page so it can be reached from the UI:
+
+In the existing current health check view:
+
+If you render a list of current policies (hus, indbo, ulykke), add a “See details” / “Se detaljer” link or button for each.
+
+That link should navigate to /policies/:snapshotId using the policy_snapshots.id for the current snapshot.
+
+In the comparison UI:
+
+For each comparison row and its cards:
+
+On the “current” side: add a link “Se din nuværende” → /policies/:currentSnapshotId
+
+On the “offer” side: add a link “Se tilbuddet” → /policies/:offerSnapshotId
+
+The comparison data should already know the snapshot IDs (or can be easily extended to include them).
+
+Make sure that:
+
+Both current and offer policies use the same PolicyHealthCheckLayout component.
+
+If I later change the layout (e.g. add a new section, change typography, etc.) in that shared component, the change applies to:
+
+the user’s current insurance health check, and
+
+all offer insurance health checks.
+
+At the end, please:
+
+Confirm the endpoint works with a real snapshotId from the database.
+
+Confirm the new page renders for both:
+
+a current snapshot
+
+an offer snapshot
+
+Show me the final file paths and a short summary of what you implemented.
