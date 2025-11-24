@@ -16,7 +16,7 @@ import {
 export type ComparisonPolicyRow = {
   policyType: string;
   label: string;
-  icon: React.ReactNode;
+  icon: any; // Component reference
   currentAnnual: number | null;
   offerAnnual: number | null;
   annualSavings: number | null;
@@ -141,13 +141,14 @@ export function ComparisonPageLayout({
               >
                 {view.policies.map((policy) => {
                   const hasPricing = policy.currentAnnual && policy.offerAnnual;
+                  const IconComponent = policy.icon;
                   return (
                     <Table.Row key={policy.policyType}>
                       <Table.Cell>
                         <div className="flex items-center gap-2">
                           <IconWithBackground 
                             size="small" 
-                            icon={policy.icon}
+                            icon={<IconComponent />}
                             variant={hasPricing ? "neutral" : "warning"}
                           />
                           <span className={`whitespace-nowrap text-body-bold font-body-bold ${hasPricing ? 'text-default-font' : 'text-subtext-color'}`}>

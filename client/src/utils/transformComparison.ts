@@ -44,7 +44,7 @@ export function transformCompanyComparisonToViewModel(apiData: any): ComparisonV
     return {
       policyType: p.policyType,
       label,
-      icon: <IconComponent />,
+      icon: IconComponent,
       currentAnnual: p.currentAnnualPremium ?? null,
       offerAnnual: p.offerAnnualPremium ?? null,
       annualSavings: p.annualSavings ?? null,
