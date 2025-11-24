@@ -1,0 +1,105 @@
+Nice, this is super close now – the blank page is almost certainly just a routing / page-wiring issue, not the data pipeline (your debug report shows everything is healthy).
+
+Right now you have:
+
+* Old comparison flow on `/sammenligning/:comparisonId` that **used to work**
+* New Subframe pages `OfferComparisonAll` / `OfferComparisonTable` + shared components
+* New policy comparison API + hooks
+* But the route `/sammenligning/...` renders **nothing**
+
+That usually means either:
+
+* The route doesn’t match (e.g. we only have `/sammenligning` but you’re opening `/sammenligning/0f0d18ad-…`), or
+* The component for that route is throwing an error during render / data-fetch, and React ends up rendering `null`.
+
+You said you normally paste context into Replit, so here’s a **ready-to-paste prompt** that tells the Replit Agent exactly what to inspect and fix.
+
+---
+
+### Prompt to paste into Replit “Ask Agent”
+
+> I’m getting a completely blank screen on the comparison page.
+>
+> * URL I open in the browser: `/sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1`
+> * This route used to show my old comparison view (based on `comparison.tsx`)
+> * After you integrated the Subframe comparison layouts (`OfferComparisonAll` / `OfferComparisonTable` and the components in `client/src/components/comparison`), the page is now **blank** (white screen, no content).
+>
+> Please debug and fix this. **Do not change any backend / DB schema.** Only fix routing and React wiring on the frontend.
+>
+> ### What I want
+>
+> 1. Visiting `/sammenligning/:comparisonId` (e.g. `/sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1`) should render a **full comparison page** using the new Subframe layout, backed by the existing comparison data for that `comparisonId`.
+> 2. It’s fine if `/sammenligning` (without an ID) shows an overview based on the new `policy_snapshots` API, but the main thing is that `/sammenligning/:comparisonId` must no longer be blank.
+> 3. Re-use the **existing comparison data-fetching logic** from the old page (`client/src/pages/comparison.tsx`) or whatever hook it uses. I don’t want new backend endpoints right now – just reuse what we already have.
+> 4. The new Subframe components should be **pure presentation**. A single container page should fetch data and pass props into them.
+>
+> ### Steps to follow
+>
+> 1. **Reproduce the bug**
+>
+>    * Run `npm run dev`
+>    * Load `/` and confirm the app works.
+>    * Then open `/sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1` and check:
+>
+>      * React dev console errors in the browser
+>      * Terminal logs
+> 2. **Check routing**
+>
+>    * Open `client/src/App.tsx`
+>    * Verify the routes for comparison. I expect something like:
+>
+>      * `path="/sammenligning/:comparisonId"` → **this must exist and render our comparison container**
+>      * Optionally `path="/sammenligning"` for an overview.
+>    * If there is only `/sammenligning` and not `/sammenligning/:comparisonId`, add the param route. Right now the URL with the ID is returning a blank page, which usually means it’s not matching any route.
+>    * Remove any duplicate or dead routes related to comparison so there is a single clear path for `/sammenligning/:comparisonId`.
+> 3. **Create / fix the comparison container page**
+>
+>    * Find the old comparison page: `client/src/pages/comparison.tsx`.
+>    * See how it fetches data for a given `comparisonId` (likely from `/api/comparisons/:id` or similar, using a React Query hook).
+>    * Create or update a container component, for example:
+>
+>      * `client/src/pages/OfferComparisonPage.tsx` (or reuse `offer-comparison-detail.tsx`), that:
+>
+>        * Uses `useParams` (or whatever routing hook is standard here) to get `comparisonId` from the URL.
+>        * Reuses the **same data fetching logic** as the old `comparison.tsx` (same API call / hook).
+>        * While loading: render a simple loading state (spinner or skeleton) – **do not return null**.
+>        * On error: render a clear error message instead of throwing.
+>        * On success: pass the data into the new Subframe layout components in `client/src/components/comparison` (header, quick table, highlights, detailed matrix, etc.).
+>    * Wire this container page into `App.tsx` as the element for `path="/sammenligning/:comparisonId"`.
+> 4. **Use the new Subframe components instead of static demo data**
+>
+>    * Open the Subframe pages you created:
+>
+>      * `client/src/pages/offer-comparison-all.tsx`
+>      * `client/src/pages/offer-comparison-detail.tsx`
+>      * And the shared components under `client/src/components/comparison/*`
+>    * Extract the **presentational JSX** (cards, table, sections) into reusable components if not already done.
+>    * Replace the hard-coded demo numbers (like “3.252 kr”, “Biology/Business/Psychology” chart data, etc.) with props.
+>    * From the comparison container, map the real comparison JSON (current vs offer, annual premiums, savings, coverage lists, highlights, cumulative savings chart) to these props.
+>    * Remove or refactor any now-unused static pages so the only entrypoint for a specific comparison is `/sammenligning/:comparisonId`.
+> 5. **Test end-to-end**
+>
+>    * After changes, restart `npm run dev`.
+>    * Log in as the usual test user.
+>    * Open `/sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1`.
+>    * Confirm:
+>
+>      * The page renders (no blank screen).
+>      * Top section shows total current vs offer price + annual savings.
+>      * Table shows per-policy rows (hus, indbo, ulykke).
+>      * Detailed comparison section shows per-coverage rows.
+>      * No runtime errors in the browser console.
+>
+> Please **describe exactly what was wrong** (route mismatch, render error, missing container, etc.) and show the final code for:
+>
+> * `client/src/App.tsx` routes related to `/sammenligning`
+> * The comparison container page
+> * Any updated Subframe comparison components (only the parts you changed for data wiring)
+>
+> Goal: `/sammenligning/:comparisonId` should be a single, stable comparison page using the new Subframe layout, powered by the existing comparison API. No more white screen.
+
+---
+
+Paste that into Replit’s agent and let it run.
+
+If you then get *any* error message or weird behaviour (e.g. parts of the layout missing, some numbers not showing), send me the screenshots / error text and I’ll help you tweak the next prompt.

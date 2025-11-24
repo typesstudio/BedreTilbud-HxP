@@ -49,7 +49,8 @@ function Router() {
         <Route path="/check" component={InsuranceCheck} />
         <Route path="/forsikringstjek/:userId" component={InsuranceCheckPage} />
         <Route path="/sammenligning" component={OfferComparisonAll} />
-        <Route path="/sammenligning/:policyType" component={OfferComparisonDetail} />
+        <Route path="/sammenligning/tilbud/:policyType" component={OfferComparisonDetail} />
+        <Route path="/sammenligning/:id" component={Comparison} />
         <Route path="/admin" component={AdminTesting} />
         <Route component={NotFound} />
       </Switch>

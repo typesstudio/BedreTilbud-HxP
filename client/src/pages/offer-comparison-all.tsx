@@ -127,7 +127,7 @@ export default function OfferComparisonAll() {
               if (tab === "samlet") {
                 setSelectedTab(tab);
               } else {
-                setLocation(`/sammenligning/${tab}`);
+                setLocation(`/sammenligning/tilbud/${tab}`);
               }
             }}
           />
@@ -228,7 +228,7 @@ export default function OfferComparisonAll() {
                         <Button
                           variant={hasPricing ? "brand-tertiary" : "neutral-tertiary"}
                           size="small"
-                          onClick={() => setLocation(`/sammenligning/${comp.policyType}`)}
+                          onClick={() => setLocation(`/sammenligning/tilbud/${comp.policyType}`)}
                           data-testid={`button-details-${comp.policyType}`}
                         >
                           {hasPricing ? "Se detaljer" : "Afventer"}

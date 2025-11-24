@@ -118,7 +118,7 @@ export default function OfferComparisonDetail() {
               if (tab === "samlet") {
                 setLocation("/sammenligning");
               } else {
-                setLocation(`/sammenligning/${tab}`);
+                setLocation(`/sammenligning/tilbud/${tab}`);
               }
             }}
           />
