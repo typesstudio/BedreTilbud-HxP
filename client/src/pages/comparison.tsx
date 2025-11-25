@@ -69,6 +69,14 @@ export default function Comparison() {
   // Get active tab view
   const activeView = viewModel.tabs[activeTab];
   
+  // Calculate available tabs (samlet is always available, plus any policy tabs with data)
+  const availableTabs: ComparisonTabKey[] = ["samlet"];
+  (["indbo", "hus", "ulykke", "bil", "rejse"] as ComparisonTabKey[]).forEach((tabKey) => {
+    if (viewModel.tabs[tabKey]?.isAvailable) {
+      availableTabs.push(tabKey);
+    }
+  });
+  
   // Find thread for messaging
   const companyId = (comparison as any)?.companyId;
   const thread = threads.find((t: any) => t.companyId === companyId);
@@ -93,6 +101,7 @@ export default function Comparison() {
           <ComparisonTabs
             selectedTab={activeTab}
             onTabChange={(tab) => setActiveTab(tab as ComparisonTabKey)}
+            availableTabs={availableTabs}
           />
 
           {/* Summary Cards - use activeView data */}
