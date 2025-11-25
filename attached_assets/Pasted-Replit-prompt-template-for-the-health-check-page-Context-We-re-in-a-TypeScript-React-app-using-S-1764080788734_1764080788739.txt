@@ -1,0 +1,177 @@
+Replit prompt template (for the health-check page)
+
+Context
+
+We’re in a TypeScript React app using Subframe components (@/ui/components/*) and DefaultPageLayout.
+
+There is a health-check page for the route /sundhedstjek/:snapshotId. This page currently renders a very basic layout and doesn’t match the Subframe design.
+
+There is a hook usePolicyHealthCheck(snapshotId) and a transformer transformHealthCheck.ts that returns a ViewModel. The page should only use that ViewModel, no direct raw JSON access and no hardcoded numbers.
+
+We already have comparison components such as:
+
+ComparisonHeader / comparison layout for the offer comparison pages
+
+ComparisonSavingsChart (AreaChart wrapper)
+
+ComparisonDetailedMatrix or similar coverage components
+Reuse these where it makes sense so that changes to components are reflected across both comparison and health-check layouts.
+
+Goal
+
+Implement the health-check page UI so it matches the Subframe design for “Dit forsikringstjek” as closely as possible.
+
+All content must come from the health-check ViewModel returned by transformHealthCheck.ts.
+
+No static numbers or labels other than section headings like “Hvad er inkluderet”, “Dine forsikringsfordele”, etc.
+
+STEP 1: Confirm and tidy the data layer
+
+Open client/src/utils/transformHealthCheck.ts and:
+
+Define/confirm a clear exported TypeScript type, e.g. HealthCheckViewModel.
+
+Make sure it contains at least:
+
+overall: yearlyPotentialSavings, yearlySavingsPercent, currentAnnualPremium, offerAnnualPremium, chartTotals (monthly, 12m, 10y).
+
+benefits: array of { id, title, description, iconVariant }.
+
+coverages: array of { id, label, description, value, variant } for the “Hvad er inkluderet” table.
+
+strengths and weaknesses: arrays for the “Styrker & svagheder” two-column grid.
+
+savingsOverTime: array { monthIndex, label, cumulativeSavings } for the chart.
+
+Do not invent fields – infer them from the existing raw JSON and adapt the transformer. If a field is missing, derive it (e.g. yearly potential savings = current − offer) instead of hard-coding.
+
+Ensure usePolicyHealthCheck(snapshotId) returns this HealthCheckViewModel.
+
+STEP 2: Header + tabs section
+
+In the health-check page component, reuse the same tabs component as the comparison pages (Indbo, Ulykke, Hus, Bil, Rejse). The active tab should correspond to the current policy type from the health check ViewModel.
+
+Use Subframe text tokens so the top section matches:
+
+Title: "[PolicyType] sundhedstjek" (e.g. “Indbo sundhedstjek”).
+
+Subtitle: “Se en grundig analyse af [companyName]’s tilbud” – fill companyName from ViewModel if available, fallback to “Ukendt”.
+
+STEP 3: “Årlig potentiel besparelse” card
+
+Implement this section using Subframe components only (no custom CSS):
+
+Container: full-width card with rounded corners and subtle border like in the comparison page.
+
+Inside:
+
+Left: big number for overall.yearlyPotentialSavings (formatted as “X.XXX kr” using the same formatter as on the comparison page).
+
+Right: pill-style badge “Din årlige besparelse [overall.yearlySavingsPercent] lavere omkostning”.
+
+All values must come from healthCheck.overall.
+
+Use the Subframe TSX snippet below as the visual reference and adapt it to the ViewModel fields instead of static data
+(paste your Subframe snippet here).
+
+STEP 4: “Dine forsikringsfordele” cards
+
+Create a reusable component, e.g. HealthCheckBenefitsGrid, in client/src/components/healthCheck/HealthCheckBenefitsGrid.tsx.
+
+Structure:
+
+A card with heading “Dine forsikringsfordele”.
+
+Inside, a 2–4 column grid of benefit cards using Subframe IconWithBackground, Badge, etc.
+
+Map each benefit from healthCheck.benefits → card:
+
+Title → main line
+
+Description → caption
+
+iconVariant (if present) → IconWithBackground variant (success, warning, etc.)
+
+Import and use this component in the health-check page.
+
+STEP 5: “Hvad er inkluderet” table
+
+Reuse the comparison coverage layout if possible:
+
+Either use ComparisonDetailedMatrix in a single-column “Tryg” mode
+
+Or create a generic CoverageIncludedTable component used by both comparison and health check.
+
+For health check it’s just one column (the offer), so:
+
+Left: coverage label + description from healthCheck.coverages.
+
+Right: a Badge showing the value (e.g. “Inkluderet”, “225.000 kr”, etc.), with color variant coming from coverage.variant.
+
+No hardcoded rows – render healthCheck.coverages.map(...).
+
+STEP 6: “Styrker & svagheder”
+
+Create HealthCheckStrengthsWeaknesses component using the Subframe design:
+
+Heading: “Styrker & svagheder”.
+
+Two columns:
+
+Left: “Styrker” – cards from healthCheck.strengths.
+
+Right: “Forbedringsmuligheder” – cards from healthCheck.weaknesses.
+
+Each card shows:
+
+Title
+
+Optional amount / delta
+
+Description
+
+All data comes from the ViewModel arrays.
+
+STEP 7: “Kumulativ besparelse” chart
+
+Reuse the same ComparisonSavingsChart component as the comparison page if possible. If needed, extract a generic SavingsChart that both can use.
+
+For health check:
+
+Use healthCheck.savingsOverTime as the data source.
+
+Allow multiple lines only if the ViewModel exposes them (e.g. one per policy type). Otherwise a single “Indbo” line is fine.
+
+Below the chart, reuse the savings summary cards component already used on the comparison page (monthly savings, total 12m, total 10y), reading values from healthCheck.overall.chartTotals.
+
+STEP 8: Final CTA
+
+At the bottom, add a CTA similar to the comparison page:
+
+Button: “Gå til dine tilbud” or “Få bedre tilbud”.
+
+Secondary text about secure data / can cancel anytime.
+
+Reuse existing button styling and layout from the comparison CTA component.
+
+General rules
+
+Do not hard-code any numeric values or company names.
+
+Use the existing formatting helpers (currency, percent) from the comparison pages.
+
+Keep everything mobile-friendly using the same Subframe utility classes (mobile:*).
+
+If you have to introduce new components, put them under client/src/components/healthCheck and keep them purely presentational, driven by props from the ViewModel.
+
+After refactor, remove any legacy markup that duplicates the same info.
+
+When you’re done:
+
+Ensure the health-check page compiles.
+
+Verify in the browser that every section:
+
+Renders with the new Subframe layout.
+
+Pulls all its content from the HealthCheckViewModel (no static text except headings).
