@@ -53,11 +53,11 @@ export function ComparisonHighlights({ highlights }: ComparisonHighlightsProps) 
           </Button>
         )}
       </div>
-      <div className="flex w-full items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+      <div className={`flex w-full items-start gap-4 ${showAll ? 'flex-wrap' : ''} mobile:flex-col mobile:flex-nowrap mobile:gap-3`}>
         {displayedHighlights.map((h) => (
           <div
             key={h.id}
-            className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4 mobile:flex-col mobile:flex-nowrap mobile:gap-2"
+            className={`flex flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4 mobile:flex-col mobile:flex-nowrap mobile:gap-2 ${showAll ? 'w-[calc(50%-0.5rem)]' : 'grow shrink-0 basis-0'}`}
             data-testid={`highlight-${h.id}`}
           >
             <IconWithBackground
