@@ -1,0 +1,264 @@
+Nice, that’s actually progress: the button now sends you to /sundhedstjek/:snapshotId, but the health-check page can’t load data for that snapshot, so it falls into the generic error state.
+
+That basically means:
+
+The comparison page is passing a snapshotId.
+
+The health-check API / hook doesn’t support loading by snapshotId yet (it’s probably still using userId + policyType or documentId), so the request fails → “Der opstod en fejl”.
+
+Below is a Replit prompt you can paste that tells it to:
+
+Find the existing health-check API + hook used for the main “Forsikringstjek”.
+
+Add a new backend endpoint that loads health-check for a given policySnapshotId.
+
+Update the health-check page + hook to use that endpoint when the route has :snapshotId.
+
+Reuse all existing Subframe layout/components – just swap the data source so it works both for:
+
+Overview (“Forsikringstjek” from sidebar)
+
+Per-policy “Se detaljer” from /sammenligning/:comparisonId tabs.
+
+Replit prompt – make “Se detaljer” open the correct health-check layout
+
+Goal
+Fix the /sundhedstjek/:snapshotId route so that clicking “Se detaljer” on the comparison page opens a fully working individual health-check layout for that specific policy snapshot (Indbo, Hus, Ulykke), reusing the same Subframe layout and components as the existing “Forsikringstjek” page.
+
+0. High-level context
+
+Comparison page route: /sammenligning/:comparisonId
+
+Health-check route: /sundhedstjek/:snapshotId (this already navigates but shows the generic error state “Kunne ikke hente sundhedstjek data”).
+
+Comparison JSON (from company_comparisons) now includes for each policy:
+
+policyType
+
+currentPolicyId
+
+offerPolicyId
+
+When I click “Se detaljer” on e.g. Indbo, the UI should:
+
+Use the offer snapshot ID (the new company) as :snapshotId.
+
+Load a policy health-check for that snapshot.
+
+Render the existing health-check layout, just scoped to that policy.
+
+Right now, the error means the health-check API / hook doesn’t know how to load data by snapshotId.
+
+1. Find the current health-check API + hook
+
+Search server routes for health-check endpoints:
+
+Look for /api/sundhedstjek, /api/health-check, /api/policies/health-check, or similar in server/routes.ts.
+
+Identify:
+
+The GET endpoint the current “Forsikringstjek” page uses.
+
+The service/storage it calls (e.g. PolicyHealthCheckService, getPolicyHealthCheck, etc.).
+
+The parameters it expects (likely userId and maybe policyType or documentId).
+
+On the client:
+
+Locate the health-check page, probably under client/src/pages/*sundhedstjek*.tsx or similar.
+
+Find the hook that fetches data, e.g. useHealthCheck, usePolicyHealthCheck, etc.
+
+I want you to understand the current data flow before changing anything.
+
+2. Add backend endpoint: health check by policySnapshotId
+
+Add a new authenticated endpoint that returns a health-check for a specific policy snapshot:
+
+Route suggestion (adjust to match your existing naming conventions):
+
+// In server/routes.ts
+app.get(
+  "/api/policy-snapshots/:snapshotId/health-check",
+  requireAuth,
+  async (req, res) => {
+    try {
+      const snapshotId = req.params.snapshotId;
+      const userId = req.user!.id; // or whatever you use in requireAuth
+
+      // 1) Load snapshot by ID
+      const snapshot = await storage.getPolicySnapshotById(snapshotId);
+      if (!snapshot) {
+        return res.status(404).json({ error: "Snapshot not found" });
+      }
+
+      // Optional: verify snapshot.userId === userId for safety
+
+      // 2) Load or compute health-check for that snapshot
+      // Reuse whatever you already do today for the main health-check:
+      // either a service like PolicyHealthCheckService.getForSnapshot(snapshotId)
+      // or a more generic healthCheckService.getForPolicy(snapshot)
+      const healthCheck = await healthCheckService.getHealthCheckForSnapshot(
+        snapshot.id
+      );
+
+      if (!healthCheck) {
+        return res.status(404).json({ error: "Health check not found" });
+      }
+
+      return res.json(healthCheck);
+    } catch (err) {
+      console.error("Error fetching snapshot health check", err);
+      return res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+
+Use existing services/storage:
+
+If there is already a getPolicyHealthCheck or similar which takes snapshotId, use that.
+
+If not, create a minimal wrapper that mirrors the logic that current “Forsikringstjek” uses, but keyed by snapshot instead of user.
+
+Important: Don’t delete or change the existing health-check endpoint; just add this new one so old flows keep working.
+
+3. Update / create storage + service helpers
+
+If they don’t already exist, add helpers:
+
+In server/storage.ts (or wherever it fits your architecture):
+
+async function getPolicySnapshotById(id: string) {
+  const { db } = await import("./db");
+  const { policySnapshots } = await import("@shared/schema");
+  const { eq } = await import("drizzle-orm");
+
+  const [snapshot] = await db
+    .select()
+    .from(policySnapshots)
+    .where(eq(policySnapshots.id, id));
+
+  return snapshot || undefined;
+}
+
+async function getHealthCheckForSnapshot(snapshotId: string) {
+  // Use the same table / schema that the current health-check uses.
+  // For example, if you have a policyHealthChecks table with snapshot_id:
+  const { db } = await import("./db");
+  const { policyHealthChecks } = await import("@shared/schema");
+  const { eq } = await import("drizzle-orm");
+
+  const [hc] = await db
+    .select()
+    .from(policyHealthChecks)
+    .where(eq(policyHealthChecks.snapshotId, snapshotId));
+
+  return hc || undefined;
+}
+
+
+Wire these into the service you used in the route above.
+
+If there’s already a function like getPolicySnapshot(snapshotId) or getHealthCheckBySnapshotId, reuse it instead of adding new ones.
+
+4. Update the client hook to support snapshotId
+
+On the client:
+
+Find the hook used by the /sundhedstjek page (something like useHealthCheck).
+
+Update it so it can be used in two ways:
+
+// Pseudocode – adapt to your actual types
+export function useHealthCheck(options: { snapshotId?: string }) {
+  const snapshotId = options.snapshotId;
+
+  return useQuery({
+    queryKey: ["healthCheck", snapshotId ?? "overview"],
+    queryFn: async () => {
+      if (snapshotId) {
+        const res = await fetch(
+          `/api/policy-snapshots/${snapshotId}/health-check`
+        );
+        if (!res.ok) throw new Error("Failed to fetch snapshot health check");
+        return res.json();
+      }
+
+      // Fallback: existing behaviour for the main Forsikringstjek overview
+      const res = await fetch(`/api/health-check`); // existing endpoint
+      if (!res.ok) throw new Error("Failed to fetch health check");
+      return res.json();
+    },
+  });
+}
+
+
+Don’t change the return shape; keep the view model the same so the page layout doesn’t need to know whether the data came from overview or from a specific snapshot.
+
+5. Wire the route parameter into the health-check page
+
+In the health-check page component (e.g. client/src/pages/sundhedstjek.tsx or similar):
+
+Use useParams (or your router equivalent) to read snapshotId from the URL:
+
+const { snapshotId } = useParams<{ snapshotId?: string }>();
+const { data, isLoading, isError } = useHealthCheck({ snapshotId });
+
+
+Keep the existing error / loading UI exactly as is; just make sure the error comes from the query, not from earlier route assumptions.
+
+Use the same Subframe health-check layout you already have – no visual changes. The only change is where the data comes from.
+
+Result:
+
+Navigating from the left menu (“Forsikringstjek”) → /sundhedstjek → overview health-check.
+
+Clicking “Se detaljer” on “Indbo/Hus/Ulykke” in /sammenligning/:id → /sundhedstjek/:snapshotId → health-check for that specific policy snapshot.
+
+6. Ensure “Se detaljer” passes the correct snapshotId
+
+Finally, double-check the comparison page:
+
+On the Indbo/Hus/Ulykke tabs, the “Se detaljer” button should:
+
+Use the offer snapshot ID (from comparison data, e.g. offerPolicyId).
+
+Navigate to /sundhedstjek/${offerPolicyId}.
+
+Don’t hardcode IDs; always use the IDs from the comparison view model.
+
+7. Test with my existing comparison
+
+Use my test comparison:
+
+comparisonId: 0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1
+
+User: hello@vyork.dk (e85ec3b9-e354-4c49-9f68-194830e356af)
+
+Flow to test:
+
+Log in as that user.
+
+Open /sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1.
+
+Go to Indbo tab → click “Se detaljer”.
+
+Confirm:
+
+The URL is /sundhedstjek/<offerPolicySnapshotId>.
+
+The health-check layout shows:
+
+Correct policy type (Indbo / Hus / Ulykke).
+
+Correct company names (current vs offer).
+
+All existing components (summary, highlights, detailed coverage, etc.) populated with real data.
+
+No “Der opstod en fejl” message.
+
+If something fails, log the request URL + status from the network tab and adjust accordingly.
+
+You can paste all of the above into Replit’s AI.
+If you want, next step after this is working is to hook the offer health-check into the same component tree we’re using for the current health-check so the layout is perfectly mirrored across both flows.
