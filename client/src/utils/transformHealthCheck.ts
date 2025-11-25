@@ -165,15 +165,26 @@ export function transformPolicyHealthCheckToView(
   }
 
   // Get annual savings - try multiple sources for compatibility
-  const annualSavings = result.annualSavings || {};
+  const annualSavingsResult = result.annualSavings || {};
   const annualPotentialSavings = potentialSavings.realistic 
-    || annualSavings.amount 
+    || annualSavingsResult.amount 
     || 0;
-  const annualSavingsPercent = potentialSavings.percentage 
-    || annualSavings.percentageLower 
-    || (potentialSavings.realistic && cumulativeSavingsData.monthlyRange 
-      ? Math.round((potentialSavings.realistic / (cumulativeSavingsData.monthlyRange.max * 12 + potentialSavings.realistic)) * 100 * 10) / 10
-      : 0);
+  
+  // Only set percentage if we have a valid source - don't default to 0
+  let annualSavingsPercent: number | undefined;
+  if (potentialSavings.percentage != null && potentialSavings.percentage > 0) {
+    annualSavingsPercent = potentialSavings.percentage;
+  } else if (annualSavingsResult.percentageLower != null && annualSavingsResult.percentageLower > 0) {
+    annualSavingsPercent = annualSavingsResult.percentageLower;
+  } else if (potentialSavings.realistic && cumulativeSavingsData.monthlyRange?.max) {
+    // Calculate percentage from cumulative savings data if available
+    const monthlyMax = cumulativeSavingsData.monthlyRange.max;
+    const annualCost = monthlyMax * 12 + potentialSavings.realistic;
+    if (annualCost > 0) {
+      annualSavingsPercent = Math.round((potentialSavings.realistic / annualCost) * 100 * 10) / 10;
+    }
+  }
+  // If still undefined, leave it undefined (don't show percentage)
 
   return {
     title: `${policyTypeLabel} sundhedstjek`,
