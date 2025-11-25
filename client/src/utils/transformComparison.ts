@@ -183,7 +183,7 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
           points,
         };
       })
-      .filter((s): s is SavingsSeriesView => s !== null);
+      .filter((s: SavingsSeriesView | null): s is SavingsSeriesView => s !== null);
 
     if (series.length > 0) {
       const totalAnnualSavings = series.reduce((sum, s) => sum + s.annualSavings, 0);
