@@ -23,6 +23,7 @@ const InsuranceCheck = lazy(() => import("@/pages/insurance-check"));
 const InsuranceCheckPage = lazy(() => import("@/pages/InsuranceCheckPage"));
 const OfferComparisonAll = lazy(() => import("@/pages/offer-comparison-all"));
 const OfferComparisonDetail = lazy(() => import("@/pages/offer-comparison-detail"));
+const PolicyHealthCheck = lazy(() => import("@/pages/policy-health-check"));
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -51,6 +52,7 @@ function Router() {
         <Route path="/sammenligning" component={OfferComparisonAll} />
         <Route path="/sammenligning/tilbud/:policyType" component={OfferComparisonDetail} />
         <Route path="/sammenligning/:id" component={Comparison} />
+        <Route path="/sundhedstjek/:snapshotId" component={PolicyHealthCheck} />
         <Route path="/admin" component={AdminTesting} />
         <Route component={NotFound} />
       </Switch>

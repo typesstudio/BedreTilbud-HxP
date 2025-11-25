@@ -92,9 +92,15 @@ export default function Comparison() {
             title={`${viewModel.offerCompanyName} sammenligning`}
             subtitle="Sammenlign og gennemgå forsikringstilbud tilpasset dig"
             onSeBeskederClick={() => threadId && setLocation(`/emails/${threadId}`)}
-            onSeSundhedstjekClick={() => setLocation("/check")}
+            onSeSundhedstjekClick={() => {
+              // Navigate to health check for current tab's offer snapshot
+              const snapshotId = activeView.offerSnapshotId || activeView.currentSnapshotId;
+              if (snapshotId) {
+                setLocation(`/sundhedstjek/${snapshotId}`);
+              }
+            }}
             showBeskederButton={!!threadId}
-            showSundhedstjekButton={true}
+            showSundhedstjekButton={!!(activeView.offerSnapshotId || activeView.currentSnapshotId)}
           />
 
           {/* Tabs */}

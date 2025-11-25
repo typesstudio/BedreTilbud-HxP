@@ -61,6 +61,10 @@ export interface ComparisonTabView {
   policyType: string | null;
   isAvailable: boolean;
   
+  // Snapshot IDs for navigation to health check
+  offerSnapshotId?: string | null;
+  currentSnapshotId?: string | null;
+  
   summary: {
     annualSavings: number;
     totalCurrentAnnual: number;
@@ -401,11 +405,17 @@ function generatePolicyTab(
     series: [seriesView],
   };
 
+  // Extract snapshot IDs if available
+  const offerSnapshotId = policyComp.offerSnapshotId || policySummary.offerSnapshotId || null;
+  const currentSnapshotId = policyComp.currentSnapshotId || policySummary.currentSnapshotId || null;
+
   return {
     key: policyType as ComparisonTabKey,
     label,
     policyType,
     isAvailable: true,
+    offerSnapshotId,
+    currentSnapshotId,
     summary: {
       annualSavings,
       totalCurrentAnnual: currentAnnual,
