@@ -1,0 +1,340 @@
+You’re super close now – the health-check is *functionally* working, we just need to:
+
+1. Make the layout match the Subframe design.
+2. Reuse the same components as the comparison pages.
+3. Bind everything to the existing `transformHealthCheck` view-model (no static data).
+
+Below is:
+
+1. **How to structure the implementation (next steps).**
+2. **A “master” Replit prompt** you can paste into Ghostwriter. After the prompt, you can paste the Subframe TSX snippet for the health-check page so it can mirror your exact design.
+
+---
+
+## 1. Implementation plan (what should happen)
+
+### A. Reuse comparison components for health check
+
+On the frontend we want this structure:
+
+* **Shared / reused components**
+
+  * `ComparisonHeader` – already used on `/sammenligning`.
+  * `ComparisonHighlights` – the “Højdepunkter hvor anbefalingen er bedre” grid.
+  * `ComparisonDetailedMatrix` – the coverage table (we already built this).
+  * `ComparisonSavingsChart` – the chart + “Månedlig besparelse / 12 mdr / 10 år” cards.
+* **New health-check specific components**
+
+  * `HealthCheckTabs` – top tabs (Indbo, Ulykke, Hus, Bil, Rejse) – but this can actually be the same Subframe `ListingsTabs` pattern we use in comparison.
+  * `HealthCheckAnnualPotentialCard` – big “Årlig potentiel besparelse” card.
+  * `HealthCheckBenefitsGrid` – “Dine forsikringsfordele” (4 cards row).
+  * `HealthCheckStrengthsWeaknesses` – “Styrker & svagheder” two-column grid.
+
+The **health-check page** then becomes mostly composition:
+
+```tsx
+<DefaultPageLayout>
+  <ComparisonHeader ... />           // same header as comparison
+  <HealthCheckTabs ... />           // same icon tabs as comparison, but for health checks
+  <HealthCheckAnnualPotentialCard ... />
+  <HealthCheckBenefitsGrid ... />
+  <ComparisonDetailedMatrix ... />  // reused, but single column for the offer
+  <HealthCheckStrengthsWeaknesses ... />
+  <ComparisonSavingsChart ... />    // reused, but fed with single-policy savings series
+  <FooterCTA ... />                 // “Choose and switch to Tryg”
+</DefaultPageLayout>
+```
+
+### B. Data wiring
+
+Use the **existing view model** from `client/src/utils/transformHealthCheck.ts` as the single source of truth.
+
+Rough mapping (names may be slightly different in your code – Replit should “follow the type”):
+
+* `healthCheck.overall.annualPotentialSavings` → “Årlig potentiel besparelse”
+* `healthCheck.overall.annualSavingsPercent` → `Din årlige besparelse 20.5% lavere omkostning`
+* `healthCheck.policy`:
+
+  * `companyName`
+  * `policyType` (“Indbo”, “Hus”, etc.)
+  * `annualPremium`
+* `healthCheck.benefits[]` → “Dine forsikringsfordele” cards
+* `healthCheck.coverages[]` → “Hvad er inkluderet” rows
+* `healthCheck.strengths[]` & `healthCheck.weaknesses[]` → “Styrker & svagheder”
+* `healthCheck.savingsOverTime` (or similar) → data for `ComparisonSavingsChart`:
+
+  * `chartPoints: { monthIndex, cumulativeSaving }[]`
+  * `monthlySavingsRange` / `totalAfter12Months` / `totalAfter10Years`
+
+If some fields don’t exist, they should be **computed in `transformHealthCheck.ts`**, not hard-coded in the component.
+
+### C. Tabs + navigation
+
+* The **tabs row** on the health-check page (Indbo/Ulykke/Hus/Bil/Rejse) should reuse the same `ListingsTabs` component as the comparison page.
+* When you click a tab:
+
+  * It should navigate to the same `/sundhedstjek/:snapshotId` page but with the snapshot for that policy type (or at least visually update selection; navigation details can follow the pattern you already use for comparison tabs).
+
+---
+
+## 2. Replit / Ghostwriter prompt
+
+Here’s a prompt you can paste directly into Replit.
+**After this prompt**, paste:
+
+* The Subframe TSX snippet for the health-check layout.
+* Mention that the big screenshot shows the final desired look.
+
+---
+
+**Replit prompt (copy-paste this):**
+
+> I want to refactor the **health check page** (`/sundhedstjek/:snapshotId`) so it matches my Subframe design and reuses the same components as the comparison pages.
+> The design is in the screenshot I’ll paste after this prompt (full “Dit forsikringstjek” layout) and the Subframe TSX snippet that follows.
+>
+> ### Overall goals
+>
+> 1. Use **Subframe components** (`DefaultPageLayout`, `Button`, `ListingsTabs`, `Badge`, `IconWithBackground`, `AreaChart`, etc.).
+> 2. **Reuse** the comparison components wherever possible so changes are shared:
+>
+>    * `ComparisonHeader`
+>    * `ComparisonHighlights` (highlights grid)
+>    * `ComparisonDetailedMatrix` (coverage table)
+>    * `ComparisonSavingsChart` (chart + 3 savings cards)
+> 3. Bind **all content to real data** from the existing health-check view model in `client/src/utils/transformHealthCheck.ts`.
+>    No static numbers or texts – only fall back to placeholders if the field is genuinely missing in the view model.
+>
+> ### Step 1 – Find the current health-check page and data hook
+>
+> 1. Locate the **route** in `client/src/App.tsx` that handles `/sundhedstjek/:snapshotId`.
+>    Identify the page component it renders (it currently shows “Der opstod en fejl / Kunne ikke hente sundhedstjek data” when things fail).
+> 2. Open that page component (the health-check page).
+> 3. Also open:
+>
+>    * `client/src/hooks/usePolicyHealthCheck.ts`
+>    * `client/src/utils/transformHealthCheck.ts`
+>    * The comparison page + components:
+>
+>      * `client/src/pages/comparison.tsx`
+>      * `client/src/components/comparison/ComparisonHeader.tsx`
+>      * `client/src/components/comparison/ComparisonDetailedMatrix.tsx`
+>      * `client/src/components/comparison/ComparisonSavingsChart.tsx`
+>
+> **Do not change any backend code** – only frontend React/TSX.
+>
+> ### Step 2 – Use the existing health-check view model
+>
+> In `transformHealthCheck.ts`, there should already be a strongly-typed view model (for example `PolicyHealthCheckViewModel` or similar).
+>
+> 1. Identify the **type** exported and used by `usePolicyHealthCheck` (for example `PolicyHealthCheckData` or `HealthCheckView`).
+> 2. Use this type as the **only source of truth** for what data the page consumes.
+>    Don’t invent new fields in the page – if you need a value (e.g. 10-year savings), compute it in `transformHealthCheck.ts` and expose it on the view model.
+> 3. Ensure the hook `usePolicyHealthCheck(snapshotId)` returns:
+>
+>    * `data` (the typed view model)
+>    * `isLoading`
+>    * `isError`
+>
+> ### Step 3 – Build / reuse layout components
+>
+> We want the health-check page to look like the Subframe screenshot I’ll paste, and share as many components with the comparison pages as possible.
+>
+> Refactor in this order:
+>
+> #### 3A – Page shell and header
+>
+> 1. Wrap the page content in `DefaultPageLayout`, as in the comparison page.
+> 2. Reuse `ComparisonHeader` at the top of the page.
+>
+>    * Title: “Dit forsikringstjek” (or the policy-type specific title from the view model, e.g. “Indbo sundhedstjek”).
+>    * Subtitle: use the text from the view model if available (e.g. “Se en grundig analyse af …”), otherwise a sensible default.
+>    * Right-hand CTA button: “Få bedre tilbud” mapped to a callback (can be a TODO for now).
+>
+> #### 3B – HealthCheck tabs
+>
+> 1. Directly under the header, add a **tabs row** using `ListingsTabs` with icons, exactly like the comparison page:
+>
+>    * Samme icons: Indbo, Ulykke, Hus, Bil, Rejse.
+> 2. The active tab should reflect the policy type of the current health check.
+>
+>    * Use the view model’s `policyType` to decide which tab is selected.
+> 3. For now, clicking another tab can either:
+>
+>    * Navigate to the corresponding `/sundhedstjek/:snapshotId` if we have those IDs, OR
+>    * Be a no-op until backend provides snapshot IDs for each type.
+>
+> #### 3C – “Årlig potentiel besparelse” card
+>
+> Create a reusable component, for example:
+>
+> ```tsx
+> // client/src/components/healthCheck/HealthCheckAnnualPotentialCard.tsx
+> interface HealthCheckAnnualPotentialCardProps {
+>   annualPotentialSavings: number;       // kr
+>   annualSavingsPercent?: number;       // e.g. 20.5
+> }
+> ```
+>
+> Implement it using Subframe’s card style so it matches the design:
+>
+> * Big number: `annualPotentialSavings` formatted as “X.XXX kr”
+> * Right side badge: “Din årlige besparelse {annualSavingsPercent}% lavere omkostning”
+>
+> Use it on the health-check page and **only pass data from the view model**:
+>
+> * If `annualSavingsPercent` is missing, hide the badge.
+>
+> #### 3D – “Dine forsikringsfordele” (benefits)
+>
+> Create a reusable grid component, e.g.:
+>
+> ```tsx
+> // client/src/components/healthCheck/HealthCheckBenefitsGrid.tsx
+> interface HealthCheckBenefit {
+>   title: string;
+>   description?: string;
+> }
+> interface HealthCheckBenefitsGridProps {
+>   benefits: HealthCheckBenefit[];
+> }
+> ```
+>
+> * Use the Subframe layout: 4 cards in a row on desktop, stacked on mobile.
+> * Each card has:
+>
+>   * An `IconWithBackground` (reuse variants from comparison; icon choice can be simple for now).
+>   * `title` and `description` from the view model.
+> * Source data from something like `healthCheck.benefits` (adjust to the real field name).
+> * If no benefits exist, hide the entire section.
+>
+> #### 3E – “Hvad er inkluderet” (included coverages)
+>
+> Reuse **`ComparisonDetailedMatrix`**, but adapt it to the health-check use case:
+>
+> * For health check we only have one column (Tryg). Do *not* copy the previous static example.
+> * Extend `ComparisonDetailedMatrix` props so it can support:
+>
+>   * A two-column mode (current vs offer) for comparison pages.
+>   * A single-column mode for health-check pages.
+>
+> Suggested prop shape:
+>
+> ```tsx
+> interface CoverageColumn {
+>   label: string;   // e.g. "Tryg"
+>   values: string[]; // or richer type if needed
+> }
+> interface ComparisonCoverageRowView {
+>   coverageLabel: string;
+>   coverageDescription?: string;
+>   columns: {
+>     value: string;
+>     variant: "success" | "error" | "neutral";
+>   }[];
+> }
+> ```
+>
+> For health-check, `columns` will only have one element (“Tryg”).
+>
+> Populate coverage rows from the health-check view model (e.g. `healthCheck.coverages`).
+>
+> #### 3F – “Styrker & svagheder”
+>
+> Create a dedicated component:
+>
+> ```tsx
+> // client/src/components/healthCheck/HealthCheckStrengthsWeaknesses.tsx
+> interface HealthCheckItem {
+>   title: string;
+>   description?: string;
+>   amountText?: string; // e.g. "1.064.064 kr - godt over gennemsnittet"
+> }
+> interface HealthCheckStrengthsWeaknessesProps {
+>   strengths: HealthCheckItem[];
+>   weaknesses: HealthCheckItem[];
+> }
+> ```
+>
+> * Layout: two columns with headline “Styrker & svagheder” and sub-labels “Styrker” / “Forbedringsmuligheder”.
+> * Each item is a small card row with an icon (`IconWithBackground` with success / warning variants), title, description, and optional `amountText`.
+> * Bind directly from view-model fields (e.g. `healthCheck.strengths`, `healthCheck.weaknesses`).
+> * Hide section if both arrays are empty.
+>
+> #### 3G – “Kumulativ besparelse / Din besparelse over tid”
+>
+> Reuse `ComparisonSavingsChart`:
+>
+> 1. Ensure `ComparisonSavingsChart` is generic enough:
+>
+>    * Props: `series[]` and `meta` (monthly range, 12-month total, 10-year total).
+> 2. In `transformHealthCheck.ts`, make sure the view model exposes:
+>
+>    * `savingsOverTime.chartData` – array of `{ monthIndex: number; [policyName: string]: number }`.
+>    * `savingsOverTime.monthlyRangeText`
+>    * `savingsOverTime.totalAfter12Months`
+>    * `savingsOverTime.totalAfter10Years`
+> 3. On the health-check page, call:
+>
+> ```tsx
+> <ComparisonSavingsChart
+>   title="Kumulativ besparelse"
+>   subtitle="Se hvor meget du sparer måned for måned"
+>   totalSavingsLabel="X kr over 10 år"
+>   data={healthCheck.savingsOverTime.chartData}
+>   categories={healthCheck.savingsOverTime.categories}
+>   monthlyRangeText={...}
+>   totalAfter12Months={...}
+>   totalAfter10Years={...}
+> />
+> ```
+>
+> For a single policy, you can still pass a single category; the chart will render one line.
+>
+> #### 3H – Footer CTA
+>
+> Add a footer section at the bottom of the page:
+>
+> * Button: “Choose and switch to Tryg” (or localized equivalent).
+> * Subtitle: “Secure data. You can cancel anytime before activation.”
+>
+> This can reuse the same footer CTA layout from the comparison page. If that layout isn’t extracted yet, factor it out into a shared `ComparisonFooterCTA` component and use it in both pages.
+>
+> ### Step 4 – Loading and error states
+>
+> 1. When `isLoading` is true, show a simple skeleton/loader in the same layout (header + empty sections).
+> 2. When `isError` OR `!data`, show the existing error state:
+>
+>    * “Der opstod en fejl”
+>    * “Kunne ikke hente sundhedstjek data. Prøv venligst igen.”
+>    * “Gå tilbage” button.
+>
+> ### Step 5 – Strictly no static data
+>
+> * Remove all hard-coded amounts, percentages, labels (“3.252 kr”, “20.5%” etc.) that were used as placeholders from the Subframe demo.
+> * Everything must come from the health-check view model in `transformHealthCheck.ts`.
+> * If a field is missing, either:
+>
+>   * Compute it from other numeric fields, OR
+>   * Omit that element in the UI (e.g. hide a badge if its value is undefined).
+>
+> ### Step 6 – Final check
+>
+> 1. Run the app and open a real health-check URL like:
+>    `/sundhedstjek/4ae81653-1501-4976-b62d-7371af05dfe2`
+> 2. Confirm:
+>
+>    * Layout matches the Subframe screenshot closely (spacing, typography, card styles).
+>    * All cards and sections show **real** data (no static demo values).
+>    * Components reused from the comparison page work correctly here.
+>
+> After implementing, please keep the code clean and typed (no `any`), and keep all shared components in `client/src/components/comparison` or `client/src/components/healthCheck` with clear prop types.
+
+---
+
+When you paste this into Replit:
+
+1. Paste **this prompt first**.
+2. Then paste the **Subframe TSX snippet** for the health-check layout under it.
+3. Mention that the tall screenshot you showed is the visual reference and should be matched as closely as possible.
+
+If you want, once Replit has done a pass, you can paste back the generated `HealthCheck` page + any new components here and I can do a second-pass review and tighten up the data mapping / props.
