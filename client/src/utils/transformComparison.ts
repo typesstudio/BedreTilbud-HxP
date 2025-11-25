@@ -53,6 +53,27 @@ export interface SavingsOverTimeView {
   series: SavingsSeriesView[];
 }
 
+export type ComparisonTabKey = "samlet" | "indbo" | "hus" | "ulykke" | "bil" | "rejse";
+
+export interface ComparisonTabView {
+  key: ComparisonTabKey;
+  label: string;
+  policyType: string | null;
+  isAvailable: boolean;
+  
+  summary: {
+    annualSavings: number;
+    totalCurrentAnnual: number;
+    totalOfferAnnual: number;
+    savingsPercent: number;
+  };
+  
+  quickRows: ComparisonPolicyRowView[];
+  highlights: ComparisonHighlightView[];
+  coverageRows: ComparisonCoverageRowView[];
+  savingsOverTime: SavingsOverTimeView | null;
+}
+
 export interface ComparisonViewModel {
   id: string;
   offerCompanyName: string;
@@ -62,6 +83,9 @@ export interface ComparisonViewModel {
   highlights: ComparisonHighlightView[];
   coverageRows: ComparisonCoverageRowView[];
   savingsOverTime: SavingsOverTimeView | null;
+  
+  tabs: Record<ComparisonTabKey, ComparisonTabView>;
+  defaultTab: ComparisonTabKey;
 }
 
 // ============================================================================
@@ -197,6 +221,17 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
     }
   }
 
+  // Generate tab views
+  const tabs = generateTabViews({
+    policyComparisons,
+    perPolicySummary,
+    overallView,
+    policies,
+    highlights,
+    coverageRows,
+    savingsOverTime,
+  });
+
   return {
     id: raw.id,
     offerCompanyName,
@@ -206,6 +241,181 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
     highlights,
     coverageRows,
     savingsOverTime,
+    tabs,
+    defaultTab: "samlet",
+  };
+}
+
+// ============================================================================
+// TAB GENERATION
+// ============================================================================
+
+interface TabGenerationInput {
+  policyComparisons: any[];
+  perPolicySummary: any[];
+  overallView: ComparisonOverallView;
+  policies: ComparisonPolicyRowView[];
+  highlights: ComparisonHighlightView[];
+  coverageRows: ComparisonCoverageRowView[];
+  savingsOverTime: SavingsOverTimeView | null;
+}
+
+function generateTabViews(input: TabGenerationInput): Record<ComparisonTabKey, ComparisonTabView> {
+  const {
+    policyComparisons,
+    perPolicySummary,
+    overallView,
+    policies,
+    highlights,
+    coverageRows,
+    savingsOverTime,
+  } = input;
+
+  const tabs: Record<ComparisonTabKey, ComparisonTabView> = {
+    samlet: {
+      key: "samlet",
+      label: "Samlet",
+      policyType: null,
+      isAvailable: true,
+      summary: {
+        annualSavings: overallView.annualSavings,
+        totalCurrentAnnual: overallView.totalCurrentAnnual,
+        totalOfferAnnual: overallView.totalOfferAnnual,
+        savingsPercent: overallView.savingsPercent ?? 0,
+      },
+      quickRows: policies,
+      highlights,
+      coverageRows,
+      savingsOverTime,
+    },
+    indbo: generatePolicyTab("indbo", "Indbo", policyComparisons, perPolicySummary),
+    hus: generatePolicyTab("hus", "Hus", policyComparisons, perPolicySummary),
+    ulykke: generatePolicyTab("ulykke", "Ulykke", policyComparisons, perPolicySummary),
+    bil: generatePolicyTab("bil", "Bil", policyComparisons, perPolicySummary),
+    rejse: generatePolicyTab("rejse", "Rejse", policyComparisons, perPolicySummary),
+  };
+
+  return tabs;
+}
+
+function generatePolicyTab(
+  policyType: string,
+  label: string,
+  policyComparisons: any[],
+  perPolicySummary: any[]
+): ComparisonTabView {
+  // Find the policy comparison data for this type
+  const policyComp = policyComparisons.find((p: any) => p.policyType === policyType);
+  const policySummary = perPolicySummary.find((p: any) => p.policyType === policyType);
+
+  if (!policyComp || !policySummary) {
+    // Policy not available - return empty tab
+    return {
+      key: policyType as ComparisonTabKey,
+      label,
+      policyType,
+      isAvailable: false,
+      summary: {
+        annualSavings: 0,
+        totalCurrentAnnual: 0,
+        totalOfferAnnual: 0,
+        savingsPercent: 0,
+      },
+      quickRows: [],
+      highlights: [],
+      coverageRows: [],
+      savingsOverTime: null,
+    };
+  }
+
+  // Extract cost data
+  const currentAnnual = policySummary.currentAnnualPremium ?? 0;
+  const offerAnnual = policySummary.offerAnnualPremium ?? 0;
+  const annualSavings = policySummary.annualSavings ?? 0;
+  const savingsPercent = currentAnnual > 0 
+    ? ((currentAnnual - offerAnnual) / currentAnnual) * 100
+    : 0;
+
+  // Create quick row for this policy
+  const quickRows: ComparisonPolicyRowView[] = [{
+    policyType,
+    label: policySummary.label || capitalizeFirst(policyType),
+    currentAnnual,
+    offerAnnual,
+    savingsAnnual: annualSavings,
+    cheaperThanCurrent: offerAnnual < currentAnnual,
+  }];
+
+  // Extract highlights for this policy
+  const policyHighlights: ComparisonHighlightView[] = [];
+  let highlightId = 0;
+  
+  if (policyComp.highlights) {
+    policyComp.highlights.forEach((h: any) => {
+      policyHighlights.push({
+        id: `highlight-${policyType}-${highlightId++}`,
+        title: h.title || "",
+        description: h.description || null,
+        kind: determineHighlightKind(h.title || "", h.category || ""),
+      });
+    });
+  }
+
+  // Extract coverage rows for this policy
+  const policyCoverageRows: ComparisonCoverageRowView[] = [];
+  if (policyComp.coverageComparison?.rows) {
+    policyComp.coverageComparison.rows.forEach((row: any) => {
+      policyCoverageRows.push({
+        coverageLabel: row.coverage || "Dækning",
+        coverageDescription: row.description || null,
+        currentValue: formatCoverageValue(row.current),
+        offerValue: formatCoverageValue(row.offer),
+        currentVariant: getVariantFromStatus(row.current?.status),
+        offerVariant: getVariantFromStatus(row.offer?.status),
+        note: row.note || null,
+      });
+    });
+  }
+
+  // Generate savings chart for this single policy
+  const monthlySavings = annualSavings / 12;
+  const tenYearSavings = annualSavings * 10;
+  
+  const points = Array.from({ length: 120 }, (_, i) => {
+    const month = i + 1;
+    return { month, cumulative: monthlySavings * month };
+  });
+
+  const seriesView: SavingsSeriesView = {
+    key: policyType,
+    label,
+    annualSavings,
+    monthlySavings,
+    tenYearSavings,
+    points,
+  };
+
+  const policySavingsOverTime: SavingsOverTimeView = {
+    totalAnnualSavings: annualSavings,
+    totalTenYearSavings: tenYearSavings,
+    series: [seriesView],
+  };
+
+  return {
+    key: policyType as ComparisonTabKey,
+    label,
+    policyType,
+    isAvailable: true,
+    summary: {
+      annualSavings,
+      totalCurrentAnnual: currentAnnual,
+      totalOfferAnnual: offerAnnual,
+      savingsPercent,
+    },
+    quickRows,
+    highlights: policyHighlights,
+    coverageRows: policyCoverageRows,
+    savingsOverTime: policySavingsOverTime,
   };
 }
 

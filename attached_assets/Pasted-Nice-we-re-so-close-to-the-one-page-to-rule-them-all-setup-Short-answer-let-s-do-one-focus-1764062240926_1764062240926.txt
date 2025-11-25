@@ -1,0 +1,247 @@
+Nice, we’re so close to the “one-page to rule them all” setup 😄
+
+Short answer: **let’s do one focused Replit prompt** that:
+
+* keeps everything on the **same `/sammenligning/:id` page**,
+* uses the **same shared components** for both *Samlet* and the per-policy views,
+* just switches the **data model** based on the active tab (Indbo, Hus, Ulykke, …).
+
+Below is a copy-paste-ready Replit prompt that does exactly that.
+
+---
+
+## Replit prompt – make per-category comparison using shared components
+
+> You are working in the BedreTilbud repo.
+> The goal is to extend the comparison page so that:
+>
+> * The **Samlet** tab shows the aggregated comparison (already working).
+> * The **Indbo / Hus / Ulykke / Bil / Rejse** tabs show **per-category** comparisons.
+> * All sections **reuse the same shared components** as Samlet:
+>
+>   * `ComparisonSummaryCards` (3 top cards)
+>   * `ComparisonQuickTable` (Hurtig sammenligning)
+>   * `ComparisonHighlights` (Højdepunkter hvor anbefalingen er bedre)
+>   * `ComparisonDetailedMatrix` (Detaljeret sammenligning)
+>   * `ComparisonSavingsChart` (Din besparelse over tid)
+> * There is **no duplicated JSX** for any of these sections – only the data changes.
+> * All data is **dynamic** (no hard-coded numbers).
+
+### 1. Inspect current comparison view model + components
+
+1. Open `client/src/utils/transformComparison.ts` and find the **main transformer** that turns `company_comparisons.comparison_json` into a view model for the page (often called something like `transformCompanyComparisonToViewModel` or similar).
+2. Open the comparison page: `client/src/pages/comparison.tsx`.
+
+   * It already uses the new shared components (summary cards, quick table, highlights, detailed matrix, savings chart) for the **Samlet** view.
+3. Open the shared comparison components:
+
+   * `client/src/components/comparison/ComparisonSummaryCards.tsx` (or similar)
+   * `client/src/components/comparison/ComparisonQuickTable.tsx` (or wherever the “Hurtig sammenligning” table lives)
+   * `client/src/components/comparison/ComparisonHighlights.tsx`
+   * `client/src/components/comparison/ComparisonDetailedMatrix.tsx`
+   * `client/src/components/comparison/ComparisonSavingsChart.tsx`
+
+Do **not** change their visual structure; we only want to adjust props and data.
+
+### 2. Extend the view model with per-tab views
+
+Update `transformComparison.ts` so the **returned view model** has a clear structure for **tabs**:
+
+```ts
+// Example shape – adapt to existing naming, don’t break other code
+export type ComparisonTabKey = "samlet" | "indbo" | "hus" | "ulykke" | "bil" | "rejse";
+
+export interface ComparisonTabView {
+  key: ComparisonTabKey;
+  label: string;            // "Samlet", "Indbo", "Hus", ...
+  policyType: string | null; // e.g. "indbo" | "hus" | "ulykke" | null for samlet
+  isAvailable: boolean;     // false if there is no such policy in policyComparisons
+
+  // data for components:
+  summary: {
+    annualSavings: number;          // total savings for this tab
+    totalCurrentAnnual: number;
+    totalOfferAnnual: number;
+    savingsPct: number;             // 0–100
+  };
+
+  quickRows: QuickRowView[];        // for the Hurtig sammenligning table
+  highlights: HighlightView[];      // Højdepunkter
+  coverageRows: ComparisonCoverageRowView[]; // for ComparisonDetailedMatrix
+
+  savingsChart: {
+    categories: string[];           // series labels, e.g. ["Hus", "Indbo", "Ulykke"] or ["Indbo"]
+    data: SavingsPoint[];           // already used by ComparisonSavingsChart
+    summary: SavingsSummary;        // monthlyMin, monthlyMax, year1Total, year10Total
+    total10YearAll: number;         // used in the top-right badge
+  };
+}
+
+export interface CompanyComparisonViewModel {
+  // existing fields (comparisonId, offerCompanyName, currentCompanyName, etc.)
+  tabs: Record<ComparisonTabKey, ComparisonTabView>;
+  defaultTab: ComparisonTabKey; // usually "samlet"
+}
+```
+
+Implementation notes:
+
+* **Samlet tab**
+
+  * Use the **existing aggregated data** you already calculate (total savings, total current, total offer, combined quick rows, combined highlights, combined coverage rows, multi-series savings chart).
+* **Per-policy tabs (indbo, hus, ulykke, bil, rejse)**
+
+  * For each `policyComparisons` entry in `comparison_json.policyComparisons`, build a matching `ComparisonTabView` using **only that policy’s data**:
+
+    * `summary` uses that policy’s `currentAnnual`, `offerAnnual`, and `annualSavings`.
+    * `quickRows` contains **one row** (that policy).
+    * `highlights` and `coverageRows` come directly from that policy’s comparison data.
+    * `savingsChart`:
+
+      * `categories = [label]` (e.g. `["Hus"]`).
+      * `data` is the monthly chart for that one policy (you can reuse the same helper you used to generate the multi-series chart, but only for one policy).
+      * `summary` and `total10YearAll` are calculated for that policy only.
+  * If a policy type doesn’t exist (e.g. no Bil), create a `ComparisonTabView` with `isAvailable = false` and **empty arrays** for `quickRows`, `highlights`, `coverageRows`, and a savingsChart with zeros. This allows the UI to show “Afventer” state like before.
+
+Make sure **Samlet** is still fully populated and **existing consumers of the transformer** keep working.
+
+### 3. Wire up tab switching in `comparison.tsx`
+
+In `client/src/pages/comparison.tsx`:
+
+1. Import the `ComparisonTabKey` type (or re-declare a compatible union type in this file).
+2. After you load the comparison view model via your hook (e.g. `useCompanyComparison`), add React state for the active tab:
+
+```tsx
+const [activeTab, setActiveTab] = useState<ComparisonTabKey>(
+  view.tabs.samlet ? "samlet" : view.defaultTab
+);
+
+const activeView = view.tabs[activeTab] ?? view.tabs[view.defaultTab];
+```
+
+3. In the Subframe `ListingsTabs` component at the top of the page, wire each tab to this state:
+
+```tsx
+<ListingsTabs>
+  <ListingsTabs.Item
+    icon={<FeatherStar />}
+    checked={activeTab === "samlet"}
+    onClick={() => setActiveTab("samlet")}
+  >
+    Samlet
+  </ListingsTabs.Item>
+
+  <ListingsTabs.Item
+    icon={<FeatherHome />}
+    checked={activeTab === "indbo"}
+    onClick={() => setActiveTab("indbo")}
+  >
+    Indbo
+  </ListingsTabs.Item>
+
+  <ListingsTabs.Item
+    icon={<FeatherShield />}
+    checked={activeTab === "ulykke"}
+    onClick={() => setActiveTab("ulykke")}
+  >
+    Ulykke
+  </ListingsTabs.Item>
+
+  <ListingsTabs.Item
+    icon={<FeatherBuilding />}
+    checked={activeTab === "hus"}
+    onClick={() => setActiveTab("hus")}
+  >
+    Hus
+  </ListingsTabs.Item>
+
+  <ListingsTabs.Item
+    icon={<FeatherCar />}
+    checked={activeTab === "bil"}
+    onClick={() => setActiveTab("bil")}
+  >
+    Bil
+  </ListingsTabs.Item>
+
+  <ListingsTabs.Item
+    icon={<FeatherPlane />}
+    checked={activeTab === "rejse"}
+    onClick={() => setActiveTab("rejse")}
+  >
+    Rejse
+  </ListingsTabs.Item>
+</ListingsTabs>
+```
+
+4. Everywhere the page currently renders data for Samlet, change it to use **`activeView`** instead:
+
+* Top 3 cards:
+
+```tsx
+<ComparisonSummaryCards summary={activeView.summary} />
+```
+
+* “Hurtig sammenligning” table:
+
+```tsx
+<ComparisonQuickTable rows={activeView.quickRows} policyType={activeTab} />
+```
+
+* Højdepunkter:
+
+```tsx
+<ComparisonHighlights highlights={activeView.highlights} />
+```
+
+* Detaljeret sammenligning:
+
+```tsx
+<ComparisonDetailedMatrix
+  currentCompanyName={view.currentCompanyName}
+  offerCompanyName={view.offerCompanyName}
+  coverageRows={activeView.coverageRows}
+/>
+```
+
+* Din besparelse over tid:
+
+```tsx
+<ComparisonSavingsChart {...activeView.savingsChart} />
+```
+
+5. **Unavailable tabs** (e.g. no Bil / Rejse):
+
+   * If `activeView.isAvailable === false`, still show the top header & cards (all zero), but:
+
+     * In the quick table, show a single row with “Afventer” / `—` as you already do.
+     * Hide the highlights and coverage matrix components (`return null` when arrays are empty).
+     * Let the savings chart show a flat zero line using the empty `savingsChart` from the transformer.
+
+### 4. Clean up / ensure reusability
+
+* Do **not** duplicate any markup from the Samlet layout inside `comparison.tsx`.
+  The page should **only** glue data to the components.
+* The only differences between Samlet and Indbo/Hus/Ulykke views must be the **data** passed into the shared components.
+
+### 5. Test
+
+1. Run the app, log in as the test user (`hello@vyork.dk`) and open an existing comparison:
+
+   * `/sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1`
+2. Verify:
+
+   * **Samlet tab** shows the same numbers as before (total savings, current, offer, multi-series savings chart).
+   * Clicking **Indbo / Hus / Ulykke**:
+
+     * Top cards update to that category’s savings and premiums.
+     * “Hurtig sammenligning” only shows that category row.
+     * Højdepunkter & Detaljeret sammenligning show only coverages for that policy.
+     * Savings chart shows a single line for that policy (using `ComparisonSavingsChart` unchanged).
+   * Tabs for categories without data show “Afventer” states and zero cards.
+
+If any TypeScript errors appear, fix types in `transformComparison.ts` and `comparison.tsx` while preserving the data shape described above.
+
+---
+
+You can paste this whole prompt into Replit’s AI pane; it will have enough context and constraints to touch only the right places, reuse the components we already built, and give you identical design across **Samlet** and each individual category.
