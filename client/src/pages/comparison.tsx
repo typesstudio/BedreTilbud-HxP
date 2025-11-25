@@ -6,15 +6,16 @@ import { ComparisonHeader } from "@/components/comparison/ComparisonHeader";
 import { ComparisonTabs } from "@/components/comparison/ComparisonTabs";
 import { ComparisonSummaryRow } from "@/components/comparison/ComparisonSummaryRow";
 import { ComparisonQuickTable } from "@/components/comparison/ComparisonQuickTable";
+import { ComparisonAnnualCost } from "@/components/comparison/ComparisonAnnualCost";
 import { ComparisonHighlights } from "@/components/comparison/ComparisonHighlights";
 import { ComparisonDetailedMatrix } from "@/components/comparison/ComparisonDetailedMatrix";
 import { ComparisonSavingsSection } from "@/components/comparison/ComparisonSavingsSection";
-import { transformCompanyComparisonToViewModel } from "@/utils/transformComparison";
+import { transformCompanyComparisonToViewModel, type ComparisonTabKey } from "@/utils/transformComparison";
 
 export default function Comparison() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
-  const [selectedTab, setSelectedTab] = useState("samlet");
+  const [activeTab, setActiveTab] = useState<ComparisonTabKey>("samlet");
   const userId = localStorage.getItem("userId");
 
   // Fetch comparison data
@@ -65,6 +66,9 @@ export default function Comparison() {
   // Transform to view model
   const viewModel = transformCompanyComparisonToViewModel(comparison);
   
+  // Get active tab view
+  const activeView = viewModel.tabs[activeTab];
+  
   // Find thread for messaging
   const companyId = (comparison as any)?.companyId;
   const thread = threads.find((t: any) => t.companyId === companyId);
@@ -87,42 +91,62 @@ export default function Comparison() {
 
           {/* Tabs */}
           <ComparisonTabs
-            selectedTab={selectedTab}
-            onTabChange={(tab) => setSelectedTab(tab)}
+            selectedTab={activeTab}
+            onTabChange={(tab) => setActiveTab(tab as ComparisonTabKey)}
           />
 
-          {/* Summary Cards - always show full data regardless of tab */}
+          {/* Summary Cards - use activeView data */}
           <ComparisonSummaryRow
-            overall={viewModel.overall}
+            overall={{
+              companyName: viewModel.offerCompanyName,
+              annualSavings: activeView.summary.annualSavings,
+              totalCurrentAnnual: activeView.summary.totalCurrentAnnual,
+              totalOfferAnnual: activeView.summary.totalOfferAnnual,
+              savingsPercent: activeView.summary.savingsPercent,
+            }}
             currentCompanyName={viewModel.currentCompanyName}
             offerCompanyName={viewModel.offerCompanyName}
           />
 
-          {/* Quick Comparison Table */}
-          <ComparisonQuickTable
-            policies={viewModel.policies}
-            onSelectPolicy={(policyType) => setSelectedTab(policyType)}
-          />
+          {/* Quick Comparison Table for Samlet tab only */}
+          {activeTab === "samlet" && (
+            <ComparisonQuickTable
+              policies={activeView.quickRows}
+              onSelectPolicy={(policyType) => setActiveTab(policyType as ComparisonTabKey)}
+            />
+          )}
+
+          {/* Annual Cost Comparison for individual policy tabs */}
+          {activeTab !== "samlet" && activeView.isAvailable && (
+            <ComparisonAnnualCost
+              currentCompanyName={viewModel.currentCompanyName}
+              offerCompanyName={viewModel.offerCompanyName}
+              currentAnnual={activeView.summary.totalCurrentAnnual}
+              offerAnnual={activeView.summary.totalOfferAnnual}
+              annualSavings={activeView.summary.annualSavings}
+              savingsPercent={activeView.summary.savingsPercent}
+            />
+          )}
 
           {/* Highlights Section */}
-          {selectedTab === "samlet" && (
-            <ComparisonHighlights highlights={viewModel.highlights} />
+          {activeView.highlights.length > 0 && (
+            <ComparisonHighlights highlights={activeView.highlights} />
           )}
 
           {/* Detailed Coverage Matrix */}
-          {selectedTab === "samlet" && (
+          {activeView.coverageRows.length > 0 && (
             <ComparisonDetailedMatrix
               currentCompanyName={viewModel.currentCompanyName}
               offerCompanyName={viewModel.offerCompanyName}
-              coverageRows={viewModel.coverageRows}
+              coverageRows={activeView.coverageRows}
             />
           )}
 
           {/* Savings Over Time */}
-          {viewModel.savingsOverTime && (
+          {activeView.savingsOverTime && (
             <ComparisonSavingsSection 
-              savings={viewModel.savingsOverTime} 
-              activePolicyKey={selectedTab === "samlet" ? "all" : selectedTab}
+              savings={activeView.savingsOverTime} 
+              activePolicyKey={activeTab === "samlet" ? "all" : activeTab}
             />
           )}
 
