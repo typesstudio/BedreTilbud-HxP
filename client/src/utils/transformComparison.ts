@@ -21,12 +21,31 @@ export interface ComparisonPolicyRowView {
   cheaperThanCurrent: boolean | null;
 }
 
+export interface ComparisonHighlightView {
+  id: string;
+  title: string;
+  description: string | null;
+  kind: "coverage_up" | "deductible_down" | "service_extra" | "tech_extra" | "generic";
+}
+
+export interface ComparisonCoverageRowView {
+  coverageLabel: string;
+  coverageDescription: string | null;
+  currentValue: string | null;
+  offerValue: string | null;
+  currentVariant: "success" | "error" | "neutral";
+  offerVariant: "success" | "error" | "neutral";
+  note: string | null;
+}
+
 export interface ComparisonViewModel {
   id: string;
   offerCompanyName: string;
   currentCompanyName: string;
   overall: ComparisonOverallView;
   policies: ComparisonPolicyRowView[];
+  highlights: ComparisonHighlightView[];
+  coverageRows: ComparisonCoverageRowView[];
 }
 
 // ============================================================================
@@ -38,6 +57,7 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
   const comparisonData = raw.comparisonData || {};
   const overall = comparisonData.overall || {};
   const perPolicySummary = overall.perPolicySummary || [];
+  const policyComparisons = comparisonData.policyComparisons || [];
   
   // Extract company names from document data
   const currentCompanyName = raw.currentDocument?.ocrData?.companyName || "Din nuværende";
@@ -71,12 +91,52 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
     };
   });
 
+  // Transform highlights from all policies with savings
+  const highlights: ComparisonHighlightView[] = [];
+  let highlightId = 0;
+  
+  policyComparisons.forEach((policy: any) => {
+    const policySavings = policy.costSummary?.annualSavings ?? 0;
+    if (policySavings > 0 && policy.highlights) {
+      policy.highlights.forEach((h: any) => {
+        highlights.push({
+          id: `highlight-${highlightId++}`,
+          title: h.title || "",
+          description: h.description || null,
+          kind: determineHighlightKind(h.title || "", h.category || ""),
+        });
+      });
+    }
+  });
+
+  // Transform coverage rows - prefer "hus" policy, fallback to first
+  const preferredPolicy = policyComparisons.find((p: any) => 
+    p.policyType === "hus" || p.policyType === "fritidshus"
+  ) || policyComparisons[0];
+  
+  const coverageRows: ComparisonCoverageRowView[] = [];
+  if (preferredPolicy?.coverageComparison?.rows) {
+    preferredPolicy.coverageComparison.rows.forEach((row: any) => {
+      coverageRows.push({
+        coverageLabel: row.coverage || "Dækning",
+        coverageDescription: row.description || null,
+        currentValue: formatCoverageValue(row.current),
+        offerValue: formatCoverageValue(row.offer),
+        currentVariant: getVariantFromStatus(row.current?.status),
+        offerVariant: getVariantFromStatus(row.offer?.status),
+        note: row.note || null,
+      });
+    });
+  }
+
   return {
     id: raw.id,
     offerCompanyName,
     currentCompanyName,
     overall: overallView,
     policies,
+    highlights,
+    coverageRows,
   };
 }
 
@@ -84,9 +144,73 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
 // HELPER FUNCTIONS
 // ============================================================================
 
+function determineHighlightKind(title: string, category: string): ComparisonHighlightView["kind"] {
+  const text = (title + " " + category).toLowerCase();
+  
+  if (text.includes("dækningssum") || text.includes("sum") || text.includes("højere")) {
+    return "coverage_up";
+  }
+  if (text.includes("selvrisiko") || text.includes("lavere") || text.includes("deductible")) {
+    return "deductible_down";
+  }
+  if (text.includes("vejhjælp") || text.includes("vejservice") || text.includes("roadside")) {
+    return "service_extra";
+  }
+  if (text.includes("sensor") || text.includes("alarm") || text.includes("hardware") || text.includes("smart")) {
+    return "tech_extra";
+  }
+  
+  return "generic";
+}
+
 function capitalizeFirst(str: string): string {
   if (!str) return "";
   return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function formatCoverageValue(coverage: any): string | null {
+  if (!coverage) return null;
+  
+  if (coverage.value === "inkluderet" || coverage.status === "included") {
+    if (coverage.limit) {
+      return coverage.limit;
+    }
+    return "inkluderet";
+  }
+  
+  if (coverage.value === "ikke inkluderet" || coverage.status === "excluded") {
+    return "ikke inkluderet";
+  }
+
+  if (coverage.limit) {
+    return coverage.limit;
+  }
+
+  if (coverage.value) {
+    return String(coverage.value);
+  }
+
+  return "—";
+}
+
+function getVariantFromStatus(status: string | undefined): "success" | "error" | "neutral" {
+  if (!status) return "neutral";
+  
+  const statusLower = status.toLowerCase();
+  
+  if (statusLower === "included" || statusLower === "success") {
+    return "success";
+  }
+  
+  if (statusLower === "excluded" || statusLower === "error") {
+    return "error";
+  }
+  
+  if (statusLower === "warning" || statusLower === "partial") {
+    return "neutral";
+  }
+
+  return "neutral";
 }
 
 // Format currency for Danish locale

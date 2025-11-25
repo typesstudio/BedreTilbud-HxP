@@ -1,0 +1,545 @@
+You’re working in a Next/React + Subframe project for BedreTilbud.
+Context:
+
+
+The route /sammenligning/[id] uses client/src/pages/comparison.tsx.
+
+
+The backend returns a company comparison from company_comparisons.comparison_json.
+
+
+That JSON already contains:
+
+
+overall (with annualSavings, totalCurrentAnnualPremium, totalOfferAnnualPremium, etc.)
+
+
+policyComparisons[] (per policy type) with:
+
+
+Basic info: policyType, label, currentAnnual, offerAnnual, annualSavings
+
+
+Comparison details: coverageRows (coverage matrix rows), highlights (bullets with why the offer is better), missingInfo, recommendations
+
+
+
+
+
+
+We already have:
+
+
+A working header, tabs, and 3 summary cards on the comparison page.
+
+
+A working quick table (“Hurtig sammenligning”) that shows current vs offer premiums per policy type using real data.
+
+
+
+
+What is missing on the “Samlet” tab is:
+
+
+The section “Højdepunkter hvor anbefalingen er bedre”
+
+
+The section “Detaljeret sammenligning” (coverage matrix)
+
+
+
+
+I want these two sections implemented component-by-component, using Subframe components and real data only (no static dummy data).
+
+
+Your tasks:
+
+0. Understand the current code
+
+
+Open:
+
+
+client/src/pages/comparison.tsx
+
+
+client/src/components/comparison/ComparisonPageLayout.tsx (if it exists)
+
+
+client/src/components/comparison/ComparisonQuickTable.tsx
+
+
+client/src/components/comparison/ComparisonDetailedMatrix.tsx (if it exists)
+
+
+client/src/components/comparison/ComparisonHighlights.tsx (if it exists)
+
+
+client/src/utils/transformComparison.ts
+
+
+
+
+Do not break anything that already works:
+
+
+The summary cards at the top are already wired to overall data – keep that.
+
+
+The quick table (“Hurtig sammenligning”) is already working – keep structure & types, just re-use its data if helpful.
+
+
+
+
+
+1. Extend the comparison view-model
+Everything should flow from one typed view-model created in client/src/utils/transformComparison.ts.
+
+
+In transformComparison.ts, locate the function that turns the API response into a view-model. It will be something like transformCompanyComparisonToViewModel or similar.
+
+
+Define / extend these view-model types:
+
+
+// One row in the “Hurtig sammenligning” table
+export interface ComparisonQuickRowView {
+  policyType: string;              // e.g. "indbo", "hus", "ulykke"
+  label: string;                   // e.g. "Indbo"
+  currentAnnual: number | null;
+  offerAnnual: number | null;
+  annualSavings: number | null;
+  cheaperThanCurrent: boolean | null;
+}
+
+// Højdepunkter (cards at the top of the second section)
+export interface ComparisonHighlightView {
+  id: string;
+  // Short label like "Højere dækningssum"
+  title: string;
+  // Short explanation like "+500k bygning" or "−1.000 kr pr. skade"
+  description: string | null;
+  // used to choose icon / color (see below)
+  kind: "coverage_up" | "deductible_down" | "service_extra" | "tech_extra" | "generic";
+}
+
+// One row in the “Detaljeret sammenligning” coverage matrix
+export interface ComparisonCoverageRowView {
+  coverageLabel: string;           // e.g. "Brand"
+  coverageDescription: string | null; // e.g. "Dækker brandskader"
+  // Values for each side – either "inkluderet" / "ikke inkluderet" or "225.000 kr"
+  currentValue: string | null;
+  offerValue: string | null;
+  // Badge variants
+  currentVariant: "success" | "error" | "neutral";
+  offerVariant: "success" | "error" | "neutral";
+  // Optional small note (e.g. "+500k", "−1.000 kr pr. skade")
+  note?: string | null;
+}
+
+// Top-level view-model for the “Samlet” tab
+export interface ComparisonViewModel {
+  companyNameOffer: string;
+  companyNameCurrent: string;
+  // Already used for the 3 summary cards:
+  totalCurrentAnnual: number | null;
+  totalOfferAnnual: number | null;
+  totalSavingsAnnual: number | null;
+  savingsPercent: number | null;
+
+  // Already used in quick table:
+  quickRows: ComparisonQuickRowView[];
+
+  // NEW:
+  highlights: ComparisonHighlightView[];
+  coverageRows: ComparisonCoverageRowView[];
+}
+
+
+
+In the transformer function:
+
+
+Continue to parse overall exactly as you already do for the summary cards and quick table.
+
+
+For highlights:
+
+
+Pick a sensible source from comparison_json.policyComparisons.
+
+
+For now, take all highlights from all policyComparisons where annualSavings > 0 and flatten them into one array.
+
+
+Each raw highlight in JSON likely has something like title and detail or description. Map those fields to ComparisonHighlightView.title and .description.
+
+
+Set kind heuristically based on the title or tags:
+
+
+If the title or text contains words like "dækningssum" or "sum" → coverage_up
+
+
+If it contains "selvrisiko" or "selvrisikoen" → deductible_down
+
+
+If it contains "vejhjælp" or "vejservice" → service_extra
+
+
+If it contains "sensor", "alarm", "hardware" → tech_extra
+
+
+Otherwise → generic
+
+
+
+
+
+
+
+
+For coverageRows:
+
+
+Choose one policyComparison to show in the Samlet view. To keep it deterministic:
+
+
+Prefer policyComparisons where policyType is "hus" or "fritidshus" if available, otherwise fall back to the first element.
+
+
+
+
+From that policyComparison, read the array that represents coverage comparison rows (likely something like coverageRows, coverageComparison.rows, or similar – inspect the actual JSON to be sure).
+
+
+For each raw row:
+
+
+Map the raw coverageLabel and description fields.
+
+
+Derive currentValue and offerValue from the raw structure (current, offer, currentValue, offerValue, etc.).
+
+
+Determine currentVariant and offerVariant:
+
+
+If value is "inkluderet" / "included" → success
+
+
+If value is "ikke inkluderet" / "not_included" → error
+
+
+Otherwise (numbers like "225.000 kr") → neutral
+
+
+
+
+If the raw row has any delta info (“+500k bygning”, “−1.000 kr pr. skade”), map it to note.
+
+
+
+
+
+
+
+
+Make sure no static data is left in the transformer. Everything should be derived from comparison_json. If a field is missing, leave the array empty or variants as neutral, but don’t hard-code text like “Højere dækningssum” in the transformer.
+
+
+
+2. Implement ComparisonHighlights component
+Create/replace client/src/components/comparison/ComparisonHighlights.tsx with a clean implementation that matches the Subframe design and uses only ComparisonHighlightView[] as input.
+Use this structure:
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { ComparisonHighlightView } from "@/utils/transformComparison";
+import {
+  FeatherTrendingUp,
+  FeatherTrendingDown,
+  FeatherTruck,
+  FeatherDroplet,
+} from "@subframe/core";
+
+interface ComparisonHighlightsProps {
+  highlights: ComparisonHighlightView[];
+}
+
+function iconForHighlight(h: ComparisonHighlightView) {
+  switch (h.kind) {
+    case "coverage_up":
+      return <FeatherTrendingUp />;
+    case "deductible_down":
+      return <FeatherTrendingDown />;
+    case "service_extra":
+      return <FeatherTruck />;
+    case "tech_extra":
+      return <FeatherDroplet />;
+    default:
+      return <FeatherTrendingUp />;
+  }
+}
+
+export function ComparisonHighlights({ highlights }: ComparisonHighlightsProps) {
+  if (!highlights || highlights.length === 0) return null;
+
+  return (
+    <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:px-4 mobile:py-4">
+      <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold">
+        Højdepunkter hvor anbefalingen er bedre
+      </span>
+      <div className="flex w-full items-start gap-4 mobile:flex-col mobile:gap-3">
+        {highlights.map((h) => (
+          <div
+            key={h.id}
+            className="flex grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4 mobile:w-full"
+          >
+            <IconWithBackground
+              variant="success"
+              size="medium"
+              icon={iconForHighlight(h)}
+              square={true}
+            />
+            <div className="flex flex-col items-start gap-1">
+              <span className="text-body-bold font-body-bold text-default-font">
+                {h.title}
+              </span>
+              {h.description && (
+                <span className="text-caption font-caption text-subtext-color">
+                  {h.description}
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+Notes:
+
+
+Layout should follow the Subframe screenshot: one heading + a row of cards.
+
+
+Use all highlights from the view-model; if more than 4, still render them; the layout is scrollable on mobile anyway.
+
+
+No hard-coded text except the section heading; everything else comes from h.title and h.description.
+
+
+
+3. Implement ComparisonDetailedMatrix component
+Replace the existing client/src/components/comparison/ComparisonDetailedMatrix.tsx with a clean implementation that matches your Subframe design for “Detaljeret sammenligning”.
+Use this structure:
+import { Badge } from "@/ui/components/Badge";
+import { ComparisonCoverageRowView } from "@/utils/transformComparison";
+
+interface ComparisonDetailedMatrixProps {
+  currentCompanyName: string;
+  offerCompanyName: string;
+  coverageRows: ComparisonCoverageRowView[];
+}
+
+export function ComparisonDetailedMatrix({
+  currentCompanyName,
+  offerCompanyName,
+  coverageRows,
+}: ComparisonDetailedMatrixProps) {
+  if (!coverageRows || coverageRows.length === 0) return null;
+
+  return (
+    <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6 mobile:px-4 mobile:py-4">
+      <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold">
+        Detaljeret sammenligning
+      </span>
+      <div className="flex w-full items-start px-6 overflow-x-auto -mx-6 mobile:px-4 mobile:-mx-4">
+        <div className="flex min-w-[576px] grow shrink-0 basis-0 flex-col items-start">
+          {/* Header row */}
+          <div className="flex w-full items-center gap-4 border-b-2 border-solid border-neutral-300 bg-neutral-50 pb-3 sticky top-0 z-10">
+            <div className="flex w-48 flex-none flex-col items-start mobile:w-32">
+              <span className="text-caption-bold font-caption-bold text-subtext-color">
+                Dækning
+              </span>
+            </div>
+            <div className="flex grow shrink-0 basis-0 flex-col items-center">
+              <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                Nuværende
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                {currentCompanyName}
+              </span>
+            </div>
+            <div className="flex grow shrink-0 basis-0 flex-col items-center">
+              <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
+                Nyt tilbud
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                {offerCompanyName}
+              </span>
+            </div>
+          </div>
+
+          {/* Rows */}
+          {coverageRows.map((row, idx) => {
+            const isLast = idx === coverageRows.length - 1;
+            return (
+              <div
+                key={`${row.coverageLabel}-${idx}`}
+                className={`flex w-full items-center gap-4 ${
+                  isLast
+                    ? "py-4"
+                    : "border-b border-solid border-neutral-border py-4"
+                }`}
+              >
+                <div className="flex w-48 flex-none flex-col items-start gap-1 mobile:w-32">
+                  <span className="text-body-bold font-body-bold text-default-font">
+                    {row.coverageLabel}
+                  </span>
+                  {row.coverageDescription && (
+                    <span className="text-caption font-caption text-subtext-color">
+                      {row.coverageDescription}
+                    </span>
+                  )}
+                  {row.note && (
+                    <span className="text-caption font-caption text-success-700">
+                      {row.note}
+                    </span>
+                  )}
+                </div>
+                <div className="flex grow shrink-0 basis-0 items-center justify-center">
+                  <Badge variant={row.currentVariant}>
+                    {row.currentValue ?? "—"}
+                  </Badge>
+                </div>
+                <div className="flex grow shrink-0 basis-0 items-center justify-center">
+                  <Badge variant={row.offerVariant}>
+                    {row.offerValue ?? "—"}
+                  </Badge>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+Notes:
+
+
+The layout should visually match your Subframe screenshot.
+
+
+All label/values/variants come from coverageRows (which the transformer builds from comparison_json).
+
+
+No hard-coded coverages like “Brand”, “Kasko” etc. They must all come from the JSON rows.
+
+
+
+4. Use the new components on the comparison page
+
+
+In client/src/pages/comparison.tsx (or ComparisonPageLayout.tsx, depending on where you assemble the page):
+
+
+Ensure you import:
+
+
+import { ComparisonHighlights } from "@/components/comparison/ComparisonHighlights";
+import { ComparisonDetailedMatrix } from "@/components/comparison/ComparisonDetailedMatrix";
+import { ComparisonViewModel } from "@/utils/transformComparison";
+
+
+
+Wherever you currently render:
+
+
+The header
+
+
+The tabs
+
+
+The 3 summary cards
+
+
+The “Hurtig sammenligning” table
+
+
+After the quick table, render the two new sections:
+
+
+{/* Højdepunkter where recommendation is better */}
+<ComparisonHighlights highlights={viewModel.highlights} />
+
+{/* Detaljeret sammenligning */}
+<ComparisonDetailedMatrix
+  currentCompanyName={viewModel.companyNameCurrent}
+  offerCompanyName={viewModel.companyNameOffer}
+  coverageRows={viewModel.coverageRows}
+/>
+
+
+
+viewModel here is what you get back from transformCompanyComparisonToViewModel.
+
+
+
+
+Make sure the components are only rendered when there is data (they already return null for empty arrays, so that’s taken care of).
+
+
+
+5. Verify with real data
+Use the existing comparison ID that we know has rich data:
+
+
+Go to /sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1
+
+
+Verify:
+
+
+Top section:
+
+
+“Samlet besparelse”, “Alka Forsikring tilbud”, “Din nuværende (Privatsikring)” show non-zero values that match comparison_json.overall.
+
+
+
+
+“Hurtig sammenligning”:
+
+
+Rows for hus, indbo, ulykke show correct annual prices and savings.
+
+
+
+
+“Højdepunkter hvor anbefalingen er bedre”:
+
+
+Cards are rendered with titles & descriptions coming from comparison_json.policyComparisons[*].highlights (no English dummy text).
+
+
+Icons are chosen based on kind.
+
+
+
+
+“Detaljeret sammenligning”:
+
+
+The matrix shows coverage rows (Brand, Kasko, osv.) with correct “inkluderet/ikke inkluderet” and numeric amounts where applicable.
+
+
+Badge colors match: green for included/better, red for not included, neutral for numeric amounts.
+
+
+
+
+Please keep the implementation as close as possible to the Subframe layouts, but never hard-code any of the dynamic text or numbers – everything must come from the comparison JSON and the transformer.

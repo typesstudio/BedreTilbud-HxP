@@ -6,12 +6,9 @@ import { ComparisonHeader } from "@/components/comparison/ComparisonHeader";
 import { ComparisonTabs } from "@/components/comparison/ComparisonTabs";
 import { ComparisonSummaryRow } from "@/components/comparison/ComparisonSummaryRow";
 import { ComparisonQuickTable } from "@/components/comparison/ComparisonQuickTable";
+import { ComparisonHighlights } from "@/components/comparison/ComparisonHighlights";
+import { ComparisonDetailedMatrix } from "@/components/comparison/ComparisonDetailedMatrix";
 import { transformCompanyComparisonToViewModel } from "@/utils/transformComparison";
-
-// Debug helper
-function debugData(label: string, data: any) {
-  console.log(`[DEBUG] ${label}:`, JSON.stringify(data, null, 2));
-}
 
 export default function Comparison() {
   const { id } = useParams();
@@ -64,14 +61,8 @@ export default function Comparison() {
     );
   }
 
-  // Debug raw comparison data
-  debugData("Raw Comparison", comparison);
-  
   // Transform to view model
   const viewModel = transformCompanyComparisonToViewModel(comparison);
-  
-  // Debug transformed view model
-  debugData("View Model", viewModel);
   
   // Find thread for messaging
   const companyId = (comparison as any)?.companyId;
@@ -111,6 +102,20 @@ export default function Comparison() {
             policies={viewModel.policies}
             onSelectPolicy={(policyType) => setSelectedTab(policyType)}
           />
+
+          {/* Highlights Section */}
+          {selectedTab === "samlet" && (
+            <ComparisonHighlights highlights={viewModel.highlights} />
+          )}
+
+          {/* Detailed Coverage Matrix */}
+          {selectedTab === "samlet" && (
+            <ComparisonDetailedMatrix
+              currentCompanyName={viewModel.currentCompanyName}
+              offerCompanyName={viewModel.offerCompanyName}
+              coverageRows={viewModel.coverageRows}
+            />
+          )}
 
         </div>
       </div>
