@@ -1,0 +1,76 @@
+Add the following code to the page. If the code already exists, update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+<div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4 mobile:px-4 mobile:py-4">
+  <div className="flex w-full items-center justify-between mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-2">
+    <div className="flex flex-col items-start gap-2">
+      <span className="text-heading-2 font-heading-2 text-default-font mobile:text-heading-3 mobile:font-heading-3">
+        Din besparelse over tid
+      </span>
+      <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+        Se hvor meget du sparer måned for måned
+      </span>
+    </div>
+    <Badge
+      className="mobile:self-start"
+      variant="success"
+      icon={<FeatherArrowUp />}
+    >
+      34.589 kr over 10 år
+    </Badge>
+  </div>
+  <AreaChart
+    className="mobile:h-64 mobile:flex-none"
+    categories={["Biology", "Business", "Psychology"]}
+    data={[
+      { Year: "2015", Psychology: 120, Business: 110, Biology: 100 },
+      { Year: "2016", Psychology: 130, Business: 95, Biology: 105 },
+      { Year: "2017", Psychology: 115, Business: 105, Biology: 110 },
+      { Year: "2018", Psychology: 125, Business: 120, Biology: 90 },
+      { Year: "2019", Psychology: 110, Business: 130, Biology: 85 },
+      { Year: "2020", Psychology: 135, Business: 100, Biology: 95 },
+      { Year: "2021", Psychology: 105, Business: 115, Biology: 120 },
+      { Year: "2022", Psychology: 140, Business: 125, Biology: 130 },
+    ]}
+    index={"Year"}
+  />
+  <div className="flex w-full items-start gap-4 flex-wrap mobile:flex-row mobile:flex-wrap mobile:gap-3">
+    <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
+      <span className="text-caption font-caption text-subtext-color">
+        Månedlig besparelse
+      </span>
+      <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
+        270-300 kr
+      </span>
+    </div>
+    <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
+      <span className="text-caption font-caption text-subtext-color">
+        Total efter 12 måneder
+      </span>
+      <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
+        3.420 kr spart
+      </span>
+    </div>
+    <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
+      <span className="text-caption font-caption text-subtext-color">
+        Forventet efter 10 år
+      </span>
+      <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
+        34.400 kr spart
+      </span>
+    </div>
+  </div>
+</div>
+
+```Be sure to import the components using the following code:
+  
+```tsx
+import React from "react";
+import { AreaChart } from "@/ui/components/AreaChart";
+import { Badge } from "@/ui/components/Badge";
+import { FeatherArrowUp } from "@subframe/core";
+```Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync Badge AreaChart -p 34bd735365b5
+```

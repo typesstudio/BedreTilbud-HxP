@@ -1,0 +1,215 @@
+Here’s a Replit prompt you can paste straight in:
+
+---
+
+I want you to add the **“Din besparelse over tid”** section to my comparison page, using my existing Subframe design and **real comparison data** (no static numbers).
+
+### Context
+
+* The page is the **company comparison page** at route `/sammenligning/[comparisonId]`.
+* It already shows:
+
+  * The big hero with company name + tabs (Samlet / Indbo / Ulykke / Hus / Bil / Rejse)
+  * The 3 summary cards (Samlet besparelse / Tilbud / Nuværende), now with real data
+  * The “Højdepunkter hvor anbefalingen er bedre” and “Detaljeret sammenligning” sections – those are already implemented and working from comparison_json.
+
+Now I want you to add the **third block** from my Subframe designs:
+
+> “Din besparelse over tid” with:
+>
+> * AreaChart
+> * Badge in top-right “34.589 kr over 10 år”
+> * 3 cards: Månedlig besparelse, Total efter 12 måneder, Forventet efter 10 år
+
+You already have Subframe components available:
+
+```ts
+import { AreaChart } from "@/ui/components/AreaChart";
+import { Badge } from "@/ui/components/Badge";
+```
+
+You also already have **real data** in `company_comparisons.comparison_json` (see the debug report you generated earlier for comparison `0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1`):
+
+* `comparison_json.overall.totalCurrentAnnualPremium`
+* `comparison_json.overall.totalOfferAnnualPremium`
+* `comparison_json.overall.annualSavings`
+* `comparison_json.cumulativeSavings.chartData` (120 points)
+
+Use those fields – **don’t use any hard-coded example data**.
+
+### What to build
+
+#### 1. Add a view model for savings
+
+In `client/src/utils/transformComparison.ts` (or wherever you do the existing view-model transform for the comparison page), extend the transformer to include a **savingsOverTime** object on the view model.
+
+1. Inspect the actual JSON in the DB to understand the structure:
+
+   ```sql
+   SELECT jsonb_pretty(comparison_json)
+   FROM company_comparisons
+   WHERE id = '0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1';
+   ```
+
+2. Based on that, create a TypeScript type like:
+
+   ```ts
+   export interface SavingsOverTimeView {
+     annualSavings: number;          // from overall.annualSavings
+     totalCurrentAnnual: number;     // from overall.totalCurrentAnnualPremium
+     totalOfferAnnual: number;       // from overall.totalOfferAnnualPremium
+     chartPoints: { x: string; y: number }[]; // derived from cumulativeSavings.chartData
+     total10Years: number;           // computed
+     monthlySavingsApprox: { min: number; max: number }; // computed range
+   }
+   ```
+
+3. In the transformer, map the raw JSON into this view:
+
+   * `annualSavings = overall.annualSavings`
+   * `totalCurrentAnnual = overall.totalCurrentAnnualPremium`
+   * `totalOfferAnnual = overall.totalOfferAnnualPremium`
+   * `chartPoints`: map `cumulativeSavings.chartData` into `{ x, y }` format that AreaChart can use.
+
+     * Use a sensible index key like month label (`"Måned 1"`, `"Måned 2"`, …) or `"År 1"`, `"År 2"` depending on how your data is structured.
+   * `total10Years`:
+
+     * If there’s already a cumulative value in the JSON (e.g. `cumulativeSavings.total`), use that.
+     * Otherwise compute `annualSavings * 10`.
+   * `monthlySavingsApprox`:
+
+     * Compute a simple range around the monthly saving:
+
+       * `monthly = annualSavings / 12`
+       * `min = Math.round(monthly * 0.9)`
+       * `max = Math.round(monthly * 1.1)`
+
+4. Add this to the main comparison view model:
+
+   ```ts
+   export interface ComparisonViewModel {
+     // already existing fields...
+     savingsOverTime: SavingsOverTimeView;
+   }
+   ```
+
+   and ensure the transformer function returns it.
+
+#### 2. Create a `ComparisonSavingsSection` component
+
+Create a new component file:
+
+`client/src/components/comparison/ComparisonSavingsSection.tsx`
+
+This component should implement the **exact Subframe layout** for “Din besparelse over tid”, but with props wired to the view model instead of static data.
+
+Signature:
+
+```ts
+import { AreaChart } from "@/ui/components/AreaChart";
+import { Badge } from "@/ui/components/Badge";
+import React from "react";
+import { SavingsOverTimeView } from "@/utils/transformComparison";
+
+interface ComparisonSavingsSectionProps {
+  savings: SavingsOverTimeView;
+}
+
+export function ComparisonSavingsSection({ savings }: ComparisonSavingsSectionProps) {
+  // ...
+}
+```
+
+Inside, copy the Subframe layout you already used in `OfferComparisonAll` / `OfferComparisonTable` for this section, but:
+
+* Replace static text with Danish labels exactly like in the screenshot:
+
+  * Title: **“Din besparelse over tid”**
+  * Subtitle: **“Se hvor meget du sparer måned for måned”**
+  * Badge text: `"{formattedTotal10Years} kr over 10 år"`
+
+* Connect values:
+
+  * Badge: `savings.total10Years` (formatted as `34.589 kr over 10 år` style – use the same currency formatter you use elsewhere, or `Intl.NumberFormat("da-DK")`).
+  * Left bottom card (Månedlig besparelse):
+
+    * Use `savings.monthlySavingsApprox.min`–`max` to show `"X–Y kr"`.
+  * Middle bottom card (“Total efter 12 måneder”):
+
+    * Use `savings.annualSavings`.
+  * Right bottom card (“Forventet efter 10 år”):
+
+    * Use `savings.total10Years`.
+
+* AreaChart:
+
+  * Use a **single series** (this is a savings chart, not 3 subjects like Biology/Business/Psychology).
+
+  * Transform `savings.chartPoints` into the format expected by `AreaChart` (check the Subframe AreaChart API you already used; it was something like):
+
+    ```tsx
+    <AreaChart
+      categories={["Besparelse"]}
+      data={savings.chartPoints.map((p) => ({
+        label: p.x,         // e.g. "År 1"
+        Besparelse: p.y,    // numeric
+      }))}
+      index="label"
+    />
+    ```
+
+  * Keep all styling / classes from the Subframe snippet (padding, rounded corners, etc.) so it looks identical to the design.
+
+#### 3. Use the component on the comparison page
+
+Open the **current company comparison page** (the one that renders for `/sammenligning/[id]`). In previous steps you already refactored it to use a view model – reuse that.
+
+1. Import the new section:
+
+   ```ts
+   import { ComparisonSavingsSection } from "@/components/comparison/ComparisonSavingsSection";
+   ```
+
+2. After the “Højdepunkter hvor anbefalingen er bedre” and “Detaljeret sammenligning” sections on the **Samlet** tab, render:
+
+   ```tsx
+   {view.savingsOverTime && (
+     <ComparisonSavingsSection savings={view.savingsOverTime} />
+   )}
+   ```
+
+   * Make sure this only shows on the **Samlet** tab (not on Indbo/Hus/Ulykke tabs).
+     If you are already passing `activeTab`, just wrap it:
+
+     ```tsx
+     {activeTab === "samlet" && view.savingsOverTime && (
+       <ComparisonSavingsSection savings={view.savingsOverTime} />
+     )}
+     ```
+
+3. Do **not** break existing layout: keep `DefaultPageLayout`, hero, tabs, summary cards, “Højdepunkter” and “Detaljeret sammenligning” exactly as they are.
+
+#### 4. No static numbers
+
+Important constraints:
+
+* **Do not** leave any placeholder/static values (no `270–300 kr`, `3.420 kr`, `34.400 kr`, or lorem data).
+* All numbers must come from real data (overall + cumulativeSavings).
+* If for some old comparisons there is no `cumulativeSavings` data, handle it gracefully:
+
+  * Don’t crash.
+  * You can hide the chart and cards or fall back to computing a simple straight-line chart from `annualSavings`.
+
+#### 5. Final check
+
+When you’re done:
+
+* Load `/sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1`
+* Verify:
+
+  * The top summary shows **5.323–5.324 kr** savings and the correct annual prices (as in the debug report).
+  * The **“Din besparelse over tid”** section appears below the detailed comparison.
+  * The area chart is filled with real data (no Biology/Business/Psychology series).
+  * The three cards at the bottom show correct values derived from the comparison, in Danish.
+
+Make all changes in a minimal, well-typed way, reusing existing helpers and components wherever possible.
