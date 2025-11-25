@@ -91,6 +91,13 @@ export default function Comparison() {
           <ComparisonHeader
             title={`${viewModel.offerCompanyName} sammenligning`}
             subtitle="Sammenlign og gennemgå forsikringstilbud tilpasset dig"
+            onSeDetaljerClick={() => {
+              // Navigate to health check for current tab's offer snapshot
+              const snapshotId = activeView.offerSnapshotId || activeView.currentSnapshotId;
+              if (snapshotId) {
+                setLocation(`/sundhedstjek/${snapshotId}`);
+              }
+            }}
             onSeBeskederClick={() => threadId && setLocation(`/emails/${threadId}`)}
             onSeSundhedstjekClick={() => {
               // Navigate to health check for current tab's offer snapshot
@@ -99,8 +106,9 @@ export default function Comparison() {
                 setLocation(`/sundhedstjek/${snapshotId}`);
               }
             }}
+            showDetaljerButton={!!(activeView.offerSnapshotId || activeView.currentSnapshotId)}
             showBeskederButton={!!threadId}
-            showSundhedstjekButton={!!(activeView.offerSnapshotId || activeView.currentSnapshotId)}
+            showSundhedstjekButton={false}
           />
 
           {/* Tabs */}
