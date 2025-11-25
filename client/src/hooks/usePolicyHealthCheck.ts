@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
-import type { HealthCheckLayoutProps } from "@/components/health/HealthCheckLayout";
+import type { HealthCheckViewModel } from "@/utils/transformHealthCheck";
 import { transformPolicyHealthCheckToView } from "@/utils/transformHealthCheck";
 
 export function usePolicyHealthCheck(snapshotId: string | undefined) {
-  return useQuery<HealthCheckLayoutProps>({
+  return useQuery<HealthCheckViewModel>({
     queryKey: ["policyHealthCheck", snapshotId],
     enabled: !!snapshotId,
     queryFn: async () => {

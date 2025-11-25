@@ -1,4 +1,6 @@
-import type { HealthCheckLayoutProps, CoverageItem, StrengthWeaknessItem, CumulativeSavings } from "@/components/health/HealthCheckLayout";
+import type { HealthCheckBenefit } from "@/components/healthCheck/HealthCheckBenefitsGrid";
+import type { HealthCheckItem } from "@/components/healthCheck/HealthCheckStrengthsWeaknesses";
+import type { ComparisonCoverageRowView } from "./transformComparison";
 
 export interface HealthCheckApiResponse {
   snapshot: {
@@ -15,6 +17,27 @@ export interface HealthCheckApiResponse {
   } | null;
 }
 
+export interface HealthCheckViewModel {
+  title: string;
+  subtitle: string;
+  companyName: string;
+  policyTypeLabel: string;
+  policyType: string;
+  kind: "current" | "offer";
+  annualPotentialSavings?: number;
+  annualSavingsPercent?: number;
+  benefits: HealthCheckBenefit[];
+  coverageRows: ComparisonCoverageRowView[];
+  strengths: HealthCheckItem[];
+  weaknesses: HealthCheckItem[];
+  savingsOverTime?: {
+    chartData: { label: string; Besparelse: number }[];
+    monthlyRangeText?: string;
+    totalAfter12Months: number;
+    totalAfter10Years: number;
+  };
+}
+
 const policyTypeLabels: { [key: string]: string } = {
   indbo: "Indbo",
   ulykke: "Ulykke",
@@ -26,7 +49,7 @@ const policyTypeLabels: { [key: string]: string } = {
 
 export function transformPolicyHealthCheckToView(
   apiData: HealthCheckApiResponse
-): HealthCheckLayoutProps {
+): HealthCheckViewModel {
   const { snapshot, healthCheck } = apiData;
   const policyTypeLabel = policyTypeLabels[snapshot.policyType] || snapshot.policyType;
   
@@ -37,79 +60,98 @@ export function transformPolicyHealthCheckToView(
   const strengthsData = result.strengths || [];
   const weaknessesData = result.weaknesses || [];
   const cumulativeSavingsData = result.cumulativeSavings || {};
-  const missingInfoData = result.missingInfo || [];
+  const benefitsData = result.benefits || [];
 
-  // Transform coverages
-  const whatsIncluded: CoverageItem[] = whatsIncludedData.map((item: any, index: number) => ({
-    id: `coverage-${index}`,
-    coverage: item.coverage || item.name || "",
+  // Transform benefits for the grid
+  const benefits: HealthCheckBenefit[] = benefitsData.map((item: any, index: number) => ({
+    id: `benefit-${index}`,
+    title: item.title || item.name || "",
     description: item.description || "",
-    value: item.value,
-    status: item.status,
-    attributes: item.attributes || {},
+    icon: item.icon,
+    variant: item.variant || "neutral",
   }));
 
+  // Transform coverages to coverage rows format for ComparisonDetailedMatrix
+  const coverageRows: ComparisonCoverageRowView[] = whatsIncludedData.map((item: any, index: number) => {
+    let value = "inkluderet";
+    let variant: "success" | "neutral" | "warning" | "error" = "success";
+
+    if (item.value === "ikke inkluderet") {
+      value = "ikke inkluderet";
+      variant = item.status || "neutral";
+    } else if (item.attributes?.selvrisiko) {
+      value = `Selvrisiko: ${item.attributes.selvrisiko}`;
+      variant = item.status || "warning";
+    } else if (item.attributes?.sum) {
+      value = item.attributes.sum;
+      variant = item.status || "success";
+    } else if (item.value) {
+      value = item.value;
+      variant = item.status || "success";
+    }
+
+    return {
+      coverageLabel: item.coverage || item.name || "",
+      coverageDescription: item.description || undefined,
+      currentValue: "",
+      currentVariant: "neutral",
+      offerValue: value,
+      offerVariant: variant,
+      note: undefined,
+    };
+  });
+
   // Transform strengths
-  const strengths: StrengthWeaknessItem[] = strengthsData.map((item: any, index: number) => ({
+  const strengths: HealthCheckItem[] = strengthsData.map((item: any, index: number) => ({
     id: `strength-${index}`,
     title: item.title || item.name || "",
     description: item.description || "",
-    icon: item.icon,
-    variant: "success",
+    amountText: item.amountText || item.amount,
   }));
 
   // Transform weaknesses
-  const weaknesses: StrengthWeaknessItem[] = weaknessesData.map((item: any, index: number) => ({
+  const weaknesses: HealthCheckItem[] = weaknessesData.map((item: any, index: number) => ({
     id: `weakness-${index}`,
     title: item.title || item.name || "",
     description: item.description || "",
-    icon: item.icon,
-    variant: "warning",
+    amountText: item.amountText || item.amount,
   }));
 
-  // Transform cumulative savings
-  let cumulativeSavings: CumulativeSavings | undefined;
+  // Transform cumulative savings for ComparisonSavingsChart
+  let savingsOverTime: HealthCheckViewModel["savingsOverTime"] | undefined;
   if (cumulativeSavingsData.chartData && cumulativeSavingsData.chartData.length > 0) {
-    cumulativeSavings = {
-      chartData: cumulativeSavingsData.chartData.map((item: any) => ({
-        month: item.month || item.label || "",
-        savings: item.savings || item.value || 0,
-      })),
-      after12Months: cumulativeSavingsData.after12Months || 0,
-      after10Years: cumulativeSavingsData.after10Years || 0,
-      monthlyRange: cumulativeSavingsData.monthlyRange,
+    const chartData = cumulativeSavingsData.chartData.map((item: any) => ({
+      label: item.month || item.label || "",
+      Besparelse: item.savings || item.value || 0,
+    }));
+
+    const after12Months = cumulativeSavingsData.after12Months || (potentialSavings.realistic || 0);
+    const after10Years = cumulativeSavingsData.after10Years || (after12Months * 10);
+
+    savingsOverTime = {
+      chartData,
+      monthlyRangeText: cumulativeSavingsData.monthlyRangeText,
+      totalAfter12Months: after12Months,
+      totalAfter10Years: after10Years,
     };
-  }
+  } else if (potentialSavings.realistic) {
+    // If we have annual savings but no chart data, generate a simple projection
+    const annualSavings = potentialSavings.realistic;
+    const monthlySavings = annualSavings / 12;
+    
+    const chartData = [];
+    for (let year = 1; year <= 10; year++) {
+      chartData.push({
+        label: `År ${year}`,
+        Besparelse: annualSavings * year,
+      });
+    }
 
-  // Transform missing info
-  const missingInfo = missingInfoData.map((item: any, index: number) => ({
-    id: `missing-${index}`,
-    category: item.category || item.title || "",
-    question: item.question || item.description || "",
-    icon: item.icon,
-    variant: item.variant || "error",
-  }));
-
-  // Build insurance details from snapshot
-  const insuranceDetails = [
-    {
-      label: "Selskab",
-      value: snapshot.companyName,
-      variant: "neutral" as const,
-    },
-    {
-      label: "Type",
-      value: policyTypeLabel,
-      variant: "neutral" as const,
-    },
-  ];
-
-  if (snapshot.pricing?.annualPremium) {
-    insuranceDetails.push({
-      label: "Årlig præmie",
-      value: `${snapshot.pricing.annualPremium} kr`,
-      variant: "neutral" as const,
-    });
+    savingsOverTime = {
+      chartData,
+      totalAfter12Months: annualSavings,
+      totalAfter10Years: annualSavings * 10,
+    };
   }
 
   return {
@@ -119,125 +161,15 @@ export function transformPolicyHealthCheckToView(
       : "Se en grundig analyse af din nuværende forsikring",
     companyName: snapshot.companyName,
     policyTypeLabel,
+    policyType: snapshot.policyType,
     kind: snapshot.kind,
-    quickStatus: potentialSavings.realistic
-      ? {
-          savingsAnnual: potentialSavings.realistic,
-          savingsPercentage: potentialSavings.percentage,
-        }
-      : undefined,
-    insuranceDetails,
-    whatsIncluded: whatsIncluded.length > 0 ? whatsIncluded : undefined,
-    strengths: strengths.length > 0 ? strengths : undefined,
-    weaknesses: weaknesses.length > 0 ? weaknesses : undefined,
-    cumulativeSavings,
-    missingInfo: missingInfo.length > 0 ? missingInfo : undefined,
+    annualPotentialSavings: potentialSavings.realistic,
+    annualSavingsPercent: potentialSavings.percentage,
+    benefits,
+    coverageRows,
+    strengths,
+    weaknesses,
+    savingsOverTime,
   };
 }
 
-// Transform current insurance health check (from InsuranceCheckPage format)
-export function transformCurrentHealthCheckToView(policy: any): HealthCheckLayoutProps {
-  const healthCheckPayload = policy.healthCheckPayload || {};
-  const policyTypeLabel = policyTypeLabels[policy.policyType] || policy.policyType;
-
-  // Extract data from healthCheckPayload
-  const potentialSavings = healthCheckPayload.potentialSavings || {};
-  const whatsIncludedData = healthCheckPayload.whatsIncluded || [];
-  const strengthsData = healthCheckPayload.strengths || [];
-  const weaknessesData = healthCheckPayload.weaknesses || [];
-  const cumulativeSavingsData = healthCheckPayload.cumulativeSavings || {};
-  const missingInfoData = healthCheckPayload.missingInfo || [];
-
-  // Transform coverages
-  const whatsIncluded: CoverageItem[] = whatsIncludedData.map((item: any, index: number) => ({
-    id: `coverage-${index}`,
-    coverage: item.coverage || item.name || "",
-    description: item.description || "",
-    value: item.value,
-    status: item.status,
-    attributes: item.attributes || {},
-  }));
-
-  // Transform strengths
-  const strengths: StrengthWeaknessItem[] = strengthsData.map((item: any, index: number) => ({
-    id: `strength-${index}`,
-    title: item.title || item.name || "",
-    description: item.description || "",
-    icon: item.icon,
-    variant: "success",
-  }));
-
-  // Transform weaknesses
-  const weaknesses: StrengthWeaknessItem[] = weaknessesData.map((item: any, index: number) => ({
-    id: `weakness-${index}`,
-    title: item.title || item.name || "",
-    description: item.description || "",
-    icon: item.icon,
-    variant: "warning",
-  }));
-
-  // Transform cumulative savings
-  let cumulativeSavings: CumulativeSavings | undefined;
-  if (cumulativeSavingsData.chartData && cumulativeSavingsData.chartData.length > 0) {
-    cumulativeSavings = {
-      chartData: cumulativeSavingsData.chartData.map((item: any) => ({
-        month: item.month || item.label || "",
-        savings: item.savings || item.value || 0,
-      })),
-      after12Months: cumulativeSavingsData.after12Months || 0,
-      after10Years: cumulativeSavingsData.after10Years || 0,
-      monthlyRange: cumulativeSavingsData.monthlyRange,
-    };
-  }
-
-  // Transform missing info
-  const missingInfo = missingInfoData.map((item: any, index: number) => ({
-    id: `missing-${index}`,
-    category: item.category || item.title || "",
-    question: item.question || item.description || "",
-    icon: item.icon,
-    variant: item.variant || "error",
-  }));
-
-  // Build insurance details
-  const insuranceDetails = [
-    {
-      label: "Selskab",
-      value: policy.companyName || "Ukendt",
-      variant: "neutral" as const,
-    },
-    {
-      label: "Type",
-      value: policyTypeLabel,
-      variant: "neutral" as const,
-    },
-  ];
-
-  if (policy.premium) {
-    insuranceDetails.push({
-      label: "Årlig præmie",
-      value: policy.premium,
-      variant: "neutral" as const,
-    });
-  }
-
-  return {
-    title: `${policyTypeLabel} sundhedstjek`,
-    subtitle: "Se en grundig analyse af din nuværende forsikring",
-    companyName: policy.companyName || "Din nuværende forsikring",
-    policyTypeLabel,
-    kind: "current",
-    quickStatus: potentialSavings.realistic
-      ? {
-          savingsAnnual: potentialSavings.realistic,
-          savingsPercentage: potentialSavings.percentage,
-        }
-      : undefined,
-    insuranceDetails,
-    whatsIncluded: whatsIncluded.length > 0 ? whatsIncluded : undefined,
-    strengths: strengths.length > 0 ? strengths : undefined,
-    weaknesses: weaknesses.length > 0 ? weaknesses : undefined,
-    cumulativeSavings,
-    missingInfo: missingInfo.length > 0 ? missingInfo : undefined,
-  };
-}
