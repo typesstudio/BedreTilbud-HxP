@@ -99,16 +99,8 @@ export default function Comparison() {
               }
             }}
             onSeBeskederClick={() => threadId && setLocation(`/emails/${threadId}`)}
-            onSeSundhedstjekClick={() => {
-              // Navigate to health check for current tab's offer snapshot
-              const snapshotId = activeView.offerSnapshotId || activeView.currentSnapshotId;
-              if (snapshotId) {
-                setLocation(`/sundhedstjek/${snapshotId}`);
-              }
-            }}
-            showDetaljerButton={!!(activeView.offerSnapshotId || activeView.currentSnapshotId)}
+            showDetaljerButton={activeTab !== "samlet" && !!(activeView.offerSnapshotId || activeView.currentSnapshotId)}
             showBeskederButton={!!threadId}
-            showSundhedstjekButton={false}
           />
 
           {/* Tabs */}
