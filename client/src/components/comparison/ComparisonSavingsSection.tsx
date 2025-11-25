@@ -1,3 +1,4 @@
+import { useState, useMemo } from "react";
 import { AreaChart } from "@/ui/components/AreaChart";
 import { Badge } from "@/ui/components/Badge";
 import { FeatherArrowUp } from "@subframe/core";
@@ -9,7 +10,16 @@ interface ComparisonSavingsSectionProps {
   activePolicyKey: string | "all";
 }
 
-function formatCurrencyShort(amount: number): string {
+// Policy type color mapping
+const POLICY_COLORS: Record<string, string> = {
+  hus: "#10b981", // emerald-500
+  indbo: "#14b8a6", // teal-500
+  ulykke: "#06b6d4", // cyan-500
+  bil: "#8b5cf6", // violet-500
+  rejse: "#f59e0b", // amber-500
+};
+
+function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("da-DK", {
     style: "decimal",
     minimumFractionDigits: 0,
@@ -17,27 +27,48 @@ function formatCurrencyShort(amount: number): string {
   }).format(Math.round(amount)) + " kr";
 }
 
-export function ComparisonSavingsSection({ savings, activePolicyKey }: ComparisonSavingsSectionProps) {
-  // Filter series based on active policy key
-  const visibleSeries =
-    activePolicyKey === "all"
-      ? savings.series
-      : savings.series.filter((s) => s.key === activePolicyKey);
+function monthToYearLabel(monthIndex: number): string {
+  const year = Math.ceil(monthIndex / 12);
+  return `${year}. år`;
+}
 
-  // If no visible series, don't render anything
+export function ComparisonSavingsSection({ savings, activePolicyKey }: ComparisonSavingsSectionProps) {
+  // Determine initial visible series based on activePolicyKey
+  const initialVisibleKeys = useMemo(() => {
+    if (activePolicyKey === "all") {
+      return savings.series.map(s => s.key);
+    }
+    return savings.series.filter(s => s.key === activePolicyKey).map(s => s.key);
+  }, [savings.series, activePolicyKey]);
+
+  const [visibleKeys, setVisibleKeys] = useState<string[]>(initialVisibleKeys);
+
+  // Update visible keys when activePolicyKey changes
+  useMemo(() => {
+    if (activePolicyKey === "all") {
+      setVisibleKeys(savings.series.map(s => s.key));
+    } else {
+      const filtered = savings.series.filter(s => s.key === activePolicyKey).map(s => s.key);
+      setVisibleKeys(filtered.length > 0 ? filtered : visibleKeys);
+    }
+  }, [activePolicyKey, savings.series]);
+
+  // Filter series
+  const visibleSeries = savings.series.filter(s => visibleKeys.includes(s.key));
+
   if (visibleSeries.length === 0) {
     return null;
   }
 
-  // Build AreaChart categories (one per visible policy)
-  const categories = visibleSeries.map((s) => s.label);
-
-  // Build chart data - 120 monthly data points
+  // Build categories and chart data
+  const categories = visibleSeries.map(s => s.label);
+  
+  // Build chart data with Year labels
   const data = Array.from({ length: 120 }, (_, i) => {
     const month = i + 1;
-    const row: any = { Måned: `${month}` };
+    const row: any = { Year: monthToYearLabel(month) };
 
-    visibleSeries.forEach((s) => {
+    visibleSeries.forEach(s => {
       const point = s.points[i];
       row[s.label] = point?.cumulative ?? 0;
     });
@@ -45,25 +76,52 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
     return row;
   });
 
-  // Calculate values for the 3 cards
+  // Calculate summary values
   let monthlySavings: number;
   let annualSavings: number;
   let tenYearSavings: number;
 
-  if (activePolicyKey === "all") {
-    // Show totals across all policies
-    monthlySavings = savings.totalAnnualSavings / 12;
-    annualSavings = savings.totalAnnualSavings;
-    tenYearSavings = savings.totalTenYearSavings;
+  if (activePolicyKey === "all" || visibleSeries.length > 1) {
+    const totals = visibleSeries.reduce(
+      (acc, s) => ({
+        monthly: acc.monthly + s.monthlySavings,
+        annual: acc.annual + s.annualSavings,
+        tenYear: acc.tenYear + s.tenYearSavings,
+      }),
+      { monthly: 0, annual: 0, tenYear: 0 }
+    );
+    monthlySavings = totals.monthly;
+    annualSavings = totals.annual;
+    tenYearSavings = totals.tenYear;
   } else {
-    // Show values for the specific policy
     const series = visibleSeries[0];
     monthlySavings = series.monthlySavings;
     annualSavings = series.annualSavings;
     tenYearSavings = series.tenYearSavings;
   }
 
-  // Value formatter for Y-axis (with thousand separators)
+  // Get colors for visible series
+  const colors = visibleSeries.map(s => POLICY_COLORS[s.key] || "#10b981");
+
+  // Toggle a specific series
+  const handleToggleSeries = (key: string) => {
+    setVisibleKeys(prev => {
+      if (prev.includes(key)) {
+        const next = prev.filter(k => k !== key);
+        return next.length > 0 ? next : [key]; // Keep at least one
+      }
+      return [...prev, key];
+    });
+  };
+
+  // Show all series
+  const handleShowAll = () => {
+    setVisibleKeys(savings.series.map(s => s.key));
+  };
+
+  const isAllSelected = visibleKeys.length === savings.series.length;
+
+  // Value formatter for Y-axis
   const tickFormatter = (value: number) => {
     return new Intl.NumberFormat("da-DK", {
       style: "decimal",
@@ -74,13 +132,14 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
 
   return (
     <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4 mobile:px-4 mobile:py-4">
+      {/* Header */}
       <div className="flex w-full items-center justify-between mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-2">
         <div className="flex flex-col items-start gap-2">
           <span className="text-heading-2 font-heading-2 text-default-font mobile:text-heading-3 mobile:font-heading-3">
             Din besparelse over tid
           </span>
           <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
-            Se hvor meget du sparer måned for måned
+            Se hvor meget du sparer år for år
           </span>
         </div>
         <Badge
@@ -89,16 +148,64 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
           icon={<FeatherArrowUp />}
           data-testid="badge-total-10-years"
         >
-          {formatCurrencyShort(tenYearSavings)} over 10 år
+          {formatCurrency(tenYearSavings)} over 10 år
         </Badge>
       </div>
+
+      {/* Interactive Legend */}
+      {savings.series.length > 1 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleShowAll}
+            className={`rounded-full border px-3 py-1 text-caption font-caption transition ${
+              isAllSelected
+                ? "border-success-500 bg-success-50 text-success-700"
+                : "border-neutral-border bg-neutral-50 text-subtext-color hover:bg-neutral-100"
+            }`}
+            data-testid="legend-toggle-all"
+          >
+            Alle
+          </button>
+          {savings.series.map(series => {
+            const isActive = visibleKeys.includes(series.key);
+            const color = POLICY_COLORS[series.key] || "#10b981";
+            
+            return (
+              <button
+                key={series.key}
+                type="button"
+                onClick={() => handleToggleSeries(series.key)}
+                className={`flex items-center gap-2 rounded-full border px-3 py-1 text-caption font-caption transition ${
+                  isActive
+                    ? "border-success-500 bg-success-50 text-success-700"
+                    : "border-neutral-border bg-neutral-50 text-subtext-color hover:bg-neutral-100"
+                }`}
+                data-testid={`legend-toggle-${series.key}`}
+              >
+                <span
+                  className="h-2 w-2 rounded-full"
+                  style={{ backgroundColor: color }}
+                  aria-hidden="true"
+                />
+                {series.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Chart */}
       <AreaChart
         className="mobile:h-64 mobile:flex-none"
         categories={categories}
         data={data}
-        index="Måned"
+        index="Year"
+        colors={colors}
         yAxis={<SubframeCore.YAxis tickFormatter={tickFormatter} />}
       />
+
+      {/* Summary Cards */}
       <div className="flex w-full items-start gap-4 flex-wrap mobile:flex-row mobile:flex-wrap mobile:gap-3">
         <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
           <span className="text-caption font-caption text-subtext-color">
@@ -108,7 +215,7 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
             className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3"
             data-testid="text-monthly-savings"
           >
-            {formatCurrencyShort(monthlySavings)}
+            {formatCurrency(monthlySavings)}
           </span>
         </div>
         <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
@@ -119,7 +226,7 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
             className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3"
             data-testid="text-12-months-savings"
           >
-            {formatCurrencyShort(annualSavings)} spart
+            {formatCurrency(annualSavings)} spart
           </span>
         </div>
         <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
@@ -130,7 +237,7 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
             className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3"
             data-testid="text-10-years-savings"
           >
-            {formatCurrencyShort(tenYearSavings)} spart
+            {formatCurrency(tenYearSavings)} spart
           </span>
         </div>
       </div>

@@ -1,0 +1,274 @@
+Yes – this is totally doable with the Subframe `AreaChart`. We can:
+
+1. Format all numbers as Danish DKK with no ugly decimals
+2. Show “years” on the X-axis instead of raw month numbers
+3. Give each policy its own color
+4. Add an interactive legend so you can click **Hus / Indbo / Ulykke / Alle** to filter the chart
+
+Below is a concrete implementation you (or Replit) can drop into `ComparisonSavingsChart.tsx` and then just wire props up.
+
+---
+
+### 1. Helpers for formatting + x-axis
+
+Add this near the top of `ComparisonSavingsChart.tsx` (or in a small utils file):
+
+```ts
+// utils/format.ts (or inside ComparisonSavingsChart.tsx)
+
+const dkkFormatter = new Intl.NumberFormat("da-DK", {
+  style: "currency",
+  currency: "DKK",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+});
+
+export function formatKr(value: number | null | undefined): string {
+  if (value == null || isNaN(value)) return "0 kr";
+  return dkkFormatter.format(value); // e.g. "53.238 kr"
+}
+
+export function formatKrRange(min: number, max: number): string {
+  if (!isFinite(min) || !isFinite(max)) return formatKr(min || max || 0);
+  if (Math.round(min) === Math.round(max)) return formatKr(min);
+  return `${dkkFormatter.format(min)}–${dkkFormatter.format(max)}`;
+}
+
+// Convert month index (1..120) to year label (1..10)
+export function monthToYearLabel(monthIndex: number): string {
+  const year = Math.ceil(monthIndex / 12);
+  return `${year}. år`;
+}
+```
+
+---
+
+### 2. Interactive, multi-series `ComparisonSavingsChart`
+
+This assumes your transformer already gives you:
+
+* `categories`: `["Hus", "Indbo", "Ulykke"]`
+* `data`: each point `{ monthIndex: number; Hus: number; Indbo: number; Ulykke: number }`
+* `summary`: `{ monthlyMin, monthlyMax, year1Total, year10Total }` (adjust names to match your code)
+
+Replace the body of `ComparisonSavingsChart.tsx` with something like this (keep the imports for `AreaChart`, `Badge` etc.):
+
+```tsx
+"use client";
+
+import React, { useMemo, useState } from "react";
+import { AreaChart } from "@/ui/components/AreaChart";
+import { Badge } from "@/ui/components/Badge";
+import { formatKr, formatKrRange, monthToYearLabel } from "@/utils/format";
+
+type SavingsPoint = {
+  monthIndex: number; // 1..120
+  [policyType: string]: number | string;
+};
+
+interface SavingsSummary {
+  monthlyMin: number;
+  monthlyMax: number;
+  year1Total: number;
+  year10Total: number;
+}
+
+interface ComparisonSavingsChartProps {
+  categories: string[];          // e.g. ["Hus", "Indbo", "Ulykke"]
+  data: SavingsPoint[];          // one point per month
+  summary: SavingsSummary;       // already computed in transformer
+  total10YearAll: number;        // used for the green badge in top-right
+}
+
+const SERIES_COLORS: Record<string, string> = {
+  Hus: "emerald",
+  Indbo: "teal",
+  Ulykke: "cyan",
+};
+
+export function ComparisonSavingsChart({
+  categories,
+  data,
+  summary,
+  total10YearAll,
+}: ComparisonSavingsChartProps) {
+  // 1) Build chart data with "Year" label for x-axis
+  const chartData = useMemo(
+    () =>
+      data.map((point) => ({
+        ...point,
+        Year: monthToYearLabel(point.monthIndex as number),
+      })),
+    [data]
+  );
+
+  const defaultCategories = useMemo(
+    () => categories.filter(Boolean),
+    [categories]
+  );
+
+  // 2) Legend / visibility state
+  const [activeCategories, setActiveCategories] =
+    useState<string[]>(defaultCategories);
+
+  const handleLegendClick = (name: string) => {
+    if (name === "Alle") {
+      // Reset to all series
+      setActiveCategories(defaultCategories);
+      return;
+    }
+
+    setActiveCategories((prev) => {
+      const exists = prev.includes(name);
+      if (exists) {
+        const next = prev.filter((c) => c !== name);
+        // never hide everything – keep at least one
+        return next.length ? next : [name];
+      }
+      return [...prev, name];
+    });
+  };
+
+  const isAllSelected = activeCategories.length === defaultCategories.length;
+
+  // 3) Colors for visible series (AreaChart follows Tremor API)
+  const activeColors = activeCategories.map(
+    (cat) => SERIES_COLORS[cat] ?? "emerald"
+  );
+
+  return (
+    <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4 mobile:px-4 mobile:py-4">
+      {/* Header */}
+      <div className="flex w-full items-center justify-between mobile:flex-col mobile:items-start mobile:gap-2">
+        <div className="flex flex-col items-start gap-2">
+          <span className="text-heading-2 font-heading-2 text-default-font mobile:text-heading-3 mobile:font-heading-3">
+            Din besparelse over tid
+          </span>
+          <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+            Se hvor meget du sparer måned for måned
+          </span>
+        </div>
+        <Badge
+          className="mobile:self-start"
+          variant="success"
+        >
+          {formatKr(total10YearAll)} over 10 år
+        </Badge>
+      </div>
+
+      {/* Legend with toggles */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => handleLegendClick("Alle")}
+          className={`rounded-full border px-3 py-1 text-caption font-caption transition
+            ${
+              isAllSelected
+                ? "border-success-500 bg-success-50 text-success-700"
+                : "border-neutral-border bg-neutral-50 text-subtext-color"
+            }`}
+        >
+          Alle
+        </button>
+        {defaultCategories.map((cat) => {
+          const active = activeCategories.includes(cat);
+          const colorDotClass =
+            cat === "Hus"
+              ? "bg-emerald-500"
+              : cat === "Indbo"
+              ? "bg-teal-500"
+              : "bg-cyan-500";
+
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => handleLegendClick(cat)}
+              className={`flex items-center gap-2 rounded-full border px-3 py-1 text-caption font-caption transition
+                ${
+                  active
+                    ? "border-success-500 bg-success-50 text-success-700"
+                    : "border-neutral-border bg-neutral-50 text-subtext-color"
+                }`}
+            >
+              <span
+                className={`h-2 w-2 rounded-full ${colorDotClass}`}
+                aria-hidden="true"
+              />
+              {cat}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Chart */}
+      <AreaChart
+        className="mt-2 h-80 w-full mobile:h-64"
+        index="Year"
+        data={chartData}
+        categories={activeCategories}
+        colors={activeColors}
+        valueFormatter={(v: number) => formatKr(v)}
+        yAxisWidth={70}
+      />
+
+      {/* Summary cards under chart */}
+      <div className="flex w-full items-start gap-4 flex-wrap mobile:flex-col mobile:gap-3">
+        <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
+          <span className="text-caption font-caption text-subtext-color">
+            Månedlig besparelse
+          </span>
+          <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
+            {formatKrRange(summary.monthlyMin, summary.monthlyMax)}
+          </span>
+        </div>
+        <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
+          <span className="text-caption font-caption text-subtext-color">
+            Total efter 12 måneder
+          </span>
+          <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
+            {formatKr(summary.year1Total)} spart
+          </span>
+        </div>
+        <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
+          <span className="text-caption font-caption text-subtext-color">
+            Forventet efter 10 år
+          </span>
+          <span className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3">
+            {formatKr(summary.year10Total)} spart
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+```
+
+---
+
+### How this matches what you asked for
+
+* **Formatted numbers**
+
+  * All kr-values use `Intl.NumberFormat("da-DK", { currency: "DKK" })` → `53.238 kr` etc.
+  * Tooltips and y-axis share the same formatting via `valueFormatter`.
+
+* **Years on the X-axis**
+
+  * We derive `Year: "1. år" | "2. år" | ...` from `monthIndex` and use that as the chart `index`.
+
+* **Clear color coding**
+
+  * `Hus` = emerald, `Indbo` = teal, `Ulykke` = cyan (you can tweak the Tailwind color tokens if you prefer other shades).
+
+* **Interactive legend**
+
+  * “Alle” shows all series.
+  * Clicking a category toggles that series on/off.
+  * We never allow the user to hide all series (we keep at least one).
+
+* **Dynamic data**
+
+  * No hard-coded numbers; all values come from `data`, `categories`, and `summary` props.
+
+If you paste this into `ComparisonSavingsChart.tsx` and make sure your transformer feeds it the right props (names may differ slightly), you should get exactly the behaviour you describe: clean Danish number formatting, three distinct lines (Hus/Indbo/Ulykke), and a clickable legend that lets people focus on one policy or all of them.
