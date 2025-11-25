@@ -33,8 +33,8 @@ export function ComparisonHighlights({ highlights }: ComparisonHighlightsProps) 
 
   if (!highlights || highlights.length === 0) return null;
 
-  const displayedHighlights = showAll ? highlights : highlights.slice(0, 4);
-  const hasMore = highlights.length > 4;
+  const displayedHighlights = showAll ? highlights : highlights.slice(0, 2);
+  const hasMore = highlights.length > 2;
 
   return (
     <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-4 mobile:py-4">
