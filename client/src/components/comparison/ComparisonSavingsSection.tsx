@@ -103,15 +103,9 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
   // Get colors for visible series
   const colors = visibleSeries.map(s => POLICY_COLORS[s.key] || "#10b981");
 
-  // Toggle a specific series
-  const handleToggleSeries = (key: string) => {
-    setVisibleKeys(prev => {
-      if (prev.includes(key)) {
-        const next = prev.filter(k => k !== key);
-        return next.length > 0 ? next : [key]; // Keep at least one
-      }
-      return [...prev, key];
-    });
+  // Select a specific series (show only that one)
+  const handleSelectSeries = (key: string) => {
+    setVisibleKeys([key]);
   };
 
   // Show all series
@@ -120,6 +114,7 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
   };
 
   const isAllSelected = visibleKeys.length === savings.series.length;
+  const isSingleSelected = (key: string) => visibleKeys.length === 1 && visibleKeys[0] === key;
 
   // Value formatter for Y-axis
   const tickFormatter = (value: number) => {
@@ -168,16 +163,16 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
             Alle
           </button>
           {savings.series.map(series => {
-            const isActive = visibleKeys.includes(series.key);
+            const isSelected = isSingleSelected(series.key);
             const color = POLICY_COLORS[series.key] || "#10b981";
             
             return (
               <button
                 key={series.key}
                 type="button"
-                onClick={() => handleToggleSeries(series.key)}
+                onClick={() => handleSelectSeries(series.key)}
                 className={`flex items-center gap-2 rounded-full border px-3 py-1 text-caption font-caption transition ${
-                  isActive
+                  isSelected
                     ? "border-success-500 bg-success-50 text-success-700"
                     : "border-neutral-border bg-neutral-50 text-subtext-color hover:bg-neutral-100"
                 }`}
