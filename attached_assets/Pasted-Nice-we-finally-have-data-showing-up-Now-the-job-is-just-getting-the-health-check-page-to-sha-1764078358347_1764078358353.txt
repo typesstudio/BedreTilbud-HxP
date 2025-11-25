@@ -1,0 +1,201 @@
+Nice – we finally have data showing up 🎉 Now the job is “just” getting the health-check page to share the same component DNA as the comparison pages.
+
+You’re basically asking two things:
+
+What’s the best workflow with Replit AI + Subframe?
+
+How should a concrete Replit prompt look for the health-check page?
+
+I’ll answer both.
+
+1. Best workflow / where to paste what
+
+When you want Replit AI to rebuild a page to match a Subframe design and reuse existing components, this is the workflow that tends to work best:
+
+Open the exact page file you want to change
+E.g. whatever file renders /sundhedstjek/:snapshotId
+(likely something like client/src/pages/sundhedstjek.tsx or [snapshotId].tsx).
+
+Run Subframe sync once in the Replit shell
+
+npx @subframe/cli@latest sync --all -p 34bd735365b5
+
+
+In the Replit AI chat (while that file is open), send ONE structured prompt with:
+
+Context section
+
+What this page does (/sundhedstjek/:snapshotId, uses usePolicyHealthCheck etc.)
+
+Which components it should reuse from client/src/components/comparison/*
+(summary cards, highlights, coverage matrix, savings chart).
+
+Design section
+
+Paste the Subframe TSX snippet for the health-check layout.
+
+Mention that the attached screenshot shows the visual target.
+
+Data mapping section
+
+Explain which fields from the health-check hook should go where
+(company name, premium, coverages, “hvad er inkluderet”, etc.).
+
+Constraints / success criteria
+
+No static numbers or hardcoded text where data exists.
+
+Reuse existing comparison components where possible.
+
+Don’t break the route or API calls.
+
+Attach the screenshot in Replit
+When you talk to Replit AI, attach the “Indbo sundhedstjek” screenshot and say “use this as visual reference”.
+
+So yes: Subframe TSX + screenshot + clear data mapping all go into the same Replit prompt, while the health-check page file is open.
+
+2. Concrete Replit prompt you can copy-paste
+
+Here’s a prompt you can drop straight into Replit AI next time you’re editing the health-check page file.
+
+Just replace the // SUBFRAME TSX HERE comment with your actual Subframe component code for the health-check layout.
+
+You are working in the BedreTilbud app.
+
+GOAL
+Refactor the health check page that renders /sundhedstjek/:snapshotId so it:
+- Uses the new Subframe design for “Indbo sundhedstjek” (see TSX below + screenshot I attached)
+- Reuses the same shared components and styling patterns as the comparison pages
+- Binds ALL content to real data from the health-check API (no static numbers)
+
+CONTEXT
+- Tech stack: React + TypeScript + Subframe design system.
+- Layout wrapper: DefaultPageLayout from "@/ui/layouts/DefaultPageLayout".
+- Health check route: /sundhedstjek/:snapshotId
+  - This page should show a health check for a SINGLE policy (e.g. Indbo offer).
+- Data hook: usePolicyHealthCheck(snapshotId) in "client/src/hooks/usePolicyHealthCheck.ts"
+  - It already calls the backend and returns health-check data for that snapshot.
+- Comparison pages:
+  - "client/src/pages/comparison.tsx" renders the “Samlet / Indbo / Hus / Ulykke” comparison tabs.
+  - Shared comparison components live in "client/src/components/comparison":
+    - header with title + tabs
+    - summary cards for total savings / current / offer
+    - highlights section (“Højdepunkter hvor anbefalingen er bedre”)
+    - detailed coverage matrix (“Detaljeret sammenligning”)
+    - savings chart (“Din besparelse over tid”)
+  - The health-check page should reuse these same building blocks wherever they appear in both places, so that changing a component updates both pages.
+
+DESIGN SPEC (SUBFRAME)
+Below is the Subframe layout for the health check page. This is the visual + structural target. 
+Use Subframe components as in this TSX, but DO NOT leave any static placeholder values if we have real data.
+
+```tsx
+// SUBFRAME TSX HERE – the "Indbo sundhedstjek" Subframe component tree
+
+
+Please adapt this structure to our existing app patterns (DefaultPageLayout, existing typography tokens, etc.).
+
+DATA MAPPING
+Bind the Subframe layout to the health-check data from usePolicyHealthCheck like this:
+
+Page title:
+
+H1: "<policyType> sundhedstjek" (e.g. "Indbo sundhedstjek")
+
+Subtitle: “Se en grundig analyse af <companyName>s tilbud”
+
+Top chips / status:
+
+Use companyName, policyType, and any status fields from the health-check JSON.
+
+“Dine forsikringsdetaljer” card:
+
+Selskab: companyName from healthCheck
+
+Type: policyType / policy.label
+
+Årlig præmie: annualPremium from healthCheck.pricing (format as “X.XXX kr”)
+
+“Hvad er inkluderet” list:
+
+Use healthCheck.whatsIncluded / coverages[] array
+
+For each coverage:
+
+title → main line
+
+description → grey subtext
+
+amount / limit / selfRisk → right-aligned badge (orange if it’s a warning/self-risk)
+
+Any “fordele” / “hvor det er godt” section:
+
+Bind to the pros/highlights part of the health-check JSON.
+
+Any “hvor det kan forbedres / mangler” section:
+
+Bind to cons / gaps / missing coverage from the health-check JSON.
+
+REUSE COMPONENTS
+When implementing the health-check layout:
+
+Reuse these existing components when possible:
+
+Buttons from "@/ui/components/Button"
+
+Badge, IconWithBackground, etc. from "@/ui/components/*"
+
+Any sections from "client/src/components/comparison/*" that are visually identical
+(e.g. highlight cards, coverage rows, chart container).
+
+If a comparison section is 90% the same, extract a generic component into
+"client/src/components/shared/*" and use it in BOTH the comparison page and the health-check page.
+
+Keep the routing & data logic intact:
+
+Keep using usePolicyHealthCheck(snapshotId) from the hook.
+
+Do not change the API endpoints, only how we render the data.
+
+Remove old bespoke layout on the health-check page:
+
+Delete the old static JSX and replace with the new Subframe-based layout that uses the shared components.
+
+Make sure all text that looks like data (prices, limits, coverage names) comes from the health-check response.
+
+FORMATTING & UX
+
+Format prices as Danish currency: “X.XXX kr” (no decimals, thousand separator).
+
+Keep headings and spacing consistent with the comparison page you already refactored.
+
+Mobile responsiveness should follow the existing Subframe classnames (mobile: utilities).
+
+Show a gracefully styled “loading” and “error” state using our existing pattern, but keep the main focus on the success state.
+
+ACCEPTANCE CRITERIA
+
+Navigating from the comparison page’s “Se detaljer” button on a policy tab opens /sundhedstjek/:snapshotId with:
+
+Correct company name, policy type and annual premium.
+
+A “Dine forsikringsdetaljer” card bound to real data.
+
+A “Hvad er inkluderet” list with all coverages from the health check.
+
+Shared components (e.g. any highlight cards / coverage rows you extracted) are used by BOTH comparison.tsx and the health-check page.
+
+No hardcoded example values like “835.600 kr” remain unless there is truly no data from the API.
+
+
+You can now:
+
+1. Open the health-check page file in Replit.  
+2. Attach the latest “Indbo sundhedstjek” screenshot.  
+3. Paste the prompt above and replace the `// SUBFRAME TSX HERE` block with your real Subframe code.
+
+Replit AI should then:
+- Rebuild the health-check layout to match the Subframe design,  
+- Reuse the comparison components,  
+- And connect everything to the live health-check data.
+::contentReference[oaicite:0]{index=0}
