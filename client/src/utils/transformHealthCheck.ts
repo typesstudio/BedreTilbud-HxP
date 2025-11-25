@@ -60,7 +60,8 @@ export function transformPolicyHealthCheckToView(
   const strengthsData = result.strengths || [];
   const weaknessesData = result.weaknesses || [];
   const cumulativeSavingsData = result.cumulativeSavings || {};
-  const benefitsData = result.benefits || [];
+  // API returns 'highlights' as the benefits/features array
+  const benefitsData = result.highlights || result.benefits || [];
 
   // Transform benefits for the grid
   const benefits: HealthCheckBenefit[] = benefitsData.map((item: any, index: number) => ({
@@ -126,11 +127,20 @@ export function transformPolicyHealthCheckToView(
     }));
 
     const after12Months = cumulativeSavingsData.after12Months || (potentialSavings.realistic || 0);
-    const after10Years = cumulativeSavingsData.after10Years || (after12Months * 10);
+    const after10Years = cumulativeSavingsData.after10Years || cumulativeSavingsData.totalOver10Years || (after12Months * 10);
+
+    // Build monthly range text from monthlyRange object if available
+    let monthlyRangeText = cumulativeSavingsData.monthlyRangeText;
+    if (!monthlyRangeText && cumulativeSavingsData.monthlyRange) {
+      const { min, max } = cumulativeSavingsData.monthlyRange;
+      if (min !== undefined && max !== undefined && (min > 0 || max > 0)) {
+        monthlyRangeText = min === max ? `${min} kr` : `${min}-${max} kr`;
+      }
+    }
 
     savingsOverTime = {
       chartData,
-      monthlyRangeText: cumulativeSavingsData.monthlyRangeText,
+      monthlyRangeText,
       totalAfter12Months: after12Months,
       totalAfter10Years: after10Years,
     };
