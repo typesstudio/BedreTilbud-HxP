@@ -1,0 +1,233 @@
+Gotcha – so navigation is finally there, but the `/sundhedstjek/:snapshotId` page still just shows the generic error screen.
+
+Let’s treat Replit as the “developer inside the repo” and give it a very explicit brief to **trace the whole health-check flow end-to-end and fix it**.
+
+Here’s a prompt you can paste into Replit AI (or your “Dev Agent”) – it’s self-contained, so you don’t need to paste our whole chat.
+
+---
+
+````text
+You are Replit AI working inside my BedreTilbud monorepo.
+
+🎯 GOAL
+Fix and wire up the *per-policy* health check pages so that:
+
+1. From the comparison page (`/sammenligning/:companyComparisonId`), when I click a tab like **Indbo / Hus / Ulykke** and then press **"Se detaljer"**, I am taken to:
+   - `/sundhedstjek/:snapshotId`
+   - where `:snapshotId` is the *policy snapshot ID* for that specific policy (current or offer, whichever the design expects).
+2. The health check page **loads real data** for that snapshot and renders the existing Subframe health-check layout (same visual style as the current “Forsikrings­tjek” page).
+3. The solution reuses our existing shared components and view-model transformers, so layout changes apply everywhere.
+
+Right now I get a blank error state:
+> Der opstod en fejl  
+> Kunne ikke hente sundhedstjek data. Prøv venligst igen.
+
+So navigation works, but the API / data flow does not.
+
+---
+
+## 1. Understand the current health-check flow
+
+Please first *read, don’t change*:
+
+**Frontend**
+
+- `client/src/App.tsx`
+  - Find the route for `/sundhedstjek/:snapshotId`.
+- `client/src/hooks/usePolicyHealthCheck.ts`
+  - How do we fetch health-check data? What URL is used? Are we using the shared `queryClient` and its default fetcher or a custom one?
+  - Are we sending `X-User-ID` or other auth headers?
+- `client/src/pages/HealthCheckPage` (or any equivalent sundhedstjek page)
+  - What shape of data does this page expect (props / hook return)?
+  - Which components does it render (cards, tables, charts)?
+
+**Backend**
+
+- `server/routes.ts`
+  - Find the GET endpoint that the hook calls (search for `sundhedstjek`, `health-check`, `policyHealthCheck`, etc.).
+  - Confirm its URL pattern, params, and how it queries the DB.
+- `server/storage.ts` or similar storage layer
+  - Find the function that loads a health check by snapshot (search `health_checks`, `getHealthCheckBySnapshot`, etc.).
+- `server/services/*HealthCheck*` or `HealthCheckOrchestrator`
+  - How are health checks generated during upload / analysis today?
+  - For which snapshots? (current, offer, policy_snapshots vs old offer_snapshots?)
+
+**Database schema**
+
+Use SQL/Drizzle introspection to check:
+
+- `policy_snapshots` table (or equivalent)
+- `health_checks` table
+  - Columns: id, snapshotId, userId, policyType, json, etc.
+  - Any foreign key constraints (especially if snapshotId still references `offer_snapshots`).
+
+Also run (replace with correct table/column names):
+
+```sql
+SELECT *
+FROM health_checks
+WHERE snapshot_id = '<ONE_OF_THE_SNAPSHOT_IDS_USED_IN_COMPARISON_DATA>'
+LIMIT 5;
+````
+
+and:
+
+```sql
+SELECT comparison_json->'policyComparisons'
+FROM company_comparisons
+WHERE id = '0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1';
+```
+
+to inspect how snapshot IDs are stored in our comparison JSON (`currentPolicyId` / `offerPolicyId` etc.).
+
+---
+
+## 2. Fix the backend: health checks by policy snapshot
+
+### 2.1 API route must match frontend
+
+Ensure the health-check hook and the server route agree on:
+
+* URL (e.g. `/api/policy-health-checks/:snapshotId` or `/api/health-checks/:snapshotId`)
+* HTTP method: GET
+* Path param name: `snapshotId`
+
+If they differ, **update the frontend hook to call the existing backend route** (don’t create a second route unless strictly needed).
+
+### 2.2 Ensure a health check exists for a given snapshotId
+
+This is the core bug discovered earlier:
+
+* Comparisons use **policy snapshot IDs** (from `policy_snapshots`).
+* Existing `health_checks.snapshotId` may still be tied to older tables (like `offer_snapshots`) or simply not be populated for these new snapshots.
+
+Implement this behaviour in the backend (in the health-check route handler):
+
+1. Given `snapshotId`:
+
+   * Try to load an existing health check from `health_checks` for that `snapshotId` and current user.
+   * If **found** → return it as JSON (matching the shape expected by the current health-check page).
+
+2. If **NOT found**:
+
+   * Load the snapshot row from `policy_snapshots` (or equivalent) and its raw OCR/structured data.
+   * Call whatever orchestration / service is already used to build a “health check” (the same logic as the main “Forsikrings­tjek” feature, but scoped to a single policy).
+   * Persist the result to `health_checks` with:
+
+     * `snapshotId` = the policy snapshot ID
+     * `userId` = current user
+     * `policyType` = the policy type if available (indbo / hus / ulykke)
+   * Return the newly created health-check JSON.
+
+3. Make sure auth is respected:
+
+   * Only allow access if the health check’s `userId` matches the current user’s ID.
+
+If there is still an old **foreign-key constraint** on `health_checks.snapshotId` that points to `offer_snapshots`, update the schema properly:
+
+* Either:
+
+  * migrate to `policy_snapshots` (preferred), or
+  * temporarily drop the FK so we can store health checks for policy snapshots too.
+* Update `@shared/schema` to keep Drizzle in sync.
+
+---
+
+## 3. Fix / simplify the frontend hook
+
+In `client/src/hooks/usePolicyHealthCheck.ts`:
+
+* Make sure the hook’s `queryFn` uses the **same fetch helper** as the rest of the app (the one that automatically adds `X-User-ID` / auth headers).
+* If it currently uses `fetch` directly without headers, replace it with the shared wrapper (e.g. `apiClient.get(...)` or the default `queryClient` fetcher).
+* Confirm it calls the **correct API URL** with `snapshotId` param.
+
+Return from the hook whatever the HealthCheck page expects, e.g.:
+
+```ts
+{
+  data: PolicyHealthCheckViewModel | undefined;
+  isLoading: boolean;
+  isError: boolean;
+}
+```
+
+---
+
+## 4. Wire “Se detaljer” buttons to the hook
+
+We already have buttons showing on the individual tabs; we just need to ensure they pass the correct snapshot ID.
+
+In `client/src/pages/comparison.tsx` (or the page rendering the Tryg comparison):
+
+* For each `policyComparison` item (Indbo, Hus, Ulykke), ensure we have:
+
+  * `currentPolicySnapshotId`
+  * `offerPolicySnapshotId`
+    (these come from the comparison JSON – use the correct keys from `comparisonData.policyComparisons`).
+* On the **Indbo / Hus / Ulykke** tabs, for the “Se detaljer” button:
+
+  * Decide whether the health check page should show the *offer* or the *current* version. (For now, pick the offer snapshot if available, otherwise fallback to current.)
+  * On click: navigate to `navigate("/sundhedstjek/" + snapshotIdToUse);`
+
+No extra state; just derive everything from `comparisonData`.
+
+---
+
+## 5. Reuse layout components, don’t fork
+
+We already have a new **comparison component system** for the “Samlet” page. Reuse as much as possible:
+
+* Keep using shared components (cards, “Højdepunkter”, “Detaljeret sammenligning”, “Din besparelse over tid”) from `client/src/components/comparison/*`.
+* For the health check pages, only adjust data mapping – don’t duplicate the JSX.
+* If necessary, create a **generic** `<PolicyHealthCheckLayout>` component that:
+
+  * Receives a `viewModel` from the hook (for a single policy).
+  * Composes existing Subframe components to render:
+
+    * headline + company name + policy type
+    * key metrics (annual cost, savings, coverage summary)
+    * “Højdepunkter” cards
+    * coverage matrix (same style as on the comparison page)
+    * charts if available.
+
+Then use `<PolicyHealthCheckLayout>` both for:
+
+* the “Se sundhedstjek” route (global current health check), and
+* the `/sundhedstjek/:snapshotId` route (per-policy health check).
+
+---
+
+## 6. Acceptance criteria (please verify before stopping)
+
+I want you to actually run through this flow:
+
+1. Log in as `hello@vyork.dk` (test user).
+2. Open the comparison:
+
+   * `/sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1`
+3. Go to **Indbo** tab.
+4. Click **“Se detaljer”**.
+5. Confirm:
+
+   * URL is `/sundhedstjek/<some-snapshot-id>`.
+   * Network tab shows a **200 OK** request to the health-check API.
+   * The page renders with:
+
+     * Proper title + company + policy type.
+     * Cards with real annual prices & savings (no 0 kr unless truly 0).
+     * “Højdepunkter hvor anbefalingen er bedre” populated from health-check JSON.
+     * “Detaljeret sammenligning” table populated.
+6. Repeat for **Hus** and **Ulykke** if they have snapshot IDs.
+
+If anything in that flow still fails, keep iterating until it works end-to-end.
+
+Please make minimal, coherent changes, add comments where needed, and don’t remove existing working behaviour.
+
+```
+
+---
+
+Paste that into Replit AI and let it run.  
+If you then get a *different* error or partial success (e.g. only some sections render), send me screenshots + any error messages and I can help you refine the next prompt.
+::contentReference[oaicite:0]{index=0}
+```

@@ -2247,16 +2247,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const healthCheck = await ensureHealthCheckForSnapshot(snapshotId, userId, storage);
 
       // Get snapshot details for response
+      // Support BOTH policy_snapshots (new) and offer_snapshots (legacy for backwards compatibility)
+      let snapshot: any = null;
+      
+      // Try new policy_snapshots first
       const policySnapshotService = new (await import("./services/policySnapshots/PolicySnapshotService")).PolicySnapshotService();
-      const snapshot = await policySnapshotService.getSnapshotById(snapshotId);
+      snapshot = await policySnapshotService.getSnapshotById(snapshotId);
+
+      // Fallback to legacy offer_snapshots if not found
+      if (!snapshot) {
+        logger.info('[Health Check API] Not found in policy_snapshots, trying offer_snapshots', { snapshotId });
+        const offerSnapshot = await storage.getOfferSnapshot(snapshotId);
+        if (offerSnapshot) {
+          // Map offer_snapshot to snapshot format
+          snapshot = {
+            id: offerSnapshot.id,
+            companyName: 'Ukendt', // offer_snapshots don't have company_name field
+            policyType: offerSnapshot.policyType,
+            kind: 'offer',
+            pricing: offerSnapshot.structuredPolicy?.pricing || null,
+          };
+        }
+      }
+
+      if (!snapshot) {
+        return res.status(404).json({ message: `Snapshot ${snapshotId} not found in policy_snapshots or offer_snapshots` });
+      }
 
       res.json({
         snapshot: {
-          id: snapshot!.id,
-          companyName: snapshot!.companyName || 'Ukendt',
-          policyType: snapshot!.policyType,
-          kind: snapshot!.kind,
-          pricing: snapshot!.pricing,
+          id: snapshot.id,
+          companyName: snapshot.companyName || 'Ukendt',
+          policyType: snapshot.policyType,
+          kind: snapshot.kind,
+          pricing: snapshot.pricing,
         },
         healthCheck,
       });

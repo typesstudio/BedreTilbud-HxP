@@ -43,13 +43,29 @@ export async function ensureHealthCheckForSnapshot(
   logger.info('[HealthCheckService] No existing health check found, generating new one', { snapshotId });
 
   // 2) Load the snapshot we're generating for
-  // Use PolicySnapshotService to handle both offer_snapshots and policy_snapshots
+  // Support BOTH policy_snapshots (new) and offer_snapshots (legacy)
   const { PolicySnapshotService } = await import("./policySnapshots/PolicySnapshotService");
   const snapshotService = new PolicySnapshotService();
-  const snapshot = await snapshotService.getSnapshotById(snapshotId);
+  let snapshot: any = await snapshotService.getSnapshotById(snapshotId);
+
+  // Fallback to legacy offer_snapshots if not in policy_snapshots
+  if (!snapshot) {
+    logger.info('[HealthCheckService] Not found in policy_snapshots, trying offer_snapshots', { snapshotId });
+    const offerSnapshot = await storage.getOfferSnapshot(snapshotId);
+    if (offerSnapshot) {
+      snapshot = {
+        ...offerSnapshot,
+        companyName: 'Ukendt', // offer_snapshots don't have companyName field
+        kind: 'offer'
+      };
+      logger.info('[HealthCheckService] Found in offer_snapshots', { snapshotId, policyType: snapshot.policyType });
+    }
+  } else {
+    logger.info('[HealthCheckService] Found in policy_snapshots', { snapshotId, policyType: snapshot.policyType });
+  }
 
   if (!snapshot) {
-    throw new Error(`Snapshot not found for id ${snapshotId}`);
+    throw new Error(`Snapshot not found for id ${snapshotId} in either policy_snapshots or offer_snapshots`);
   }
 
   // 3) Verify ownership - snapshot must belong to the requesting user
@@ -61,8 +77,8 @@ export async function ensureHealthCheckForSnapshot(
   logger.info('[HealthCheckService] Loaded snapshot, starting AI analysis', {
     snapshotId,
     policyType: snapshot.policyType,
-    companyName: snapshot.companyName,
-    kind: snapshot.kind
+    companyName: snapshot.companyName || 'Ukendt',
+    kind: snapshot.kind || 'offer'
   });
 
   // 4) Generate health check using existing AI service
@@ -78,12 +94,17 @@ export async function ensureHealthCheckForSnapshot(
   });
 
   // 5) Prepare health check record for database
+  // Determine dataSource based on which table we found the snapshot in
+  const dataSource = snapshot.kind === 'offer' && !snapshot.rawText 
+    ? 'OfferSnapshot'  // Legacy offer_snapshots
+    : 'PolicySnapshot'; // New policy_snapshots
+
   const healthCheckData: InsertHealthCheck = {
     documentId: snapshot.documentId,
     userId,
     snapshotId: snapshot.id,
     policyType: snapshot.policyType,
-    dataSource: 'PolicySnapshot', // Indicates on-demand generation from policy_snapshots
+    dataSource,
     confidenceScore: (snapshot as any).confidenceScore || 0,
     result: healthCheckResult
   };
@@ -130,10 +151,7 @@ export async function ensureHealthChecksForSnapshots(
     if (result.status === 'fulfilled') {
       return { snapshotId, success: true };
     } else {
-      logger.error('[HealthCheckService] Failed to ensure health check', {
-        snapshotId,
-        error: result.reason
-      });
+      logger.error('[HealthCheckService] Failed to ensure health check', result.reason, { snapshotId });
       return {
         snapshotId,
         success: false,
