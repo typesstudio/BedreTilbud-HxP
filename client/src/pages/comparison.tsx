@@ -8,6 +8,7 @@ import { ComparisonSummaryRow } from "@/components/comparison/ComparisonSummaryR
 import { ComparisonQuickTable } from "@/components/comparison/ComparisonQuickTable";
 import { ComparisonHighlights } from "@/components/comparison/ComparisonHighlights";
 import { ComparisonDetailedMatrix } from "@/components/comparison/ComparisonDetailedMatrix";
+import { ComparisonSavingsSection } from "@/components/comparison/ComparisonSavingsSection";
 import { transformCompanyComparisonToViewModel } from "@/utils/transformComparison";
 
 export default function Comparison() {
@@ -115,6 +116,11 @@ export default function Comparison() {
               offerCompanyName={viewModel.offerCompanyName}
               coverageRows={viewModel.coverageRows}
             />
+          )}
+
+          {/* Savings Over Time */}
+          {selectedTab === "samlet" && viewModel.savingsOverTime && (
+            <ComparisonSavingsSection savings={viewModel.savingsOverTime} />
           )}
 
         </div>
