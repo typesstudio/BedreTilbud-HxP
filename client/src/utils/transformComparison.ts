@@ -147,14 +147,24 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
   if (cumulativeSavings && overall.annualSavings) {
     const chartData = cumulativeSavings.chartData || [];
     
+    // Convert monthly data to yearly data points
+    const yearlyChartPoints: { x: string; y: number }[] = [];
+    for (let i = 0; i < chartData.length; i += 12) {
+      const yearNumber = Math.floor(i / 12) + 1;
+      const dataPoint = chartData[i];
+      if (dataPoint) {
+        yearlyChartPoints.push({
+          x: String(yearNumber),
+          y: dataPoint.savings || 0,
+        });
+      }
+    }
+    
     savingsOverTime = {
       annualSavings: overall.annualSavings,
       totalCurrentAnnual: overall.totalCurrentAnnualPremium ?? 0,
       totalOfferAnnual: overall.totalOfferAnnualPremium ?? 0,
-      chartPoints: chartData.map((point: any) => ({
-        x: point.month || "",
-        y: point.savings || 0,
-      })),
+      chartPoints: yearlyChartPoints,
       total10Years: cumulativeSavings.totalOver10Years ?? cumulativeSavings.after10Years ?? (overall.annualSavings * 10),
       total12Months: cumulativeSavings.after12Months ?? overall.annualSavings,
       monthlySavingsRange: cumulativeSavings.monthlyRange || {

@@ -1,6 +1,7 @@
 import { AreaChart } from "@/ui/components/AreaChart";
 import { Badge } from "@/ui/components/Badge";
 import { FeatherArrowUp } from "@subframe/core";
+import * as SubframeCore from "@subframe/core";
 import { SavingsOverTimeView } from "@/utils/transformComparison";
 
 interface ComparisonSavingsSectionProps {
@@ -24,6 +25,15 @@ export function ComparisonSavingsSection({ savings }: ComparisonSavingsSectionPr
 
   const monthlySavingsText = `${savings.monthlySavingsRange.min}-${savings.monthlySavingsRange.max} kr`;
 
+  // Value formatter for Y-axis (with thousand separators)
+  const tickFormatter = (value: number) => {
+    return new Intl.NumberFormat("da-DK", {
+      style: "decimal",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value) + " kr";
+  };
+
   return (
     <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4 mobile:px-4 mobile:py-4">
       <div className="flex w-full items-center justify-between mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-2">
@@ -32,7 +42,7 @@ export function ComparisonSavingsSection({ savings }: ComparisonSavingsSectionPr
             Din besparelse over tid
           </span>
           <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
-            Se hvor meget du sparer måned for måned
+            Se hvor meget du sparer år for år
           </span>
         </div>
         <Badge
@@ -49,6 +59,9 @@ export function ComparisonSavingsSection({ savings }: ComparisonSavingsSectionPr
         categories={["Besparelse"]}
         data={chartData}
         index="label"
+        yAxisLabel="Kroner"
+        xAxisLabel="År"
+        yAxis={<SubframeCore.YAxis tickFormatter={tickFormatter} />}
       />
       <div className="flex w-full items-start gap-4 flex-wrap mobile:flex-row mobile:flex-wrap mobile:gap-3">
         <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
