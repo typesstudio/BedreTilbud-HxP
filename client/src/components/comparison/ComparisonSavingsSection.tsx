@@ -6,6 +6,7 @@ import { SavingsOverTimeView } from "@/utils/transformComparison";
 
 interface ComparisonSavingsSectionProps {
   savings: SavingsOverTimeView;
+  activePolicyKey: string | "all";
 }
 
 function formatCurrencyShort(amount: number): string {
@@ -16,14 +17,51 @@ function formatCurrencyShort(amount: number): string {
   }).format(Math.round(amount)) + " kr";
 }
 
-export function ComparisonSavingsSection({ savings }: ComparisonSavingsSectionProps) {
-  // Format chart data for AreaChart component
-  const chartData = savings.chartPoints.map((point) => ({
-    periode: point.x,
-    Besparelse: Math.round(point.y),
-  }));
+export function ComparisonSavingsSection({ savings, activePolicyKey }: ComparisonSavingsSectionProps) {
+  // Filter series based on active policy key
+  const visibleSeries =
+    activePolicyKey === "all"
+      ? savings.series
+      : savings.series.filter((s) => s.key === activePolicyKey);
 
-  const monthlySavingsText = `${savings.monthlySavingsRange.min}-${savings.monthlySavingsRange.max} kr`;
+  // If no visible series, don't render anything
+  if (visibleSeries.length === 0) {
+    return null;
+  }
+
+  // Build AreaChart categories (one per visible policy)
+  const categories = visibleSeries.map((s) => s.label);
+
+  // Build chart data - 120 monthly data points
+  const data = Array.from({ length: 120 }, (_, i) => {
+    const month = i + 1;
+    const row: any = { Måned: `${month}` };
+
+    visibleSeries.forEach((s) => {
+      const point = s.points[i];
+      row[s.label] = point?.cumulative ?? 0;
+    });
+
+    return row;
+  });
+
+  // Calculate values for the 3 cards
+  let monthlySavings: number;
+  let annualSavings: number;
+  let tenYearSavings: number;
+
+  if (activePolicyKey === "all") {
+    // Show totals across all policies
+    monthlySavings = savings.totalAnnualSavings / 12;
+    annualSavings = savings.totalAnnualSavings;
+    tenYearSavings = savings.totalTenYearSavings;
+  } else {
+    // Show values for the specific policy
+    const series = visibleSeries[0];
+    monthlySavings = series.monthlySavings;
+    annualSavings = series.annualSavings;
+    tenYearSavings = series.tenYearSavings;
+  }
 
   // Value formatter for Y-axis (with thousand separators)
   const tickFormatter = (value: number) => {
@@ -42,7 +80,7 @@ export function ComparisonSavingsSection({ savings }: ComparisonSavingsSectionPr
             Din besparelse over tid
           </span>
           <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
-            Se hvor meget du sparer år for år
+            Se hvor meget du sparer måned for måned
           </span>
         </div>
         <Badge
@@ -51,14 +89,14 @@ export function ComparisonSavingsSection({ savings }: ComparisonSavingsSectionPr
           icon={<FeatherArrowUp />}
           data-testid="badge-total-10-years"
         >
-          {formatCurrencyShort(savings.total10Years)} over 10 år
+          {formatCurrencyShort(tenYearSavings)} over 10 år
         </Badge>
       </div>
       <AreaChart
         className="mobile:h-64 mobile:flex-none"
-        categories={["Besparelse"]}
-        data={chartData}
-        index="periode"
+        categories={categories}
+        data={data}
+        index="Måned"
         yAxis={<SubframeCore.YAxis tickFormatter={tickFormatter} />}
       />
       <div className="flex w-full items-start gap-4 flex-wrap mobile:flex-row mobile:flex-wrap mobile:gap-3">
@@ -70,7 +108,7 @@ export function ComparisonSavingsSection({ savings }: ComparisonSavingsSectionPr
             className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3"
             data-testid="text-monthly-savings"
           >
-            {monthlySavingsText}
+            {formatCurrencyShort(monthlySavings)}
           </span>
         </div>
         <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
@@ -81,7 +119,7 @@ export function ComparisonSavingsSection({ savings }: ComparisonSavingsSectionPr
             className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3"
             data-testid="text-12-months-savings"
           >
-            {formatCurrencyShort(savings.total12Months)} spart
+            {formatCurrencyShort(annualSavings)} spart
           </span>
         </div>
         <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
@@ -92,7 +130,7 @@ export function ComparisonSavingsSection({ savings }: ComparisonSavingsSectionPr
             className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3"
             data-testid="text-10-years-savings"
           >
-            {formatCurrencyShort(savings.total10Years)} spart
+            {formatCurrencyShort(tenYearSavings)} spart
           </span>
         </div>
       </div>
