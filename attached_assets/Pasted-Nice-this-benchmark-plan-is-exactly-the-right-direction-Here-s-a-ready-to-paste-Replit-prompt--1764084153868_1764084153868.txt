@@ -1,0 +1,281 @@
+Nice, this benchmark plan is exactly the right direction.
+Here’s a **ready-to-paste Replit prompt** that tells the Replit AI to implement all 3 phases (DB + backend + frontend) and wire it into the existing health-check flow.
+
+---
+
+### Replit prompt (copy-paste this with the project open)
+
+````text
+You are working in a TypeScript monorepo with these main parts:
+
+- shared/        → shared Drizzle schema & types
+- server/        → Express/Node + Drizzle
+- client/        → React app using Subframe components
+
+The app powers an insurance product “Bedretilbud”. We already have:
+
+- Health check API + pages under `/sundhedstjek/:snapshotId`
+- Comparison pages that show savings, strengths, weaknesses etc.
+- A `transformHealthCheck.ts` on the client that turns API JSON into a `HealthCheckViewModel`.
+
+I want you to IMPLEMENT a benchmark-based savings system for health checks and hook it into the existing health-check UI.
+
+############################
+## OVERALL GOAL
+############################
+
+Health checks should always show meaningful savings numbers, **even when there is no current policy price** to compare against.
+
+If we don’t know the user’s current premium for a policy type (Indbo, Hus, Ulykke, Bil, Rejse), we should:
+
+- Look up a configurable benchmark annual price for that policy type.
+- Compute “Årlig potentiel besparelse” and percentages from that benchmark.
+- Generate monthly / 12-month / 10-year cumulative savings for the chart and summary cards.
+- Expose all of this through the existing health-check API, so the frontend just renders data and NEVER hardcodes numbers.
+
+Please implement the following phases using the existing architecture and naming patterns.
+
+##################################################
+## PHASE 1 – DATABASE: benchmark_prices table
+##################################################
+
+1. Open `shared/schema.ts` and add a new Drizzle table (name it `benchmarkPrices` or `benchmark_prices` depending on conventions already used):
+
+   Columns:
+   - `policyType`   → text, primary key (e.g. "indbo", "hus", "ulykke", "bil", "rejse")
+   - `annualPremium`→ integer (stored in øre or whole kr, follow existing money conventions)
+
+   Export the TypeScript type for this table as well (e.g. `BenchmarkPrice`).
+
+2. Ensure the table is included in the default export / db config so Drizzle knows about it.
+
+3. Seed initial benchmark rows (you can either:
+   - add a small seed helper, or
+   - add a script in `server/scripts/`, or
+   - insert once from `server/storage.ts` if the table is empty):
+
+   Initial values (annualPremium in kr equivalents):
+   - indbo:  2000
+   - hus:    4500
+   - ulykke: 1500
+   - bil:    3000
+   - rejse:   800
+
+   Use the same policyType strings that are already used elsewhere (check existing enums/union types in `shared/schema.ts` or other shared types and reuse them).
+
+4. Add convenience methods in `server/storage.ts`, for example:
+
+   - `getBenchmarkPrice(policyType: string): Promise<number | null>`
+   - `setBenchmarkPrice(policyType: string, annualPremium: number): Promise<void>`
+
+   These should wrap simple Drizzle selects/inserts/updates using the new table.
+
+5. OPTIONAL (but useful): add a simple admin route in `server/routes.ts` for future use:
+
+   - `GET /api/benchmark-prices` → returns all benchmark prices
+   - `POST /api/benchmark-prices` → upsert a single row (policyType + annualPremium)
+
+   This endpoint is not used by the frontend yet, but it lets us tweak the benchmarks later.
+
+##################################################
+## PHASE 2 – BACKEND LOGIC: health check service
+##################################################
+
+Goal: extend the health-check generation logic so it uses benchmarks when there’s no current policy price.
+
+1. Find the health-check service/orchestrator:
+
+   - e.g. `server/services/healthCheckService.ts` (or similarly named).
+   - This file is responsible for generating the health-check JSON saved in the DB or returned via the API.
+
+2. Identify where “savings” and “cumulative savings” are currently calculated for a health check.
+   - If there is already a notion of `currentAnnualPremium` vs `offerAnnualPremium`, reuse it.
+   - If not, derive `offerAnnualPremium` from the relevant snapshot (the offer policy) – this is the **price we always know**.
+
+3. Implement the following logic in a clearly named helper function, e.g. `computeBenchmarkSavings(policyType, maybeCurrentPremium, offerAnnualPremium)`:
+
+   - Input:
+     - `policyType: string`
+     - `currentPremium: number | null` (can be null/undefined if user has no current policy price)
+     - `offerPremium: number` (required)
+
+   - Logic:
+     - If `currentPremium` exists and is > 0:
+       - Use that as the baseline (this is the “normal” case – keep existing behaviour).
+     - ELSE:
+       - Call `getBenchmarkPrice(policyType)` from `server/storage.ts`.
+       - If benchmark exists → use that as the baseline.
+       - If no benchmark exists → do NOT crash; set savings to 0 and mark percentage as 0.
+
+     - Let `baseline = currentPremium ?? benchmark`.
+     - Compute:
+       - `savingsAnnual = baseline - offerPremium` (can be negative).
+       - `savingsPercent = baseline > 0 ? (savingsAnnual / baseline) * 100 : 0`.
+
+     - Generate cumulative projections for the health-check JSON:
+       - Monthly savings ≈ `savingsAnnual / 12`.
+       - 12-month total = `savingsAnnual`.
+       - 10-year projection = `savingsAnnual * 10`. (Keep it simple and deterministic.)
+
+       Also build a simple time-series array for the chart for 120 months:
+       - index 0..119 → each month.
+       - cumulativeSavings = monthIndex * (savingsAnnual / 12).
+       - The existing chart transform should be able to read this.
+
+4. Extend the health-check JSON shape (server-side) to include:
+
+   Inside the health-check object (check existing schema/typing, but conceptually):
+
+   ```ts
+   {
+     ...,
+     overall: {
+       annualPotentialSavings: number;      // kr value (baseline - offer)
+       annualSavingsPercent: number;        // percentage (e.g. 20.5)
+       baselineAnnualPremium: number;       // either current premium or benchmark
+       offerAnnualPremium: number;
+
+       // cumulative
+       monthlySavings: number;
+       twelveMonthSavings: number;
+       tenYearSavings: number;
+     },
+     savingsOverTime: {
+       points: Array<{ monthIndex: number; cumulativeSavings: number }>;
+     }
+   }
+````
+
+Adjust field names to match **existing client expectations** if there is already a structure in `transformHealthCheck.ts`. Prefer changing the server to match existing client names rather than the opposite, unless there is no prior contract.
+
+5. Make sure the health-check API endpoint (in `server/routes.ts`) returns this extended data structure. If it is already typed, update the types accordingly.
+
+6. Add logging or comments where appropriate, and keep everything deterministic (no randomness).
+
+##################################################
+
+## PHASE 3 – FRONTEND: use new data in UI
+
+##################################################
+
+We already have a health-check page under `/sundhedstjek/:snapshotId` and several health-check components.
+
+### 3.1 Annual savings card
+
+1. Create a dedicated component:
+
+   * `client/src/components/healthCheck/HealthCheckAnnualSavingsCard.tsx`
+
+   This should use the **existing Subframe design** used on the comparison pages (teal/green card with large number + small badge).
+
+   Props:
+
+   ```ts
+   interface HealthCheckAnnualSavingsCardProps {
+     annualPotentialSavings: number;   // kr
+     annualSavingsPercent: number;     // % e.g. 20.5
+   }
+   ```
+
+   Behaviour/UI:
+
+   * Large text: formatted `annualPotentialSavings` in Danish kr format (e.g. “3.252 kr”).
+   * Badge text: something like `"Din årlige besparelse · {annualSavingsPercent.toFixed(1)}% lavere omkostning"`.
+   * Styling: reuse the same Tailwind/Subframe classes as the comparison “Årlig omkostning sammenligning” / “Samlet besparelse” cards for full visual consistency.
+
+2. Import this component into the health-check page (see below) and pass data from the `HealthCheckViewModel`.
+
+### 3.2 Strengths & weaknesses section
+
+1. Open (or create if missing):
+
+   * `client/src/components/healthCheck/HealthCheckStrengthsWeaknesses.tsx`
+
+2. Ensure it renders using the **Subframe two-column layout**:
+
+   * Left column: “Styrker” (green cards, checkmark icon).
+   * Right column: “Forbedringsmuligheder” (warning/orange cards, alert icon).
+
+   Props (adapt to what `transformHealthCheck.ts` already exposes, but conceptually):
+
+   ```ts
+   interface HealthCheckStrengthsWeaknessesProps {
+     strengths: Array<{ title: string; description?: string }>;
+     weaknesses: Array<{ title: string; description?: string }>;
+   }
+   ```
+
+   * Map `strengths` and `weaknesses` from the `HealthCheckViewModel` produced in `transformHealthCheck.ts`.
+   * Use Subframe components (e.g. Card, IconWithBackground, Badge) that match the design of the screenshot “Styrker & svagheder”.
+   * If a list is empty, render an unobtrusive empty-state text like “Ingen styrker fundet endnu” instead of leaving a blank column.
+
+### 3.3 Health check page wiring
+
+1. Open the health-check page file, e.g.:
+
+   * `client/src/pages/policy-health-check.tsx`
+   * or whatever file is used for `/sundhedstjek/:snapshotId` route.
+
+2. Ensure the page uses a single hook to fetch data, such as:
+
+   ```ts
+   const { data: healthCheck, isLoading, isError } = usePolicyHealthCheck(snapshotId);
+   ```
+
+   There MUST be **no static demo numbers** in this page – everything should come from `healthCheck`.
+
+3. In `client/src/utils/transformHealthCheck.ts`, extend the `HealthCheckViewModel` so it exposes:
+
+   * `overall.annualPotentialSavings`
+   * `overall.annualSavingsPercent`
+   * `overall.monthlySavings`
+   * `overall.twelveMonthSavings`
+   * `overall.tenYearSavings`
+   * `savingsOverTime.points` (or whatever structure we chose in Phase 2)
+   * `strengths` and `weaknesses` arrays in the correct format.
+
+4. Update the page layout to:
+
+   * Render the new `<HealthCheckAnnualSavingsCard />` at the top of the health-check sections.
+   * Reuse the **same chart component** that the comparison page uses (e.g. `ComparisonSavingsChart`) but feed it with `healthCheck.savingsOverTime` and the 3 summary numbers for monthly / 12 months / 10 years.
+   * Render `<HealthCheckStrengthsWeaknesses />` beneath the “Hvad er inkluderet” table, using the new data from the ViewModel.
+
+5. Search the entire health-check page + `healthCheck` components for **hardcoded numbers** or text that should really be data-driven (e.g. specific kr amounts from the Figma/Subframe screenshot). Replace all of them with values from the ViewModel.
+
+##################################################
+
+## ACCEPTANCE CRITERIA
+
+##################################################
+
+* Database:
+
+  * `benchmarkPrices` table exists with seeded rows for indbo, hus, ulykke, bil, rejse.
+* Backend:
+
+  * When a user has a current premium → savings are based on that, as before.
+  * When NO current premium exists → savings are based on the benchmark for that policyType.
+  * Health-check API returns annual savings + percent + cumulative savings using the new logic.
+* Frontend:
+
+  * Health-check page shows:
+
+    * An “Årlig potentiel besparelse” card with correct dynamic amount and percentage.
+    * A “Styrker & svagheder” section with two columns and data coming from the AI/health-check JSON.
+    * A cumulative savings chart and summary numbers that match the backend calculations.
+  * There are **no** hardcoded demo kr values or percentages left in health-check React components.
+  * Shared components (chart, layout cards) are reused between comparison and health-check pages wherever possible.
+
+After implementing, briefly summarize:
+
+* Which files you changed.
+* Any deviations from the plan needed to fit the existing codebase.
+* How to manually test the flow in the browser (paths to visit and what to expect).
+
+```
+
+---
+
+If you’d like, next step we can do a tiny follow-up prompt just for **polishing the health-check UI** (spacing, mobile, typography) once this logic is in and the numbers look right.
+::contentReference[oaicite:0]{index=0}
+```

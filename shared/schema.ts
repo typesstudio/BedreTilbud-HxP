@@ -576,3 +576,14 @@ export const comparisonResultSchema = z.object({
 });
 
 export type ComparisonResult = z.infer<typeof comparisonResultSchema>;
+
+// Benchmark prices for calculating savings when no current policy exists
+export const benchmarkPrices = pgTable("benchmark_prices", {
+  policyType: text("policy_type").primaryKey(), // "indbo", "hus", "ulykke", "bil", "rejse"
+  annualPremium: integer("annual_premium").notNull(), // Benchmark annual premium in DKK
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertBenchmarkPriceSchema = createInsertSchema(benchmarkPrices);
+export type InsertBenchmarkPrice = z.infer<typeof insertBenchmarkPriceSchema>;
+export type BenchmarkPrice = typeof benchmarkPrices.$inferSelect;

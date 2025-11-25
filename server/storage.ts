@@ -132,6 +132,11 @@ export interface IStorage {
   getOnboardingProgressByEmail(email: string): Promise<OnboardingProgress | undefined>;
   createOnboardingProgress(progress: InsertOnboardingProgress): Promise<OnboardingProgress>;
   updateOnboardingProgress(email: string, updates: Partial<InsertOnboardingProgress>): Promise<OnboardingProgress>;
+
+  // Benchmark Prices
+  getBenchmarkPrice(policyType: string): Promise<number | null>;
+  getAllBenchmarkPrices(): Promise<Array<{ policyType: string; annualPremium: number }>>;
+  setBenchmarkPrice(policyType: string, annualPremium: number): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -874,6 +879,30 @@ export class MemStorage implements IStorage {
     };
     this.onboardingProgress.set(email, updated);
     return updated;
+  }
+
+  // Benchmark Prices (MemStorage - hardcoded defaults)
+  private benchmarkPrices: Map<string, number> = new Map([
+    ["indbo", 2000],
+    ["hus", 4500],
+    ["ulykke", 1500],
+    ["bil", 3000],
+    ["rejse", 800],
+  ]);
+
+  async getBenchmarkPrice(policyType: string): Promise<number | null> {
+    return this.benchmarkPrices.get(policyType) ?? null;
+  }
+
+  async getAllBenchmarkPrices(): Promise<Array<{ policyType: string; annualPremium: number }>> {
+    return Array.from(this.benchmarkPrices.entries()).map(([policyType, annualPremium]) => ({
+      policyType,
+      annualPremium,
+    }));
+  }
+
+  async setBenchmarkPrice(policyType: string, annualPremium: number): Promise<void> {
+    this.benchmarkPrices.set(policyType, annualPremium);
   }
 }
 
@@ -1679,6 +1708,33 @@ export class DatabaseStorage implements IStorage {
     }
     
     return progress;
+  }
+
+  // Benchmark Prices
+  async getBenchmarkPrice(policyType: string): Promise<number | null> {
+    const { db } = await import("./db");
+    const { benchmarkPrices } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [benchmark] = await db.select().from(benchmarkPrices).where(eq(benchmarkPrices.policyType, policyType));
+    return benchmark?.annualPremium ?? null;
+  }
+
+  async getAllBenchmarkPrices(): Promise<Array<{ policyType: string; annualPremium: number }>> {
+    const { db } = await import("./db");
+    const { benchmarkPrices } = await import("@shared/schema");
+    const results = await db.select().from(benchmarkPrices);
+    return results.map(r => ({ policyType: r.policyType, annualPremium: r.annualPremium }));
+  }
+
+  async setBenchmarkPrice(policyType: string, annualPremium: number): Promise<void> {
+    const { db } = await import("./db");
+    const { benchmarkPrices } = await import("@shared/schema");
+    await db.insert(benchmarkPrices)
+      .values({ policyType, annualPremium, updatedAt: new Date() })
+      .onConflictDoUpdate({ 
+        target: benchmarkPrices.policyType, 
+        set: { annualPremium, updatedAt: new Date() } 
+      });
   }
 }
 
