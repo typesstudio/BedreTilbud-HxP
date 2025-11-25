@@ -52,6 +52,7 @@ function Router() {
         <Route path="/sammenligning" component={OfferComparisonAll} />
         <Route path="/sammenligning/tilbud/:policyType" component={OfferComparisonDetail} />
         <Route path="/sammenligning/:id" component={Comparison} />
+        <Route path="/sammenligninger/:id" component={Comparison} />
         <Route path="/sundhedstjek/:snapshotId" component={PolicyHealthCheck} />
         <Route path="/admin" component={AdminTesting} />
         <Route component={NotFound} />
