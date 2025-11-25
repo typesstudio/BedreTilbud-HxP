@@ -405,9 +405,9 @@ function generatePolicyTab(
     series: [seriesView],
   };
 
-  // Extract snapshot IDs if available
-  const offerSnapshotId = policyComp.offerSnapshotId || policySummary.offerSnapshotId || null;
-  const currentSnapshotId = policyComp.currentSnapshotId || policySummary.currentSnapshotId || null;
+  // Extract snapshot IDs from policy comparison data
+  const offerSnapshotId = policyComp.offerPolicyId || null;
+  const currentSnapshotId = policyComp.currentPolicyId || null;
 
   return {
     key: policyType as ComparisonTabKey,
