@@ -1,0 +1,194 @@
+Add the following code to the page. If the code already exists, update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+<div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+  <div className="flex w-full items-center justify-between">
+    <span className="text-heading-2 font-heading-2 text-default-font">
+      Manglende information
+    </span>
+    <Badge variant="neutral" icon={<FeatherCopy />}>
+      Vælg alle
+    </Badge>
+  </div>
+  <span className="text-body font-body text-subtext-color">
+    Vi har fundet punkter der mangler tydelig dokumentation
+  </span>
+  <div className="flex w-full flex-col items-start gap-3">
+    <div className="flex w-full flex-col items-start gap-2 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+      <div className="flex w-full items-center justify-between">
+        <div className="flex items-center gap-2">
+          <IconWithBackground
+            variant="error"
+            size="small"
+            icon={<FeatherDollarSign />}
+          />
+          <span className="text-body-bold font-body-bold text-default-font">
+            Pris &amp; Økonomi
+          </span>
+        </div>
+        <IconButton
+          size="small"
+          icon={<FeatherSquare />}
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+        />
+      </div>
+      <span className="text-body font-body text-default-font">
+        Kan I give mig en skriftlig garanti for præmien efter bindingsperioden?
+        Hvilke faktorer påvirker fremtidige prisjusteringer, og hvad er den
+        maksimale årlige stigningsprocent?
+      </span>
+    </div>
+    <div className="flex w-full flex-col items-start gap-2 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+      <div className="flex w-full items-center justify-between">
+        <div className="flex items-center gap-2">
+          <IconWithBackground
+            variant="error"
+            size="small"
+            icon={<FeatherDollarSign />}
+          />
+          <span className="text-body-bold font-body-bold text-default-font">
+            Rabatter
+          </span>
+        </div>
+        <IconButton
+          size="small"
+          icon={<FeatherSquare />}
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+        />
+      </div>
+      <span className="text-body font-body text-default-font">
+        Hvad er jeres præcise rabatstruktur ved flere forsikringer? Ved hvor
+        mange forsikringer får jeg rabat, hvor stor er rabatten, og kan jeg
+        kombinere den med andre kampagner? Gælder rabatten også ved fremtidige
+        tilvalg?
+      </span>
+    </div>
+    <div className="flex w-full flex-col items-start gap-2 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+      <div className="flex w-full items-center justify-between">
+        <div className="flex items-center gap-2">
+          <IconWithBackground
+            variant="error"
+            size="small"
+            icon={<FeatherShield />}
+          />
+          <span className="text-body-bold font-body-bold text-default-font">
+            Dækning
+          </span>
+        </div>
+        <IconButton
+          size="small"
+          icon={<FeatherSquare />}
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+        />
+      </div>
+      <span className="text-body font-body text-default-font">
+        Kan I præcisere definitionen af utilsigtet vandskade? Hvilke situationer
+        er specifikt inkluderet og ekskluderet, så jeg forstår nøjagtigt hvornår
+        jeg er dækket?
+      </span>
+    </div>
+    <div className="flex w-full flex-col items-start gap-2 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+      <div className="flex w-full items-center justify-between">
+        <div className="flex items-center gap-2">
+          <IconWithBackground
+            variant="error"
+            size="small"
+            icon={<FeatherShield />}
+          />
+          <span className="text-body-bold font-body-bold text-default-font">
+            Naturskader
+          </span>
+        </div>
+        <IconButton
+          size="small"
+          icon={<FeatherSquare />}
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+        />
+      </div>
+      <span className="text-body font-body text-default-font">
+        Hvad er de præcise udbetalingsgrænser og undergrænser for naturskader
+        som storm og oversvømmelse? Er der særskilte begrænsninger eller krav
+        jeg skal være opmærksom på?
+      </span>
+    </div>
+    <div className="flex w-full flex-col items-start gap-2 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+      <div className="flex w-full items-center justify-between">
+        <div className="flex items-center gap-2">
+          <IconWithBackground
+            variant="warning"
+            size="small"
+            icon={<FeatherClock />}
+          />
+          <span className="text-body-bold font-body-bold text-default-font">
+            Skadebehandling
+          </span>
+        </div>
+        <IconButton
+          size="small"
+          icon={<FeatherSquare />}
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+        />
+      </div>
+      <span className="text-body font-body text-default-font">
+        Hvad er jeres service level agreement (SLA) for håndtering af skader?
+        Hvor mange dage tager det typisk fra anmeldelse til godkendelse og
+        udbetaling?
+      </span>
+    </div>
+    <div className="flex w-full flex-col items-start gap-2 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+      <div className="flex w-full items-center justify-between">
+        <div className="flex items-center gap-2">
+          <IconWithBackground size="small" icon={<FeatherHelpCircle />} />
+          <span className="text-body-bold font-body-bold text-default-font">
+            Selvrisiko
+          </span>
+        </div>
+        <IconButton
+          size="small"
+          icon={<FeatherSquare />}
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+        />
+      </div>
+      <span className="text-body font-body text-default-font">
+        Kan jeg vælge en lavere eller højere selvrisiko? Hvilke pris-trin findes
+        der, og hvordan påvirker det min præmie?
+      </span>
+    </div>
+  </div>
+  <div className="flex w-full items-center gap-2 rounded-md bg-brand-100 px-4 py-3">
+    <FeatherLightbulb className="text-body font-body text-brand-700" />
+    <span className="text-caption font-caption text-brand-700">
+      Tip: Send alle spørgsmål på én gang for at få et komplet overblik
+    </span>
+  </div>
+  <Button
+    className="h-10 w-full flex-none"
+    size="large"
+    icon={<FeatherSend />}
+    onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+  >
+    Send alle spørgsmål til Tryg
+  </Button>
+</div>
+
+```Be sure to import the components using the following code:
+  
+```tsx
+import React from "react";
+import { Badge } from "@/ui/components/Badge";
+import { Button } from "@/ui/components/Button";
+import { IconButton } from "@/ui/components/IconButton";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { FeatherClock } from "@subframe/core";
+import { FeatherCopy } from "@subframe/core";
+import { FeatherDollarSign } from "@subframe/core";
+import { FeatherHelpCircle } from "@subframe/core";
+import { FeatherLightbulb } from "@subframe/core";
+import { FeatherSend } from "@subframe/core";
+import { FeatherShield } from "@subframe/core";
+import { FeatherSquare } from "@subframe/core";
+```Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync Badge IconWithBackground IconButton Button -p 34bd735365b5
+```

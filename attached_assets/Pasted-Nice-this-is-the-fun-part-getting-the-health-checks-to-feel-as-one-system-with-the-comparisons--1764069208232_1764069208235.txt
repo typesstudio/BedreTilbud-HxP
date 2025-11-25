@@ -1,0 +1,382 @@
+Nice, this is the fun part – getting the health-checks to feel as “one system” with the comparisons ✨
+
+Let’s do **one solid Replit prompt** that still works *component-by-component*: we’ll factor out a shared HealthCheck layout and then reuse it for:
+
+* current insurance health check
+* offer health check(s)
+* per-category health checks (Indbo, Hus, Ulykke, …)
+
+You can paste everything below straight into Replit’s AI.
+
+---
+
+## Replit prompt – build reusable individual HealthCheck pages
+
+> You are working in the BedreTilbud repo.
+> We already have:
+>
+> * A working **comparison page** (`/sammenligning/:id`) that uses shared comparison components (summary cards, quick table, highlights, detailed matrix, savings chart).
+> * A **health check layout** for the user’s current insurances, designed in Subframe (with sections like “Hurtig vurdering”, “Hvad er godt”, “Hvad kan blive bedre”, “Hvad er inkluderet”, etc.).
+>
+> **Goal:**
+> Create **reusable HealthCheck components** and use them to render:
+>
+> 1. The existing “current insurance” health check page.
+> 2. New **individual policy health check pages** (for both *current* and *offer* policies).
+> 3. Link these pages from the comparison view (e.g. via the “Se sundhedstjek” button).
+>
+> The key requirement:
+>
+> * We want a **single set of HealthCheck components** that are used across all pages.
+> * If we change the layout in one place, it automatically updates everywhere.
+
+### 0. Sync Subframe components
+
+1. Run:
+
+   ```bash
+   npx @subframe/cli@latest sync --all -p 34bd735365b5
+   ```
+
+---
+
+### 1. Find the existing HealthCheck page + data
+
+1. Search for the existing health check page:
+
+   * Look for a page with the heading text “Sundhedstjek” or similar.
+   * Likely in something like `client/src/pages/health-check.tsx` or `client/src/pages/forsikringstjek.tsx`.
+   * Use ripgrep if needed:
+
+     ```bash
+     rg "Sundhedstjek|Forsikringstjek" client/src -n
+     ```
+
+2. Identify:
+
+   * The **page component** (e.g. `HealthCheckPage`, `InsuranceCheckPage`, etc.).
+   * The **hook** used to fetch data (e.g. `useHealthCheck`, `usePolicyHealthCheck`, etc.).
+   * The **data type/shape** of the health-check response (e.g. strengths, weaknesses, “hvad er inkluderet”, key metrics, etc.).
+
+> ⚠️ Don’t change any logic yet – just understand the structure.
+
+---
+
+### 2. Extract a shared `HealthCheckLayout` component
+
+1. Create a folder for shared health components:
+
+   ```bash
+   mkdir -p client/src/components/health
+   ```
+
+2. Add a new component file:
+   `client/src/components/health/HealthCheckLayout.tsx`
+
+3. Move all the **Subframe layout JSX** for the health check into this component.
+   The layout should include, in order (adapt to the actual design):
+
+   * Header: title, subtitle, maybe company/policy badges.
+   * “Hurtig vurdering” / overall status card.
+   * “Hvad er godt” / “Fordele” cards.
+   * “Hvad kan blive bedre” / “Risici / Mangler” list.
+   * “Hvad er inkluderet” section (table / list of coverages).
+   * Any “økonomi / pris” cards or charts linked to the health check.
+
+4. Define **props** for the data you need instead of inlining it:
+
+   ```tsx
+   export interface HealthCheckLayoutProps {
+     title: string;
+     subtitle?: string;
+
+     companyName: string;
+     policyTypeLabel: string;          // "Indbo", "Hus" etc.
+     kind: "current" | "offer";
+
+     quickStatus: {
+       score: number;                  // 0–100 or whatever you use
+       label: string;                  // fx "Rigtig godt", "Ok", ...
+       description?: string;
+     };
+
+     goodPoints: { id: string; title: string; description: string }[];
+     improvementPoints: { id: string; title: string; description: string }[];
+
+     whatsIncluded: {
+       id: string;
+       name: string;                   // coverage label
+       description?: string;
+       status: "included" | "partial" | "missing";
+       comment?: string;
+     }[];
+
+     // Optional pricing/summary for this policy
+     pricing?: {
+       annualPremiumCurrent?: number;
+       annualPremiumOffer?: number;
+       savingsAnnual?: number;
+     };
+   }
+
+   export function HealthCheckLayout(props: HealthCheckLayoutProps) {
+     // Use ONLY Subframe components for layout:
+     // Badge, Cards, Table, IconWithBackground, etc.
+     // No hard-coded text other than section headings.
+   }
+   ```
+
+5. Replace **hard-coded static numbers** in the layout with these props.
+   Use your existing Subframe components (`Badge`, `Table`, etc.) and keep styling 1:1 with the design.
+
+---
+
+### 3. Wire the existing health check page to use `HealthCheckLayout`
+
+1. Go back to the old health check page file you found in step 1.
+2. Replace its internal layout with a thin wrapper that:
+
+   * Fetches the health check data via the existing hook / API.
+   * Transforms the API response into **`HealthCheckLayoutProps`**.
+   * Passes the props into `<HealthCheckLayout />`.
+
+Example (pseudo-code – adapt to real types):
+
+```tsx
+import { HealthCheckLayout } from "@/components/health/HealthCheckLayout";
+import { useCurrentHealthCheck } from "@/hooks/useCurrentHealthCheck";
+
+function CurrentHealthCheckPage() {
+  const { data, isLoading, error } = useCurrentHealthCheck();
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error || !data) return <ErrorState />;
+
+  const view = transformCurrentHealthCheckToView(data);
+
+  return (
+    <DefaultPageLayout>
+      <HealthCheckLayout {...view} />
+    </DefaultPageLayout>
+  );
+}
+
+export default CurrentHealthCheckPage;
+```
+
+3. Put the transform logic in a new utility file, e.g.:
+   `client/src/utils/transformHealthCheck.ts` with functions like:
+
+```ts
+export function transformCurrentHealthCheckToView(apiData: CurrentHealthCheckApiResponse): HealthCheckLayoutProps {
+  // Map the existing JSON into the props:
+  // - derive title "Sundhedstjek – Din nuværende forsikring"
+  // - map strengths → goodPoints
+  // - map weaknesses → improvementPoints
+  // - map coverages → whatsIncluded
+}
+```
+
+> ✅ At this point, nothing new is visible – but the layout is now reusable.
+
+---
+
+### 4. Add backend endpoint for **policy-level health checks**
+
+Goal: given a **policy snapshot**, return its health check data.
+
+1. Inspect how health-check data is stored:
+
+   * Look at `policy_snapshots` table in `@shared/schema` and in the DB.
+   * You should see a JSON column with health check or structured analysis (used earlier in the “health check AI” work).
+
+2. Add a new service method in `server/services/policySnapshots/PolicySnapshotService.ts`:
+
+   ```ts
+   async getHealthCheckForSnapshot(snapshotId: string) {
+     // Load policy_snapshots row
+     // Return combined object:
+     // {
+     //   snapshot: { id, companyName, policyType, kind, pricing, ... },
+     //   healthCheck: { ...raw json from AI health check... }
+     // }
+   }
+   ```
+
+3. Add a new API route in `server/routes.ts`:
+
+   ```ts
+   app.get("/api/policies/health-check/:snapshotId", requireAuth, async (req, res) => {
+     const userId = req.user!.id; // or wherever userId lives
+
+     const result = await policySnapshotService.getHealthCheckForSnapshot(req.params.snapshotId, userId);
+
+     if (!result) return res.status(404).json({ error: "Not found" });
+
+     return res.json(result);
+   });
+   ```
+
+   * Make sure to verify that the snapshot **belongs to the authenticated user**.
+
+---
+
+### 5. Create hook + transformer for **policy-level health checks**
+
+1. In `client/src/hooks`, create:
+   `client/src/hooks/usePolicyHealthCheck.ts`
+
+   ```ts
+   import { useQuery } from "@tanstack/react-query";
+   import { HealthCheckLayoutProps } from "@/components/health/HealthCheckLayout";
+
+   export function usePolicyHealthCheck(snapshotId: string | undefined) {
+     return useQuery({
+       queryKey: ["policyHealthCheck", snapshotId],
+       enabled: !!snapshotId,
+       queryFn: async (): Promise<HealthCheckLayoutProps> => {
+         const res = await fetch(`/api/policies/health-check/${snapshotId}`);
+         if (!res.ok) throw new Error("Failed to load health check");
+         const apiData = await res.json();
+         return transformPolicyHealthCheckToView(apiData);
+       },
+     });
+   }
+   ```
+
+2. In `client/src/utils/transformHealthCheck.ts`, add:
+
+   ```ts
+   export function transformPolicyHealthCheckToView(apiData: PolicyHealthCheckApiResponse): HealthCheckLayoutProps {
+     // apiData contains snapshot + healthCheck json
+     // Use same mapping logic as for current health check, but:
+     // - title: `${snapshot.companyName} – ${policyTypeLabel} sundhedstjek`
+     // - kind: snapshot.kind ("current" | "offer")
+     // - pricing: from snapshot.pricing if available
+   }
+   ```
+
+   Reuse as much as possible from the current-health-check transformer to avoid duplication.
+
+---
+
+### 6. Add **individual health check page** + route
+
+1. Create a new page:
+   `client/src/pages/policy-health-check.tsx` (or similar – use your routing pattern; if you use React Router v6 in `App.tsx`, we’ll add a route with params).
+
+2. In that page:
+
+   ```tsx
+   import { useParams } from "react-router-dom";
+   import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+   import { HealthCheckLayout } from "@/components/health/HealthCheckLayout";
+   import { usePolicyHealthCheck } from "@/hooks/usePolicyHealthCheck";
+
+   function PolicyHealthCheckPage() {
+     const { snapshotId } = useParams<{ snapshotId: string }>();
+     const { data, isLoading, error } = usePolicyHealthCheck(snapshotId);
+
+     if (isLoading) return <DefaultPageLayout>/* loading state */</DefaultPageLayout>;
+     if (error || !data) return <DefaultPageLayout>/* error state */</DefaultPageLayout>;
+
+     return (
+       <DefaultPageLayout>
+         <HealthCheckLayout {...data} />
+       </DefaultPageLayout>
+     );
+   }
+
+   export default PolicyHealthCheckPage;
+   ```
+
+3. In `client/src/App.tsx`, add a route:
+
+   ```tsx
+   <Route path="/sundhedstjek/:snapshotId" element={<PolicyHealthCheckPage />} />
+   ```
+
+---
+
+### 7. Hook “Se sundhedstjek” buttons from the comparison page
+
+We now want:
+
+* From `/sammenligning/:id`, the “Se sundhedstjek” button should open the **correct** policy health check page.
+* When on the **Samlet** tab, we can either:
+
+  * Link to a generic current health check page, OR
+  * Open the offer health check for the main policy (house) – choose the simplest consistent UX.
+
+Implementation:
+
+1. In your comparison view model (`transformComparison.ts`), for each **policy row** include:
+
+   ```ts
+   interface PolicyQuickRowView {
+     policyType: string; // "hus", "indbo", "ulykke", ...
+     label: string;
+     currentAnnual: number;
+     offerAnnual: number;
+     savingsAnnual: number;
+     currentSnapshotId?: string;
+     offerSnapshotId?: string;
+   }
+   ```
+
+   Populate these IDs from `policy_snapshots` when building the comparison result.
+
+2. In the comparison page `comparison.tsx`, when a tab is active:
+
+   * Decide which snapshot we want to show for the health check – usually the **offer** snapshot for that policy (the recommendation).
+   * Look up the current `quickRow` for the active tab and get `offerSnapshotId` (fallback to `currentSnapshotId` if offer is missing).
+
+3. Update the “Se sundhedstjek” button in the comparison header component (where the button lives now) to navigate via `useNavigate`:
+
+   ```tsx
+   const navigate = useNavigate();
+
+   const handleOpenHealthCheck = () => {
+     const row = activeView.quickRows[0]; // per-tab there’s typically 1 row
+     const snapshotId = row?.offerSnapshotId || row?.currentSnapshotId;
+     if (!snapshotId) return;
+     navigate(`/sundhedstjek/${snapshotId}`);
+   };
+   ```
+
+   Wire that to the button’s `onClick`.
+
+> This way, the **same HealthCheck layout** is used for:
+>
+> * The general “current” health check.
+> * Any individual offer (or current) health check opened from the comparison page.
+
+---
+
+### 8. Testing checklist
+
+1. Open your original current health check page – UI should look the same as before (but now powered by `HealthCheckLayout`).
+2. Open a comparison:
+
+   * `/sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1`
+3. Click:
+
+   * **Samlet** → **Se sundhedstjek**:
+
+     * Should navigate to `/sundhedstjek/:snapshotId` and show the offer (or current) health check.
+   * Switch to **Hus / Indbo / Ulykke**, click **Se sundhedstjek**:
+
+     * Should open the matching policy health check for that company & policy type.
+4. Confirm:
+
+   * Layout 1:1 with Subframe design.
+   * All numbers & lists are dynamic (no static placeholders).
+   * Changing `HealthCheckLayout` in one place updates both the general and individual pages.
+
+---
+
+That’s it – this should give you a **single health-check system** where any future design change happens in one Subframe-powered component and automatically flows to:
+
+* Current health check
+* Offer health check
+* Per-category health check pages.
