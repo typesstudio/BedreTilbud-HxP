@@ -1,0 +1,95 @@
+Nice, so Replit claims everything is perfect now 😄
+Let’s treat that as “probably good” and then actually *verify* and polish.
+
+I’ll give you two things:
+
+1. **A super quick checklist** so you can see in 2–3 minutes if the implementation really matches what you want (both design + data).
+2. **A follow-up Replit prompt** you can paste in to tighten things further (no static data, shared components, etc.).
+
+---
+
+## 1. Quick sanity-check: is it really correct?
+
+In the browser:
+
+1. **Try multiple policy types**
+
+   * Click *Indbo*, then *Hus*, *Ulykke* tabs on the health-check page.
+   * Confirm:
+
+     * The title changes (e.g. “Hus sundhedstjek”).
+     * The yearly savings numbers change logically between types.
+     * Coverage rows, strengths/weaknesses look different between types (if the data is different).
+
+2. **Cross-check numbers with the raw JSON**
+
+   * Open DevTools → Network → XHR.
+   * Reload `/sundhedstjek/:snapshotId`.
+   * Click the health-check API response and look at the JSON.
+   * Check that:
+
+     * The **“Årlig potentiel besparelse”** card matches the computed values (current vs offer).
+     * Coverage rows (“Hvad er inkluderet”) map exactly to entries in the JSON.
+     * Strengths / weaknesses text is coming from the AI fields (not static).
+
+3. **Search for static placeholders**
+
+   * In Replit, search for strings like `3.252`, `20.5%`, `Tryg`, etc.
+   * If you find them inside TSX instead of in mock tests or story files → replace with values from the ViewModel.
+
+If those three pass, the page is probably in a good place functionally.
+
+---
+
+## 2. Tightening things with one more Replit prompt
+
+When the **health-check page file is open** in Replit, you can paste this prompt to let the AI double-check the implementation and clean up:
+
+> **Goal**
+> The health-check page for `/sundhedstjek/:snapshotId` should:
+>
+> * Reuse the same Subframe components and tokens as the comparison pages.
+> * Take **all data** from `HealthCheckViewModel` (returned by `transformHealthCheck.ts`).
+> * Contain **no static demo values** for prices, percentages, coverage amounts, or company names.
+>
+> **Tasks**
+>
+> 1. Open:
+>
+>    * `client/src/pages/[health-check-page].tsx` (the sundhedstjek page)
+>    * `client/src/utils/transformHealthCheck.ts`
+>    * `client/src/components/healthCheck/*`
+>    * `client/src/components/comparison/*`
+> 2. Verify that the health-check page:
+>
+>    * Uses a single `const { data: healthCheck } = usePolicyHealthCheck(snapshotId);`
+>    * Only reads fields from `healthCheck` (no duplicated calculations in the page).
+> 3. Search the health-check page and health-check components for hardcoded demo numbers or names, e.g.:
+>
+>    * specific kr values like `3252`, `34400`, etc.
+>    * specific company names like `Tryg`.
+>    * fake coverage labels that don’t come from the ViewModel.
+>      Replace them with the appropriate `healthCheck` properties.
+> 4. Ensure **component reuse**:
+>
+>    * If the savings chart UI is duplicated, extract a shared component that both comparison and health-check pages use (e.g. `SavingsChart`).
+>    * If “Hvad er inkluderet” uses a different layout than the comparison coverage matrix, see if it can reuse `ComparisonDetailedMatrix` in single-column mode instead of a separate custom table.
+> 5. Confirm that all sections exist and are wired to real data:
+>
+>    * Header + tabs: policy type + company name from `healthCheck`.
+>    * Årlig potentiel besparelse card: `healthCheck.overall`.
+>    * Dine forsikringsfordele: `healthCheck.benefits`.
+>    * Hvad er inkluderet: `healthCheck.coverageRows`.
+>    * Styrker & svagheder: `healthCheck.strengths` / `healthCheck.weaknesses`.
+>    * Kumulativ besparelse chart + summary cards: `healthCheck.savingsOverTime` and `healthCheck.overall.chartTotals`.
+> 6. Remove any leftover legacy markup from the old health-check implementation that is no longer used, while preserving all business logic.
+>
+> When you’re done, explain briefly:
+>
+> * Which components are now shared between comparison and health-check pages.
+> * Which static demo values you removed.
+> * Which `HealthCheckViewModel` fields each section depends on.
+
+---
+
+If you want, next step we can do is **one specific section diff**: you send a screenshot + the current TSX for, say, “Styrker & svagheder”, and I’ll rewrite just that section so it’s pixel-close to your Subframe design and 100% data-driven.

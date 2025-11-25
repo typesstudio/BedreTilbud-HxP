@@ -5,10 +5,10 @@ import { Button } from "@/ui/components/Button";
 import { ListingsTabs } from "@/ui/components/ListingsTabs";
 import { ComparisonHeader } from "@/components/comparison/ComparisonHeader";
 import { ComparisonDetailedMatrix } from "@/components/comparison/ComparisonDetailedMatrix";
-import { ComparisonSavingsChart } from "@/components/comparison/ComparisonSavingsChart";
 import { HealthCheckAnnualPotentialCard } from "@/components/healthCheck/HealthCheckAnnualPotentialCard";
 import { HealthCheckBenefitsGrid } from "@/components/healthCheck/HealthCheckBenefitsGrid";
 import { HealthCheckStrengthsWeaknesses } from "@/components/healthCheck/HealthCheckStrengthsWeaknesses";
+import { HealthCheckSavingsSection } from "@/components/healthCheck/HealthCheckSavingsSection";
 import { 
   FeatherHome, 
   FeatherShield, 
@@ -145,32 +145,7 @@ export default function PolicyHealthCheckPage() {
 
           {/* Savings Chart */}
           {data.savingsOverTime && (
-            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-4 mobile:py-4">
-              <div className="flex w-full items-center justify-between gap-2">
-                <div className="flex flex-col items-start gap-1">
-                  <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold">
-                    Kumulativ besparelse
-                  </span>
-                  <span className="text-caption font-caption text-subtext-color">
-                    Se hvor meget du sparer måned for måned
-                  </span>
-                </div>
-              </div>
-
-              <ComparisonSavingsChart
-                overall={{
-                  companyName: data.companyName,
-                  annualSavings: data.annualPotentialSavings || 0,
-                  totalCurrentAnnual: 0,
-                  totalOfferAnnual: 0,
-                  savingsPercent: data.annualSavingsPercent || null,
-                  cumulativeSavings: data.savingsOverTime.chartData.map((item) => ({
-                    label: item.label,
-                    value: item.Besparelse,
-                  })),
-                }}
-              />
-            </div>
+            <HealthCheckSavingsSection savingsOverTime={data.savingsOverTime} />
           )}
 
           {/* Footer CTA */}
