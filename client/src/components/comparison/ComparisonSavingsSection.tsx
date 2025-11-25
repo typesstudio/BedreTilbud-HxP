@@ -127,8 +127,8 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
 
   return (
     <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4 mobile:px-4 mobile:py-4">
-      {/* Header */}
-      <div className="flex w-full items-center justify-between mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-2">
+      {/* Header with Legend Filters */}
+      <div className="flex w-full items-center justify-between mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-3">
         <div className="flex flex-col items-start gap-2">
           <span className="text-heading-2 font-heading-2 text-default-font mobile:text-heading-3 mobile:font-heading-3">
             Din besparelse over tid
@@ -137,68 +137,62 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
             Se hvor meget du sparer år for år
           </span>
         </div>
-        <Badge
-          className="mobile:self-start"
-          variant="success"
-          icon={<FeatherArrowUp />}
-          data-testid="badge-total-10-years"
-        >
-          {formatCurrency(tenYearSavings)} over 10 år
-        </Badge>
+        
+        {/* Interactive Legend Filters */}
+        {savings.series.length > 1 && (
+          <div className="flex flex-wrap items-center gap-2 mobile:self-start">
+            <button
+              type="button"
+              onClick={handleShowAll}
+              className={`rounded-full border px-3 py-1 text-caption font-caption transition ${
+                isAllSelected
+                  ? "border-success-500 bg-success-50 text-success-700"
+                  : "border-neutral-border bg-neutral-50 text-subtext-color hover:bg-neutral-100"
+              }`}
+              data-testid="legend-toggle-all"
+            >
+              Alle
+            </button>
+            {savings.series.map(series => {
+              const isSelected = isSingleSelected(series.key);
+              const color = POLICY_COLORS[series.key] || "#10b981";
+              
+              return (
+                <button
+                  key={series.key}
+                  type="button"
+                  onClick={() => handleSelectSeries(series.key)}
+                  className={`flex items-center gap-2 rounded-full border px-3 py-1 text-caption font-caption transition ${
+                    isSelected
+                      ? "border-success-500 bg-success-50 text-success-700"
+                      : "border-neutral-border bg-neutral-50 text-subtext-color hover:bg-neutral-100"
+                  }`}
+                  data-testid={`legend-toggle-${series.key}`}
+                >
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: color }}
+                    aria-hidden="true"
+                  />
+                  {series.label}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      {/* Interactive Legend */}
-      {savings.series.length > 1 && (
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={handleShowAll}
-            className={`rounded-full border px-3 py-1 text-caption font-caption transition ${
-              isAllSelected
-                ? "border-success-500 bg-success-50 text-success-700"
-                : "border-neutral-border bg-neutral-50 text-subtext-color hover:bg-neutral-100"
-            }`}
-            data-testid="legend-toggle-all"
-          >
-            Alle
-          </button>
-          {savings.series.map(series => {
-            const isSelected = isSingleSelected(series.key);
-            const color = POLICY_COLORS[series.key] || "#10b981";
-            
-            return (
-              <button
-                key={series.key}
-                type="button"
-                onClick={() => handleSelectSeries(series.key)}
-                className={`flex items-center gap-2 rounded-full border px-3 py-1 text-caption font-caption transition ${
-                  isSelected
-                    ? "border-success-500 bg-success-50 text-success-700"
-                    : "border-neutral-border bg-neutral-50 text-subtext-color hover:bg-neutral-100"
-                }`}
-                data-testid={`legend-toggle-${series.key}`}
-              >
-                <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: color }}
-                  aria-hidden="true"
-                />
-                {series.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
       {/* Chart */}
-      <AreaChart
-        className="mobile:h-64 mobile:flex-none"
-        categories={categories}
-        data={data}
-        index="Year"
-        colors={colors}
-        yAxis={<SubframeCore.YAxis tickFormatter={tickFormatter} />}
-      />
+      <div className="w-full [&_.recharts-legend-wrapper]:hidden">
+        <AreaChart
+          className="mobile:h-64 mobile:flex-none"
+          categories={categories}
+          data={data}
+          index="Year"
+          colors={colors}
+          yAxis={<SubframeCore.YAxis tickFormatter={tickFormatter} />}
+        />
+      </div>
 
       {/* Summary Cards */}
       <div className="flex w-full items-start gap-4 flex-wrap mobile:flex-row mobile:flex-wrap mobile:gap-3">
@@ -226,7 +220,7 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
         </div>
         <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">
           <span className="text-caption font-caption text-subtext-color">
-            Forventet efter 10 år
+            Total efter 10 år
           </span>
           <span 
             className="text-heading-2 font-heading-2 text-success-600 mobile:text-heading-3 mobile:font-heading-3"
