@@ -1,0 +1,252 @@
+Got it – the buttons still aren’t rendering, so let’s fix the *structure* and wiring around the shared header instead of poking randomly at JSX.
+
+Here’s a Replit prompt you can paste directly into Ghostwriter. It will:
+
+* Reuse Subframe’s header snippet
+* Centralise it in `ComparisonHeader`
+* Ensure both **“Se detaljer”** and **“Se beskeder”** render on the **Indbo / Hus / Ulykke** tabs
+* Hook them up to the existing health-check + messages logic
+* Keep everything DRY so changes to the header affect all comparison layouts.
+
+---
+
+### Replit prompt
+
+````text
+You are working in a React + TypeScript + Subframe project.
+
+**High-level goal**
+
+On the comparison pages I want a shared header that:
+
+- Uses the Subframe layout with title + subtitle and two buttons:
+  - "Se detaljer" (neutral-primary)
+  - "Se beskeder" (brand-secondary)
+- Appears on **all comparison tabs**, but:
+  - On the **"Samlet"** tab: only the "Se beskeder" button is visible
+  - On **Indbo / Hus / Ulykke** tabs: both buttons are visible
+- Reuses one shared component so if I later change the header in one place, it updates everywhere.
+
+The buttons must be wired to **real navigation**, not dummy onClick handlers:
+
+- "Se detaljer": navigate to the *individual health check page* for the currently selected policy type (Indbo/Hus/Ulykke) using the same routing logic we already use elsewhere in the app.
+- "Se beskeder": open the existing messages / thread view for the current comparison and offer company, using the same logic we used on the old comparison page.
+
+Please follow these steps carefully and KEEP all existing business logic.
+
+---
+
+### 1. Sync Subframe Button
+
+Run this once:
+
+```bash
+npx @subframe/cli@latest sync Button -p 34bd735365b5
+````
+
+---
+
+### 2. Update the shared ComparisonHeader component
+
+1. Open `client/src/components/comparison/ComparisonHeader.tsx`.
+
+2. Make sure this component exists and is the **only** place that renders the page title + top-right buttons for comparison pages. If there are multiple ad-hoc headers, refactor them to use this component instead.
+
+3. Give `ComparisonHeader` props similar to:
+
+```ts
+type ComparisonTab = "samlet" | "indbo" | "hus" | "ulykke" | "bil" | "rejse";
+
+interface ComparisonHeaderProps {
+  title: string;                 // e.g. "Tryg sammenligning"
+  subtitle: string;              // e.g. "Compare and review insurance offers tailored for you"
+  activeTab: ComparisonTab;      // current selected tab
+  onClickDetails?: () => void;   // open health check
+  onClickMessages?: () => void;  // open message thread
+  canOpenMessages?: boolean;     // if false, disable/hide "Se beskeder"
+}
+```
+
+4. Import the Subframe Button:
+
+```ts
+import { Button } from "@/ui/components/Button";
+```
+
+5. Replace the header JSX inside `ComparisonHeader` with the Subframe snippet, but driven by props and with the right conditions:
+
+```tsx
+export function ComparisonHeader({
+  title,
+  subtitle,
+  activeTab,
+  onClickDetails,
+  onClickMessages,
+  canOpenMessages = true,
+}: ComparisonHeaderProps) {
+  const showDetails = activeTab !== "samlet" && !!onClickDetails;
+  const showMessages = !!onClickMessages;
+
+  return (
+    <div className="flex w-full items-start gap-2 px-2 py-2 mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:py-2">
+      <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 px-2 py-2 mobile:px-0 mobile:py-0">
+        <span className="text-heading-1 font-heading-1 text-default-font mobile:text-heading-2 mobile:font-heading-2">
+          {title}
+        </span>
+        <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+          {subtitle}
+        </span>
+      </div>
+
+      {showDetails && (
+        <Button
+          variant="neutral-primary"
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+            event.preventDefault();
+            onClickDetails?.();
+          }}
+        >
+          Se detaljer
+        </Button>
+      )}
+
+      {showMessages && (
+        <Button
+          className="mobile:w-full"
+          variant="brand-secondary"
+          disabled={!canOpenMessages}
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
+            event.preventDefault();
+            if (!canOpenMessages) return;
+            onClickMessages?.();
+          }}
+        >
+          Se beskeder
+        </Button>
+      )}
+    </div>
+  );
+}
+```
+
+Keep any existing props that are needed for other parts of the header (e.g. company name). If there is already a `ComparisonHeader` implementation, merge this JSX into it rather than creating duplicates.
+
+---
+
+### 3. Wire ComparisonHeader into the comparison page
+
+1. Open `client/src/pages/comparison.tsx`.
+
+2. Find where the page currently renders the title + tabs for the comparison view. Replace the manual header with `<ComparisonHeader />` **once**, passing the right props.
+
+3. Determine the active tab:
+
+* Look at how the tabs are implemented (probably with `ListingsTabs`).
+* You already know which tab is active (e.g. via state or a query param). Use that value to set `activeTab` prop (`"samlet" | "indbo" | "hus" | "ulykke"`).
+
+Example:
+
+```tsx
+const [activeTab, setActiveTab] = useState<ComparisonTab>("samlet");
+```
+
+4. Reuse the existing navigation logic for **health check**:
+
+* Search the codebase for the previous health-check button:
+
+```bash
+rg "Se sundhedstjek" -n client/src
+rg "health check" -n client/src
+rg "forsikrings" -n client/src/pages
+```
+
+* Find how we previously navigated to the health-check page (route + params).
+  It might be something like `/sundhedstjek/:policyType` or a query param.
+
+* Implement a handler in `comparison.tsx`, for example:
+
+```tsx
+const navigate = useNavigate(); // or use router used elsewhere
+
+const handleOpenDetails = () => {
+  if (activeTab === "samlet") return;
+
+  // Reuse existing route pattern from the old implementation:
+  // e.g. /sundhedstjek/:policyType or similar.
+  navigate(`/sundhedstjek/${activeTab}`, {
+    state: { comparisonId, policyType: activeTab },
+  });
+};
+```
+
+Use the *exact* route and params you find in the old code so behaviour stays identical.
+
+5. Reuse existing logic for **messages**:
+
+* Search for the logic that opens the messages/threads view for a company:
+
+```bash
+rg "Se beskeder" -n client/src
+rg "openThread" -n client/src
+rg "/messages" -n client/src
+```
+
+* Extract the find-thread-and-navigate logic into a helper in `comparison.tsx`, e.g.:
+
+```tsx
+const handleOpenMessages = () => {
+  // Reuse existing implementation from old comparison page:
+  // 1) find thread for current offer company
+  // 2) navigate to thread/messages page with correct IDs
+};
+```
+
+* Make sure `canOpenMessages` is true only when there *is* a thread for the current offer company; otherwise pass false so the button is disabled but still visible.
+
+6. Use the component at the top of the comparison page:
+
+```tsx
+<ComparisonHeader
+  title={`${offerCompanyName} sammenligning`}
+  subtitle="Compare and review insurance offers tailored for you"
+  activeTab={activeTab}
+  onClickDetails={handleOpenDetails}
+  onClickMessages={handleOpenMessages}
+  canOpenMessages={!!currentThread}
+/>
+```
+
+Replace `offerCompanyName` and `currentThread` with the actual variables from this page.
+
+---
+
+### 4. Reuse the header on individual comparison pages (if they are separate)
+
+If there are separate files like `offer-comparison-detail.tsx` or per-policy comparison pages:
+
+1. Open each page (`client/src/pages/offer-comparison-detail.tsx`, etc.).
+2. Replace any hard-coded header JSX (title + buttons) with the shared `<ComparisonHeader />` component, using the same props pattern as above.
+3. The `activeTab` should be set based on the policy type for that page (e.g. `"indbo"` for the Indbo page).
+
+---
+
+### 5. Clean up & verify
+
+* Ensure there is only one visual header implementation (the shared `ComparisonHeader`).
+* Make sure there are no leftover `Button` imports or unused header fragments.
+* Run the app and verify:
+
+  * On **Samlet** tab: only “Se beskeder” is visible (if messages exist).
+  * On **Indbo / Hus / Ulykke** tabs: **both** “Se detaljer” and “Se beskeder” are visible.
+  * Clicking **Se detaljer** navigates to the correct health-check page for that policy type.
+  * Clicking **Se beskeder** opens the existing thread/messages view.
+
+Please implement all of the above changes now.
+
+```
+
+---
+
+When you’ve run this in Replit and refreshed, you should see both buttons on the Indbo/Hus/Ulykke tabs. If something is still off (e.g. route name for health check), send me the current `ComparisonHeader.tsx` + the top of `comparison.tsx` and I can tune the prompt further.
+::contentReference[oaicite:0]{index=0}
+```

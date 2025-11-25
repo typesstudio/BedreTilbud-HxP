@@ -91,16 +91,16 @@ export default function Comparison() {
           <ComparisonHeader
             title={`${viewModel.offerCompanyName} sammenligning`}
             subtitle="Sammenlign og gennemgå forsikringstilbud tilpasset dig"
-            onSeDetaljerClick={() => {
+            activeTab={activeTab}
+            onClickDetails={() => {
               // Navigate to health check for current tab's offer snapshot
               const snapshotId = activeView.offerSnapshotId || activeView.currentSnapshotId;
               if (snapshotId) {
                 setLocation(`/sundhedstjek/${snapshotId}`);
               }
             }}
-            onSeBeskederClick={() => threadId && setLocation(`/emails/${threadId}`)}
-            showDetaljerButton={activeTab !== "samlet" && !!(activeView.offerSnapshotId || activeView.currentSnapshotId)}
-            showBeskederButton={!!threadId}
+            onClickMessages={() => threadId && setLocation(`/emails/${threadId}`)}
+            canOpenMessages={!!threadId}
           />
 
           {/* Tabs */}
