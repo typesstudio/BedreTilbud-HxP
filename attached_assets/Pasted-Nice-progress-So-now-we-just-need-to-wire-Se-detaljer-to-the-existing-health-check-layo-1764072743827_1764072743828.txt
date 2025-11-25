@@ -1,0 +1,183 @@
+Nice, progress! 🙌
+So now we just need to wire **“Se detaljer”** to the *existing* health-check layout per insurance type instead of doing nothing.
+
+Since I can’t see your code directly, the safest way is to let Replit inspect your routes and copy the **already working health-check navigation**. Here’s a focused Ghostwriter prompt that does exactly that.
+
+---
+
+### Replit prompt: make “Se detaljer” open the correct health-check page
+
+````text
+You are working in the same BedreTilbud project as before.
+
+Goal
+Wire up the "Se detaljer" button in the comparison header so that:
+
+- On the comparison page, when the user is on:
+  - Indbo tab → opens the Indbo health-check layout
+  - Hus tab → opens the Hus health-check layout
+  - Ulykke tab → opens the Ulykke health-check layout
+- It uses the **existing** health-check route and logic that already works elsewhere in the app.
+- The button on the "Samlet" tab should stay disabled / do nothing (or be hidden, depending on current implementation).
+
+Do NOT invent new routes. Reuse whatever health-check route already exists.
+
+---
+
+Step 1 – Find the existing health-check route and navigation
+
+1. Search for the health-check page component and its route:
+
+   ```bash
+   rg "Sundhedstjek" -n client/src || true
+   rg "Forsikringstjek" -n client/src || true
+   rg "health check" -n client/src || true
+   rg "sundhedstjek" -n client/src || true
+````
+
+2. Also open the app router to see the route definition:
+
+   ```bash
+   sed -n '1,260p' client/src/App.tsx
+   ```
+
+3. Identify:
+
+   * The **path** of the health-check route (for example `/sundhedstjek`, `/forsikringscheck`, `/health-check/:policyType`, etc.).
+   * Whether it expects parameters like `:policyType` or `:comparisonId`, or query params.
+   * Any existing place where a button already navigates to this health-check page (for example a button with text `"Se sundhedstjek"`).
+
+4. If such a button exists, open that file and note its onClick handler:
+
+   ```bash
+   rg "Se sundhedstjek" -n client/src || true
+   rg "Se sundhedstjek" -n .
+   ```
+
+   Reuse this logic as a reference for the new "Se detaljer" button.
+
+---
+
+Step 2 – Update the comparison page to call the health-check route
+
+1. Open the comparison page:
+
+   ```bash
+   sed -n '1,260p' client/src/pages/comparison.tsx
+   ```
+
+2. Confirm where we import and use `ComparisonHeader`. There should already be something like:
+
+   ```tsx
+   <ComparisonHeader
+     title={...}
+     subtitle={...}
+     activeTab={activeTab}
+     onClickDetails={handleOpenDetails}
+     onClickMessages={handleOpenMessages}
+     canOpenMessages={!!currentThread}
+   />
+   ```
+
+   If `handleOpenDetails` does not exist yet or is a stub, we will create/fix it now.
+
+3. Make sure the page has access to:
+
+   * `activeTab` (e.g. `"samlet" | "indbo" | "hus" | "ulykke" | ...`)
+   * `comparisonId` (from route params like `/sammenligning/:id`)
+   * The router navigation hook (for example `useNavigate` from `react-router` or `useRouter` from Next.js). Use whichever is already used in this file.
+
+4. Implement or update `handleOpenDetails` to map the current tab to the policy type expected by the health-check route.
+
+   Example (adapt to the actual route you found in Step 1):
+
+   ```tsx
+   type ComparisonTab = "samlet" | "indbo" | "hus" | "ulykke" | "bil" | "rejse";
+
+   const policyTypeByTab: Record<ComparisonTab, string | null> = {
+     samlet: null,
+     indbo: "indbo",
+     hus: "hus",
+     ulykke: "ulykke",
+     bil: "bil",
+     rejse: "rejse",
+   };
+
+   const navigate = useNavigate(); // or the router hook already used in this file
+
+   const handleOpenDetails = () => {
+     const policyType = policyTypeByTab[activeTab];
+
+     // Do nothing on "samlet" or unknown
+     if (!policyType) return;
+
+     // Use the EXACT health-check route and params discovered in Step 1.
+     // For example, if App.tsx has:
+     //   <Route path="/sundhedstjek/:policyType" element={<HealthCheckPage />} />
+     // then do:
+     navigate(`/sundhedstjek/${policyType}`, {
+       state: {
+         comparisonId,   // only include if HealthCheckPage uses it
+         policyType,
+       },
+     });
+   };
+   ```
+
+   If the route instead looks like `/sundhedstjek/:comparisonId/:policyType`, build the path accordingly, for example:
+
+   ```tsx
+   navigate(`/sundhedstjek/${comparisonId}/${policyType}`);
+   ```
+
+   Or, if the existing code you found uses query params:
+
+   ```tsx
+   navigate(`/sundhedstjek?comparisonId=${comparisonId}&policyType=${policyType}`);
+   ```
+
+   The key is: **mirror the exact pattern already used by the existing health-check navigation**.
+
+5. Ensure `handleOpenDetails` is passed into `ComparisonHeader`:
+
+   ```tsx
+   <ComparisonHeader
+     ...
+     activeTab={activeTab}
+     onClickDetails={handleOpenDetails}
+     ...
+   />
+   ```
+
+---
+
+Step 3 – Verify button behaviour
+
+1. Restart the dev server / workflow if needed.
+
+2. In the browser:
+
+   * Open `/sammenligning/:id`.
+   * Click **Samlet** tab → the "Se detaljer" button should be hidden or do nothing.
+   * Click **Indbo** tab → click "Se detaljer":
+
+     * You should navigate to the **Indbo health-check layout**.
+   * Repeat for **Hus** and **Ulykke**.
+
+3. Confirm that **no existing health-check links were broken** (any other place that linked to the health-check page should still work, because we reused the same route format).
+
+If anything in the route signature is unclear, inspect the existing health-check page and match its expectations rather than inventing a new pattern.
+
+```
+
+---
+
+Once Ghostwriter has run this, try:
+
+- Go to comparison page  
+- Switch to **Indbo** tab  
+- Click **Se detaljer**
+
+You should land on your existing Indbo health-check layout. If it doesn’t, tell me what the health-check route in `App.tsx` looks like (just the `<Route path=...>` line), and I’ll adapt the handler precisely.
+::contentReference[oaicite:0]{index=0}
+```

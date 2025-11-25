@@ -738,6 +738,8 @@ export class ComparisonOrchestrator {
           label: pair.label,
           currentCompany,
           offerCompany,
+          currentPolicyId: pair.currentPolicyId, // Snapshot ID for current policy
+          offerPolicyId: pair.offerPolicyId, // Snapshot ID for offer policy
           costSummary: {
             currentAnnualPremium,
             offerAnnualPremium,
@@ -840,6 +842,8 @@ export class ComparisonOrchestrator {
           label: deterministicData.label,
           currentCompany: deterministicData.currentCompany,
           offerCompany: deterministicData.offerCompany,
+          currentPolicyId: deterministicData.currentPolicyId, // Snapshot ID for navigation
+          offerPolicyId: deterministicData.offerPolicyId, // Snapshot ID for navigation
           costSummary: deterministicData.costSummary, // DETERMINISTIC (immutable)
           highlights: deterministicData.highlights, // DETERMINISTIC (immutable)
           coverageComparison: deterministicData.coverageComparison, // DETERMINISTIC (immutable)
