@@ -38,14 +38,19 @@ export interface ComparisonCoverageRowView {
   note: string | null;
 }
 
-export interface SavingsOverTimeView {
+export interface SavingsSeriesView {
+  key: string;          // "indbo", "hus", "ulykke"
+  label: string;        // "Indbo", "Hus", "Ulykke"
   annualSavings: number;
-  totalCurrentAnnual: number;
-  totalOfferAnnual: number;
-  chartPoints: { x: string; y: number }[];
-  total10Years: number;
-  total12Months: number;
-  monthlySavingsRange: { min: number; max: number };
+  monthlySavings: number;
+  tenYearSavings: number;
+  points: { month: number; cumulative: number }[];
+}
+
+export interface SavingsOverTimeView {
+  totalAnnualSavings: number;
+  totalTenYearSavings: number;
+  series: SavingsSeriesView[];
 }
 
 export interface ComparisonViewModel {
@@ -140,38 +145,56 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
     });
   }
 
-  // Transform savings over time
-  const cumulativeSavings = comparisonData.cumulativeSavings;
+  // Transform savings over time - generate series per policy type
   let savingsOverTime: SavingsOverTimeView | null = null;
 
-  if (cumulativeSavings && overall.annualSavings) {
-    const chartData = cumulativeSavings.chartData || [];
-    
-    // Convert monthly data to yearly data points
-    const yearlyChartPoints: { x: string; y: number }[] = [];
-    for (let i = 0; i < chartData.length; i += 12) {
-      const yearNumber = Math.floor(i / 12) + 1;
-      const dataPoint = chartData[i];
-      if (dataPoint) {
-        yearlyChartPoints.push({
-          x: `${yearNumber} år`,
-          y: dataPoint.savings || 0,
+  if (policyComparisons && policyComparisons.length > 0) {
+    const series: SavingsSeriesView[] = policyComparisons
+      .map((p: any) => {
+        // Extract savings from costSummary or calculate from premiums
+        const currentAnnual = p.costSummary?.currentAnnual ?? p.currentAnnual ?? null;
+        const offerAnnual = p.costSummary?.offerAnnual ?? p.offerAnnual ?? null;
+        const annualSavings = 
+          p.costSummary?.annualSavings ??
+          (currentAnnual != null && offerAnnual != null
+            ? currentAnnual - offerAnnual
+            : 0);
+
+        // Skip policies with no savings data
+        if (annualSavings === 0 && currentAnnual === null && offerAnnual === null) {
+          return null;
+        }
+
+        const monthlySavings = annualSavings / 12;
+        const tenYearSavings = annualSavings * 10;
+
+        // Generate 120 monthly cumulative data points
+        const points = Array.from({ length: 120 }, (_, i) => {
+          const month = i + 1;
+          return { month, cumulative: monthlySavings * month };
         });
-      }
+
+        return {
+          key: p.policyType,
+          label: p.label || capitalizeFirst(p.policyType),
+          annualSavings,
+          monthlySavings,
+          tenYearSavings,
+          points,
+        };
+      })
+      .filter((s): s is SavingsSeriesView => s !== null);
+
+    if (series.length > 0) {
+      const totalAnnualSavings = series.reduce((sum, s) => sum + s.annualSavings, 0);
+      const totalTenYearSavings = series.reduce((sum, s) => sum + s.tenYearSavings, 0);
+
+      savingsOverTime = {
+        totalAnnualSavings,
+        totalTenYearSavings,
+        series,
+      };
     }
-    
-    savingsOverTime = {
-      annualSavings: overall.annualSavings,
-      totalCurrentAnnual: overall.totalCurrentAnnualPremium ?? 0,
-      totalOfferAnnual: overall.totalOfferAnnualPremium ?? 0,
-      chartPoints: yearlyChartPoints,
-      total10Years: cumulativeSavings.totalOver10Years ?? cumulativeSavings.after10Years ?? (overall.annualSavings * 10),
-      total12Months: cumulativeSavings.after12Months ?? overall.annualSavings,
-      monthlySavingsRange: cumulativeSavings.monthlyRange || {
-        min: Math.round((overall.annualSavings / 12) * 0.9),
-        max: Math.round((overall.annualSavings / 12) * 1.1),
-      },
-    };
   }
 
   return {

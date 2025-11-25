@@ -1,0 +1,315 @@
+Yes, it’s absolutely possible – and you **don’t need new backend fields** to do it 🎯
+
+You already have, per policy in `policyComparisons`:
+
+* `currentAnnual` (current price)
+* `offerAnnual` (offer price)
+* `annualSavings` (difference)
+
+From that we can **derive a savings line for each policy**:
+
+* Monthly saving for that policy: `annualSavings / 12`
+* Cumulative over 10 years (120 months): `monthIndex * monthlySaving`
+
+So you can:
+
+* Show **all policy types as separate series** in the Subframe `AreaChart`
+* Use the existing **top tabs** (Samlet / Indbo / Hus / …) to switch between:
+
+  * **Samlet** → all series at once (Indbo, Hus, Ulykke…)
+  * A specific tab → only that policy’s line
+* Keep everything dynamic: if later you add “Bil” or “Rejse”, they just show up as extra series.
+
+---
+
+### Concrete structure I’d recommend
+
+In your comparison view-model (`transformComparison.ts`):
+
+```ts
+export interface SavingsSeriesView {
+  key: string;          // "indbo", "hus", "ulykke"
+  label: string;        // "Indbo", "Hus", "Ulykke"
+  annualSavings: number;
+  monthlySavings: number;
+  tenYearSavings: number;
+  // 120 points, one per month, cumulative
+  points: { month: number; cumulative: number }[];
+}
+
+export interface SavingsOverTimeView {
+  totalAnnualSavings: number;           // sum of all
+  totalTenYearSavings: number;          // sum(series.tenYearSavings)
+  series: SavingsSeriesView[];          // one per policy type
+}
+```
+
+Derive it purely on the frontend from `policyComparisons`:
+
+```ts
+const policies = comparisonJson.policyComparisons ?? [];
+
+const series: SavingsSeriesView[] = policies.map((p) => {
+  const annual = p.annualSavings ?? (p.currentAnnual - p.offerAnnual);
+  const monthly = annual / 12;
+  const tenYear = annual * 10;
+
+  const points = Array.from({ length: 120 }, (_, i) => {
+    const month = i + 1;
+    return { month, cumulative: monthly * month };
+  });
+
+  return {
+    key: p.policyType,       // "hus"
+    label: p.label,          // "Hus"
+    annualSavings: annual,
+    monthlySavings: monthly,
+    tenYearSavings: tenYear,
+    points,
+  };
+});
+
+const totalAnnual = series.reduce((sum, s) => sum + s.annualSavings, 0);
+const totalTenYear = series.reduce((sum, s) => sum + s.tenYearSavings, 0);
+
+view.savingsOverTime = {
+  totalAnnualSavings: totalAnnual,
+  totalTenYearSavings: totalTenYear,
+  series,
+};
+```
+
+---
+
+### How to wire this into the Subframe AreaChart
+
+In your `ComparisonSavingsSection` component:
+
+1. Accept the **whole** `SavingsOverTimeView` and an `activePolicyKey`:
+
+```ts
+interface ComparisonSavingsSectionProps {
+  savings: SavingsOverTimeView;
+  activePolicyKey: string | "all"; // "samlet", "indbo", "hus", etc.
+}
+```
+
+2. Decide which series to show:
+
+```ts
+const visibleSeries =
+  activePolicyKey === "all"
+    ? savings.series
+    : savings.series.filter((s) => s.key === activePolicyKey);
+```
+
+3. Build `AreaChart` `categories` and `data` dynamically:
+
+```ts
+const categories = visibleSeries.map((s) => s.label); // ["Indbo", "Hus", "Ulykke"]
+
+const data = Array.from({ length: 120 }, (_, i) => {
+  const month = i + 1;
+  const entry: any = { Måned: `Måned ${month}` };
+
+  visibleSeries.forEach((s) => {
+    const point = s.points[i];
+    entry[s.label] = point?.cumulative ?? 0;
+  });
+
+  return entry;
+});
+```
+
+Then use the Subframe chart:
+
+```tsx
+<AreaChart
+  className="mobile:h-64 mobile:flex-none"
+  categories={categories}
+  data={data}
+  index="Måned"
+/>
+```
+
+4. Cards at the bottom:
+
+* **Samlet** (activePolicyKey === "all"):
+
+  * Månedlig besparelse → `totalAnnualSavings / 12`
+  * Total efter 12 måneder → `totalAnnualSavings`
+  * Forventet efter 10 år → `totalTenYearSavings`
+* **Single policy tab**: use that policy’s `monthlySavings`, `annualSavings`, `tenYearSavings`.
+
+That gives you exactly what you described:
+
+* All policy types in the chart simultaneously
+* Click the existing top tabs (Samlet / Indbo / Hus / Ulykke…) to “focus” the chart + cards on one line vs all
+* Fully dynamic: if the backend outputs more/less policies, chart adapts automatically.
+
+---
+
+### Replit prompt you can paste
+
+Here’s a compact prompt you can give Replit to implement all of this step-by-step:
+
+```text
+I want to upgrade the “Din besparelse over tid” section on the company comparison page so it shows savings PER policy type (Indbo, Hus, Ulykke, etc.) as separate dynamic lines using our Subframe AreaChart.
+
+Context:
+- Route: /sammenligning/[comparisonId]
+- The comparison page already has:
+  - Hero + tabs (Samlet / Indbo / Ulykke / Hus / Bil / Rejse)
+  - 3 summary cards with real prices
+  - Highlights section
+  - Detailed coverage comparison section
+- The comparison JSON (company_comparisons.comparison_json) has:
+  - overall.totalCurrentAnnualPremium
+  - overall.totalOfferAnnualPremium
+  - overall.annualSavings
+  - policyComparisons[] with annualSavings/currentAnnual/offerAnnual per policy type
+
+Goal:
+- Build a proper “savingsOverTime” view model that:
+  - Computes savings PER policy (Indbo, Hus, Ulykke, etc.)
+  - Generates a 120-month cumulative savings line per policy
+  - Exposes these as series for the AreaChart
+- Update the Subframe-based savings section to:
+  - Show ALL policy series on the “Samlet” tab
+  - Show only the selected policy series when user clicks “Indbo”, “Hus”, etc.
+  - Drive the 3 bottom cards from real data (no static numbers).
+
+Steps:
+
+1) In client/src/utils/transformComparison.ts
+   - Add these types:
+
+     export interface SavingsSeriesView {
+       key: string;      // "indbo", "hus", "ulykke"
+       label: string;    // "Indbo", "Hus", "Ulykke"
+       annualSavings: number;
+       monthlySavings: number;
+       tenYearSavings: number;
+       points: { month: number; cumulative: number }[];
+     }
+
+     export interface SavingsOverTimeView {
+       totalAnnualSavings: number;
+       totalTenYearSavings: number;
+       series: SavingsSeriesView[];
+     }
+
+   - Extend the main comparison view model interface to include:
+     savingsOverTime?: SavingsOverTimeView;
+
+   - In the transformer, after mapping policyComparisons, compute the series:
+
+     const policies = comparisonJson.policyComparisons ?? [];
+
+     const series: SavingsSeriesView[] = policies.map((p) => {
+       const annual =
+         p.annualSavings ??
+         (p.currentAnnual != null && p.offerAnnual != null
+           ? p.currentAnnual - p.offerAnnual
+           : 0);
+
+       const monthly = annual / 12;
+       const tenYear = annual * 10;
+
+       const points = Array.from({ length: 120 }, (_, i) => {
+         const month = i + 1;
+         return { month, cumulative: monthly * month };
+       });
+
+       return {
+         key: p.policyType,
+         label: p.label,
+         annualSavings: annual,
+         monthlySavings: monthly,
+         tenYearSavings: tenYear,
+         points,
+       };
+     });
+
+     const totalAnnual = series.reduce((sum, s) => sum + s.annualSavings, 0);
+     const totalTenYear = series.reduce((sum, s) => sum + s.tenYearSavings, 0);
+
+     view.savingsOverTime = {
+       totalAnnualSavings: totalAnnual,
+       totalTenYearSavings: totalTenYear,
+       series,
+     };
+
+   - Be null-safe so the page doesn’t crash if some numbers are missing.
+
+2) In client/src/components/comparison/ComparisonSavingsSection.tsx
+   - Update props to:
+
+     interface ComparisonSavingsSectionProps {
+       savings: SavingsOverTimeView;
+       activePolicyKey: string | "all"; // "all", "indbo", "hus", ...
+     }
+
+   - Compute visibleSeries:
+
+     const visibleSeries =
+       activePolicyKey === "all"
+         ? savings.series
+         : savings.series.filter((s) => s.key === activePolicyKey);
+
+   - Build AreaChart props dynamically:
+
+     const categories = visibleSeries.map((s) => s.label);
+
+     const data = Array.from({ length: 120 }, (_, i) => {
+       const month = i + 1;
+       const row: any = { Måned: `Måned ${month}` };
+
+       visibleSeries.forEach((s) => {
+         const point = s.points[i];
+         row[s.label] = point?.cumulative ?? 0;
+       });
+
+       return row;
+     });
+
+   - Render the Subframe AreaChart:
+
+     <AreaChart
+       className="mobile:h-64 mobile:flex-none"
+       categories={categories}
+       data={data}
+       index="Måned"
+     />
+
+   - For the 3 bottom cards:
+     - If activePolicyKey === "all":
+       use savings.totalAnnualSavings/12, savings.totalAnnualSavings, savings.totalTenYearSavings.
+     - Else, use the first visibleSeries[0] for all three values.
+
+   - Keep all styling and layout exactly as in the original Subframe design; only swap static numbers for these dynamic values.
+
+3) In the comparison page (client/src/pages/comparison.tsx)
+   - Pass the correct activePolicyKey into ComparisonSavingsSection:
+     - Map Samlet tab → "all"
+     - Map Indbo/Hus/Ulykke/Hus/Bil/Rejse tabs → their policyType keys.
+   - Call it like:
+
+     {view.savingsOverTime && (
+       <ComparisonSavingsSection
+         savings={view.savingsOverTime}
+         activePolicyKey={activeTabKey} // "all" | "indbo" | "hus" | ...
+       />
+     )}
+
+4) Verify with comparison ID 0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1
+   - On “Samlet” tab: chart shows multiple lines, one for each policy with savings, legend using policy labels.
+   - On “Indbo” tab: only Indbo line shown, and the 3 cards reflect the Indbo savings.
+   - No static numbers anywhere in this section.
+
+Please implement these changes and keep the rest of the page exactly as-is.
+```
+
+---
+
+If you’d like, we can next refine the **legend / hover tooltips** to match Subframe’s exact visual behaviour, but this structure will already give you “all policies at once” + “individual per tab” with dynamic data.
