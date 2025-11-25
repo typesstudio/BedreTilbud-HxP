@@ -8,6 +8,11 @@ import { ComparisonSummaryRow } from "@/components/comparison/ComparisonSummaryR
 import { ComparisonQuickTable } from "@/components/comparison/ComparisonQuickTable";
 import { transformCompanyComparisonToViewModel } from "@/utils/transformComparison";
 
+// Debug helper
+function debugData(label: string, data: any) {
+  console.log(`[DEBUG] ${label}:`, JSON.stringify(data, null, 2));
+}
+
 export default function Comparison() {
   const { id } = useParams();
   const [, setLocation] = useLocation();
@@ -59,8 +64,14 @@ export default function Comparison() {
     );
   }
 
+  // Debug raw comparison data
+  debugData("Raw Comparison", comparison);
+  
   // Transform to view model
   const viewModel = transformCompanyComparisonToViewModel(comparison);
+  
+  // Debug transformed view model
+  debugData("View Model", viewModel);
   
   // Find thread for messaging
   const companyId = (comparison as any)?.companyId;

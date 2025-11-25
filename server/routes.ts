@@ -1904,8 +1904,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? await storage.getCompany(companyComparison.offerCompany) 
           : null;
 
-        // Extract data from comparison_json
-        const comparisonJson = companyComparison.comparisonJson as any || {};
+        // Extract data from comparison_json (NOTE: field is comparisonJSON with uppercase JSON)
+        const comparisonJson = companyComparison.comparisonJSON as any || {};
         const overall = comparisonJson.overall ?? {};
         
         // Transform to old format
