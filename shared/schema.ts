@@ -295,10 +295,10 @@ export const healthChecks = pgTable("health_checks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   documentId: varchar("document_id").references(() => documents.id).notNull(),
   userId: varchar("user_id").references(() => users.id).notNull(),
-  snapshotId: varchar("snapshot_id").references(() => offerSnapshots.id), // Phase 2: FK to offer_snapshots for ID-based matching
+  snapshotId: varchar("snapshot_id"), // Supports both offer_snapshots and policy_snapshots (no FK for flexibility)
   policyType: text("policy_type").notNull(), // "indbo", "ulykke", "hus" - copied from snapshot for data integrity
-  dataSource: text("data_source").notNull(), // "OfferSnapshot", "Policy", "ocrData"
-  confidenceScore: integer("confidence_score"), // 0-100 if from OfferSnapshot
+  dataSource: text("data_source").notNull(), // "OfferSnapshot", "PolicySnapshot", "Policy", "ocrData"
+  confidenceScore: integer("confidence_score"), // 0-100 if from snapshot
   result: json("result").notNull(), // HealthCheckResult object
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({

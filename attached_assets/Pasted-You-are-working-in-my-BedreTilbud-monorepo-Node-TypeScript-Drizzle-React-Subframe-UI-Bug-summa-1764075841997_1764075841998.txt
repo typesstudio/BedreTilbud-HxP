@@ -1,0 +1,357 @@
+You are working in my BedreTilbud monorepo (Node/TypeScript, Drizzle, React, Subframe UI).
+Bug summary
+
+
+From /sammenligning/:comparisonId, the “Se detaljer” button on e.g. Indbo / Hus / Ulykke opens /sundhedstjek/:snapshotId.
+
+
+The route works, but the page shows the error state:
+
+
+
+“Der opstod en fejl – Kunne ikke hente sundhedstjek data”
+
+
+
+Replit analysis already found the root cause:
+
+
+Health checks are stored in a health_checks (or similar) table, linked to policy snapshots via a snapshot id.
+
+
+When we regenerated comparisons, we created new policy_snapshots but did not generate health checks for those new snapshots.
+
+
+The endpoint GET /api/.../health-check correctly looks up the health check by snapshotId, but returns 404 because no row exists.
+
+
+Navigation, auth headers, and snapshot IDs are all fine.
+
+
+
+
+Goal
+Fix the health-check flow so that:
+
+
+Existing snapshots without health checks are backfilled.
+
+
+The health-check API auto-creates a health check for a snapshot if it’s missing (on-demand generation, instead of 404).
+
+
+The comparison / snapshot pipeline is updated so that future snapshots automatically get health checks when they’re created.
+
+
+The existing Subframe health-check layout continues to work unchanged – we’re only fixing data flow.
+
+
+Use existing services/orchestrators; do not invent new tables. Reuse the same logic that creates health checks during the normal upload flow.
+
+Step 1 – Understand the current health-check setup
+
+
+Find the health-check API route:
+rg -C 20 "health.*check|sundhedstjek" server/routes.ts
+
+
+
+Identify the route used by /sundhedstjek/:snapshotId, e.g. something like:
+app.get("/api/policy-snapshots/:snapshotId/health-check", requireAuth, ...)
+
+
+
+
+
+Open the route handler and see:
+
+
+Which storage function it calls (e.g. storage.getHealthCheckBySnapshotId).
+
+
+What it does when no row is found (currently returns 404).
+
+
+
+
+Find the storage + schema:
+rg -C 10 "healthCheck" server/storage.ts @shared/schema
+
+
+
+Confirm the table name (healthChecks, policyHealthChecks, etc).
+
+
+Confirm the link field to snapshots (snapshotId, policySnapshotId, …).
+
+
+
+
+Confirm from logs that the current call for a failing snapshot ID returns 404 (not 401/500).
+
+
+
+Step 2 – Create a reusable “generate health-check for snapshot” helper
+We need a single place that can generate (and persist) a health check for a given snapshot id, using the existing logic from the original upload flow.
+
+
+Find the existing health-check generation logic:
+rg -C 20 "HealthCheckOrchestrator|health check" server -S
+
+or look for an orchestrator/service that:
+
+
+Accepts a snapshot/document and
+
+
+Calls an AI agent / pipeline to compute a health check and
+
+
+Writes into the health-checks table.
+
+
+
+
+Create a helper in a suitable place (e.g. server/services/healthCheckService.ts or inside comparisonOrchestrator.ts if that’s where the rest lives):
+export async function ensureHealthCheckForSnapshot(
+  snapshotId: string,
+  userId: string
+) {
+  const { db } = await import("./db");
+  const { healthChecks, policySnapshots } = await import("@shared/schema");
+  const { eq } = await import("drizzle-orm");
+
+  // 1) Check if one already exists
+  const [existing] = await db
+    .select()
+    .from(healthChecks)
+    .where(eq(healthChecks.snapshotId, snapshotId));
+
+  if (existing) return existing;
+
+  // 2) Load the snapshot we’re generating for
+  const [snapshot] = await db
+    .select()
+    .from(policySnapshots)
+    .where(eq(policySnapshots.id, snapshotId));
+
+  if (!snapshot) {
+    throw new Error(`Snapshot not found for id ${snapshotId}`);
+  }
+
+  // 3) Call the existing health-check orchestrator / agent
+  //    IMPORTANT: Reuse existing code, do NOT duplicate business logic.
+  const { generateHealthCheckForSnapshot } = await import(
+    "./HealthCheckOrchestrator" // adjust to actual file
+  );
+
+  const healthCheck = await generateHealthCheckForSnapshot({
+    snapshot,
+    userId,
+  });
+
+  // 4) Persist and return
+  return healthCheck;
+}
+
+Important:
+
+
+Reuse the existing orchestrator / agent. If it currently takes a document instead of a snapshot, adapt accordingly but don’t re-implement the AI call.
+
+
+Adjust imports and type names to whatever actually exists in the repo.
+
+
+
+
+
+Step 3 – Make the API endpoint auto-generate on demand
+Update the health-check route so that it no longer returns 404 when a health check is missing, but instead generates one and returns it.
+
+
+In the health-check route handler in server/routes.ts:
+
+
+Extract userId from the auth context (whatever requireAuth puts on req).
+
+
+Replace the current 404 branch with a call to ensureHealthCheckForSnapshot.
+
+
+Conceptually:
+app.get(
+  "/api/policy-snapshots/:snapshotId/health-check",
+  requireAuth,
+  async (req, res) => {
+    const snapshotId = req.params.snapshotId;
+    const userId = req.user.id; // adapt to actual field
+
+    try {
+      const healthCheck =
+        (await storage.getHealthCheckBySnapshotId(snapshotId)) ??
+        (await ensureHealthCheckForSnapshot(snapshotId, userId));
+
+      if (!healthCheck) {
+        return res.status(404).json({ error: "Health check not found" });
+      }
+
+      return res.json(healthCheck);
+    } catch (err) {
+      console.error("Health check error", err);
+      return res
+        .status(500)
+        .json({ error: "Could not generate health check" });
+    }
+  }
+);
+
+
+
+Make sure the frontend hook used by /sundhedstjek/:snapshotId keeps calling this endpoint – no changes needed except to rely on this new behaviour.
+
+
+
+Step 4 – Backfill missing health checks for existing snapshots
+We need a one-off script to create health checks for snapshots that don’t have one yet (for your current test comparison and others).
+
+
+Create a script file, e.g. server/scripts/backfill-missing-health-checks.ts.
+
+
+Logic:
+
+
+Query all policySnapshots that belong to real users (or simply all for now).
+
+
+LEFT JOIN to the health-checks table.
+
+
+Filter where health_checks.snapshotId IS NULL.
+
+
+For each such snapshot:
+
+
+Call ensureHealthCheckForSnapshot(snapshot.id, snapshot.userId).
+
+
+
+
+Pseudocode:
+import "dotenv/config";
+import { db } from "../db";
+import { policySnapshots, healthChecks } from "@shared/schema";
+import { eq, isNull } from "drizzle-orm";
+import { ensureHealthCheckForSnapshot } from "../services/healthCheckService";
+
+async function main() {
+  const rows = await db
+    .select({ id: policySnapshots.id, userId: policySnapshots.userId })
+    .from(policySnapshots)
+    .leftJoin(
+      healthChecks,
+      eq(healthChecks.snapshotId, policySnapshots.id)
+    )
+    .where(isNull(healthChecks.snapshotId));
+
+  console.log(`Found ${rows.length} snapshots without health checks`);
+
+  for (const row of rows) {
+    console.log("Generating health check for snapshot", row.id);
+    await ensureHealthCheckForSnapshot(row.id, row.userId);
+  }
+
+  console.log("Done");
+}
+
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
+
+
+
+Run it once:
+npx tsx server/scripts/backfill-missing-health-checks.ts
+
+
+
+After it finishes, verify a known snapshot now has a health check in DB (use psql with the ID from the failing URL).
+
+
+
+Step 5 – Ensure future snapshots get health checks automatically
+Update the comparison / snapshot generation pipeline so that newly created policy_snapshots immediately get health checks.
+
+
+Find where policy snapshots are created during comparisons:
+rg -C 20 "policySnapshots" server/services server -S
+rg -C 20 "snapshot" server/services/comparisonOrchestrator.ts
+
+
+
+In the place where you create new snapshots for current and offer policies, add a call to ensureHealthCheckForSnapshot(snapshot.id, userId) after the snapshot is saved.
+Example (pseudo):
+const currentSnapshot = await createPolicySnapshot(...);
+await ensureHealthCheckForSnapshot(currentSnapshot.id, userId);
+
+const offerSnapshot = await createPolicySnapshot(...);
+await ensureHealthCheckForSnapshot(offerSnapshot.id, userId);
+
+
+
+Make sure this doesn’t introduce double work – ensureHealthCheckForSnapshot should be idempotent (it returns existing row if present).
+
+
+
+Step 6 – Test the full UX with your known comparison
+Use the existing test data you already mentioned:
+
+
+User: hello@vyork.dk (e85ec3b9-e354-4c49-9f68-194830e356af)
+
+
+Comparison: /sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1
+
+
+
+
+Run the backfill script.
+
+
+Restart the app (npm run dev or existing command).
+
+
+In the browser:
+
+
+Go to /sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1
+
+
+Click Indbo tab.
+
+
+Click “Se detaljer”.
+
+
+
+
+Expected:
+
+
+Network call GET /api/policy-snapshots/:snapshotId/health-check returns 200 with data (no 404).
+
+
+/sundhedstjek/:snapshotId shows the full health-check layout for that policy type (no error message).
+
+
+If you try the same for Hus/Ulykke, they behave the same way.
+
+
+
+
+If you need to regenerate a comparison again later, the route + pipeline should now automatically produce health checks, so the health-check page keeps working without extra manual scripts.
+
+Please implement all of the above in small, well-commented commits and keep the existing Subframe UI components untouched – we’re only fixing data flow and orchestration.

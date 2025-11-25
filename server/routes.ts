@@ -2230,41 +2230,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get health check by policy snapshot ID
+  // Get health check by policy snapshot ID (with auto-generation)
   app.get("/api/policies/health-check/:snapshotId", requireAuth, async (req, res) => {
     try {
       const { snapshotId } = req.params;
       const userId = req.headers['x-user-id'] as string;
 
-      // Get the policy snapshot using PolicySnapshotService
+      logger.info('[Health Check API] Fetching health check for snapshot', { snapshotId, userId });
+
+      // Auto-generate health check if missing (on-demand generation)
+      // This uses the ensureHealthCheckForSnapshot helper which:
+      // 1. Returns existing health check if found
+      // 2. Generates and persists new one if missing
+      // 3. Handles auth/ownership verification
+      const { ensureHealthCheckForSnapshot } = await import("./services/healthCheckService");
+      const healthCheck = await ensureHealthCheckForSnapshot(snapshotId, userId, storage);
+
+      // Get snapshot details for response
       const policySnapshotService = new (await import("./services/policySnapshots/PolicySnapshotService")).PolicySnapshotService();
       const snapshot = await policySnapshotService.getSnapshotById(snapshotId);
-      if (!snapshot) {
-        return res.status(404).json({ message: "Policy snapshot not found" });
-      }
-
-      // SECURITY: Verify ownership via document
-      const document = await storage.getDocument(snapshot.documentId);
-      if (!document || document.userId !== userId) {
-        auditLog('unauthorized_health_check_access_attempt', userId, `Attempted to access health check for snapshot ${snapshotId}`);
-        return res.status(403).json({ message: "Unauthorized" });
-      }
-
-      // Get the health check for this snapshot
-      const healthCheck = await storage.getHealthCheckBySnapshot(snapshotId);
 
       res.json({
         snapshot: {
-          id: snapshot.id,
-          companyName: snapshot.companyName || 'Ukendt',
-          policyType: snapshot.policyType,
-          kind: snapshot.kind,
-          pricing: snapshot.pricing,
+          id: snapshot!.id,
+          companyName: snapshot!.companyName || 'Ukendt',
+          policyType: snapshot!.policyType,
+          kind: snapshot!.kind,
+          pricing: snapshot!.pricing,
         },
-        healthCheck: healthCheck || null,
+        healthCheck,
       });
     } catch (error: any) {
-      console.error('[Health Check] Error fetching health check by snapshot:', error);
+      logger.error('[Health Check API] Error fetching/generating health check', error, { snapshotId: req.params.snapshotId });
+      
+      // Return appropriate error codes
+      if (error.message.includes('not found')) {
+        return res.status(404).json({ message: error.message });
+      }
+      if (error.message.includes('Unauthorized')) {
+        return res.status(403).json({ message: error.message });
+      }
+      
       res.status(500).json({ message: error.message });
     }
   });
