@@ -184,6 +184,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Benchmark Prices routes (for savings calculations)
+  app.get("/api/benchmark-prices", apiCaching(300), async (req, res) => {
+    try {
+      const prices = await storage.getAllBenchmarkPrices();
+      res.json(prices);
+    } catch (error: any) {
+      logger.error('Failed to fetch benchmark prices', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  app.post("/api/benchmark-prices", requireAuth, requireCSRFToken, async (req, res) => {
+    try {
+      const { policyType, annualPremium } = req.body;
+      if (!policyType || typeof annualPremium !== 'number') {
+        return res.status(400).json({ message: 'policyType and annualPremium are required' });
+      }
+      await storage.setBenchmarkPrice(policyType, annualPremium);
+      logger.info('Benchmark price updated', { policyType, annualPremium });
+      res.json({ success: true, policyType, annualPremium });
+    } catch (error: any) {
+      logger.error('Failed to update benchmark price', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // User routes
   app.get("/api/users/check/:email", async (req, res) => {
     try {
