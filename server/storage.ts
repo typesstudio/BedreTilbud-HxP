@@ -112,6 +112,7 @@ export interface IStorage {
   getHealthCheck(id: string): Promise<HealthCheck | undefined>;
   getHealthChecksByDocument(documentId: string): Promise<HealthCheck[]>;
   getLatestHealthCheckByDocument(documentId: string): Promise<HealthCheck | undefined>;
+  getHealthCheckBySnapshot(snapshotId: string): Promise<HealthCheck | undefined>;
   getHealthChecksByUser(userId: string, limit?: number, offset?: number): Promise<HealthCheck[]>;
   createHealthCheck(healthCheck: InsertHealthCheck): Promise<HealthCheck>;
   deleteHealthCheck(id: string): Promise<void>;
@@ -750,6 +751,12 @@ export class MemStorage implements IStorage {
   async getLatestHealthCheckByDocument(documentId: string): Promise<HealthCheck | undefined> {
     const healthChecks = await this.getHealthChecksByDocument(documentId);
     return healthChecks[0];
+  }
+
+  async getHealthCheckBySnapshot(snapshotId: string): Promise<HealthCheck | undefined> {
+    return Array.from(this.healthChecks.values())
+      .filter(hc => hc.snapshotId === snapshotId)
+      .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0))[0];
   }
 
   async getHealthChecksByUser(userId: string, limit = 50, offset = 0): Promise<HealthCheck[]> {
@@ -1519,6 +1526,18 @@ export class DatabaseStorage implements IStorage {
     const [healthCheck] = await db.select()
       .from(healthChecks)
       .where(eq(healthChecks.documentId, documentId))
+      .orderBy(desc(healthChecks.createdAt))
+      .limit(1);
+    return healthCheck || undefined;
+  }
+
+  async getHealthCheckBySnapshot(snapshotId: string): Promise<HealthCheck | undefined> {
+    const { db } = await import("./db");
+    const { healthChecks } = await import("@shared/schema");
+    const { eq, desc } = await import("drizzle-orm");
+    const [healthCheck] = await db.select()
+      .from(healthChecks)
+      .where(eq(healthChecks.snapshotId, snapshotId))
       .orderBy(desc(healthChecks.createdAt))
       .limit(1);
     return healthCheck || undefined;

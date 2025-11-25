@@ -2230,6 +2230,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get health check by policy snapshot ID
+  app.get("/api/policies/health-check/:snapshotId", requireAuth, async (req, res) => {
+    try {
+      const { snapshotId } = req.params;
+      const userId = req.headers['x-user-id'] as string;
+
+      // Get the policy snapshot using PolicySnapshotService
+      const policySnapshotService = new (await import("./services/policySnapshots/PolicySnapshotService")).PolicySnapshotService();
+      const snapshot = await policySnapshotService.getSnapshotById(snapshotId);
+      if (!snapshot) {
+        return res.status(404).json({ message: "Policy snapshot not found" });
+      }
+
+      // SECURITY: Verify ownership via document
+      const document = await storage.getDocument(snapshot.documentId);
+      if (!document || document.userId !== userId) {
+        auditLog('unauthorized_health_check_access_attempt', userId, `Attempted to access health check for snapshot ${snapshotId}`);
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      // Get the health check for this snapshot
+      const healthCheck = await storage.getHealthCheckBySnapshot(snapshotId);
+
+      res.json({
+        snapshot: {
+          id: snapshot.id,
+          companyName: snapshot.companyName || 'Ukendt',
+          policyType: snapshot.policyType,
+          kind: snapshot.kind,
+          pricing: snapshot.pricing,
+        },
+        healthCheck: healthCheck || null,
+      });
+    } catch (error: any) {
+      console.error('[Health Check] Error fetching health check by snapshot:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.post("/api/insurance-check/analyze", aiLimiter, requireAuth, async (req, res) => {
     try {
       // Validate request body
