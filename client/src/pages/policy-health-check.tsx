@@ -1,13 +1,35 @@
-import { useParams, useLocation } from "wouter";
+import { useParams } from "wouter";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
-import { HealthCheckLayout } from "@/components/health/HealthCheckLayout";
 import { usePolicyHealthCheck } from "@/hooks/usePolicyHealthCheck";
-import { Button } from "@/ui";
-import { FeatherArrowLeft } from "@subframe/core";
+import { Button } from "@/ui/components/Button";
+import { ListingsTabs } from "@/ui/components/ListingsTabs";
+import { ComparisonHeader } from "@/components/comparison/ComparisonHeader";
+import { ComparisonDetailedMatrix } from "@/components/comparison/ComparisonDetailedMatrix";
+import { ComparisonSavingsChart } from "@/components/comparison/ComparisonSavingsChart";
+import { HealthCheckAnnualPotentialCard } from "@/components/healthCheck/HealthCheckAnnualPotentialCard";
+import { HealthCheckBenefitsGrid } from "@/components/healthCheck/HealthCheckBenefitsGrid";
+import { HealthCheckStrengthsWeaknesses } from "@/components/healthCheck/HealthCheckStrengthsWeaknesses";
+import { 
+  FeatherHome, 
+  FeatherShield, 
+  FeatherBuilding, 
+  FeatherCar, 
+  FeatherPlane,
+  FeatherArrowLeft
+} from "@subframe/core";
+
+const policyTypeIcons: Record<string, React.ReactNode> = {
+  indbo: <FeatherHome />,
+  ulykke: <FeatherShield />,
+  hus: <FeatherBuilding />,
+  bil: <FeatherCar />,
+  rejse: <FeatherPlane />,
+};
+
+const policyTypeOrder = ["indbo", "ulykke", "hus", "bil", "rejse"];
 
 export default function PolicyHealthCheckPage() {
   const { snapshotId } = useParams<{ snapshotId: string }>();
-  const [, setLocation] = useLocation();
   const userId = localStorage.getItem("userId") || "";
 
   const { data, isLoading, error } = usePolicyHealthCheck(snapshotId);
@@ -42,23 +64,130 @@ export default function PolicyHealthCheckPage() {
     );
   }
 
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("da-DK", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount) + " kr";
+  };
+
   return (
     <AppLayoutWithNav userId={userId}>
-      <div className="flex w-full flex-col items-center justify-center bg-default-background px-4 py-4 mobile:px-3 mobile:py-3">
-        {/* Back button */}
-        <div className="flex w-full max-w-[768px] items-start pb-4">
+      <div className="flex w-full flex-col items-center justify-center bg-default-background px-6 py-6 mobile:px-4 mobile:py-4">
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-6">
+          {/* Back button */}
           <Button
-            variant="neutral"
+            variant="neutral-tertiary"
             icon={<FeatherArrowLeft />}
             onClick={() => window.history.back()}
             data-testid="button-back"
           >
             Tilbage
           </Button>
-        </div>
 
-        {/* Health Check Layout */}
-        <HealthCheckLayout {...data} />
+          {/* Header */}
+          <ComparisonHeader
+            title={data.title}
+            subtitle={data.subtitle}
+            activeTab={data.policyType as any}
+            onClickDetails={undefined}
+            onClickMessages={undefined}
+          />
+
+          {/* Tabs */}
+          <div className="flex w-full flex-col items-start gap-2 border-b border-solid border-neutral-border bg-default-background sticky top-0 z-20">
+            <div className="flex w-full items-center gap-2 overflow-x-auto">
+              <ListingsTabs>
+                {policyTypeOrder.map((type) => (
+                  <ListingsTabs.Item
+                    key={type}
+                    checked={type === data.policyType}
+                    icon={policyTypeIcons[type]}
+                  >
+                    {type.charAt(0).toUpperCase() + type.slice(1)}
+                  </ListingsTabs.Item>
+                ))}
+              </ListingsTabs>
+            </div>
+          </div>
+
+          {/* Annual Potential Savings */}
+          {data.annualPotentialSavings && (
+            <HealthCheckAnnualPotentialCard
+              annualPotentialSavings={data.annualPotentialSavings}
+              annualSavingsPercent={data.annualSavingsPercent}
+            />
+          )}
+
+          {/* Benefits Grid */}
+          {data.benefits && data.benefits.length > 0 && (
+            <HealthCheckBenefitsGrid benefits={data.benefits} />
+          )}
+
+          {/* Coverage Matrix (single column) */}
+          {data.coverageRows && data.coverageRows.length > 0 && (
+            <ComparisonDetailedMatrix
+              title="Hvad er inkluderet"
+              singleColumn={true}
+              singleColumnName={data.companyName}
+              coverageRows={data.coverageRows}
+            />
+          )}
+
+          {/* Strengths & Weaknesses */}
+          {((data.strengths && data.strengths.length > 0) || 
+            (data.weaknesses && data.weaknesses.length > 0)) && (
+            <HealthCheckStrengthsWeaknesses
+              strengths={data.strengths || []}
+              weaknesses={data.weaknesses || []}
+            />
+          )}
+
+          {/* Savings Chart */}
+          {data.savingsOverTime && (
+            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-4 mobile:py-4">
+              <div className="flex w-full items-center justify-between gap-2">
+                <div className="flex flex-col items-start gap-1">
+                  <span className="text-heading-3 font-heading-3 text-default-font mobile:text-body-bold mobile:font-body-bold">
+                    Kumulativ besparelse
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    Se hvor meget du sparer måned for måned
+                  </span>
+                </div>
+              </div>
+
+              <ComparisonSavingsChart
+                overall={{
+                  companyName: data.companyName,
+                  annualSavings: data.annualPotentialSavings || 0,
+                  totalCurrentAnnual: 0,
+                  totalOfferAnnual: 0,
+                  savingsPercent: data.annualSavingsPercent || null,
+                  cumulativeSavings: data.savingsOverTime.chartData.map((item) => ({
+                    label: item.label,
+                    value: item.Besparelse,
+                  })),
+                }}
+              />
+            </div>
+          )}
+
+          {/* Footer CTA */}
+          <div className="flex w-full flex-col items-start gap-3 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:px-4 mobile:py-4">
+            <Button
+              className="w-full"
+              size="large"
+              onClick={() => {}}
+              data-testid="button-choose-and-switch"
+            >
+              Vælg og skift til {data.companyName}
+            </Button>
+            <span className="text-caption font-caption text-subtext-color text-center w-full">
+              Sikre data. Du kan annullere når som helst før aktivering.
+            </span>
+          </div>
+        </div>
       </div>
     </AppLayoutWithNav>
   );

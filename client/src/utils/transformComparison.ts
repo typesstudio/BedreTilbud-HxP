@@ -10,6 +10,7 @@ export interface ComparisonOverallView {
   totalCurrentAnnual: number;
   totalOfferAnnual: number;
   savingsPercent: number | null;
+  cumulativeSavings?: { label: string; value: number }[];
 }
 
 export interface ComparisonPolicyRowView {
