@@ -119,8 +119,11 @@ export default function Comparison() {
           )}
 
           {/* Savings Over Time */}
-          {selectedTab === "samlet" && viewModel.savingsOverTime && (
-            <ComparisonSavingsSection savings={viewModel.savingsOverTime} />
+          {viewModel.savingsOverTime && (
+            <ComparisonSavingsSection 
+              savings={viewModel.savingsOverTime} 
+              activePolicyKey={selectedTab === "samlet" ? "all" : selectedTab}
+            />
           )}
 
         </div>
