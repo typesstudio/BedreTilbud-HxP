@@ -59,9 +59,8 @@ export function ComparisonSavingsSection({ savings }: ComparisonSavingsSectionPr
         categories={["Besparelse"]}
         data={chartData}
         index="label"
-        yAxisLabel="Kroner"
-        xAxisLabel="År"
         yAxis={<SubframeCore.YAxis tickFormatter={tickFormatter} />}
+        xAxis={<SubframeCore.XAxis />}
       />
       <div className="flex w-full items-start gap-4 flex-wrap mobile:flex-row mobile:flex-wrap mobile:gap-3">
         <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-4 py-4 mobile:min-w-full">

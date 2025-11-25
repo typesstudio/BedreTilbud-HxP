@@ -154,7 +154,7 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
       const dataPoint = chartData[i];
       if (dataPoint) {
         yearlyChartPoints.push({
-          x: String(yearNumber),
+          x: `${yearNumber} år`,
           y: dataPoint.savings || 0,
         });
       }
