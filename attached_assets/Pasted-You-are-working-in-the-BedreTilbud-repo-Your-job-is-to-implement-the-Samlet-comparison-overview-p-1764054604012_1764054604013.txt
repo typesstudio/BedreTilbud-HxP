@@ -1,0 +1,587 @@
+You are working in the BedreTilbud repo.
+Your job is to implement the “Samlet” comparison overview page exactly like the Subframe design (see screenshot) and wire it up to real comparison data, component by component.
+We already have:
+
+
+Backend endpoint: GET /api/comparisons/:id (company comparison)
+
+
+Table: company_comparisons with comparison_json
+
+
+A working example comparison:
+0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1
+
+
+Subframe components and layout primitives (already synced).
+
+
+Right now, /sammenligning/:id only shows:
+
+
+Title
+
+
+Tabs
+
+
+3 summary cards with 0 kr values
+
+
+No “Hurtig sammenligning” table
+
+
+We want this fixed and extended so that the “Samlet” tab matches the Subframe design:
+Target UI (Samlet tab, overview section)
+Top area:
+
+
+Heading: "{companyName} sammenligning" (e.g. “Alka Forsikring sammenligning”)
+
+
+Subtitle: Sammenlign dit nuværende tilbud med {offerCompanyName} / similarly to design
+
+
+Tabs (ListingsTabs): Samlet (active), Indbo, Ulykke, Hus, Bil, Rejse
+
+
+Summary cards (3 cards):
+
+
+Samlet besparelse
+
+
+Big number: total annual savings in DKK
+
+
+Small text: “{pct}% billigere” (percentage savings vs current)
+
+
+
+
+{offerCompanyName} tilbud
+
+
+Big number: total offer annual premium
+
+
+Small text: “Per år”
+
+
+
+
+Din nuværende ({currentCompanyName})
+
+
+Big number: total current annual premium
+
+
+Small text: “Per år”
+
+
+
+
+“Hurtig sammenligning” table:
+
+
+Columns: Kategori, Nuværende, Tilbud, Besparelse, Status
+
+
+Each row = one policy type (indbo, bil, hus, ulykke, rejse)
+
+
+Each row shows:
+
+
+Icon + label (“Indbo”, “Bil”, “Hus”, “Ulykke”, “Rejse”)
+
+
+Current premium per year (DKK)
+
+
+Offer premium per year (DKK)
+
+
+Savings per year (DKK, green when cheaper)
+
+
+Status:
+
+
+“Se detaljer” button when both current+offer exist
+
+
+“Afventer” when one side is missing
+
+
+
+
+
+
+No static amounts – everything must come from comparison_json.
+
+
+
+PHASE 0 – Understand the data
+
+
+Inspect the JSON in the DB for the sample comparison:
+SELECT jsonb_pretty(comparison_json)
+FROM company_comparisons
+WHERE id = '0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1';
+
+
+
+Confirm the actual field names (these are what we’ve seen in previous debug output – please verify):
+
+
+comparison_json.overall.totalCurrentAnnualPremium
+
+
+comparison_json.overall.totalOfferAnnualPremium
+
+
+comparison_json.overall.annualSavings
+
+
+comparison_json.overall.savingsPct
+
+
+comparison_json.policyComparisons[] with per-policy objects, e.g.:
+
+
+policyType (e.g. "indbo", "hus", "ulykke")
+
+
+label (e.g. "Indbo", "Hus")
+
+
+currentAnnual
+
+
+offerAnnual
+
+
+annualSavings
+
+
+status or similar
+
+
+
+
+
+
+Also call the API to see what the frontend currently gets:
+curl -s http://localhost:5000/api/comparisons/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1 | jq .
+
+
+
+If the API is not returning the fields mentioned above, fix the backend transform first (in server/routes.ts) so that the JSON returned from /api/comparisons/:id exposes:
+{
+  id: string;
+  offerCompanyName: string;
+  currentCompanyName: string;
+  overall: {
+    totalCurrentAnnualPremium: number;
+    totalOfferAnnualPremium: number;
+    annualSavings: number;
+    savingsPct: number;  // 0–100
+  };
+  policyComparisons: Array<{
+    policyType: string;           // 'indbo' | 'hus' | 'ulykke' | 'bil' | 'rejse'
+    label: string;                // display label
+    currentAnnual: number | null; // null if missing
+    offerAnnual: number | null;
+    annualSavings: number | null;
+    status: "ready" | "pending";  // you can derive this if needed
+  }>;
+}
+
+Do not change the shape of comparison_json in the DB, only the API output.
+
+PHASE 1 – Create a typed view-model transformer
+File: client/src/utils/transformComparison.ts
+
+
+Create / update a function:
+
+
+export interface PolicyRowView {
+  policyType: string;
+  label: string;
+  icon: "indbo" | "hus" | "ulykke" | "bil" | "rejse";
+  currentAnnual: number | null;
+  offerAnnual: number | null;
+  annualSavings: number | null;
+  cheaperThanCurrent: boolean | null;
+  status: "ready" | "pending";
+}
+
+export interface ComparisonOverviewViewModel {
+  id: string;
+  offerCompanyName: string;
+  currentCompanyName: string;
+  overallSavingsAnnual: number;
+  overallSavingsPct: number;
+  totalCurrentAnnualPremium: number;
+  totalOfferAnnualPremium: number;
+  policyRows: PolicyRowView[];
+}
+
+export function transformCompanyComparisonToOverview(
+  apiData: any
+): ComparisonOverviewViewModel { ... }
+
+
+
+Implementation rules:
+
+
+
+
+Use only fields from the API response – no magic numbers.
+
+
+Map overallSavingsAnnual ← overall.annualSavings
+
+
+Map overallSavingsPct ← overall.savingsPct
+
+
+Map totalCurrentAnnualPremium ← overall.totalCurrentAnnualPremium
+
+
+Map totalOfferAnnualPremium ← overall.totalOfferAnnualPremium
+
+
+For each policyComparisons[] entry:
+
+
+Map premiums + savings directly
+
+
+cheaperThanCurrent = (currentAnnual != null && offerAnnual != null && offerAnnual < currentAnnual)
+
+
+status = (currentAnnual != null && offerAnnual != null) ? "ready" : "pending"
+
+
+Map icon based on policyType (indbo → "indbo", hus → "hus", etc.)
+
+
+
+
+Never return 0 as a fallback unless the field is truly missing; use null where appropriate and let the UI decide what to show.
+
+
+
+PHASE 2 – Build small presentation components (no data fetching)
+All components should live under client/src/components/comparison/ and use existing Subframe UI components (DefaultPageLayout, ListingsTabs, Table, Badge, Button, IconWithBackground, etc.).
+2.1 <ComparisonHeader>
+File: client/src/components/comparison/ComparisonHeader.tsx
+Props:
+interface ComparisonHeaderProps {
+  offerCompanyName: string;
+}
+
+Render exactly like the Subframe design:
+
+
+Title: "{offerCompanyName} sammenligning"
+
+
+Subtitle: “Compare and review insurance offers tailored for you” (or the Danish version you already used)
+
+
+On the right, a “Se beskeder” button (keep existing behaviour / link logic if already implemented).
+
+
+2.2 <ComparisonTabs>
+File: ComparisonTabs.tsx
+Props:
+interface ComparisonTabsProps {
+  active: "samlet" | "indbo" | "ulykke" | "hus" | "bil" | "rejse";
+  onChange?: (tab: ComparisonTabsProps["active"]) => void;
+}
+
+Use ListingsTabs and Subframe icons the same way as in your Subframe TSX. For now you can keep onChange optional; the page will pass "samlet" and we’ll wire others later.
+2.3 <ComparisonSummaryCards>
+File: ComparisonSummaryCards.tsx
+Props:
+interface ComparisonSummaryCardsProps {
+  overallSavingsAnnual: number;
+  overallSavingsPct: number;
+  totalCurrentAnnualPremium: number;
+  totalOfferAnnualPremium: number;
+  offerCompanyName: string;
+  currentCompanyName: string;
+}
+
+Implement the three cards using the Subframe classes and real data:
+
+
+Card 1: “Samlet besparelse”
+
+
+Large text: format overallSavingsAnnual as “X.XXX kr”
+
+
+Small text: {overallSavingsPct.toFixed(1)}% billigere
+
+
+
+
+Card 2: “{offerCompanyName} tilbud”
+
+
+Large text: totalOfferAnnualPremium
+
+
+Small text: “Per år”
+
+
+
+
+Card 3: “Din nuværende ({currentCompanyName})”
+
+
+Large text: totalCurrentAnnualPremium
+
+
+Small text: “Per år”
+
+
+
+
+Create a small utility in the same file (or a shared util) for formatting DKK amounts (no decimals or 2 decimals, matching the rest of the app), and reuse it in the table too.
+Important: No hard-coded numbers like “5.324 kr” inside JSX. Everything must come from props.
+2.4 <ComparisonQuickTable>
+File: ComparisonQuickTable.tsx
+Props:
+interface ComparisonQuickTableProps {
+  rows: PolicyRowView[];
+  onRowClick?: (policyType: string) => void; // for “Se detaljer”
+}
+
+Render:
+
+
+Card wrapper and heading “Hurtig sammenligning” exactly like Subframe markup.
+
+
+Use <Table> component like in your Subframe TSX.
+
+
+For each row:
+
+
+Category cell:
+
+
+IconWithBackground with appropriate icon based on row.icon
+
+
+row.label as label
+
+
+For policies with status === "pending" and no data, greyed-out typography (use text-subtext-color like in Subframe)
+
+
+
+
+“Nuværende” cell:
+
+
+If row.currentAnnual != null → show formatted “X.XXX kr”
+
+
+Else → “Afventer” in subtext color
+
+
+
+
+“Tilbud” cell:
+
+
+Same logic with row.offerAnnual
+
+
+
+
+“Besparelse” cell:
+
+
+If both premiums are present and annualSavings != null:
+
+
+Show formatted annualSavings in green (text-success-600) when cheaper
+
+
+Show formatted value in neutral when more expensive (you can still show negative saving, or “0 kr”)
+
+
+
+
+Else → “—”
+
+
+
+
+“Status” cell:
+
+
+If status === "ready":
+
+
+Button variant="brand-tertiary" size="small" with label “Se detaljer”
+
+
+On click → call onRowClick(policyType) (for now the page can console.log or navigate later)
+
+
+
+
+If status === "pending":
+
+
+Button variant="neutral-tertiary" size="small" with label “Afventer” and disabled.
+
+
+
+
+
+
+Again: no hard-coded amounts or rows; map directly from the rows prop.
+
+PHASE 3 – Wire everything into the comparison page
+File: client/src/pages/comparison.tsx
+The goal: comparison.tsx should only:
+
+
+Read comparisonId from the route
+
+
+Fetch /api/comparisons/:id
+
+
+Transform to ComparisonOverviewViewModel
+
+
+Pass data into the presentation components
+
+
+Steps:
+
+
+Check existing hooks. If we already have a hook like useComparison(id), reuse it; otherwise create a simple hook using TanStack Query:
+import { useQuery } from "@tanstack/react-query";
+
+function useCompanyComparison(id: string) {
+  return useQuery({
+    queryKey: ["companyComparison", id],
+    queryFn: async () => {
+      const res = await fetch(`/api/comparisons/${id}`);
+      if (!res.ok) throw new Error("Failed to load comparison");
+      return res.json();
+    },
+  });
+}
+
+
+
+In comparison.tsx:
+
+
+Get comparisonId from router params (match existing pattern).
+
+
+Call useCompanyComparison(comparisonId).
+
+
+When isLoading → show existing loading state.
+
+
+When error or data missing → show existing “Sammenligning ikke fundet”.
+
+
+
+
+When data is available:
+const vm = transformCompanyComparisonToOverview(data);
+
+return (
+  <DefaultPageLayout>
+    <div className="... page wrapper ...">
+      <ComparisonHeader offerCompanyName={vm.offerCompanyName} />
+      <ComparisonTabs active="samlet" />
+      <div className="mt-6 flex w-full flex-col gap-6">
+        <ComparisonSummaryCards
+          overallSavingsAnnual={vm.overallSavingsAnnual}
+          overallSavingsPct={vm.overallSavingsPct}
+          totalCurrentAnnualPremium={vm.totalCurrentAnnualPremium}
+          totalOfferAnnualPremium={vm.totalOfferAnnualPremium}
+          offerCompanyName={vm.offerCompanyName}
+          currentCompanyName={vm.currentCompanyName}
+        />
+        <ComparisonQuickTable
+          rows={vm.policyRows}
+          onRowClick={(policyType) => {
+            // For now, you can just console.log or navigate to the tab version later
+            console.log("Clicked", policyType);
+          }}
+        />
+      </div>
+    </div>
+  </DefaultPageLayout>
+);
+
+
+
+Important: Remove any remaining static demo JSX or static Subframe rows from comparison.tsx. All rows and numbers must come from vm.
+
+PHASE 4 – Verify visually with the real comparison
+
+
+Run the app and open:
+/sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1
+
+
+Confirm:
+
+
+Heading shows “Alka Forsikring sammenligning”
+
+
+Summary cards show real numbers:
+
+
+Samlet besparelse: ≈ 5.324 kr
+
+
+Alka Forsikring tilbud: ≈ 6.549 kr
+
+
+Din nuværende (Privatsikring): ≈ 11.873 kr
+
+
+
+
+“Hurtig sammenligning” table lists at least:
+
+
+Indbo, Hus, Ulykke (plus Bil/Rejse as “Afventer” if data missing)
+
+
+
+
+Savings column shows green numbers where offer is cheaper.
+
+
+
+
+Make sure no card displays “0 kr” unless the underlying data is really zero.
+
+
+
+Please implement all of the above carefully, reusing existing Subframe classes and components so that the layout in /sammenligning/:id matches the screenshot as closely as possible, and everything is wired to real data – no static demo content.

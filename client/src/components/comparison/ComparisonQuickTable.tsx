@@ -1,7 +1,7 @@
 import { Button } from "@/ui/components/Button";
 import { IconWithBackground } from "@/ui/components/IconWithBackground";
 import { Table } from "@/ui/components/Table";
-import { ComparisonPolicyRowView } from "@/utils/transformComparison";
+import { ComparisonPolicyRowView, formatCurrency } from "@/utils/transformComparison";
 import {
   FeatherHome,
   FeatherBuilding,
@@ -27,15 +27,6 @@ export function ComparisonQuickTable({
   policies,
   onSelectPolicy,
 }: ComparisonQuickTableProps) {
-  const formatCurrency = (amount: number | null | undefined) => {
-    if (amount === null || amount === undefined) return "Afventer";
-    return new Intl.NumberFormat("da-DK", {
-      style: "decimal",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount) + " kr";
-  };
-
   if (policies.length === 0) {
     return null;
   }

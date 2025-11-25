@@ -6,8 +6,6 @@ import { ComparisonHeader } from "@/components/comparison/ComparisonHeader";
 import { ComparisonTabs } from "@/components/comparison/ComparisonTabs";
 import { ComparisonSummaryRow } from "@/components/comparison/ComparisonSummaryRow";
 import { ComparisonQuickTable } from "@/components/comparison/ComparisonQuickTable";
-import { ComparisonDetailedMatrix } from "@/components/comparison/ComparisonDetailedMatrix";
-import { ComparisonSavingsChart } from "@/components/comparison/ComparisonSavingsChart";
 import { transformCompanyComparisonToViewModel } from "@/utils/transformComparison";
 
 export default function Comparison() {
@@ -17,9 +15,9 @@ export default function Comparison() {
   const userId = localStorage.getItem("userId");
 
   // Fetch comparison data
-  const { data: comparison, isLoading } = useQuery({
+  const { data: comparison, isLoading, error } = useQuery({
     queryKey: ["/api/comparisons", id],
-    enabled: !!id,
+    enabled: !!id && !!userId,
   });
 
   // Fetch email threads for messaging
@@ -44,7 +42,7 @@ export default function Comparison() {
   }
 
   // Error state
-  if (!comparison) {
+  if (error || !comparison) {
     return (
       <AppLayoutWithNav userId={userId!}>
         <div className="flex w-full h-screen items-center justify-center">
@@ -52,6 +50,9 @@ export default function Comparison() {
             <h2 className="text-heading-2 font-heading-2 text-default-font mb-4">
               Sammenligning ikke fundet
             </h2>
+            <p className="text-body font-body text-subtext-color mb-4">
+              {error ? "Der opstod en fejl" : "Denne sammenligning eksisterer ikke"}
+            </p>
           </div>
         </div>
       </AppLayoutWithNav>
@@ -65,15 +66,6 @@ export default function Comparison() {
   const companyId = (comparison as any)?.companyId;
   const thread = threads.find((t: any) => t.companyId === companyId);
   const threadId = thread?.id;
-
-  // Filter data based on selected tab
-  const filteredPolicies = selectedTab === "samlet"
-    ? viewModel.policies
-    : viewModel.policies.filter(p => p.policyType === selectedTab);
-
-  const filteredCoverageRows = selectedTab === "samlet"
-    ? viewModel.coverageRows
-    : viewModel.coverageRows; // TODO: Filter by policy type if needed
 
   return (
     <AppLayoutWithNav userId={userId!}>
@@ -96,7 +88,7 @@ export default function Comparison() {
             onTabChange={(tab) => setSelectedTab(tab)}
           />
 
-          {/* Summary Cards */}
+          {/* Summary Cards - always show full data regardless of tab */}
           <ComparisonSummaryRow
             overall={viewModel.overall}
             currentCompanyName={viewModel.currentCompanyName}
@@ -105,20 +97,8 @@ export default function Comparison() {
 
           {/* Quick Comparison Table */}
           <ComparisonQuickTable
-            policies={filteredPolicies}
+            policies={viewModel.policies}
             onSelectPolicy={(policyType) => setSelectedTab(policyType)}
-          />
-
-          {/* Savings Chart */}
-          {selectedTab === "samlet" && (
-            <ComparisonSavingsChart overall={viewModel.overall} />
-          )}
-
-          {/* Detailed Coverage Matrix */}
-          <ComparisonDetailedMatrix
-            currentCompanyName={viewModel.currentCompanyName}
-            offerCompanyName={viewModel.offerCompanyName}
-            coverageRows={filteredCoverageRows}
           />
 
         </div>

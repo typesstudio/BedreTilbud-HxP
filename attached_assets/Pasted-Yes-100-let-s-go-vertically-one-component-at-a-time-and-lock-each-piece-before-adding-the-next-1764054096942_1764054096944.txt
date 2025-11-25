@@ -1,0 +1,168 @@
+Yes, 100% – let’s go *vertically* one component at a time and lock each piece before adding the next.
+
+For this step, let’s ONLY fix the **top summary section** on `/sammenligning/:id`:
+
+* Hero title/subtitle
+* Tabs row (Samlet / Indbo / Ulykke / Hus / … – already fine)
+* The 3 cards: *“Samlet besparelse / Tilbud / Din nuværende”*
+
+And we wire them to **real numbers** from `company_comparisons.comparison_json.overall`.
+
+---
+
+## Step 1 – Replit prompt for the summary cards (only)
+
+Copy-paste this whole thing into Replit’s “Ask Agent”:
+
+````text
+You are working on my BedreTilbud app.
+
+GOAL (THIS STEP ONLY)
+Make the top summary section of the comparison page `/sammenligning/:id` work with **real data**, using my Subframe layout.
+
+Do NOT touch any other sections (Hurtig sammenligning table, detaljeret sammenligning, savings chart, “Forstå det med småt”). We will do those in later steps.
+
+----------------
+FILES / CONTEXT
+----------------
+- The comparison page route is: `client/src/pages/comparison.tsx`
+- Old Subframe design examples you can reuse for layout:
+  - `client/src/pages/offer-comparison-all.tsx`
+  - `client/src/pages/offer-comparison-detail.tsx`
+- Subframe components used there:
+  - `DefaultPageLayout`, `ListingsTabs`, `Badge`, `Button`, `IconWithBackground` etc.
+- Comparison data comes from the backend:
+  - Table: `company_comparisons`
+  - Column: `comparison_json`
+  - Shape (for comparison id `0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1`) – run this to confirm:
+    ```sql
+    SELECT jsonb_pretty(comparison_json->'overall')
+    FROM company_comparisons
+    WHERE id = '0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1';
+    ```
+  - The `overall` object contains at least:
+    - `annualSavings` (number)
+    - `totalCurrentAnnualPremium` (number)
+    - `totalOfferAnnualPremium` (number)
+    - possibly `savingsPercent` (number). If not, compute `annualSavings / totalCurrentAnnualPremium * 100`.
+
+There are also columns on `company_comparisons` for company names (e.g. `current_company`, `offer_company`) – use those or whatever is already returned by the `/api/comparisons/:id` endpoint so we can show company names in the UI.
+
+----------------
+WHAT TO IMPLEMENT
+----------------
+
+1. **Create a presentational component for the summary cards**
+
+Create a new file:
+
+`client/src/components/comparison/ComparisonSummarySection.tsx`
+
+Implementation rules:
+
+- It must be a **pure presentational** component – no data fetching.
+- Props:
+
+  ```ts
+  export interface ComparisonSummaryProps {
+    offerCompanyName: string;
+    currentCompanyName: string;
+    annualSavings: number;              // e.g. 5323.78
+    savingsPercent: number;             // e.g. 44.8
+    totalCurrentAnnualPremium: number;  // e.g. 11872.7
+    totalOfferAnnualPremium: number;    // e.g. 6548.92
+  }
+````
+
+* The JSX/layout should copy the Subframe design from `OfferComparisonAll`:
+
+  * 3 cards in a row:
+
+    1. “Samlet besparelse” – shows savings amount + “X% billigere”
+    2. “{offerCompanyName} tilbud” – shows offer annual premium
+    3. “Din nuværende ({currentCompanyName})” – shows current annual premium
+  * Use the same Tailwind/Subframe class names as in `offer-comparison-all.tsx` so the visual design stays identical.
+* Format the numbers as `X.XXX kr` (you can use a simple helper like `Intl.NumberFormat("da-DK", { style: "currency", currency: "DKK", maximumFractionDigits: 0 })`, or reuse an existing formatter if the project already has one).
+* If any number is `null`/`undefined`, fall back gracefully with `"0 kr"` and `0%`.
+
+2. **Wire the component into `comparison.tsx`**
+
+Open `client/src/pages/comparison.tsx` and:
+
+* Find where the comparison data for `/api/comparisons/:id` is fetched. Reuse whatever hook or fetch logic is already there.
+
+* After you have the raw comparison object and its `comparisonJson` (or similar), derive a small **view-model** for the summary:
+
+  ```ts
+  const overall = comparison.comparisonJson?.overall ?? {};
+
+  const annualSavings = overall.annualSavings ?? 0;
+  const totalCurrentAnnualPremium = overall.totalCurrentAnnualPremium ?? 0;
+  const totalOfferAnnualPremium = overall.totalOfferAnnualPremium ?? 0;
+
+  const savingsPercent =
+    totalCurrentAnnualPremium > 0
+      ? (annualSavings / totalCurrentAnnualPremium) * 100
+      : 0;
+  ```
+
+* Derive the company names from the comparison:
+
+  * Prefer `comparison.currentCompany` / `comparison.offerCompany` if present.
+  * Otherwise look inside `comparisonJson.overall` for any name fields.
+
+* Render the new component inside the existing `DefaultPageLayout`, in the same place where the static summary cards used to be.
+
+  Example (pseudo):
+
+  ```tsx
+  <ComparisonSummarySection
+    offerCompanyName={offerCompanyName}
+    currentCompanyName={currentCompanyName}
+    annualSavings={annualSavings}
+    savingsPercent={savingsPercent}
+    totalCurrentAnnualPremium={totalCurrentAnnualPremium}
+    totalOfferAnnualPremium={totalOfferAnnualPremium}
+  />
+  ```
+
+3. **Temporarily hide the rest**
+
+* For now, comment out or remove any placeholder components for:
+
+  * Hurtig sammenligning table
+  * Detaljeret sammenligning
+  * Savings chart
+  * “Forstå det med småt”
+* The page should just show:
+
+  * The existing header (title, subtitle, tabs)
+  * The 3 summary cards with real numbers.
+
+4. **Verify with the known comparison**
+
+* Run the dev server.
+* Open: `/sammenligning/0f0d18ad-174f-4ca5-a4bf-b70a7d64c1a1`
+* Check that the cards show approximately:
+
+  * Samlet besparelse: **5.324 kr** (44,8% billigere)
+  * {offerCompanyName} tilbud: **6.549 kr / år** (rounded)
+  * Din nuværende ({currentCompanyName}): **11.873 kr / år** (rounded)
+
+If the numbers are slightly different due to rounding, that’s OK, but they must clearly come from `comparison_json.overall` and not be hardcoded.
+
+IMPORTANT:
+
+* Do not change any backend routes or database schema.
+* Do not implement the coverage matrix or savings chart yet.
+* Keep the code clean and type-safe (use TypeScript types where appropriate).
+
+```
+
+---
+
+Once that’s working and the three cards show the real numbers, we’ll do **Step 2** just for “Hurtig sammenligning” table, then Step 3 for “Detaljeret sammenligning”, etc. Each step will be its own focused Replit prompt.
+
+When you’ve run this and the cards look right (with real values), send me a screenshot, and we’ll craft the next component-specific prompt.
+::contentReference[oaicite:0]{index=0}
+```
