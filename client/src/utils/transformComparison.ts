@@ -38,6 +38,16 @@ export interface ComparisonCoverageRowView {
   note: string | null;
 }
 
+export interface SavingsOverTimeView {
+  annualSavings: number;
+  totalCurrentAnnual: number;
+  totalOfferAnnual: number;
+  chartPoints: { x: string; y: number }[];
+  total10Years: number;
+  total12Months: number;
+  monthlySavingsRange: { min: number; max: number };
+}
+
 export interface ComparisonViewModel {
   id: string;
   offerCompanyName: string;
@@ -46,6 +56,7 @@ export interface ComparisonViewModel {
   policies: ComparisonPolicyRowView[];
   highlights: ComparisonHighlightView[];
   coverageRows: ComparisonCoverageRowView[];
+  savingsOverTime: SavingsOverTimeView | null;
 }
 
 // ============================================================================
@@ -129,6 +140,30 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
     });
   }
 
+  // Transform savings over time
+  const cumulativeSavings = comparisonData.cumulativeSavings;
+  let savingsOverTime: SavingsOverTimeView | null = null;
+
+  if (cumulativeSavings && overall.annualSavings) {
+    const chartData = cumulativeSavings.chartData || [];
+    
+    savingsOverTime = {
+      annualSavings: overall.annualSavings,
+      totalCurrentAnnual: overall.totalCurrentAnnualPremium ?? 0,
+      totalOfferAnnual: overall.totalOfferAnnualPremium ?? 0,
+      chartPoints: chartData.map((point: any) => ({
+        x: point.month || "",
+        y: point.savings || 0,
+      })),
+      total10Years: cumulativeSavings.totalOver10Years ?? cumulativeSavings.after10Years ?? (overall.annualSavings * 10),
+      total12Months: cumulativeSavings.after12Months ?? overall.annualSavings,
+      monthlySavingsRange: cumulativeSavings.monthlyRange || {
+        min: Math.round((overall.annualSavings / 12) * 0.9),
+        max: Math.round((overall.annualSavings / 12) * 1.1),
+      },
+    };
+  }
+
   return {
     id: raw.id,
     offerCompanyName,
@@ -137,6 +172,7 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
     policies,
     highlights,
     coverageRows,
+    savingsOverTime,
   };
 }
 
