@@ -164,6 +164,17 @@ export function transformPolicyHealthCheckToView(
     };
   }
 
+  // Get annual savings - try multiple sources for compatibility
+  const annualSavings = result.annualSavings || {};
+  const annualPotentialSavings = potentialSavings.realistic 
+    || annualSavings.amount 
+    || 0;
+  const annualSavingsPercent = potentialSavings.percentage 
+    || annualSavings.percentageLower 
+    || (potentialSavings.realistic && cumulativeSavingsData.monthlyRange 
+      ? Math.round((potentialSavings.realistic / (cumulativeSavingsData.monthlyRange.max * 12 + potentialSavings.realistic)) * 100 * 10) / 10
+      : 0);
+
   return {
     title: `${policyTypeLabel} sundhedstjek`,
     subtitle: snapshot.kind === "offer" 
@@ -173,8 +184,8 @@ export function transformPolicyHealthCheckToView(
     policyTypeLabel,
     policyType: snapshot.policyType,
     kind: snapshot.kind,
-    annualPotentialSavings: potentialSavings.realistic,
-    annualSavingsPercent: potentialSavings.percentage,
+    annualPotentialSavings,
+    annualSavingsPercent,
     benefits,
     coverageRows,
     strengths,

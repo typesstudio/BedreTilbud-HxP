@@ -111,13 +111,11 @@ export default function PolicyHealthCheckPage() {
             </div>
           </div>
 
-          {/* Annual Potential Savings */}
-          {data.annualPotentialSavings && (
-            <HealthCheckAnnualPotentialCard
-              annualPotentialSavings={data.annualPotentialSavings}
-              annualSavingsPercent={data.annualSavingsPercent}
-            />
-          )}
+          {/* Annual Potential Savings - always show, component handles 0 values */}
+          <HealthCheckAnnualPotentialCard
+            annualPotentialSavings={data.annualPotentialSavings || 0}
+            annualSavingsPercent={data.annualSavingsPercent}
+          />
 
           {/* Benefits Grid */}
           {data.benefits && data.benefits.length > 0 && (
@@ -134,14 +132,11 @@ export default function PolicyHealthCheckPage() {
             />
           )}
 
-          {/* Strengths & Weaknesses */}
-          {((data.strengths && data.strengths.length > 0) || 
-            (data.weaknesses && data.weaknesses.length > 0)) && (
-            <HealthCheckStrengthsWeaknesses
-              strengths={data.strengths || []}
-              weaknesses={data.weaknesses || []}
-            />
-          )}
+          {/* Strengths & Weaknesses - always show, component handles empty states */}
+          <HealthCheckStrengthsWeaknesses
+            strengths={data.strengths || []}
+            weaknesses={data.weaknesses || []}
+          />
 
           {/* Savings Chart */}
           {data.savingsOverTime && (

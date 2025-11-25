@@ -1,5 +1,5 @@
 import { IconWithBackground } from "@/ui/components/IconWithBackground";
-import { FeatherCheck, FeatherAlertCircle } from "@subframe/core";
+import { FeatherCheck, FeatherAlertCircle, FeatherCheckCircle, FeatherAlertTriangle } from "@subframe/core";
 
 export interface HealthCheckItem {
   id: string;
@@ -17,94 +17,122 @@ export function HealthCheckStrengthsWeaknesses({
   strengths,
   weaknesses,
 }: HealthCheckStrengthsWeaknessesProps) {
-  const hasContent = (strengths && strengths.length > 0) || (weaknesses && weaknesses.length > 0);
+  const hasStrengths = strengths && strengths.length > 0;
+  const hasWeaknesses = weaknesses && weaknesses.length > 0;
+  const hasContent = hasStrengths || hasWeaknesses;
   
-  if (!hasContent) return null;
+  if (!hasContent) {
+    return (
+      <div 
+        className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6"
+        data-testid="strengths-weaknesses-section"
+      >
+        <span className="text-heading-2 font-heading-2 text-default-font">
+          Styrker & svagheder
+        </span>
+        <div className="flex w-full items-center justify-center py-8">
+          <span className="text-body font-body text-subtext-color">
+            Ingen styrker eller svagheder identificeret for denne forsikring.
+          </span>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:px-4 mobile:py-4">
-      <span className="text-heading-2 font-heading-2 text-default-font mobile:text-heading-3 mobile:font-heading-3">
+    <div 
+      className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6"
+      data-testid="strengths-weaknesses-section"
+    >
+      <span className="text-heading-2 font-heading-2 text-default-font">
         Styrker & svagheder
       </span>
-
-      <div className="flex w-full items-start gap-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4">
+      <div className="flex w-full items-start gap-4">
         {/* Strengths Column */}
-        {strengths && strengths.length > 0 && (
-          <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3 mobile:w-full">
-            <div className="flex items-center gap-2">
-              <IconWithBackground
-                variant="success"
-                size="small"
-                icon={<FeatherCheck />}
-              />
-              <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
-                Styrker
-              </span>
-            </div>
-            <div className="flex w-full flex-col items-start gap-2">
-              {strengths.map((item) => (
+        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3">
+          <div className="flex items-center gap-2">
+            <IconWithBackground
+              variant="success"
+              size="small"
+              icon={<FeatherCheckCircle />}
+            />
+            <span className="text-body-bold font-body-bold text-success-700">
+              Styrker
+            </span>
+          </div>
+          <div className="flex w-full flex-col items-start gap-2">
+            {hasStrengths ? (
+              strengths.map((item) => (
                 <div
                   key={item.id}
-                  className="flex w-full flex-col items-start gap-1 rounded-md border border-solid border-success-200 bg-success-50 px-4 py-3"
+                  className="flex w-full items-start gap-2 rounded-md border border-solid border-success-200 bg-success-50 px-3 py-3"
                   data-testid={`strength-${item.id}`}
                 >
-                  <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
-                    {item.title}
-                  </span>
-                  {item.description && (
-                    <span className="text-body font-body text-default-font mobile:text-caption mobile:font-caption">
-                      {item.description}
+                  <FeatherCheck className="text-body font-body text-success-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                    <span className="text-body-bold font-body-bold text-default-font">
+                      {item.title}
                     </span>
-                  )}
-                  {item.amountText && (
-                    <span className="text-caption font-caption text-success-700">
-                      {item.amountText}
-                    </span>
-                  )}
+                    {item.description && (
+                      <span className="text-caption font-caption text-subtext-color">
+                        {item.description}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
+              ))
+            ) : (
+              <div className="flex w-full items-center justify-center py-4 rounded-md bg-neutral-50">
+                <span className="text-caption font-caption text-subtext-color">
+                  Ingen styrker identificeret
+                </span>
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
         {/* Weaknesses Column */}
-        {weaknesses && weaknesses.length > 0 && (
-          <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3 mobile:w-full">
-            <div className="flex items-center gap-2">
-              <IconWithBackground
-                variant="warning"
-                size="small"
-                icon={<FeatherAlertCircle />}
-              />
-              <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
-                Forbedringsmuligheder
-              </span>
-            </div>
-            <div className="flex w-full flex-col items-start gap-2">
-              {weaknesses.map((item) => (
+        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3">
+          <div className="flex items-center gap-2">
+            <IconWithBackground
+              variant="warning"
+              size="small"
+              icon={<FeatherAlertTriangle />}
+            />
+            <span className="text-body-bold font-body-bold text-warning-700">
+              Forbedringsmuligheder
+            </span>
+          </div>
+          <div className="flex w-full flex-col items-start gap-2">
+            {hasWeaknesses ? (
+              weaknesses.map((item) => (
                 <div
                   key={item.id}
-                  className="flex w-full flex-col items-start gap-1 rounded-md border border-solid border-warning-200 bg-warning-50 px-4 py-3"
+                  className="flex w-full items-start gap-2 rounded-md border border-solid border-warning-200 bg-warning-50 px-3 py-3"
                   data-testid={`weakness-${item.id}`}
                 >
-                  <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold">
-                    {item.title}
-                  </span>
-                  {item.description && (
-                    <span className="text-body font-body text-default-font mobile:text-caption mobile:font-caption">
-                      {item.description}
+                  <FeatherAlertCircle className="text-body font-body text-warning-600 mt-0.5 flex-shrink-0" />
+                  <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                    <span className="text-body-bold font-body-bold text-default-font">
+                      {item.title}
                     </span>
-                  )}
-                  {item.amountText && (
-                    <span className="text-caption font-caption text-warning-700">
-                      {item.amountText}
-                    </span>
-                  )}
+                    {item.description && (
+                      <span className="text-caption font-caption text-subtext-color">
+                        {item.description}
+                      </span>
+                    )}
+                  </div>
                 </div>
-              ))}
-            </div>
+              ))
+            ) : (
+              <div className="flex w-full items-center justify-center py-4 rounded-md bg-neutral-50">
+                <span className="text-caption font-caption text-subtext-color">
+                  Ingen forbedringsmuligheder identificeret
+                </span>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
