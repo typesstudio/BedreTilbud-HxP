@@ -6,13 +6,13 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import OffersOverview from "@/pages/offers-overview";
+import Comparison from "@/pages/comparison";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
 const ModernLandingPage = lazy(() => import("@/pages/ModernLandingPage"));
 const LandingWizard = lazy(() => import("@/pages/LandingWizard"));
 const Home = lazy(() => import("@/pages/home"));
 const Onboarding = lazy(() => import("@/pages/onboarding"));
-const Comparison = lazy(() => import("@/pages/comparison"));
 const EmailCorrespondence = lazy(() => import("@/pages/email-correspondence"));
 const UploadOffer = lazy(() => import("@/pages/upload-offer"));
 const GmailSetup = lazy(() => import("@/pages/gmail-setup"));

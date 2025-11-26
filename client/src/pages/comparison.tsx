@@ -11,6 +11,7 @@ import { ComparisonHighlights } from "@/components/comparison/ComparisonHighligh
 import { ComparisonDetailedMatrix } from "@/components/comparison/ComparisonDetailedMatrix";
 import { ComparisonSavingsSection } from "@/components/comparison/ComparisonSavingsSection";
 import { transformCompanyComparisonToViewModel, type ComparisonTabKey } from "@/utils/transformComparison";
+import LoadingComparison from "@/components/loading/LoadingComparison";
 
 export default function Comparison() {
   const { id } = useParams();
@@ -31,16 +32,11 @@ export default function Comparison() {
   });
   const threads = threadsResponse?.data || [];
 
-  // Loading state
+  // Loading state - show skeleton
   if (isLoading) {
     return (
       <AppLayoutWithNav userId={userId!}>
-        <div className="flex w-full h-screen items-center justify-center">
-          <div className="text-center">
-            <div className="w-16 h-16 border-4 border-brand-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-            <p className="text-body font-body text-subtext-color">Indlæser sammenligning...</p>
-          </div>
-        </div>
+        <LoadingComparison />
       </AppLayoutWithNav>
     );
   }
