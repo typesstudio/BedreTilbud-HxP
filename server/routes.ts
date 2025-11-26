@@ -2274,7 +2274,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get snapshot details for response
       // Support BOTH policy_snapshots (new) and offer_snapshots (legacy for backwards compatibility)
+      // Track which table the snapshot came from to fetch siblings from the SAME table
       let snapshot: any = null;
+      let snapshotSource: 'policy_snapshots' | 'offer_snapshots' = 'policy_snapshots';
       
       // Try new policy_snapshots first
       const policySnapshotService = new (await import("./services/policySnapshots/PolicySnapshotService")).PolicySnapshotService();
@@ -2285,6 +2287,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         logger.info('[Health Check API] Not found in policy_snapshots, trying offer_snapshots', { snapshotId });
         const offerSnapshot = await storage.getOfferSnapshot(snapshotId);
         if (offerSnapshot) {
+          snapshotSource = 'offer_snapshots';
           // Map offer_snapshot to snapshot format
           // Note: structuredPolicy is loosely typed, so we cast to any for pricing access
           const structuredPolicy = offerSnapshot.structuredPolicy as any;
@@ -2316,23 +2319,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       // Fetch sibling snapshots from the same document for tab navigation
-      // This allows the health check page to show dynamic tabs that navigate between policies
+      // IMPORTANT: Fetch from the SAME table as the current snapshot to avoid
+      // mismatched policy types (e.g., 'hus' in offer_snapshots vs 'fritidshus' in policy_snapshots)
       const documentId = healthCheck.documentId;
       let siblingSnapshots: Array<{ id: string; policyType: string; companyName: string }> = [];
       
       try {
-        // Try policy_snapshots first (new architecture)
-        const policySiblings = await policySnapshotService.getSnapshotsByDocument(documentId);
-        if (policySiblings && policySiblings.length > 0) {
-          siblingSnapshots = policySiblings.map((s: any) => ({
-            id: s.id,
-            policyType: s.policyType,
-            companyName: s.companyName || 'Ukendt',
-          }));
+        if (snapshotSource === 'policy_snapshots') {
+          // Current snapshot is from policy_snapshots - fetch siblings from same table
+          const policySiblings = await policySnapshotService.getSnapshotsByDocument(documentId);
+          if (policySiblings && policySiblings.length > 0) {
+            siblingSnapshots = policySiblings.map((s: any) => ({
+              id: s.id,
+              policyType: s.policyType,
+              companyName: s.companyName || 'Ukendt',
+            }));
+          }
         } else {
-          // Fallback to offer_snapshots (legacy)
+          // Current snapshot is from offer_snapshots - fetch siblings from same table
           const offerSiblings = await storage.getOfferSnapshotsByDocument(documentId);
-          if (offerSiblings) {
+          if (offerSiblings && offerSiblings.length > 0) {
             siblingSnapshots = offerSiblings.map((s: any) => ({
               id: s.id,
               policyType: s.policyType,
@@ -2343,6 +2349,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         logger.info('[Health Check API] Found sibling snapshots', { 
           documentId, 
+          snapshotSource,
           count: siblingSnapshots.length,
           types: siblingSnapshots.map(s => s.policyType)
         });
