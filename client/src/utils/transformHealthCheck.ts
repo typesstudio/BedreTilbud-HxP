@@ -74,39 +74,40 @@ export function transformPolicyHealthCheckToView(
   const policyTypeLabel = policyTypeLabels[snapshot.policyType] || snapshot.policyType;
 
   // Build sibling tabs from sibling snapshots, ordered by policy type
+  // IMPORTANT: Deduplicate by policyType (not just id) to handle cases where
+  // both offer_snapshots and policy_snapshots exist for the same document/policyType
   const siblingTabs: PolicyTab[] = [];
   
-  // Collect all siblings plus ensure current snapshot is included
-  const allSnapshots: SiblingSnapshot[] = [];
+  // Use a Map to deduplicate by policyType, preferring the current snapshot's ID
+  // for its policy type, and the first sibling for other policy types
+  const policyTypeToSnapshot = new Map<string, SiblingSnapshot>();
   
-  // Add current snapshot first (will be deduplicated if already in siblings)
-  const currentAsTab: SiblingSnapshot = {
+  // First, add all siblings to the map
+  if (siblingSnapshots && siblingSnapshots.length > 0) {
+    for (const sibling of siblingSnapshots) {
+      // Only add if we haven't seen this policyType yet
+      if (!policyTypeToSnapshot.has(sibling.policyType)) {
+        policyTypeToSnapshot.set(sibling.policyType, sibling);
+      }
+    }
+  }
+  
+  // Override with current snapshot for its policyType (ensures correct active state)
+  policyTypeToSnapshot.set(snapshot.policyType, {
     id: snapshot.id,
     policyType: snapshot.policyType,
     companyName: snapshot.companyName,
-  };
+  });
   
-  if (siblingSnapshots && siblingSnapshots.length > 0) {
-    // Check if current snapshot is already in siblings
-    const currentInSiblings = siblingSnapshots.some(s => s.id === snapshot.id);
-    
-    if (!currentInSiblings) {
-      allSnapshots.push(currentAsTab);
-    }
-    allSnapshots.push(...siblingSnapshots);
-  } else {
-    // No siblings - just show current snapshot
-    allSnapshots.push(currentAsTab);
-  }
-  
-  // Sort all snapshots by policy type order
-  const sortedSnapshots = allSnapshots.sort((a, b) => {
+  // Convert map to array and sort by policy type order
+  const uniqueSnapshots = Array.from(policyTypeToSnapshot.values());
+  const sortedSnapshots = uniqueSnapshots.sort((a, b) => {
     const aIndex = policyTypeOrder.indexOf(a.policyType);
     const bIndex = policyTypeOrder.indexOf(b.policyType);
     return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
   });
 
-  // Build tabs from sorted snapshots
+  // Build tabs from sorted, deduplicated snapshots
   for (const snap of sortedSnapshots) {
     siblingTabs.push({
       policyType: snap.policyType,
