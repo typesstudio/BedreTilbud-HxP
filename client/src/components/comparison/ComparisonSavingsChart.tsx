@@ -14,11 +14,9 @@ export function ComparisonSavingsChart({ overall }: ComparisonSavingsChartProps)
   }
 
   const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("da-DK", {
-      style: "decimal",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(Math.round(amount)) + " kr";
+    const rounded = Math.round(amount);
+    const formatted = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return formatted + " kr";
   };
 
   const tooltipFormatter = (value: number) => formatCurrency(value);

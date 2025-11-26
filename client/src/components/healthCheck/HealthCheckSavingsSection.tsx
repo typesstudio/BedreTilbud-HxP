@@ -25,11 +25,9 @@ const POLICY_COLORS: Record<string, string> = {
 };
 
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("da-DK", {
-    style: "decimal",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(Math.round(amount)) + " kr";
+  const rounded = Math.round(amount);
+  const formatted = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return formatted + " kr";
 }
 
 function monthToYearLabel(monthIndex: number): string {
@@ -55,11 +53,7 @@ export function HealthCheckSavingsSection({
   const seriesColor = POLICY_COLORS[policyType] || "#10b981";
 
   const tickFormatter = (value: number) => {
-    return new Intl.NumberFormat("da-DK", {
-      style: "decimal",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value) + " kr";
+    return formatCurrency(value);
   };
 
   const chartData = savingsOverTime.chartData.map((point, index) => ({

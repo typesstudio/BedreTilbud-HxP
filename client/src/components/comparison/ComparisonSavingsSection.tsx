@@ -20,11 +20,9 @@ const POLICY_COLORS: Record<string, string> = {
 };
 
 function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("da-DK", {
-    style: "decimal",
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(Math.round(amount)) + " kr";
+  const rounded = Math.round(amount);
+  const formatted = rounded.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return formatted + " kr";
 }
 
 function monthToYearLabel(monthIndex: number): string {
@@ -118,11 +116,7 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
 
   // Value formatter for Y-axis and tooltip
   const tickFormatter = (value: number) => {
-    return new Intl.NumberFormat("da-DK", {
-      style: "decimal",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(Math.round(value)) + " kr";
+    return formatCurrency(value);
   };
 
   const tooltipFormatter = (value: number) => formatCurrency(value);
