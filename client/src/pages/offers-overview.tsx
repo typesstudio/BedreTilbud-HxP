@@ -36,17 +36,6 @@ export default function OffersOverview() {
   });
   const offers = offersResponse?.data || [];
 
-  // Show loading skeleton while initial data is loading
-  const isInitialLoading = isLoadingStats || isLoadingThreads || isLoadingOffers;
-
-  if (isInitialLoading) {
-    return (
-      <AppLayoutWithNav userId={userId}>
-        <LoadingOffers />
-      </AppLayoutWithNav>
-    );
-  }
-
   // Check inbox mutation
   const checkInboxMutation = useMutation({
     mutationFn: async () => {
@@ -83,6 +72,17 @@ export default function OffersOverview() {
 
     return () => clearInterval(intervalId);
   }, [userId]);
+
+  // Show loading skeleton while initial data is loading (must be after all hooks)
+  const isInitialLoading = isLoadingStats || isLoadingThreads || isLoadingOffers;
+
+  if (isInitialLoading) {
+    return (
+      <AppLayoutWithNav userId={userId}>
+        <LoadingOffers />
+      </AppLayoutWithNav>
+    );
+  }
 
   const getComparisonForThread = (threadId: string) => {
     // Find offers that match the thread's company
