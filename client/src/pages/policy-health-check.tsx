@@ -155,9 +155,7 @@ export default function PolicyHealthCheckPage() {
           {activeTab === "overblik" ? (
             /* Overblik / Aggregated Overview */
             overviewLoading ? (
-              <div className="flex w-full items-center justify-center py-12">
-                <span className="text-body font-body text-subtext-color">Indlæser overblik...</span>
-              </div>
+              <LoadingInsuranceCheck />
             ) : overviewData ? (
               <HealthCheckOverviewSection
                 data={overviewData}
