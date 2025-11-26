@@ -1,0 +1,138 @@
+Yes – your analysis is spot on.
+
+* The **numbers ARE in the data** (for that user and in general):
+
+  * `structured_policy.coverageDetails.mainCoverages[].limit` (e.g. *“62.344 kr”, “10.000.000 kr”, “225.000 kr”, “200.000,00 kr”*).
+  * `health_check.result.whatsIncluded[].attributes.sum` (e.g. Indbo *“66.595 kr”*).
+* The **current Overblik backend** is looking in the wrong place (highlights/keyFigures with “sum” in title/label), so the “Din dækningsstatus” column ends up with text instead of the real coverage sums.
+
+So the fix is: **change the backend aggregation for Overblik to read coverage sums from `structured_policy.coverageDetails.mainCoverages` and/or `health_check.result.whatsIncluded[].attributes.sum`.**
+
+Below is a Replit prompt you can paste directly.
+
+---
+
+### Replit prompt – make “Din dækningsstatus” use real coverage sums
+
+````md
+Goal
+Fix the “Din dækningsstatus” section on the Overblik (sundhedstjek) page so that the “Nuværende sum” column shows real coverage sums (e.g. “500.000 kr”) from the extracted policy data, not generic text.
+
+Current bug (backend)
+- The health-check overview endpoint currently tries to derive the coverage sum from:
+  - health_check.result.highlights (title containing “sum”), or
+  - health_check.result.keyFigures (label containing “sum”).
+- This is wrong for the Overblik table.
+- The actual sums live in:
+  - offer_snapshots.structured_policy.coverageDetails.mainCoverages[].limit
+  - health_check.result.whatsIncluded[].attributes.sum
+
+What to implement
+
+1) Add a helper to extract the primary coverage sum for a single policy
+
+In the backend (where we build the per-policy summary used by Overblik), add a pure function, e.g.:
+
+```ts
+function extractCoverageSum(structuredPolicy: any, healthCheckResult: any): string | null {
+  // 1) Prefer explicit sum from health_check.result.whatsIncluded
+  const whatsIncluded = healthCheckResult?.whatsIncluded ?? [];
+  const withSum = whatsIncluded.find(
+    (item: any) => item?.attributes?.sum
+  );
+  if (withSum?.attributes?.sum) {
+    // Example: "66.595 kr" for Indbo
+    return withSum.attributes.sum;
+  }
+
+  // 2) Fallback to first mainCoverage with a limit in structured_policy.coverageDetails.mainCoverages
+  const mainCoverages = structuredPolicy?.coverageDetails?.mainCoverages ?? [];
+  const coverageWithLimit = mainCoverages.find((c: any) => c?.limit);
+  if (coverageWithLimit?.limit) {
+    // Examples: "62.344 kr", "10.000.000 kr", "225.000 kr", "200.000,00 kr"
+    return coverageWithLimit.limit;
+  }
+
+  // 3) If nothing found, indicate missing
+  return null;
+}
+````
+
+Notes:
+
+* Do NOT rely on highlights or keyFigures here.
+* The helper should be generic enough to work for Indbo, Hus, Fritidshus, Ulykke etc.
+* We keep the value as a formatted string; no need to parse to a number for this table.
+
+2. Use the helper when building the Overblik coverageStatus entries
+
+Where we currently build each `coverageStatus` item for the Overblik API payload, we already map per-policy data into something like:
+
+```ts
+{
+  policyId,
+  policyType,
+  policyLabel,
+  coverageAmountLabel, // currently wrong
+  recommendation,
+  recommendationLabel,
+  ...
+}
+```
+
+Replace the existing logic for `coverageAmountLabel`:
+
+* **Remove** any code that looks into `highlights` or `keyFigures` for “sum”.
+* **Instead**, call the new helper:
+
+```ts
+const coverageAmountLabel =
+  extractCoverageSum(snapshot.structured_policy, healthCheck.result) ?? "—";
+```
+
+Make sure this value is included in the JSON returned by the overview endpoint (the one consumed by the Overblik page).
+
+3. Keep existing aggregation logic intact
+
+* Keep the current logic for:
+
+  * totalAnnualSavings (sum of per-policy annualSavings),
+  * totalSavingsPct,
+  * recommendation / recommendationLabel,
+  * aggregatedIssues, etc.
+* Only change how the “coverage sum” / “Nuværende sum” label is derived.
+
+4. Frontend – no structural changes, just use the field
+
+The Overblik frontend already expects each row in the “Din dækningsstatus” table to have a `coverageAmountLabel` (or similar). Ensure:
+
+```tsx
+<Table.Cell>
+  <span className="whitespace-nowrap text-body font-body text-default-font">
+    {policy.coverageAmountLabel ?? "—"}
+  </span>
+</Table.Cell>
+```
+
+Once the backend is updated to use `extractCoverageSum`, the Overblik table should automatically display the real sums, like:
+
+* “500.000 kr” for Indbo,
+* “3.500.000 kr” for Hus,
+* “100.000 kr” for Ulykke,
+* or “—” if we genuinely have no coverage sum for that policy.
+
+5. Edge cases
+
+* If a policy has neither `whatsIncluded[].attributes.sum` nor any `mainCoverages[].limit`, return `"—"` and keep the text color as the neutral/subtext color.
+* Do not change any other API contracts or routes.
+
+Summary
+
+* Backend currently points to the wrong fields for coverage sums.
+* Implement `extractCoverageSum(structuredPolicy, healthCheckResult)` using `whatsIncluded[].attributes.sum` and `coverageDetails.mainCoverages[].limit`.
+* Use that helper to populate `coverageAmountLabel` for each policy in the Overblik response, so the “Nuværende sum” column shows real coverage numbers.
+
+```
+
+This keeps your current architecture intact and just fixes the one thing the Overblik table actually needs: a clean, consistent coverage sum per policy.
+```
