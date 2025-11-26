@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import LoadingProfile from "@/components/loading/LoadingProfile";
 
 export default function ProfilePage() {
   const { userId } = useParams<{ userId: string }>();
@@ -139,7 +140,11 @@ export default function ProfilePage() {
   };
 
   if (loadingUser) {
-    return <div className="flex h-screen items-center justify-center">Indlæser...</div>;
+    return (
+      <AppLayoutWithNav userId={userId!}>
+        <LoadingProfile />
+      </AppLayoutWithNav>
+    );
   }
 
   if (!user) {

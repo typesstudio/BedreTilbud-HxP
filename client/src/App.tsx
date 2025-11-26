@@ -8,6 +8,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import OffersOverview from "@/pages/offers-overview";
 import Comparison from "@/pages/comparison";
 import PolicyHealthCheck from "@/pages/policy-health-check";
+import ProfilePage from "@/pages/ProfilePage";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
 const ModernLandingPage = lazy(() => import("@/pages/ModernLandingPage"));
@@ -19,7 +20,6 @@ const UploadOffer = lazy(() => import("@/pages/upload-offer"));
 const GmailSetup = lazy(() => import("@/pages/gmail-setup"));
 const SendInquiry = lazy(() => import("@/pages/send-inquiry"));
 const AdminTesting = lazy(() => import("@/pages/admin-testing"));
-const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const InsuranceCheck = lazy(() => import("@/pages/insurance-check"));
 const InsuranceCheckPage = lazy(() => import("@/pages/InsuranceCheckPage"));
 const OfferComparisonAll = lazy(() => import("@/pages/offer-comparison-all"));
