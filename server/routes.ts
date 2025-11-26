@@ -1062,7 +1062,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ comparisons });
     } catch (error: any) {
       logger.error('[PolicyComparisons] Failed to fetch comparisons', error, { 
-        userId: req.headers['x-user-id'] 
+        userId: req.headers['x-user-id'] as string | undefined
       });
       res.status(500).json({ message: "Failed to fetch policy comparisons" });
     }
@@ -2286,12 +2286,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const offerSnapshot = await storage.getOfferSnapshot(snapshotId);
         if (offerSnapshot) {
           // Map offer_snapshot to snapshot format
+          // Note: structuredPolicy is loosely typed, so we cast to any for pricing access
+          const structuredPolicy = offerSnapshot.structuredPolicy as any;
           snapshot = {
             id: offerSnapshot.id,
             companyName: 'Ukendt', // offer_snapshots don't have company_name field
             policyType: offerSnapshot.policyType,
             kind: 'offer',
-            pricing: offerSnapshot.structuredPolicy?.pricing || null,
+            pricing: structuredPolicy?.pricing || null,
           };
         }
       }

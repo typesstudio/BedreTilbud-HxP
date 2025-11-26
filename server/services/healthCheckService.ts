@@ -107,9 +107,67 @@ async function enrichWithBenchmarkSavings(
     });
   }
   
-  // Update health check result with benchmark-based savings
+  // Generate fallback strengths/weaknesses if they're missing or empty
+  const DEFAULT_STRENGTHS_BY_TYPE: Record<string, Array<{ title: string; description: string }>> = {
+    indbo: [
+      { title: 'Standard indbodækning', description: 'Dækker de fleste almindelige skader på dit indbo' },
+      { title: 'Fleksibel forsikring', description: 'Kan tilpasses dine specifikke behov' },
+    ],
+    hus: [
+      { title: 'Omfattende bygningsdækning', description: 'Beskytter din bolig mod brand, storm og vandskade' },
+      { title: 'Inkluderer ansvarsdækning', description: 'Du er dækket hvis andre kommer til skade på din grund' },
+    ],
+    ulykke: [
+      { title: 'Personlig ulykkesbeskyttelse', description: 'Dækker varige skader ved uheld' },
+      { title: 'Fleksibel dækningssum', description: 'Kan tilpasses din livssituation' },
+    ],
+    bil: [
+      { title: 'Kaskoforsikring inkluderet', description: 'Dækker skader på din egen bil' },
+      { title: 'Vejhjælp inkluderet', description: 'Hjælp når du går i stå' },
+    ],
+    rejse: [
+      { title: 'Verdensomspændende dækning', description: 'Du er dækket på alle dine rejser' },
+      { title: 'Bagagedækning inkluderet', description: 'Erstatning ved bortkommet bagage' },
+    ],
+  };
+  
+  const DEFAULT_WEAKNESSES_BY_TYPE: Record<string, Array<{ title: string; description: string }>> = {
+    indbo: [
+      { title: 'Selvrisiko bør gennemgås', description: 'Tjek at selvrisikoen passer til dit budget' },
+      { title: 'Særlig dækning for værdigenstande', description: 'Overvej om smykker og elektronik er tilstrækkeligt dækket' },
+    ],
+    hus: [
+      { title: 'Undersøg dækning for skybrud', description: 'Klimaforandringer øger risikoen for oversvømmelse' },
+      { title: 'Gennemgå selvrisiko på vandskade', description: 'Vandskader kan være dyre - tjek din selvrisiko' },
+    ],
+    ulykke: [
+      { title: 'Dækning ved arbejde', description: 'Tjek om du er dækket i arbejdstiden' },
+      { title: 'Erhvervsevnetab', description: 'Overvej om du har behov for udvidet dækning ved tab af arbejdsevne' },
+    ],
+    bil: [
+      { title: 'Vejhjælp i udlandet', description: 'Tjek om vejhjælp dækker i hele Europa' },
+      { title: 'Erstatningsbil', description: 'Overvej om du har brug for erstatningsbil ved skade' },
+    ],
+    rejse: [
+      { title: 'Afbestillingsdækning', description: 'Tjek om afbestilling af rejser er dækket' },
+      { title: 'Dækning for eksisterende sygdomme', description: 'Undersøg om kroniske sygdomme er dækket' },
+    ],
+  };
+  
+  const defaultStrengths = DEFAULT_STRENGTHS_BY_TYPE[policyType] || DEFAULT_STRENGTHS_BY_TYPE.indbo;
+  const defaultWeaknesses = DEFAULT_WEAKNESSES_BY_TYPE[policyType] || DEFAULT_WEAKNESSES_BY_TYPE.indbo;
+  
+  // Use AI-generated strengths/weaknesses if available, otherwise use defaults
+  const existingStrengths = healthCheckResult.strengths;
+  const existingWeaknesses = healthCheckResult.weaknesses;
+  const strengths = (existingStrengths && existingStrengths.length > 0) ? existingStrengths : defaultStrengths;
+  const weaknesses = (existingWeaknesses && existingWeaknesses.length > 0) ? existingWeaknesses : defaultWeaknesses;
+
+  // Update health check result with benchmark-based savings and fallback strengths/weaknesses
   const enrichedResult: HealthCheckResult = {
     ...healthCheckResult,
+    strengths,
+    weaknesses,
     potentialSavings: {
       conservative: Math.round(benchmarkSavings.annualSavings * 0.7),
       realistic: benchmarkSavings.annualSavings,
