@@ -1,4 +1,4 @@
-import { useParams } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { usePolicyHealthCheck } from "@/hooks/usePolicyHealthCheck";
 import { Button } from "@/ui/components/Button";
@@ -26,10 +26,9 @@ const policyTypeIcons: Record<string, React.ReactNode> = {
   rejse: <FeatherPlane />,
 };
 
-const policyTypeOrder = ["indbo", "ulykke", "hus", "bil", "rejse"];
-
 export default function PolicyHealthCheckPage() {
   const { snapshotId } = useParams<{ snapshotId: string }>();
+  const [, setLocation] = useLocation();
   const userId = localStorage.getItem("userId") || "";
 
   const { data, isLoading, error } = usePolicyHealthCheck(snapshotId);
@@ -94,22 +93,30 @@ export default function PolicyHealthCheckPage() {
             onClickMessages={undefined}
           />
 
-          {/* Tabs */}
-          <div className="flex w-full flex-col items-start gap-2 border-b border-solid border-neutral-border bg-default-background sticky top-0 z-20">
-            <div className="flex w-full items-center gap-2 overflow-x-auto">
-              <ListingsTabs>
-                {policyTypeOrder.map((type) => (
-                  <ListingsTabs.Item
-                    key={type}
-                    checked={type === data.policyType}
-                    icon={policyTypeIcons[type]}
-                  >
-                    {type.charAt(0).toUpperCase() + type.slice(1)}
-                  </ListingsTabs.Item>
-                ))}
-              </ListingsTabs>
+          {/* Dynamic Tabs - only show tabs that exist in this document bundle */}
+          {data.siblingTabs && data.siblingTabs.length > 0 && (
+            <div className="flex w-full flex-col items-start gap-2 border-b border-solid border-neutral-border bg-default-background sticky top-0 z-20">
+              <div className="flex w-full items-center gap-2 overflow-x-auto">
+                <ListingsTabs>
+                  {data.siblingTabs.map((tab) => (
+                    <ListingsTabs.Item
+                      key={tab.snapshotId}
+                      checked={tab.isActive}
+                      icon={policyTypeIcons[tab.policyType]}
+                      onClick={() => {
+                        if (!tab.isActive) {
+                          setLocation(`/sundhedstjek/${tab.snapshotId}`);
+                        }
+                      }}
+                      data-testid={`tab-${tab.policyType}`}
+                    >
+                      {tab.label}
+                    </ListingsTabs.Item>
+                  ))}
+                </ListingsTabs>
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Annual Potential Savings - always show, component handles 0 values */}
           <HealthCheckAnnualPotentialCard

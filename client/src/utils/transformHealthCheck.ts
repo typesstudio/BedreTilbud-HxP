@@ -2,6 +2,12 @@ import type { HealthCheckBenefit } from "@/components/healthCheck/HealthCheckBen
 import type { HealthCheckItem } from "@/components/healthCheck/HealthCheckStrengthsWeaknesses";
 import type { ComparisonCoverageRowView } from "./transformComparison";
 
+export interface SiblingSnapshot {
+  id: string;
+  policyType: string;
+  companyName: string;
+}
+
 export interface HealthCheckApiResponse {
   snapshot: {
     id: string;
@@ -15,6 +21,15 @@ export interface HealthCheckApiResponse {
   healthCheck: {
     result: any;
   } | null;
+  siblingSnapshots?: SiblingSnapshot[];
+  documentId?: string;
+}
+
+export interface PolicyTab {
+  policyType: string;
+  label: string;
+  snapshotId: string;
+  isActive: boolean;
 }
 
 export interface HealthCheckViewModel {
@@ -24,6 +39,8 @@ export interface HealthCheckViewModel {
   policyTypeLabel: string;
   policyType: string;
   kind: "current" | "offer";
+  snapshotId: string;
+  documentId?: string;
   annualPotentialSavings?: number;
   annualSavingsPercent?: number;
   benefits: HealthCheckBenefit[];
@@ -36,6 +53,7 @@ export interface HealthCheckViewModel {
     totalAfter12Months: number;
     totalAfter10Years: number;
   };
+  siblingTabs: PolicyTab[];
 }
 
 const policyTypeLabels: { [key: string]: string } = {
@@ -47,11 +65,41 @@ const policyTypeLabels: { [key: string]: string } = {
   rejse: "Rejse",
 };
 
+const policyTypeOrder = ["indbo", "ulykke", "hus", "bil", "rejse"];
+
 export function transformPolicyHealthCheckToView(
   apiData: HealthCheckApiResponse
 ): HealthCheckViewModel {
-  const { snapshot, healthCheck } = apiData;
+  const { snapshot, healthCheck, siblingSnapshots, documentId } = apiData;
   const policyTypeLabel = policyTypeLabels[snapshot.policyType] || snapshot.policyType;
+
+  // Build sibling tabs from sibling snapshots, ordered by policy type
+  const siblingTabs: PolicyTab[] = [];
+  if (siblingSnapshots && siblingSnapshots.length > 0) {
+    // Sort siblings by policy type order
+    const sortedSiblings = [...siblingSnapshots].sort((a, b) => {
+      const aIndex = policyTypeOrder.indexOf(a.policyType);
+      const bIndex = policyTypeOrder.indexOf(b.policyType);
+      return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+    });
+
+    for (const sibling of sortedSiblings) {
+      siblingTabs.push({
+        policyType: sibling.policyType,
+        label: policyTypeLabels[sibling.policyType] || sibling.policyType,
+        snapshotId: sibling.id,
+        isActive: sibling.id === snapshot.id,
+      });
+    }
+  } else {
+    // Fallback: if no siblings, create a single tab for current snapshot
+    siblingTabs.push({
+      policyType: snapshot.policyType,
+      label: policyTypeLabel,
+      snapshotId: snapshot.id,
+      isActive: true,
+    });
+  }
   
   // Extract health check result
   const result = healthCheck?.result || {};
@@ -195,6 +243,8 @@ export function transformPolicyHealthCheckToView(
     policyTypeLabel,
     policyType: snapshot.policyType,
     kind: snapshot.kind,
+    snapshotId: snapshot.id,
+    documentId,
     annualPotentialSavings,
     annualSavingsPercent,
     benefits,
@@ -202,6 +252,7 @@ export function transformPolicyHealthCheckToView(
     strengths,
     weaknesses,
     savingsOverTime,
+    siblingTabs,
   };
 }
 

@@ -2315,6 +2315,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage
       );
 
+      // Fetch sibling snapshots from the same document for tab navigation
+      // This allows the health check page to show dynamic tabs that navigate between policies
+      const documentId = healthCheck.documentId;
+      let siblingSnapshots: Array<{ id: string; policyType: string; companyName: string }> = [];
+      
+      try {
+        // Try policy_snapshots first (new architecture)
+        const policySiblings = await policySnapshotService.getSnapshotsByDocument(documentId);
+        if (policySiblings && policySiblings.length > 0) {
+          siblingSnapshots = policySiblings.map((s: any) => ({
+            id: s.id,
+            policyType: s.policyType,
+            companyName: s.companyName || 'Ukendt',
+          }));
+        } else {
+          // Fallback to offer_snapshots (legacy)
+          const offerSiblings = await storage.getOfferSnapshotsByDocument(documentId);
+          if (offerSiblings) {
+            siblingSnapshots = offerSiblings.map((s: any) => ({
+              id: s.id,
+              policyType: s.policyType,
+              companyName: 'Ukendt',
+            }));
+          }
+        }
+        
+        logger.info('[Health Check API] Found sibling snapshots', { 
+          documentId, 
+          count: siblingSnapshots.length,
+          types: siblingSnapshots.map(s => s.policyType)
+        });
+      } catch (siblingError: any) {
+        logger.warn('[Health Check API] Failed to fetch siblings', { error: siblingError?.message });
+        // Continue without siblings - tabs will be static
+      }
+
       res.json({
         snapshot: {
           id: snapshot.id,
@@ -2327,6 +2363,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...healthCheck,
           result: enrichedResult,
         },
+        siblingSnapshots,
+        documentId,
       });
     } catch (error: any) {
       logger.error('[Health Check API] Error fetching/generating health check', error, { snapshotId: req.params.snapshotId });
