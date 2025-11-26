@@ -3,7 +3,6 @@ import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { usePolicyHealthCheck } from "@/hooks/usePolicyHealthCheck";
 import { Button } from "@/ui/components/Button";
 import { ListingsTabs } from "@/ui/components/ListingsTabs";
-import { ComparisonHeader } from "@/components/comparison/ComparisonHeader";
 import { ComparisonDetailedMatrix } from "@/components/comparison/ComparisonDetailedMatrix";
 import { HealthCheckAnnualPotentialCard } from "@/components/healthCheck/HealthCheckAnnualPotentialCard";
 import { HealthCheckBenefitsGrid } from "@/components/healthCheck/HealthCheckBenefitsGrid";
@@ -15,7 +14,6 @@ import {
   FeatherBuilding, 
   FeatherCar, 
   FeatherPlane,
-  FeatherArrowLeft,
   FeatherSunrise
 } from "@subframe/core";
 
@@ -76,24 +74,35 @@ export default function PolicyHealthCheckPage() {
     <AppLayoutWithNav userId={userId}>
       <div className="flex w-full flex-col items-center justify-center bg-default-background px-6 py-6 mobile:px-4 mobile:py-4">
         <div className="flex w-full max-w-[768px] flex-col items-start gap-6">
-          {/* Back button */}
-          <Button
-            variant="neutral-tertiary"
-            icon={<FeatherArrowLeft />}
-            onClick={() => window.history.back()}
-            data-testid="button-back"
-          >
-            Tilbage
-          </Button>
-
-          {/* Header */}
-          <ComparisonHeader
-            title={data.title}
-            subtitle={data.subtitle}
-            activeTab={data.policyType as any}
-            onClickDetails={undefined}
-            onClickMessages={undefined}
-          />
+          {/* Header with action buttons */}
+          <div className="flex w-full items-start gap-2 px-2 py-2 mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:py-2">
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 px-2 py-2 mobile:px-0 mobile:py-0">
+              <span className="text-heading-1 font-heading-1 text-default-font mobile:text-heading-2 mobile:font-heading-2">
+                {data.title}
+              </span>
+              <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+                {data.subtitle}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 mobile:w-full mobile:flex-col">
+              <Button
+                variant="neutral-secondary"
+                onClick={() => window.history.back()}
+                data-testid="button-compare-offer"
+              >
+                Sammenlign tilbudet
+              </Button>
+              <Button
+                variant="brand-primary"
+                onClick={() => {
+                  // TODO: Navigate to "få bedre tilbud" page when ready
+                }}
+                data-testid="button-get-better-offer"
+              >
+                Få bedre tilbud
+              </Button>
+            </div>
+          </div>
 
           {/* Dynamic Tabs - only show tabs that exist in this document bundle */}
           {data.siblingTabs && data.siblingTabs.length > 0 && (
