@@ -1,7 +1,9 @@
 import { AreaChart } from "@/ui/components/AreaChart";
 import { Badge } from "@/ui/components/Badge";
 import * as SubframeCore from "@subframe/core";
+import { Tooltip } from "recharts";
 import { ComparisonOverallView } from "@/utils/transformComparison";
+import { FormattedChartTooltip } from "@/components/ui/FormattedChartTooltip";
 
 interface ComparisonSavingsChartProps {
   overall: ComparisonOverallView;
@@ -50,7 +52,7 @@ export function ComparisonSavingsChart({ overall }: ComparisonSavingsChartProps)
           data={chartData}
           className="w-full h-full"
           yAxis={<SubframeCore.YAxis tickFormatter={(value: number) => formatCurrency(value)} />}
-          tooltip={<SubframeCore.ChartTooltip formatter={tooltipFormatter} />}
+          tooltip={<Tooltip content={<FormattedChartTooltip />} />}
         />
       </div>
 

@@ -2,7 +2,9 @@ import { useState } from "react";
 import { AreaChart } from "@/ui/components/AreaChart";
 import { Badge } from "@/ui/components/Badge";
 import * as SubframeCore from "@subframe/core";
+import { Tooltip } from "recharts";
 import { FeatherArrowUp, FeatherPiggyBank } from "@subframe/core";
+import { FormattedChartTooltip } from "@/components/ui/FormattedChartTooltip";
 
 interface HealthCheckSavingsSectionProps {
   savingsOverTime: {
@@ -107,7 +109,7 @@ export function HealthCheckSavingsSection({
             index="Year"
             colors={[seriesColor]}
             yAxis={<SubframeCore.YAxis tickFormatter={tickFormatter} />}
-            tooltip={<SubframeCore.ChartTooltip formatter={tooltipFormatter} />}
+            tooltip={<Tooltip content={<FormattedChartTooltip />} />}
           />
         ) : (
           <div className="flex h-64 w-full items-center justify-center rounded-md bg-neutral-50 mobile:h-48">

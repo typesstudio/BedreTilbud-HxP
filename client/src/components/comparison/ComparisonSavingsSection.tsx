@@ -3,7 +3,9 @@ import { AreaChart } from "@/ui/components/AreaChart";
 import { Badge } from "@/ui/components/Badge";
 import { FeatherArrowUp } from "@subframe/core";
 import * as SubframeCore from "@subframe/core";
+import { Tooltip } from "recharts";
 import { SavingsOverTimeView } from "@/utils/transformComparison";
+import { FormattedChartTooltip } from "@/components/ui/FormattedChartTooltip";
 
 interface ComparisonSavingsSectionProps {
   savings: SavingsOverTimeView;
@@ -187,7 +189,7 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
           index="Year"
           colors={colors}
           yAxis={<SubframeCore.YAxis tickFormatter={tickFormatter} />}
-          tooltip={<SubframeCore.ChartTooltip formatter={tooltipFormatter} />}
+          tooltip={<Tooltip content={<FormattedChartTooltip />} />}
         />
       </div>
 
