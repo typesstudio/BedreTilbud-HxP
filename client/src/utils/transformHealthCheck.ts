@@ -65,7 +65,7 @@ const policyTypeLabels: { [key: string]: string } = {
   rejse: "Rejse",
 };
 
-const policyTypeOrder = ["indbo", "ulykke", "hus", "bil", "rejse"];
+const policyTypeOrder = ["indbo", "ulykke", "hus", "fritidshus", "bil", "rejse"];
 
 export function transformPolicyHealthCheckToView(
   apiData: HealthCheckApiResponse

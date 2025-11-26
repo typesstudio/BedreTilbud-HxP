@@ -15,13 +15,15 @@ import {
   FeatherBuilding, 
   FeatherCar, 
   FeatherPlane,
-  FeatherArrowLeft
+  FeatherArrowLeft,
+  FeatherSunrise
 } from "@subframe/core";
 
 const policyTypeIcons: Record<string, React.ReactNode> = {
   indbo: <FeatherHome />,
   ulykke: <FeatherShield />,
   hus: <FeatherBuilding />,
+  fritidshus: <FeatherSunrise />,
   bil: <FeatherCar />,
   rejse: <FeatherPlane />,
 };
