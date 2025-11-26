@@ -2264,19 +2264,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       logger.info('[Health Check API] Fetching health check for snapshot', { snapshotId, userId });
 
-      // Auto-generate health check if missing (on-demand generation)
-      // This uses the ensureHealthCheckForSnapshot helper which:
-      // 1. Returns existing health check if found
-      // 2. Generates and persists new one if missing
-      // 3. Handles auth/ownership verification
-      const { ensureHealthCheckForSnapshot, enrichStoredHealthCheck } = await import("./services/healthCheckService");
-      const healthCheck = await ensureHealthCheckForSnapshot(snapshotId, userId, storage);
+      // Policy type aliases for matching (hus ↔ fritidshus are related types)
+      const policyTypeAliases: Record<string, string[]> = {
+        hus: ['hus', 'fritidshus'],
+        fritidshus: ['fritidshus', 'hus'],
+      };
 
       // Get snapshot details for response
       // Support BOTH policy_snapshots (new) and offer_snapshots (legacy for backwards compatibility)
       // Track which table the snapshot came from to fetch siblings from the SAME table
       let snapshot: any = null;
       let snapshotSource: 'policy_snapshots' | 'offer_snapshots' = 'policy_snapshots';
+      let effectiveSnapshotId = snapshotId; // May change if we find a better match
       
       // Try new policy_snapshots first
       const policySnapshotService = new (await import("./services/policySnapshots/PolicySnapshotService")).PolicySnapshotService();
@@ -2288,22 +2287,66 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const offerSnapshot = await storage.getOfferSnapshot(snapshotId);
         if (offerSnapshot) {
           snapshotSource = 'offer_snapshots';
-          // Map offer_snapshot to snapshot format
-          // Note: structuredPolicy is loosely typed, so we cast to any for pricing access
-          const structuredPolicy = offerSnapshot.structuredPolicy as any;
-          snapshot = {
-            id: offerSnapshot.id,
-            companyName: 'Ukendt', // offer_snapshots don't have company_name field
-            policyType: offerSnapshot.policyType,
-            kind: 'offer',
-            pricing: structuredPolicy?.pricing || null,
-          };
+          
+          // SMART MATCHING: Check if there's a policy_snapshot with better health check data
+          // This handles cases where offer_snapshots has "hus" but policy_snapshots has "fritidshus"
+          const documentId = offerSnapshot.documentId;
+          const requestedPolicyType = offerSnapshot.policyType;
+          const typesToCheck = policyTypeAliases[requestedPolicyType] || [requestedPolicyType];
+          
+          const policySiblings = await policySnapshotService.getSnapshotsByDocument(documentId);
+          if (policySiblings && policySiblings.length > 0) {
+            // Find a matching policy_snapshot with health check data
+            for (const policySnap of policySiblings) {
+              if (typesToCheck.includes(policySnap.policyType)) {
+                // Check if this policy_snapshot has a health check with coverage data
+                const existingHC = await storage.getHealthCheckBySnapshot(policySnap.id);
+                if (existingHC) {
+                  const result = existingHC.result as any;
+                  const hasWhatsIncluded = Array.isArray(result?.whatsIncluded) && result.whatsIncluded.length > 0;
+                  
+                  if (hasWhatsIncluded) {
+                    logger.info('[Health Check API] Found better match in policy_snapshots', {
+                      originalSnapshotId: snapshotId,
+                      originalPolicyType: requestedPolicyType,
+                      betterSnapshotId: policySnap.id,
+                      betterPolicyType: policySnap.policyType,
+                      whatsIncludedCount: result.whatsIncluded.length
+                    });
+                    
+                    // Use the better snapshot instead
+                    snapshot = policySnap;
+                    snapshotSource = 'policy_snapshots';
+                    effectiveSnapshotId = policySnap.id;
+                    break;
+                  }
+                }
+              }
+            }
+          }
+          
+          // If no better match found, use the original offer_snapshot
+          if (!snapshot) {
+            const structuredPolicy = offerSnapshot.structuredPolicy as any;
+            snapshot = {
+              id: offerSnapshot.id,
+              companyName: 'Ukendt',
+              policyType: offerSnapshot.policyType,
+              kind: 'offer',
+              pricing: structuredPolicy?.pricing || null,
+              documentId: offerSnapshot.documentId,
+            };
+          }
         }
       }
 
       if (!snapshot) {
         return res.status(404).json({ message: `Snapshot ${snapshotId} not found in policy_snapshots or offer_snapshots` });
       }
+
+      // Auto-generate health check if missing (on-demand generation)
+      const { ensureHealthCheckForSnapshot, enrichStoredHealthCheck } = await import("./services/healthCheckService");
+      const healthCheck = await ensureHealthCheckForSnapshot(effectiveSnapshotId, userId, storage);
 
       // Enrich stored health check with benchmark-based savings on-the-fly
       // This ensures old records without savings data still display meaningful numbers
