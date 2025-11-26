@@ -1,0 +1,423 @@
+Got it – we want a **“Samlet sundhedstjek / Overblik”** view like on the screenshot, driven by real data instead of hard-coded numbers, and reusing as much of your existing health check + Subframe setup as possible.
+
+Here’s a concrete plan to get there.
+
+---
+
+## 1. Clarify the data we need (from existing health checks)
+
+Per *single* health check (Bil, Hus, Indbo, osv.) we already have / want something like this in the JSON you store:
+
+```ts
+type SingleHealthCheckSummary = {
+  policyId: string;
+  policyType: "indbo" | "hus" | "bil" | "ulykke" | "rejse" | "sundhed" | "ansvar" | "retshjælp" | string;
+  policyLabel: string; // e.g. "Indboforsikring"
+  currentPremiumYear: number;  // e.g. 4200
+  offerPremiumYear?: number;   // optional, if you have it
+  annualSavings: number;       // positive = potential saving if switching
+  coverageAmountLabel: string; // "500.000 kr", "Kasko", "—", etc.
+  recommendation: "good" | "can_improve" | "missing";
+  recommendationLabel: string; // "God dækning" / "Kan forbedres" / "Anbefales"
+  issues: {
+    id: string;
+    severity: "warning" | "error";  // for yellow vs red cards
+    title: string;
+    description: string;
+  }[];
+};
+```
+
+For the **Overblik** view we need:
+
+```ts
+type HealthCheckOverview = {
+  totalAnnualSavings: number;          // sum(annualSavings of all policies)
+  totalCurrentPremiumYear?: number;    // optional, for % calc
+  totalSavingsPct?: number;            // totalAnnualSavings / totalCurrentPremiumYear
+  coverageStatus: SingleHealthCheckSummary[]; // used for table rows
+  aggregatedIssues: {
+    severity: "warning" | "error";
+    title: string;
+    description: string;
+    policyTypes: string[]; // optional: which policies this relates to
+  }[];
+};
+```
+
+👉 The important bit for your note:
+**`totalAnnualSavings` = sum of `annualSavings` from all individual health checks.**
+
+---
+
+## 2. Adjust AI / health-check JSON (if needed)
+
+Goal: **avoid a new AI call** – just reuse what each health check already produces.
+
+1. **Update the health check prompt** (if not already) so each per-policy agent returns:
+
+   * `annualSavings`
+   * `coverageAmountLabel` (single “headline” amount or label you want in the table)
+   * `recommendation` (`good` / `can_improve` / `missing`)
+   * `issues[]` with `severity`, `title`, `description`
+
+2. Store that in a column like `health_checks.summary_json` (or whatever you have) as the `SingleHealthCheckSummary` structure above.
+
+3. For now, aggregation can be **pure backend math**, not AI:
+
+   * Sum `annualSavings`
+   * Join all `issues[]` into a single list
+   * Map `recommendation` → label & color on the frontend.
+
+Later, if you want a fancier “top 3 issues across all policies” you can add an **optional aggregator AI step** that takes all `issues[]` and compresses/merges them into fewer cards – but v1 can be deterministic.
+
+---
+
+## 3. Backend: aggregated “Overblik” endpoint
+
+### 3.1. Decide how to group health checks
+
+You already use `snapshotId` in your Replit analysis. We need a way to say:
+
+> “Give me the overview for the same upload / same customer context as this sundhedstjek”
+
+Typical options:
+
+* `health_check.snapshot_group_id` (one per upload/session), or
+* “all health checks for user X and current `document_group_id`”.
+
+For the plan I’ll assume:
+
+```ts
+health_checks: {
+  id: string;
+  snapshot_group_id: string; // same for all policies from same upload
+  policy_type: string;
+  summary_json: SingleHealthCheckSummary;
+}
+```
+
+### 3.2. New endpoint
+
+Extend your existing route from:
+
+```ts
+GET /api/policies/health-check/:snapshotId
+```
+
+to one of:
+
+* **Option A (recommended)**
+  `GET /api/policies/health-check-overview/:snapshotGroupId`
+
+* **Option B (via a single snapshot)**
+  `GET /api/policies/health-check-overview/by-snapshot/:snapshotId` → backend looks up `snapshot_group_id` from that snapshot.
+
+Implementation sketch (Option B):
+
+```ts
+// routes.ts
+
+app.get("/api/policies/health-check-overview/by-snapshot/:snapshotId", async (req, res) => {
+  const snapshotId = req.params.snapshotId;
+
+  // 1) Find the group
+  const snapshot = await db.query.healthChecks.findFirst({
+    where: eq(healthChecks.id, snapshotId),
+  });
+
+  if (!snapshot) {
+    return res.status(404).json({ error: "Snapshot not found" });
+  }
+
+  const groupId = snapshot.snapshot_group_id;
+
+  // 2) Get all siblings in same group
+  const siblings = await db.query.healthChecks.findMany({
+    where: eq(healthChecks.snapshot_group_id, groupId),
+  });
+
+  // 3) Parse summaries
+  const summaries: SingleHealthCheckSummary[] = siblings
+    .map((s) => s.summary_json as SingleHealthCheckSummary)
+    .filter(Boolean);
+
+  // 4) Aggregate
+  const totalAnnualSavings = summaries.reduce(
+    (acc, s) => acc + (s.annualSavings || 0),
+    0
+  );
+
+  const totalCurrentPremiumYear = summaries.reduce(
+    (acc, s) => acc + (s.currentPremiumYear || 0),
+    0
+  );
+
+  const totalSavingsPct =
+    totalCurrentPremiumYear > 0
+      ? (totalAnnualSavings / totalCurrentPremiumYear) * 100
+      : null;
+
+  const aggregatedIssues = summaries.flatMap((s) =>
+    s.issues.map((i) => ({
+      ...i,
+      policyTypes: [s.policyType],
+    }))
+  );
+
+  const payload: HealthCheckOverview = {
+    totalAnnualSavings,
+    totalCurrentPremiumYear,
+    totalSavingsPct,
+    coverageStatus: summaries,
+    aggregatedIssues,
+  };
+
+  res.json(payload);
+});
+```
+
+Edge cases:
+
+* If some siblings do **not** have a health check yet → either exclude them, or include a row with `recommendation: "pending"` and label “Afventer analyse”.
+* If `totalCurrentPremiumYear` is missing, show only the DKK amount and hide the “20.5% lavere omkostning” subtitle.
+
+---
+
+## 4. Frontend: new “Overblik” tab on the sundhedstjek page
+
+You already have the Subframe code you pasted – it’s essentially the **static** version of the Overblik page.
+
+### 4.1. Tabs & routing
+
+On your current sundhedstjek page (route like `/sundhedstjek/:snapshotId`):
+
+* You already have tabs: Ulykke, Hus, Bil, Rejse etc.
+* We add **“Overblik” as first tab** (with `FeatherStar`), and make it the default when you land on the page.
+
+Logic:
+
+```tsx
+const [activeTab, setActiveTab] = useState<"overblik" | "ulykke" | "hus" | "bil" | "rejse">("overblik");
+```
+
+`ListingsTabs.Item` should set `activeTab` on click.
+When `activeTab === "overblik"`, render the new overview component; otherwise render the existing per-policy component.
+
+### 4.2. New `HealthCheckOverview` component (using Subframe layout)
+
+Take your Subframe snippet and turn it into a component:
+
+```tsx
+import React from "react";
+import { useQuery } from "@tanstack/react-query";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import { Badge } from "@/ui/components/Badge";
+import { Button } from "@/ui/components/Button";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { ListingsTabs } from "@/ui/components/ListingsTabs";
+import { Table } from "@/ui/components/Table";
+import {
+  FeatherAlertCircle,
+  FeatherAlertTriangle,
+  FeatherBuilding,
+  FeatherCar,
+  FeatherCheckCircle,
+  FeatherHeart,
+  FeatherHome,
+  FeatherLightbulb,
+  FeatherPlane,
+  FeatherScale,
+  FeatherShield,
+  FeatherStar,
+  FeatherUsers,
+  FeatherX,
+} from "@subframe/core";
+
+type HealthCheckOverview = /* same as backend type */;
+
+function HealthCheckOverviewPage({ snapshotId }: { snapshotId: string }) {
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["health-check-overview", snapshotId],
+    queryFn: () =>
+      fetch(`/api/policies/health-check-overview/by-snapshot/${snapshotId}`).then((r) => r.json()),
+  });
+
+  if (isLoading) {
+    // use your skeleton loader here later
+    return null;
+  }
+
+  if (!data || isError) {
+    // TODO: nice error UI
+    return null;
+  }
+
+  const overview: HealthCheckOverview = data;
+  const totalPolicies = overview.coverageStatus.length;
+  const goodOrBetter = overview.coverageStatus.filter(
+    (c) => c.recommendation === "good"
+  ).length;
+
+  return (
+    <DefaultPageLayout>
+      {/* → now paste your Subframe structure here but replace hardcoded text with data */}
+      {/* header, tabs etc… */}
+    </DefaultPageLayout>
+  );
+}
+```
+
+Then, in the main sundhedstjek page:
+
+```tsx
+{activeTab === "overblik" ? (
+  <HealthCheckOverviewPage snapshotId={snapshotId} />
+) : (
+  <SinglePolicyHealthCheckPage snapshotId={snapshotId} tab={activeTab} />
+)}
+```
+
+### 4.3. Wire the Subframe markup to data
+
+Replace the hardcoded bits in your snippet:
+
+1. **Potential savings block**
+
+```tsx
+<span className="text-heading-1 font-heading-1 text-success-600">
+  {formatCurrency(overview.totalAnnualSavings)} kr
+</span>
+{overview.totalSavingsPct && (
+  <span className="text-caption font-caption text-success-600">
+    {overview.totalSavingsPct.toFixed(1)}% lavere omkostning
+  </span>
+)}
+```
+
+2. **“Din dækningsstatus” subtitle**
+
+```tsx
+<Badge variant="success" icon={<FeatherCheckCircle />}>
+  {goodOrBetter} af {totalPolicies} dækninger
+</Badge>
+```
+
+3. **Table rows**
+
+Instead of hardcoded rows:
+
+```tsx
+{overview.coverageStatus.map((policy) => (
+  <Table.Row key={policy.policyId}>
+    <Table.Cell>
+      <div className="flex items-center gap-2">
+        <IconWithBackground
+          variant={mapRecommendationToVariant(policy.recommendation)} // "success" | "warning" | "error"
+          size="small"
+          icon={mapPolicyTypeToIcon(policy.policyType)}
+        />
+        <span className="whitespace-nowrap text-body-bold font-body-bold text-default-font">
+          {policy.policyLabel}
+        </span>
+      </div>
+    </Table.Cell>
+    <Table.Cell>
+      <span className="whitespace-nowrap text-body font-body text-default-font">
+        {policy.coverageAmountLabel}
+      </span>
+    </Table.Cell>
+    <Table.Cell>
+      <span
+        className={clsx(
+          "whitespace-nowrap text-body font-body",
+          mapRecommendationToTextColor(policy.recommendation)
+        )}
+      >
+        {policy.recommendationLabel}
+      </span>
+    </Table.Cell>
+  </Table.Row>
+))}
+```
+
+Helper mapping functions live next to the component.
+
+4. **“Hvor du kan forbedre dig” list**
+
+Take your existing component for a single health check’s weaknesses (if you have one like `HealthCheckIssuesSection`) and reuse it:
+
+```tsx
+<HealthCheckIssuesSection issues={overview.aggregatedIssues} />
+```
+
+If not, keep your Subframe markup but render from `overview.aggregatedIssues` instead of four hardcoded cards. Pick color based on `severity`:
+
+* `warning` → yellow card with `FeatherAlertCircle`
+* `error` → red card with `FeatherX`
+
+---
+
+## 5. Prompt text you can drop into Replit
+
+Here’s a compact “do this” spec you can paste into the Replit planning prompt:
+
+```md
+Goal
+Implement an “Overblik / Samlet sundhedstjek” view on the existing sundhedstjek page. It should look like the provided Subframe design and show:
+- Total annual potential savings (sum of all individual health check savings)
+- Coverage status table across all policy types
+- Aggregated improvement opportunities (“Hvor du kan forbedre dig”)
+
+Backend
+1. Extend the health check API:
+   - Add a new endpoint: GET /api/policies/health-check-overview/by-snapshot/:snapshotId
+   - Look up the health_check row for :snapshotId and get its snapshot_group_id (or similar grouping key).
+   - Fetch all health_checks in the same group.
+   - Each health_check already stores a JSON summary like:
+     {
+       policyId,
+       policyType,
+       policyLabel,
+       currentPremiumYear,
+       annualSavings,
+       coverageAmountLabel,
+       recommendation,
+       recommendationLabel,
+       issues: [{ severity, title, description }]
+     }
+   - Aggregate into:
+     {
+       totalAnnualSavings: sum(annualSavings),
+       totalCurrentPremiumYear: sum(currentPremiumYear),
+       totalSavingsPct: totalAnnualSavings / totalCurrentPremiumYear,
+       coverageStatus: [all summaries],
+       aggregatedIssues: flatten(all issues with policyTypes info)
+     }
+   - Return this object as JSON.
+
+Frontend
+2. Add an “Overblik” tab on the sundhedstjek page:
+   - Use ListingsTabs and FeatherStar as in the Subframe snippet.
+   - Tabs: Overblik (default), Ulykke, Hus, Bil, Rejse (existing).
+   - Maintain a local state activeTab and render:
+     - Overblik → new overview component
+     - Other tabs → existing single-policy view
+
+3. Create HealthCheckOverviewPage component:
+   - Use the provided Subframe markup as layout inside <DefaultPageLayout>.
+   - Import the components as specified in the Subframe prompt.
+   - Fetch overview data with React Query:
+     useQuery(["health-check-overview", snapshotId], () => fetch("/api/policies/health-check-overview/by-snapshot/" + snapshotId).then(r => r.json()))
+   - Replace hardcoded values with data from the API:
+     - “Årlig potentiel besparelse” uses totalAnnualSavings and totalSavingsPct.
+     - “Din dækningsstatus” table maps coverageStatus to Table rows.
+     - “Hvor du kan forbedre dig” maps aggregatedIssues to warning/error cards.
+   - Reuse existing helper components or styles for issue cards if they already exist in the single-policy health check.
+
+4. Keep existing business logic intact:
+   - Do NOT change how individual health checks are computed or stored.
+   - Only add the new overview endpoint and UI layer on top.
+```
+
+If you follow this sequence (AI JSON → backend overview → Overblik tab + component), you’ll end up with exactly the screenshot you attached, but fully driven by real health-check data and extensible for new policy types.

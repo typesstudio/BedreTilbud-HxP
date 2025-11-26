@@ -8,6 +8,58 @@ export interface SiblingSnapshot {
   companyName: string;
 }
 
+// Types for aggregated health check overview (Overblik/Samlet view)
+export interface SinglePolicySummary {
+  policyId: string;
+  policyType: string;
+  policyLabel: string;
+  annualSavings: number;
+  currentPremiumYear: number;
+  coverageAmountLabel: string;
+  recommendation: 'good' | 'can_improve' | 'missing' | 'pending';
+  recommendationLabel: string;
+  issues: {
+    id: string;
+    severity: 'warning' | 'error';
+    title: string;
+    description: string;
+  }[];
+}
+
+export interface AggregatedIssue {
+  id: string;
+  severity: 'warning' | 'error';
+  title: string;
+  description: string;
+  policyTypes: string[];
+}
+
+export interface HealthCheckOverviewApiResponse {
+  totalAnnualSavings: number;
+  totalCurrentPremiumYear: number;
+  totalSavingsPct: number | null;
+  goodCount: number;
+  totalCount: number;
+  coverageStatus: SinglePolicySummary[];
+  aggregatedIssues: AggregatedIssue[];
+  documentId: string;
+  comparisonId: string | null;
+  siblingSnapshots: SiblingSnapshot[];
+}
+
+export interface HealthCheckOverviewViewModel {
+  totalAnnualSavings: number;
+  totalSavingsPct: number | null;
+  savingsLabel: string;
+  goodCount: number;
+  totalCount: number;
+  coverageStatus: SinglePolicySummary[];
+  aggregatedIssues: AggregatedIssue[];
+  documentId: string;
+  comparisonId: string | null;
+  siblingTabs: PolicyTab[];
+}
+
 export interface HealthCheckApiResponse {
   snapshot: {
     id: string;
@@ -271,6 +323,61 @@ export function transformPolicyHealthCheckToView(
     strengths,
     weaknesses,
     savingsOverTime,
+    siblingTabs,
+  };
+}
+
+// Transform aggregated health check overview API response to view model
+export function transformHealthCheckOverviewToView(
+  apiData: HealthCheckOverviewApiResponse
+): HealthCheckOverviewViewModel {
+  const { 
+    totalAnnualSavings, 
+    totalSavingsPct, 
+    goodCount, 
+    totalCount, 
+    coverageStatus, 
+    aggregatedIssues,
+    documentId,
+    comparisonId,
+    siblingSnapshots 
+  } = apiData;
+
+  // Format savings label
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("da-DK", {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  };
+  
+  const savingsLabel = `${formatCurrency(totalAnnualSavings)} kr`;
+
+  // Build sibling tabs from sibling snapshots
+  const siblingTabs: PolicyTab[] = siblingSnapshots.map(snap => ({
+    policyType: snap.policyType,
+    label: policyTypeLabels[snap.policyType] || snap.policyType,
+    snapshotId: snap.id,
+    isActive: false, // All tabs are inactive when viewing overview
+  }));
+
+  // Sort tabs by policy type order
+  siblingTabs.sort((a, b) => {
+    const aIndex = policyTypeOrder.indexOf(a.policyType);
+    const bIndex = policyTypeOrder.indexOf(b.policyType);
+    return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+  });
+
+  return {
+    totalAnnualSavings,
+    totalSavingsPct,
+    savingsLabel,
+    goodCount,
+    totalCount,
+    coverageStatus,
+    aggregatedIssues,
+    documentId,
+    comparisonId,
     siblingTabs,
   };
 }

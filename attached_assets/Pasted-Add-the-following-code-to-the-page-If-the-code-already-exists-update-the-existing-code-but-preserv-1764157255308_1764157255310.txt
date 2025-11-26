@@ -1,0 +1,395 @@
+Add the following code to the page. If the code already exists, update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+<DefaultPageLayout>
+  <div className="flex w-full flex-col items-center justify-center bg-default-background px-6 py-6">
+    <div className="flex w-full max-w-[768px] flex-col items-start gap-6">
+      <div className="flex w-full items-start gap-2 px-2 py-2">
+        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 px-2 py-2">
+          <span className="text-heading-1 font-heading-1 text-default-font">
+            Dit forsikringstjek
+          </span>
+          <span className="text-body font-body text-subtext-color">
+            Se en grundig analyse af dine forsikringer og potentielle
+            besparelser
+          </span>
+        </div>
+        <Button
+          variant="neutral-primary"
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+        >
+          Sammenlign forsikringen
+        </Button>
+        <Button
+          variant="variation"
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+        >
+          Få bedre tilbud
+        </Button>
+      </div>
+      <div className="flex w-full flex-col items-start gap-2 border-b border-solid border-neutral-border bg-default-background sticky top-0 z-20">
+        <div className="flex w-full items-center gap-2 overflow-x-auto">
+          <ListingsTabs>
+            <ListingsTabs.Item checked={true} icon={<FeatherStar />}>
+              Overblik
+            </ListingsTabs.Item>
+            <ListingsTabs.Item icon={<FeatherShield />}>
+              Ulykke
+            </ListingsTabs.Item>
+            <ListingsTabs.Item icon={<FeatherBuilding />}>
+              Hus
+            </ListingsTabs.Item>
+            <ListingsTabs.Item icon={<FeatherCar />}>Bil</ListingsTabs.Item>
+            <ListingsTabs.Item icon={<FeatherPlane />}>Rejse</ListingsTabs.Item>
+          </ListingsTabs>
+        </div>
+      </div>
+      <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+        <span className="text-heading-2 font-heading-2 text-default-font">
+          Årlig potentiel besparelse
+        </span>
+        <div className="flex w-full items-center justify-between rounded-lg border border-solid border-success-200 bg-success-50 px-6 py-4">
+          <span className="text-heading-1 font-heading-1 text-success-600">
+            3.252 kr
+          </span>
+          <div className="flex flex-col items-start gap-1">
+            <span className="text-body-bold font-body-bold text-success-700">
+              Din årlige besparelse
+            </span>
+            <span className="text-caption font-caption text-success-600">
+              20.5% lavere omkostning
+            </span>
+          </div>
+        </div>
+      </div>
+      <div className="flex w-full flex-col items-start gap-4">
+        <div className="flex w-full items-center justify-between">
+          <span className="text-heading-2 font-heading-2 text-default-font">
+            Din dækningsstatus
+          </span>
+          <Badge variant="success" icon={<FeatherCheckCircle />}>
+            5 af 8 dækninger
+          </Badge>
+        </div>
+        <div className="flex w-full flex-col items-start rounded-lg border border-solid border-neutral-border bg-default-background overflow-x-auto">
+          <Table
+            header={
+              <Table.HeaderRow>
+                <Table.HeaderCell>Dækningstype</Table.HeaderCell>
+                <Table.HeaderCell>Nuværende sum</Table.HeaderCell>
+                <Table.HeaderCell>Anbefaling</Table.HeaderCell>
+              </Table.HeaderRow>
+            }
+          >
+            <Table.Row>
+              <Table.Cell>
+                <div className="flex items-center gap-2">
+                  <IconWithBackground
+                    variant="success"
+                    size="small"
+                    icon={<FeatherHome />}
+                  />
+                  <span className="whitespace-nowrap text-body-bold font-body-bold text-default-font">
+                    Indbo
+                  </span>
+                </div>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-default-font">
+                  500.000 kr
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-success-600">
+                  God dækning
+                </span>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <div className="flex items-center gap-2">
+                  <IconWithBackground
+                    variant="success"
+                    size="small"
+                    icon={<FeatherCar />}
+                  />
+                  <span className="whitespace-nowrap text-body-bold font-body-bold text-default-font">
+                    Bilforsikring
+                  </span>
+                </div>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-default-font">
+                  Kasko
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-success-600">
+                  God dækning
+                </span>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <div className="flex items-center gap-2">
+                  <IconWithBackground
+                    variant="success"
+                    size="small"
+                    icon={<FeatherBuilding />}
+                  />
+                  <span className="whitespace-nowrap text-body-bold font-body-bold text-default-font">
+                    Husforsikring
+                  </span>
+                </div>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-default-font">
+                  3.500.000 kr
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-warning-600">
+                  Kan forbedres
+                </span>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <div className="flex items-center gap-2">
+                  <IconWithBackground
+                    variant="warning"
+                    size="small"
+                    icon={<FeatherShield />}
+                  />
+                  <span className="whitespace-nowrap text-body-bold font-body-bold text-default-font">
+                    Ulykkesforsikring
+                  </span>
+                </div>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-default-font">
+                  100.000 kr
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-warning-600">
+                  Kan forbedres
+                </span>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <div className="flex items-center gap-2">
+                  <IconWithBackground
+                    variant="success"
+                    size="small"
+                    icon={<FeatherUsers />}
+                  />
+                  <span className="whitespace-nowrap text-body-bold font-body-bold text-default-font">
+                    Ansvarsforsikring
+                  </span>
+                </div>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-default-font">
+                  2.000.000 kr
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-success-600">
+                  God dækning
+                </span>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <div className="flex items-center gap-2">
+                  <IconWithBackground
+                    variant="error"
+                    size="small"
+                    icon={<FeatherPlane />}
+                  />
+                  <span className="whitespace-nowrap text-body-bold font-body-bold text-subtext-color">
+                    Rejseforsikring
+                  </span>
+                </div>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-subtext-color">
+                  —
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-error-600">
+                  Anbefales
+                </span>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <div className="flex items-center gap-2">
+                  <IconWithBackground
+                    variant="error"
+                    size="small"
+                    icon={<FeatherHeart />}
+                  />
+                  <span className="whitespace-nowrap text-body-bold font-body-bold text-subtext-color">
+                    Sundhedsforsikring
+                  </span>
+                </div>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-subtext-color">
+                  —
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-error-600">
+                  Anbefales
+                </span>
+              </Table.Cell>
+            </Table.Row>
+            <Table.Row>
+              <Table.Cell>
+                <div className="flex items-center gap-2">
+                  <IconWithBackground
+                    variant="error"
+                    size="small"
+                    icon={<FeatherScale />}
+                  />
+                  <span className="whitespace-nowrap text-body-bold font-body-bold text-subtext-color">
+                    Retshjælpsforsikring
+                  </span>
+                </div>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-subtext-color">
+                  —
+                </span>
+              </Table.Cell>
+              <Table.Cell>
+                <span className="whitespace-nowrap text-body font-body text-error-600">
+                  Anbefales
+                </span>
+              </Table.Cell>
+            </Table.Row>
+          </Table>
+        </div>
+      </div>
+      <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+        <span className="text-heading-2 font-heading-2 text-default-font">
+          Hvor du kan forbedre dig
+        </span>
+        <div className="flex w-full items-start gap-4">
+          <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3">
+            <div className="flex items-center gap-2">
+              <IconWithBackground
+                variant="warning"
+                size="small"
+                icon={<FeatherAlertTriangle />}
+              />
+              <span className="text-body-bold font-body-bold text-warning-700">
+                Forbedringsmuligheder
+              </span>
+            </div>
+            <div className="flex w-full flex-col items-start gap-2">
+              <div className="flex w-full items-start gap-2 rounded-md border border-solid border-warning-200 bg-warning-50 px-3 py-3">
+                <FeatherAlertCircle className="text-body font-body text-warning-600 mt-0.5" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <span className="text-body-bold font-body-bold text-default-font">
+                    Ingen glas/kvummer dækning
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    Lejligheden mangler denne dækning
+                  </span>
+                </div>
+              </div>
+              <div className="flex w-full items-start gap-2 rounded-md border border-solid border-warning-200 bg-warning-50 px-3 py-3">
+                <FeatherAlertCircle className="text-body font-body text-warning-600 mt-0.5" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <span className="text-body-bold font-body-bold text-default-font">
+                    Høj selvrisiko ved skybrud
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    5.000 kr. er over gennemsnittet
+                  </span>
+                </div>
+              </div>
+              <div className="flex w-full items-start gap-2 rounded-md border border-solid border-warning-200 bg-warning-50 px-3 py-3">
+                <FeatherAlertCircle className="text-body font-body text-warning-600 mt-0.5" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <span className="text-body-bold font-body-bold text-default-font">
+                    Lav dækning på særlige værdier
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    Maks 125.340 kr. kan være utilstrækkeligt
+                  </span>
+                </div>
+              </div>
+              <div className="flex w-full items-start gap-2 rounded-md border border-solid border-error-200 bg-error-50 px-3 py-3">
+                <FeatherX className="text-body font-body text-error-600 mt-0.5" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <span className="text-body-bold font-body-bold text-default-font">
+                    Manglende invaliditetsdækning
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    Ingen dækning ved ulykke
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex w-full items-center gap-2 rounded-md bg-brand-100 px-4 py-3">
+          <FeatherLightbulb className="text-body font-body text-brand-700" />
+          <span className="text-caption font-caption text-brand-700">
+            Vi kan hjælpe dig med at få bedre dækning til en lavere pris
+          </span>
+        </div>
+      </div>
+      <div className="flex w-full flex-col items-center gap-4 border-t border-solid border-neutral-border py-6">
+        <Button
+          className="h-10 w-full flex-none"
+          variant="variation"
+          size="large"
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+        >
+          Få bedre tilbud nu
+        </Button>
+        <span className="text-body font-body text-subtext-color">
+          Gratis og uforpligtende. Ingen binding.
+        </span>
+      </div>
+    </div>
+  </div>
+</DefaultPageLayout>
+
+```Be sure to import the components using the following code:
+  
+```tsx
+import React from "react";
+import { Badge } from "@/ui/components/Badge";
+import { Button } from "@/ui/components/Button";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { ListingsTabs } from "@/ui/components/ListingsTabs";
+import { Table } from "@/ui/components/Table";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import { FeatherAlertCircle } from "@subframe/core";
+import { FeatherAlertTriangle } from "@subframe/core";
+import { FeatherBuilding } from "@subframe/core";
+import { FeatherCar } from "@subframe/core";
+import { FeatherCheckCircle } from "@subframe/core";
+import { FeatherHeart } from "@subframe/core";
+import { FeatherHome } from "@subframe/core";
+import { FeatherLightbulb } from "@subframe/core";
+import { FeatherPlane } from "@subframe/core";
+import { FeatherScale } from "@subframe/core";
+import { FeatherShield } from "@subframe/core";
+import { FeatherStar } from "@subframe/core";
+import { FeatherUsers } from "@subframe/core";
+import { FeatherX } from "@subframe/core";
+```Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync DefaultPageLayout Button ListingsTabs Badge Table IconWithBackground -p 34bd735365b5
+```

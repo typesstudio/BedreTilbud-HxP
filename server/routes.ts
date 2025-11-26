@@ -2458,6 +2458,231 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get aggregated health check overview for all policies in same document
+  // Returns total savings, coverage status table, and aggregated improvement areas
+  app.get("/api/policies/health-check-overview/by-snapshot/:snapshotId", requireAuth, async (req, res) => {
+    try {
+      const { snapshotId } = req.params;
+      const userId = req.headers['x-user-id'] as string;
+
+      logger.info('[Health Check Overview API] Fetching aggregated overview', { snapshotId, userId });
+
+      // Get the snapshot to find the document ID
+      const policySnapshotService = new (await import("./services/policySnapshots/PolicySnapshotService")).PolicySnapshotService();
+      let snapshot: any = await policySnapshotService.getSnapshotById(snapshotId);
+      let snapshotSource: 'policy_snapshots' | 'offer_snapshots' = 'policy_snapshots';
+      
+      // Fallback to offer_snapshots
+      if (!snapshot) {
+        const offerSnapshot = await storage.getOfferSnapshot(snapshotId);
+        if (offerSnapshot) {
+          snapshotSource = 'offer_snapshots';
+          snapshot = {
+            id: offerSnapshot.id,
+            documentId: offerSnapshot.documentId,
+            policyType: offerSnapshot.policyType,
+          };
+        }
+      }
+
+      if (!snapshot) {
+        return res.status(404).json({ message: `Snapshot ${snapshotId} not found` });
+      }
+
+      const documentId = snapshot.documentId;
+
+      // Authorization check
+      const document = await storage.getDocument(documentId);
+      if (!document || document.userId !== userId) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      // Get all sibling snapshots from the same document
+      let siblingSnapshots: any[] = [];
+      if (snapshotSource === 'policy_snapshots') {
+        siblingSnapshots = await policySnapshotService.getSnapshotsByDocument(documentId);
+      } else {
+        const offerSnapshots = await storage.getOfferSnapshotsByDocument(documentId);
+        siblingSnapshots = offerSnapshots.map((s: any) => ({
+          id: s.id,
+          policyType: s.policyType,
+          companyName: 'Ukendt',
+          documentId: s.documentId,
+          pricing: (s.structuredPolicy as any)?.pricing || null,
+        }));
+      }
+
+      // Fetch health checks for all siblings IN PARALLEL for better performance
+      const { enrichStoredHealthCheck } = await import("./services/healthCheckService");
+
+      const policyTypeLabels: Record<string, string> = {
+        indbo: 'Indboforsikring',
+        ulykke: 'Ulykkesforsikring',
+        hus: 'Husforsikring',
+        fritidshus: 'Fritidshusforsikring',
+        bil: 'Bilforsikring',
+        rejse: 'Rejseforsikring',
+        sundhed: 'Sundhedsforsikring',
+        ansvar: 'Ansvarsforsikring',
+        retshjælp: 'Retshjælpsforsikring',
+      };
+
+      // Fetch all health checks in parallel
+      const healthCheckPromises = siblingSnapshots.map(sibling => 
+        storage.getHealthCheckBySnapshot(sibling.id)
+          .then(hc => ({ sibling, healthCheck: hc }))
+          .catch(() => ({ sibling, healthCheck: null }))
+      );
+      const healthCheckResults = await Promise.all(healthCheckPromises);
+
+      // Process results and enrich in parallel
+      const enrichmentPromises = healthCheckResults.map(async ({ sibling, healthCheck }) => {
+        if (!healthCheck) {
+          return {
+            summary: {
+              policyId: sibling.id,
+              policyType: sibling.policyType,
+              policyLabel: policyTypeLabels[sibling.policyType] || sibling.policyType,
+              annualSavings: 0,
+              currentPremiumYear: 0,
+              coverageAmountLabel: '—',
+              recommendation: 'pending' as const,
+              recommendationLabel: 'Afventer analyse',
+              issues: [],
+            },
+            issues: [],
+          };
+        }
+
+        const offerPremium = sibling.pricing?.annualPremium || null;
+        const enrichedResult = await enrichStoredHealthCheck(
+          healthCheck.result as any,
+          sibling.policyType,
+          offerPremium,
+          storage
+        );
+
+        const annualSavings = enrichedResult.annualSavings?.amount || 
+                              enrichedResult.potentialSavings?.realistic || 0;
+        const currentPremium = offerPremium || 0;
+
+        const weaknesses = enrichedResult.weaknesses || [];
+        const hasErrors = weaknesses.some((w: any) => w.severity === 'error' || w.variant === 'error');
+        const hasWarnings = weaknesses.length > 0;
+        
+        let recommendation: 'good' | 'can_improve' | 'missing' = 'good';
+        let recommendationLabel = 'God dækning';
+        
+        if (hasErrors) {
+          recommendation = 'missing';
+          recommendationLabel = 'Anbefales';
+        } else if (hasWarnings) {
+          recommendation = 'can_improve';
+          recommendationLabel = 'Kan forbedres';
+        }
+
+        let coverageAmountLabel = '—';
+        const highlights = enrichedResult.highlights || [];
+        const keyFigures = enrichedResult.keyFigures || [];
+        
+        const sumHighlight = highlights.find((h: any) => 
+          h.title?.toLowerCase().includes('sum') || h.description?.toLowerCase().includes('kr')
+        );
+        if (sumHighlight?.description) {
+          coverageAmountLabel = sumHighlight.description;
+        } else if (keyFigures.length > 0) {
+          const sumFigure = keyFigures.find((k: any) => 
+            k.label?.toLowerCase().includes('sum') || k.label?.toLowerCase().includes('dækning')
+          );
+          if (sumFigure?.newValue) {
+            coverageAmountLabel = sumFigure.newValue;
+          }
+        }
+
+        const issues = weaknesses.map((w: any) => ({
+          id: `${sibling.id}-${w.title}`,
+          severity: (w.severity === 'error' || w.variant === 'error' ? 'error' : 'warning') as 'error' | 'warning',
+          title: w.title,
+          description: w.description,
+          policyTypes: [sibling.policyType],
+        }));
+
+        return {
+          summary: {
+            policyId: sibling.id,
+            policyType: sibling.policyType,
+            policyLabel: policyTypeLabels[sibling.policyType] || sibling.policyType,
+            annualSavings,
+            currentPremiumYear: currentPremium,
+            coverageAmountLabel,
+            recommendation,
+            recommendationLabel,
+            issues: weaknesses.map((w: any) => ({
+              id: w.title,
+              severity: w.severity === 'error' || w.variant === 'error' ? 'error' : 'warning',
+              title: w.title,
+              description: w.description,
+            })),
+          },
+          issues,
+        };
+      });
+
+      const enrichedResults = await Promise.all(enrichmentPromises);
+
+      // Aggregate results
+      const policySummaries = enrichedResults.map(r => r.summary);
+      const aggregatedIssues = enrichedResults.flatMap(r => r.issues);
+      const totalAnnualSavings = policySummaries.reduce((sum, p) => sum + p.annualSavings, 0);
+      const totalCurrentPremiumYear = policySummaries.reduce((sum, p) => sum + p.currentPremiumYear, 0);
+
+      // Calculate savings percentage
+      const totalSavingsPct = totalCurrentPremiumYear > 0 
+        ? (totalAnnualSavings / totalCurrentPremiumYear) * 100 
+        : null;
+
+      // Count good vs total coverages
+      const goodCount = policySummaries.filter(p => p.recommendation === 'good').length;
+      const totalCount = policySummaries.length;
+
+      // Find comparison ID if available
+      let comparisonId: string | null = null;
+      try {
+        if (document.companyId) {
+          const comparisons = await storage.getCompanyComparisonsByUser(userId);
+          const relevantComparison = comparisons.find(
+            (cc: any) => cc.offerCompany === document.companyId && cc.status === 'completed'
+          );
+          if (relevantComparison) {
+            comparisonId = relevantComparison.id;
+          }
+        }
+      } catch (comparisonError: any) {
+        logger.warn('[Health Check Overview API] Failed to find comparison', { error: comparisonError?.message });
+      }
+
+      res.json({
+        totalAnnualSavings,
+        totalCurrentPremiumYear,
+        totalSavingsPct,
+        goodCount,
+        totalCount,
+        coverageStatus: policySummaries,
+        aggregatedIssues,
+        documentId,
+        comparisonId,
+        siblingSnapshots: siblingSnapshots.map(s => ({
+          id: s.id,
+          policyType: s.policyType,
+          companyName: s.companyName || 'Ukendt',
+        })),
+      });
+    } catch (error: any) {
+      logger.error('[Health Check Overview API] Error', error, { snapshotId: req.params.snapshotId });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // DEV-ONLY: Debug endpoint for health check data inspection
   // Returns raw and enriched health check data for debugging prompts and schema
   if (process.env.NODE_ENV !== "production") {

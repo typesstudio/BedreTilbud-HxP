@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { usePolicyHealthCheck } from "@/hooks/usePolicyHealthCheck";
+import { useHealthCheckOverview } from "@/hooks/useHealthCheckOverview";
 import { Button } from "@/ui/components/Button";
 import { ListingsTabs } from "@/ui/components/ListingsTabs";
 import { ComparisonDetailedMatrix } from "@/components/comparison/ComparisonDetailedMatrix";
@@ -8,6 +10,7 @@ import { HealthCheckAnnualPotentialCard } from "@/components/healthCheck/HealthC
 import { HealthCheckBenefitsGrid } from "@/components/healthCheck/HealthCheckBenefitsGrid";
 import { HealthCheckStrengthsWeaknesses } from "@/components/healthCheck/HealthCheckStrengthsWeaknesses";
 import { HealthCheckSavingsSection } from "@/components/healthCheck/HealthCheckSavingsSection";
+import { HealthCheckOverviewSection } from "@/components/healthCheck/HealthCheckOverviewSection";
 import LoadingInsuranceCheck from "@/components/loading/LoadingInsuranceCheck";
 import { 
   FeatherHome, 
@@ -15,7 +18,8 @@ import {
   FeatherBuilding, 
   FeatherCar, 
   FeatherPlane,
-  FeatherSunrise
+  FeatherSunrise,
+  FeatherStar,
 } from "@subframe/core";
 
 const policyTypeIcons: Record<string, React.ReactNode> = {
@@ -31,8 +35,10 @@ export default function PolicyHealthCheckPage() {
   const { snapshotId } = useParams<{ snapshotId: string }>();
   const [, setLocation] = useLocation();
   const userId = localStorage.getItem("userId") || "";
+  const [activeTab, setActiveTab] = useState<"overblik" | string>("overblik");
 
   const { data, isLoading, error } = usePolicyHealthCheck(snapshotId);
+  const { data: overviewData, isLoading: overviewLoading } = useHealthCheckOverview(snapshotId);
 
   if (isLoading) {
     return (
@@ -109,17 +115,28 @@ export default function PolicyHealthCheckPage() {
             </div>
           </div>
 
-          {/* Dynamic Tabs - only show tabs that exist in this document bundle */}
+          {/* Dynamic Tabs - Overblik first, then policy-specific tabs */}
           {data.siblingTabs && data.siblingTabs.length > 0 && (
             <div className="flex w-full flex-col items-start gap-2 border-b border-solid border-neutral-border bg-default-background sticky top-0 z-20">
               <div className="flex w-full items-center gap-2 overflow-x-auto">
                 <ListingsTabs>
+                  {/* Overblik tab - always first */}
+                  <ListingsTabs.Item
+                    checked={activeTab === "overblik"}
+                    icon={<FeatherStar />}
+                    onClick={() => setActiveTab("overblik")}
+                    data-testid="tab-overblik"
+                  >
+                    Overblik
+                  </ListingsTabs.Item>
+                  {/* Policy-specific tabs - navigate to snapshot when clicked */}
                   {data.siblingTabs.map((tab) => (
                     <ListingsTabs.Item
                       key={tab.snapshotId}
-                      checked={tab.isActive}
+                      checked={activeTab !== "overblik" && tab.isActive}
                       icon={policyTypeIcons[tab.policyType]}
                       onClick={() => {
+                        setActiveTab(tab.policyType);
                         if (!tab.isActive) {
                           setLocation(`/sundhedstjek/${tab.snapshotId}`);
                         }
@@ -134,56 +151,85 @@ export default function PolicyHealthCheckPage() {
             </div>
           )}
 
-          {/* Annual Potential Savings - always show, component handles 0 values */}
-          <HealthCheckAnnualPotentialCard
-            annualPotentialSavings={data.annualPotentialSavings || 0}
-            annualSavingsPercent={data.annualSavingsPercent}
-          />
+          {/* Content based on active tab */}
+          {activeTab === "overblik" ? (
+            /* Overblik / Aggregated Overview */
+            overviewLoading ? (
+              <div className="flex w-full items-center justify-center py-12">
+                <span className="text-body font-body text-subtext-color">Indlæser overblik...</span>
+              </div>
+            ) : overviewData ? (
+              <HealthCheckOverviewSection
+                data={overviewData}
+                onCompareClick={() => {
+                  if (data.comparisonId) {
+                    setLocation(`/sammenligning/${data.comparisonId}`);
+                  }
+                }}
+                onGetOfferClick={() => {
+                  // TODO: Navigate to "få bedre tilbud" page when ready
+                }}
+              />
+            ) : (
+              <div className="flex w-full items-center justify-center py-12">
+                <span className="text-body font-body text-subtext-color">Kunne ikke hente overblik data</span>
+              </div>
+            )
+          ) : (
+            /* Single Policy Health Check */
+            <>
+              {/* Annual Potential Savings - always show, component handles 0 values */}
+              <HealthCheckAnnualPotentialCard
+                annualPotentialSavings={data.annualPotentialSavings || 0}
+                annualSavingsPercent={data.annualSavingsPercent}
+              />
 
-          {/* Benefits Grid */}
-          {data.benefits && data.benefits.length > 0 && (
-            <HealthCheckBenefitsGrid benefits={data.benefits} />
+              {/* Benefits Grid */}
+              {data.benefits && data.benefits.length > 0 && (
+                <HealthCheckBenefitsGrid benefits={data.benefits} />
+              )}
+
+              {/* Coverage Matrix (single column) */}
+              {data.coverageRows && data.coverageRows.length > 0 && (
+                <ComparisonDetailedMatrix
+                  title="Hvad er inkluderet"
+                  singleColumn={true}
+                  singleColumnName={data.companyName}
+                  coverageRows={data.coverageRows}
+                />
+              )}
+
+              {/* Strengths & Weaknesses - always show, component handles empty states */}
+              <HealthCheckStrengthsWeaknesses
+                strengths={data.strengths || []}
+                weaknesses={data.weaknesses || []}
+              />
+
+              {/* Savings Chart */}
+              {data.savingsOverTime && (
+                <HealthCheckSavingsSection 
+                  savingsOverTime={data.savingsOverTime}
+                  policyType={data.policyType}
+                  policyTypeLabel={data.policyTypeLabel}
+                />
+              )}
+
+              {/* Footer CTA */}
+              <div className="flex w-full flex-col items-start gap-3 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:px-4 mobile:py-4">
+                <Button
+                  className="w-full"
+                  size="large"
+                  onClick={() => {}}
+                  data-testid="button-choose-and-switch"
+                >
+                  Vælg og skift til {data.companyName}
+                </Button>
+                <span className="text-caption font-caption text-subtext-color text-center w-full">
+                  Sikre data. Du kan annullere når som helst før aktivering.
+                </span>
+              </div>
+            </>
           )}
-
-          {/* Coverage Matrix (single column) */}
-          {data.coverageRows && data.coverageRows.length > 0 && (
-            <ComparisonDetailedMatrix
-              title="Hvad er inkluderet"
-              singleColumn={true}
-              singleColumnName={data.companyName}
-              coverageRows={data.coverageRows}
-            />
-          )}
-
-          {/* Strengths & Weaknesses - always show, component handles empty states */}
-          <HealthCheckStrengthsWeaknesses
-            strengths={data.strengths || []}
-            weaknesses={data.weaknesses || []}
-          />
-
-          {/* Savings Chart */}
-          {data.savingsOverTime && (
-            <HealthCheckSavingsSection 
-              savingsOverTime={data.savingsOverTime}
-              policyType={data.policyType}
-              policyTypeLabel={data.policyTypeLabel}
-            />
-          )}
-
-          {/* Footer CTA */}
-          <div className="flex w-full flex-col items-start gap-3 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:px-4 mobile:py-4">
-            <Button
-              className="w-full"
-              size="large"
-              onClick={() => {}}
-              data-testid="button-choose-and-switch"
-            >
-              Vælg og skift til {data.companyName}
-            </Button>
-            <span className="text-caption font-caption text-subtext-color text-center w-full">
-              Sikre data. Du kan annullere når som helst før aktivering.
-            </span>
-          </div>
         </div>
       </div>
     </AppLayoutWithNav>
