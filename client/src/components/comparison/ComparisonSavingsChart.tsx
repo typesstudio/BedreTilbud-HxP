@@ -1,5 +1,6 @@
 import { AreaChart } from "@/ui/components/AreaChart";
 import { Badge } from "@/ui/components/Badge";
+import * as SubframeCore from "@subframe/core";
 import { ComparisonOverallView } from "@/utils/transformComparison";
 
 interface ComparisonSavingsChartProps {
@@ -17,18 +18,20 @@ export function ComparisonSavingsChart({ overall }: ComparisonSavingsChartProps)
       style: "decimal",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(amount) + " kr";
+    }).format(Math.round(amount)) + " kr";
   };
+
+  const tooltipFormatter = (value: number) => formatCurrency(value);
 
   // Calculate savings milestones
   const monthlySavings = overall.annualSavings / 12;
   const oneYearSavings = overall.annualSavings;
   const tenYearSavings = overall.cumulativeSavings[overall.cumulativeSavings.length - 1]?.value || overall.annualSavings * 10;
 
-  // Transform data for AreaChart
+  // Transform data for AreaChart with rounded values
   const chartData = overall.cumulativeSavings.map((point) => ({
     label: point.label,
-    Besparelse: point.value,
+    Besparelse: Math.round(point.value),
   }));
 
   return (
@@ -48,6 +51,8 @@ export function ComparisonSavingsChart({ overall }: ComparisonSavingsChartProps)
           categories={["Besparelse"]}
           data={chartData}
           className="w-full h-full"
+          yAxis={<SubframeCore.YAxis tickFormatter={(value: number) => formatCurrency(value)} />}
+          tooltip={<SubframeCore.ChartTooltip formatter={tooltipFormatter} />}
         />
       </div>
 

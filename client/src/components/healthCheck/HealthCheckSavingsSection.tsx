@@ -21,6 +21,7 @@ const POLICY_COLORS: Record<string, string> = {
   ulykke: "#06b6d4",
   bil: "#8b5cf6",
   rejse: "#f59e0b",
+  fritidshus: "#10b981",
 };
 
 function formatCurrency(amount: number): string {
@@ -34,6 +35,10 @@ function formatCurrency(amount: number): string {
 function monthToYearLabel(monthIndex: number): string {
   const year = Math.ceil(monthIndex / 12);
   return `${year}. år`;
+}
+
+function tooltipFormatter(value: number): string {
+  return formatCurrency(value);
 }
 
 export function HealthCheckSavingsSection({ 
@@ -59,7 +64,7 @@ export function HealthCheckSavingsSection({
 
   const chartData = savingsOverTime.chartData.map((point, index) => ({
     Year: monthToYearLabel(index + 1),
-    [policyTypeLabel]: point.Besparelse,
+    [policyTypeLabel]: Math.round(point.Besparelse),
   }));
 
   const toggleVisibility = () => {
@@ -108,6 +113,7 @@ export function HealthCheckSavingsSection({
             index="Year"
             colors={[seriesColor]}
             yAxis={<SubframeCore.YAxis tickFormatter={tickFormatter} />}
+            tooltip={<SubframeCore.ChartTooltip formatter={tooltipFormatter} />}
           />
         ) : (
           <div className="flex h-64 w-full items-center justify-center rounded-md bg-neutral-50 mobile:h-48">

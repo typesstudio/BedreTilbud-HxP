@@ -63,14 +63,14 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
   // Build categories and chart data
   const categories = visibleSeries.map(s => s.label);
   
-  // Build chart data with Year labels
+  // Build chart data with Year labels and rounded values
   const data = Array.from({ length: 120 }, (_, i) => {
     const month = i + 1;
     const row: any = { Year: monthToYearLabel(month) };
 
     visibleSeries.forEach(s => {
       const point = s.points[i];
-      row[s.label] = point?.cumulative ?? 0;
+      row[s.label] = Math.round(point?.cumulative ?? 0);
     });
 
     return row;
@@ -116,14 +116,16 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
   const isAllSelected = visibleKeys.length === savings.series.length;
   const isSingleSelected = (key: string) => visibleKeys.length === 1 && visibleKeys[0] === key;
 
-  // Value formatter for Y-axis
+  // Value formatter for Y-axis and tooltip
   const tickFormatter = (value: number) => {
     return new Intl.NumberFormat("da-DK", {
       style: "decimal",
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
-    }).format(value) + " kr";
+    }).format(Math.round(value)) + " kr";
   };
+
+  const tooltipFormatter = (value: number) => formatCurrency(value);
 
   return (
     <div className="flex w-full flex-col items-start gap-6 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4 mobile:px-4 mobile:py-4">
@@ -191,6 +193,7 @@ export function ComparisonSavingsSection({ savings, activePolicyKey }: Compariso
           index="Year"
           colors={colors}
           yAxis={<SubframeCore.YAxis tickFormatter={tickFormatter} />}
+          tooltip={<SubframeCore.ChartTooltip formatter={tooltipFormatter} />}
         />
       </div>
 
