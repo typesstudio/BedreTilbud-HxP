@@ -1,0 +1,264 @@
+Here’s a prompt you can paste into Replit to get this fixed end-to-end 👇
+
+````text
+You are working in the Bedretilbud monorepo (server + client + shared).
+
+Current situation:
+- The **health check flow works**, but effectively only for **Indbo**.
+- When a user uploads insurance PDFs, multiple policies can be detected (indbo, hus, bil, ulykke, rejse).
+- We want **every detected policy type** to get its **own health check**, and for the **comparison + navigation** to link correctly between them.
+- On the UI, I can open Indbo sundhedstjek, but health checks are not consistently created/linked for the other types (Hus, Bil, Ulykke, Rejse).
+
+Goal:
+1. When a user uploads insurance and policies are parsed, **each individual policy** (Indbo, Hus, Bil, Ulykke, Rejse, etc.) must:
+   - Get its own `policy_snapshots` row.
+   - Get its own `health_checks` row.
+2. The **health check API** (`GET /api/policies/health-check/:snapshotId`) must work for **all policy types**, not just Indbo.
+3. The **comparison page tabs** (Samlet / Indbo / Hus / Bil / Ulykke / Rejse) must:
+   - Use the correct snapshot IDs for each policy type.
+   - Open the correct policy health check when I click **“Se detaljer”**.
+4. On the **health check page**, the top icon tabs (Indbo / Ulykke / Hus / Bil / Rejse) must:
+   - Be **dynamic**, based on which policy snapshots exist for that “bundle”/comparison.
+   - Navigate between the correct **snapshotIds** for each policy type.
+5. Everything must be **fully dynamic**, no hard-coded policy types or IDs, and must remain backwards compatible.
+
+Please implement this in a clean, minimal way.
+
+--------------------------------
+STEP 1 – Understand current data model + relations
+--------------------------------
+
+1. Open `shared/schema.ts` and identify:
+   - `policySnapshots` (or `policy_snapshots`) table:
+     - Fields like `id`, `userId`, `policyType`, `companyId`, `requestId`/`companyRequestId`/`comparisonId` or similar.
+   - `healthChecks` (or `health_checks`) table:
+     - Fields like `id`, `snapshotId`, `policyType`, `userId`, `result` JSON, etc.
+   - `companyComparisons` (or `company_comparisons`) and `policyComparisons` JSON structure in `comparison_json`:
+     - Where do we store per-policy `currentPolicyId` / `offerPolicyId`?
+
+2. Confirm which field is used to group all policies that belong together (for the same user + company offer):
+   - It might be `companyRequestId`, `comparisonId`, or similar on `policy_snapshots`.
+   - Whatever is currently used by the comparison orchestrator to assemble `policyComparisons` is the grouping key we should reuse for the health check tab navigation.
+
+--------------------------------
+STEP 2 – Ensure health checks are generated for ALL policy snapshots
+--------------------------------
+
+We already have health check generation and enrichment working for Indbo. Now we must generalize this for all policy types.
+
+1. Open:
+
+   - `server/services/healthCheckService.ts`
+   - `server/services/insuranceCheckService.ts`
+   - Any existing script like `server/scripts/backfill-missing-health-checks.ts`
+   - The API route handler for health checks in `server/routes.ts` (e.g. `GET /api/policies/health-check/:snapshotId`).
+
+2. Confirm we have a function similar to:
+
+   - `generateHealthCheckForSnapshot(snapshotId: string, userId: string)`
+   - or `getOrCreateHealthCheckForSnapshot(snapshotId: string, userId: string)`
+
+   Make sure this function:
+   - Reads the **policy snapshot** by `snapshotId`.
+   - Uses `snapshot.policyType` (indbo/hus/bil/ulykke/rejse/etc).
+   - Calls the AI agent and returns a full `health_checks.result` structure.
+   - Runs the **benchmark enrichment** logic for savings (using benchmark_prices).
+
+3. Make this function **policy-type agnostic**:
+   - Remove any guards like `if (policyType !== "indbo") return;`.
+   - The logic should work for **any** `policyType` we support.
+
+4. Find where **policy snapshots are created** after OCR/parse:
+
+   - Look for routes/services that process parsed PDF → create `policy_snapshots`.
+   - It might be in some “orchestrator” (`comparisonOrchestrator.ts`, `policySnapshotService.ts`, etc.).
+
+   For each snapshot that is created, call:
+
+   ```ts
+   await healthCheckService.getOrCreateHealthCheckForSnapshot(snapshot.id, userId);
+````
+
+Do this for **all** snapshots, not just the first one or only indbo.
+
+5. Fix the **backfill script**:
+
+   * Open `server/scripts/backfill-missing-health-checks.ts`.
+
+   * If it currently filters by `--policy-type=indbo` or similar, refactor so that by default it:
+
+     * Finds all `policy_snapshots` that **do not** have a corresponding `health_checks` row.
+     * For each, calls `generateHealthCheckForSnapshot(snapshot.id, snapshot.userId)`.
+
+   * Keep CLI options (like `--policy-type`) as optional filters for debugging, but run **without filters** by default.
+
+6. Run the backfill script locally (the Replit environment) to generate missing health checks for existing data.
+
+---
+
+## STEP 3 – Health check API must work for any snapshot
+
+1. In `server/routes.ts`, find the route:
+
+   ```ts
+   GET /api/policies/health-check/:snapshotId
+   ```
+
+   or similar.
+
+2. Ensure the handler:
+
+   * Validates `userId` (from `X-User-ID` header or session).
+   * Calls `healthCheckService.getOrCreateHealthCheckForSnapshot(snapshotId, userId)` so:
+
+     * If a health check exists → enrich & return it.
+     * If missing → generate it on demand for that snapshot (any policyType), store it, and return it.
+
+3. Confirm **no hard-coded policy type checks** here. It should work for Hus, Bil, Ulykke, Rejse, etc.
+
+---
+
+## STEP 4 – Wire comparison tabs → correct health check snapshot IDs
+
+We already have a working “Se detaljer” button for Indbo; extend this to all policy types.
+
+1. Open the comparison page:
+
+   * `client/src/pages/comparison.tsx` (or the equivalent).
+   * Also open `client/src/utils/transformComparison.ts` and `client/src/components/comparison/ComparisonHeader.tsx`.
+
+2. In `transformComparison.ts`, we already map each element of `policyComparisons` to a view model. Confirm that for each policy we expose:
+
+   * `policyType` (indbo, hus, bil, ulykke, rejse, etc.)
+   * `offerPolicySnapshotId` (or similar, the snapshot we want to inspect in health check).
+   * Optionally the current policy snapshot ID.
+
+   If we only have `offerPolicyId` in the JSON, make sure it maps to the **snapshot ID** used by the health-check API.
+
+3. On the comparison page, find where we build the **tabs** (Samlet / Indbo / Hus / Bil / Ulykke / Rejse):
+
+   * There should be some array like `policyTabs` or similar derived from `comparison.policyComparisons`.
+   * Each tab should include both:
+
+     * `policyType`
+     * `healthCheckSnapshotId` = `offerPolicySnapshotId` (or whichever snapshot you want to inspect).
+
+4. In the header where the **“Se detaljer”** button lives (likely `ComparisonHeader`):
+
+   * On individual policy tabs (NOT Samlet), the button’s `onClick` should navigate to:
+
+     ```ts
+     navigate(`/sundhedstjek/${activePolicy.healthCheckSnapshotId}`);
+     ```
+
+   * Make sure this works for **all** policy types present in the comparison (Indbo, Hus, Ulykke, Bil, Rejse), not only for Indbo.
+
+5. Test:
+
+   * For a comparison that has multiple policy types.
+   * Click each tab → click “Se detaljer”:
+
+     * The URL must be `/sundhedstjek/:snapshotId` with the correct snapshotID for that policy type.
+     * No 404/500 from the API (health check exists or is generated on demand).
+
+---
+
+## STEP 5 – Health check top tabs: navigate between all policy health checks in the bundle
+
+On `/sundhedstjek/:snapshotId`, we have the icon row: Indbo / Ulykke / Hus / Bil / Rejse. Those tabs must reflect the real policies in the same bundle/comparison, not just be static.
+
+1. Open `client/src/pages/policy-health-check.tsx` and any “tabs” component it uses.
+
+2. For the active snapshot:
+
+   * Fetch the health-check data (`usePolicyHealthCheck(snapshotId)`).
+   * From the response, identify what **grouping key** we can use to find the sibling policies:
+
+     * It might return `comparisonId`, `companyRequestId`, or some other ID.
+     * If not, we can add a small extra field on the backend: e.g. include `groupId` in the health-check API response sourced from `policy_snapshots`.
+
+3. Add a hook or query to get all **related policy snapshots** in the same group, e.g.:
+
+   * New API route (if needed) like:
+
+     * `GET /api/policies/groups/:groupId`
+     * Which returns all snapshots for that group (policyType + snapshotId).
+
+   or
+
+   * Reuse existing comparison API:
+
+     * `/api/company-comparisons/:id` → from this we know all `policyComparisons` and their snapshotIds.
+
+   Use whichever is already implemented and easiest to connect.
+
+4. Build the tabs dynamically:
+
+   * Create an array like:
+
+     ```ts
+     const tabs = [
+       { policyType: "indbo", label: "Indbo", snapshotId: "..."},
+       { policyType: "hus", label: "Hus", snapshotId: "..."},
+       ...
+     ];
+     ```
+
+   * Only include policy types that actually exist in this group (no fake empty tabs).
+
+   * Mark the active tab by comparing its `snapshotId` with the current route param.
+
+5. Tab click behaviour:
+
+   * When clicking a tab for a **different** snapshotId, do:
+
+     ```ts
+     navigate(`/sundhedstjek/${tab.snapshotId}`);
+     ```
+
+   * The page should refetch the health check for that snapshot and update all sections (savings, benefits, coverage, strengths/weaknesses, cumulative chart) accordingly.
+
+6. Ensure this logic is **fully generic** so any combination of policy types works:
+
+   * Example: some users might have Indbo + Hus + Bil, others only Indbo + Rejse, etc.
+
+---
+
+## STEP 6 – Verify end-to-end behaviour
+
+1. Run the backfill script so all existing policy snapshots have health checks.
+
+2. In the browser:
+
+   * Upload a PDF that results in multiple policy types (e.g. Indbo + Hus + Bil).
+   * Wait for processing / comparison generation.
+
+3. Open the comparison page:
+
+   * Switch between Indbo / Hus / Bil tabs.
+   * Click “Se detaljer” on each:
+
+     * Each should open its **own** health check page (`/sundhedstjek/:snapshotId`).
+
+4. On each health-check page:
+
+   * The top icon tabs should show exactly the policy types in that bundle.
+   * Clicking between them should change snapshotId and show the matching health check.
+   * All sections (Årlig potentiel besparelse, Dine forsikringsfordele, Hvad er inkluderet, Styrker & svagheder, Kumulativ besparelse, CTA) must show **policy-specific data**.
+
+5. Finally, print a short log or comment in the code summarising:
+
+   * Where health checks are generated for each snapshot.
+   * How the comparison tabs map to health-check snapshot IDs.
+   * How the health-check page discovers and navigates between sibling policies.
+
+Important constraints:
+
+* Do not remove or break the existing Indbo flow — just generalise it for **all** policy types.
+* No hard-coded snapshot IDs or policy types in logic; use enums/strings from the existing schema.
+* Keep changes minimal, well-factored, and backwards compatible with existing data.
+
+```
+
+::contentReference[oaicite:0]{index=0}
+```
