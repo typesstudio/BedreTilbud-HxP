@@ -2269,7 +2269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 1. Returns existing health check if found
       // 2. Generates and persists new one if missing
       // 3. Handles auth/ownership verification
-      const { ensureHealthCheckForSnapshot } = await import("./services/healthCheckService");
+      const { ensureHealthCheckForSnapshot, enrichStoredHealthCheck } = await import("./services/healthCheckService");
       const healthCheck = await ensureHealthCheckForSnapshot(snapshotId, userId, storage);
 
       // Get snapshot details for response
@@ -2300,6 +2300,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: `Snapshot ${snapshotId} not found in policy_snapshots or offer_snapshots` });
       }
 
+      // Enrich stored health check with benchmark-based savings on-the-fly
+      // This ensures old records without savings data still display meaningful numbers
+      const offerPremium = snapshot.pricing?.annualPremium 
+        || snapshot.structuredPolicy?.pricing?.annualPremium 
+        || null;
+      
+      const enrichedResult = await enrichStoredHealthCheck(
+        healthCheck.result as any,
+        snapshot.policyType,
+        offerPremium,
+        storage
+      );
+
       res.json({
         snapshot: {
           id: snapshot.id,
@@ -2308,7 +2321,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           kind: snapshot.kind,
           pricing: snapshot.pricing,
         },
-        healthCheck,
+        healthCheck: {
+          ...healthCheck,
+          result: enrichedResult,
+        },
       });
     } catch (error: any) {
       logger.error('[Health Check API] Error fetching/generating health check', error, { snapshotId: req.params.snapshotId });

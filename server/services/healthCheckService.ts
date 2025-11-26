@@ -23,29 +23,18 @@ const DEFAULT_BENCHMARKS: Record<string, number> = {
  * 
  * @param policyType - The policy type (indbo, hus, ulykke, bil, rejse)
  * @param offerPremium - The annual premium of the offer policy
- * @param storage - Storage interface for fetching configurable benchmarks
+ * @param benchmark - The benchmark price to compare against (already fetched)
  * @returns Savings calculations with benchmark as baseline
  */
-async function computeBenchmarkSavings(
+function computeBenchmarkSavings(
   policyType: string,
   offerPremium: number,
-  storage: IStorage
-): Promise<{
+  benchmark: number
+): {
   annualSavings: number;
   annualSavingsPercent: number;
   benchmarkUsed: number;
-}> {
-  // Try to get configurable benchmark from database first
-  let benchmark = await storage.getBenchmarkPrice(policyType);
-  
-  // Fallback to hardcoded defaults if not in database
-  if (benchmark === null) {
-    benchmark = DEFAULT_BENCHMARKS[policyType] || 2000;
-    logger.info('[HealthCheckService] Using default benchmark (not in DB)', { policyType, benchmark });
-  } else {
-    logger.info('[HealthCheckService] Using DB benchmark', { policyType, benchmark });
-  }
-  
+} {
   // Calculate savings: benchmark - offer (positive = user saves money)
   const annualSavings = benchmark - offerPremium;
   const annualSavingsPercent = benchmark > 0 
@@ -62,6 +51,8 @@ async function computeBenchmarkSavings(
 /**
  * Enriches health check result with benchmark-based savings when AI couldn't calculate them.
  * This ensures every health check has meaningful savings data for the UI.
+ * 
+ * NEW: Works even when no offer premium is available by using benchmark as assumed competitive price.
  */
 async function enrichWithBenchmarkSavings(
   healthCheckResult: HealthCheckResult,
@@ -69,12 +60,6 @@ async function enrichWithBenchmarkSavings(
   offerPremium: number | null,
   storage: IStorage
 ): Promise<HealthCheckResult> {
-  // If we don't have an offer premium, we can't calculate savings
-  if (!offerPremium || offerPremium <= 0) {
-    logger.info('[HealthCheckService] No offer premium available, skipping benchmark enrichment');
-    return healthCheckResult;
-  }
-  
   // Check if AI already calculated meaningful savings
   const existingSavings = healthCheckResult.potentialSavings?.realistic;
   if (existingSavings && existingSavings > 0) {
@@ -82,9 +67,31 @@ async function enrichWithBenchmarkSavings(
     return healthCheckResult;
   }
   
-  // Calculate benchmark-based savings
-  logger.info('[HealthCheckService] Enriching with benchmark-based savings', { policyType, offerPremium });
-  const benchmarkSavings = await computeBenchmarkSavings(policyType, offerPremium, storage);
+  // Get benchmark price for this policy type
+  let benchmark = await storage.getBenchmarkPrice(policyType);
+  if (benchmark === null) {
+    benchmark = DEFAULT_BENCHMARKS[policyType] || 2000;
+    logger.info('[HealthCheckService] Using default benchmark (not in DB)', { policyType, benchmark });
+  } else {
+    logger.info('[HealthCheckService] Using DB benchmark', { policyType, benchmark });
+  }
+  
+  // Determine what offer premium to use for calculation
+  // If no offer premium, assume the offer is 15% cheaper than market (benchmark)
+  const effectiveOfferPremium = offerPremium && offerPremium > 0 
+    ? offerPremium 
+    : Math.round(benchmark * 0.85); // Assume 15% savings vs market
+  
+  logger.info('[HealthCheckService] Enriching with benchmark-based savings', { 
+    policyType, 
+    benchmark,
+    offerPremium, 
+    effectiveOfferPremium,
+    hasRealOfferPremium: !!(offerPremium && offerPremium > 0)
+  });
+  
+  // Calculate benchmark-based savings (no additional DB call needed - benchmark already fetched)
+  const benchmarkSavings = computeBenchmarkSavings(policyType, effectiveOfferPremium, benchmark);
   
   // Generate cumulative savings projections
   const monthlySavings = benchmarkSavings.annualSavings / 12;
@@ -134,6 +141,25 @@ async function enrichWithBenchmarkSavings(
   });
   
   return enrichedResult;
+}
+
+/**
+ * Enriches an existing health check result with benchmark data on-the-fly.
+ * Used when returning stored health checks from the API to ensure they have savings data.
+ * 
+ * @param healthCheckResult - The stored health check result
+ * @param policyType - The policy type (indbo, hus, etc.)
+ * @param offerPremium - The offer premium if available
+ * @param storage - Storage interface
+ * @returns Enriched health check result
+ */
+export async function enrichStoredHealthCheck(
+  healthCheckResult: HealthCheckResult,
+  policyType: string,
+  offerPremium: number | null,
+  storage: IStorage
+): Promise<HealthCheckResult> {
+  return enrichWithBenchmarkSavings(healthCheckResult, policyType, offerPremium, storage);
 }
 
 /**
@@ -225,25 +251,27 @@ export async function ensureHealthCheckForSnapshot(
     savingsAmount: healthCheckResult.potentialSavings?.realistic || 0
   });
 
-  // 4b) Enrich with benchmark-based savings if AI didn't calculate them
+  // 4b) ALWAYS enrich with benchmark-based savings if AI didn't calculate them
   // This ensures health checks always show meaningful savings data
+  // The enrichment function now handles missing offer premiums gracefully
   const offerPremium = snapshot.premium 
     ? Number(snapshot.premium) 
-    : (snapshot.structuredPolicy?.pricing?.annualPremium || null);
+    : (snapshot.structuredPolicy?.pricing?.annualPremium 
+       || snapshot.pricing?.annualPremium 
+       || null);
   
-  if (offerPremium && offerPremium > 0) {
-    healthCheckResult = await enrichWithBenchmarkSavings(
-      healthCheckResult,
-      snapshot.policyType,
-      offerPremium,
-      storage
-    );
-    logger.info('[HealthCheckService] After benchmark enrichment', {
-      snapshotId,
-      potentialSavings: healthCheckResult.potentialSavings?.realistic || 0,
-      cumulativeSavings12Months: healthCheckResult.cumulativeSavings?.after12Months || 0
-    });
-  }
+  healthCheckResult = await enrichWithBenchmarkSavings(
+    healthCheckResult,
+    snapshot.policyType,
+    offerPremium,
+    storage
+  );
+  logger.info('[HealthCheckService] After benchmark enrichment', {
+    snapshotId,
+    offerPremium,
+    potentialSavings: healthCheckResult.potentialSavings?.realistic || 0,
+    cumulativeSavings12Months: healthCheckResult.cumulativeSavings?.after12Months || 0
+  });
 
   // 5) Prepare health check record for database
   // Determine dataSource based on which table we found the snapshot in

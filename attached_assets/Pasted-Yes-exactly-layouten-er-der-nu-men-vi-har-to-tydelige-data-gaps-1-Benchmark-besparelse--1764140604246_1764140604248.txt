@@ -1,0 +1,301 @@
+Yes, exactly – layouten er der nu, men vi har to tydelige **data-gaps**:
+
+1. **Benchmark-besparelse** bliver ikke brugt konsekvent → derfor 0 kr og flad graf.
+2. **Styrker & svagheder** er tomme → højst sandsynligt fordi AI-agentens JSON ikke matcher det, frontenden forventer.
+
+Det giver mening at sikre datagrundlaget først. Her er en Replit-prompt du kan copy-paste, som fokuserer 100% på:
+
+* at benchmark-logikken faktisk sætter tal i health check JSON’et
+* at AI-agenten reelt returnerer `strengths` / `weaknesses`, og at de bliver mappet rigtigt.
+
+---
+
+## Replit-prompt (copy-paste i Replit)
+
+````text
+You are working in the Bedretilbud TypeScript monorepo (server + client + shared).
+
+Goal: Fix the **health check data**, not the layout.
+
+Current situation in the browser (snapshotId like `4ae81653-1501-4976-b62d-7371af05dfe2`):
+
+- Health check page `/sundhedstjek/:snapshotId` shows:
+  - Sections are rendered (Årlig potentiel besparelse, Dine forsikringsfordele, Hvad er inkluderet, Styrker & svagheder, Kumulativ besparelse, CTA).
+  - BUT:
+    - Årlig potentiel besparelse card shows 0 kr (or empty).
+    - Cumulative savings chart is flat at 0, and the summary cards show `0 kr sparet`.
+    - “Styrker & svagheder” shows the empty state text instead of real strengths/weaknesses.
+
+We already added:
+
+- `benchmark_prices` (or `benchmarkPrices`) table in `shared/schema.ts`.
+- Storage methods `getBenchmarkPrice`, `setBenchmarkPrice`, `getAllBenchmarkPrices` in `server/storage.ts`.
+- A seeding script for benchmark prices:
+  - indbo:  2000 kr
+  - hus:    4500 kr
+  - ulykke: 1500 kr
+  - bil:    3000 kr
+  - rejse:   800 kr
+- A health check enrichment step in `server/services/healthCheckService.ts` that *should* add benchmark-based savings.
+- Frontend components and transformer for:
+  - “Årlig potentiel besparelse”
+  - “Styrker & svagheder”
+  - Savings over time chart
+
+But the data isn’t showing up, so something in the **data pipeline** is still wrong.
+
+############################
+# TASK 1 – Verify benchmarks exist
+############################
+
+1. Open `shared/schema.ts` and confirm the benchmark table definition (name and column names).
+2. Open `server/storage.ts` and confirm:
+   - `getBenchmarkPrice(policyType: string)` returns the numeric `annualPremium`.
+   - `getAllBenchmarkPrices()` returns all rows.
+3. Run a small script or REPL snippet to log current benchmarks from the DB, e.g.:
+
+   ```ts
+   import { storage } from "./server/storage";
+
+   async function debugBenchmarks() {
+     const all = await storage.getAllBenchmarkPrices();
+     console.log(all);
+   }
+
+   debugBenchmarks().catch(console.error);
+````
+
+Make sure the values match:
+
+* indbo: 2000
+* hus: 4500
+* ulykke: 1500
+* bil: 3000
+* rejse: 800
+
+If not, fix the seed script or storage implementation.
+
+############################
+
+# TASK 2 – Inspect health_check JSON for a snapshot
+
+############################
+
+We need to see exactly what the server returns **today** for a concrete health check.
+
+1. Find where health checks are stored (likely `health_checks` table in `shared/schema.ts`).
+
+2. Using either psql or a small Node script, fetch the raw JSON for a **known snapshotId**, e.g. `4ae81653-1501-4976-b62d-7371af05dfe2` (from the current Indbo sundhedstjek page):
+
+   * From DB (psql) OR via API:
+
+     * API route is something like: `GET /api/policy-health-checks/:snapshotId` or similar.
+       Search in `server/routes.ts` for “sundhedstjek” or “health check” to find the exact path.
+     * Log the full JSON response.
+
+3. Specifically, check if the JSON contains fields like:
+
+   ```json
+   {
+     "overall": {
+       "annualPotentialSavings": ...,
+       "annualSavingsPercent": ...,
+       "baselineAnnualPremium": ...,
+       "offerAnnualPremium": ...,
+       "monthlySavings": ...,
+       "twelveMonthSavings": ...,
+       "tenYearSavings": ...
+     },
+     "savingsOverTime": {
+       "points": [...]
+     },
+     "strengths": [...],
+     "weaknesses": [...]
+   }
+   ```
+
+   If these fields are missing or all zeros, we know the enrichment logic isn’t being applied correctly.
+
+############################
+
+# TASK 3 – Fix benchmark-based savings enrichment
+
+############################
+
+Open `server/services/healthCheckService.ts` and `server/services/insuranceCheckService.ts`.
+
+1. Locate the function that enriches a health check with benchmark-based savings. You previously started something like:
+
+   ```ts
+   async function enrichHealthCheckWithBenchmark(
+     healthCheck: ExistingHealthCheck,
+     snapshot: PolicySnapshot
+   ) { ... }
+   ```
+
+2. Make this function do the following, deterministically:
+
+   * Determine `policyType` (e.g. "indbo") from the snapshot or health check.
+
+   * Determine `offerAnnualPremium` from the snapshot’s pricing.
+
+   * Determine `currentAnnualPremium` from:
+
+     * The user’s current policy if available, otherwise `null`.
+
+   * If `currentAnnualPremium` is present and > 0:
+
+     * Use this as `baselineAnnualPremium`.
+
+   * ELSE:
+
+     * Call `storage.getBenchmarkPrice(policyType)`.
+     * If it returns a value → use that as `baselineAnnualPremium`.
+     * If not → set `baselineAnnualPremium = offerAnnualPremium`, resulting in 0 savings (but don’t crash).
+
+   * Compute:
+
+     ```ts
+     const savingsAnnual = baselineAnnualPremium - offerAnnualPremium;
+     const savingsPercent =
+       baselineAnnualPremium > 0
+         ? (savingsAnnual / baselineAnnualPremium) * 100
+         : 0;
+     const monthlySavings = savingsAnnual / 12;
+     const twelveMonthSavings = savingsAnnual;
+     const tenYearSavings = savingsAnnual * 10;
+     ```
+
+   * Build a simple array for 120 months (10 years) of cumulative savings:
+
+     ```ts
+     const points = Array.from({ length: 120 }, (_, i) => ({
+       monthIndex: i + 1,
+       cumulativeSavings: monthlySavings * (i + 1),
+     }));
+     ```
+
+   * Write these values into the health-check JSON under **the exact fields the frontend expects**.
+     Check `client/src/utils/transformHealthCheck.ts` to see what field names it reads – adapt the server output to those names instead of inventing new ones.
+
+3. Ensure this enrichment function is called:
+
+   * Every time a new health check is generated.
+   * AND also when an existing health check is loaded, if necessary (for older records).
+     The simplest safe approach: when returning a health check from the API, run the enrichment on the in-memory object before sending the response, so old rows get computed savings too.
+
+4. After updating, re-run the app and call the health-check API again for the same snapshotId. Confirm that:
+
+   * `overall.annualPotentialSavings` is **non-zero**.
+   * `overall.annualSavingsPercent` is non-zero (if benchmark > offer).
+   * `savingsOverTime.points` contains a non-empty array with cumulative values.
+
+############################
+
+# TASK 4 – Make sure the transformer uses those fields
+
+############################
+
+Open `client/src/utils/transformHealthCheck.ts`.
+
+1. Confirm how the `HealthCheckViewModel` is built. Make sure it reads the **same fields** we just populated on the server:
+
+   * `annualPotentialSavings` ← from server JSON.
+   * `annualSavingsPercent` ← from server JSON.
+   * `monthlySavings`, `twelveMonthSavings`, `tenYearSavings`.
+   * `savingsOverTime` → map points to whatever structure the chart component expects.
+
+2. There should be no fallback to `0` or hardcoded demo values anymore. If there are, remove them and rely on the server-provided data.
+
+3. Confirm that `HealthCheckAnnualPotentialCard` and the savings chart component receive these values via props.
+
+At this point, if the benchmarks are wired correctly, the top card and the chart should display non-zero savings.
+
+############################
+
+# TASK 5 – Strengths & weaknesses (AI data)
+
+############################
+
+Right now the “Styrker & svagheder” component shows only the empty state. That means either:
+
+* The AI agent doesn’t generate strengths/weaknesses in its JSON, or
+* The server/transformer uses different field names.
+
+1. Inspect the raw health-check JSON again (from TASK 2):
+
+   * Look for arrays like `strengths`, `weaknesses`, `pros`, `cons`, `improvements`, etc.
+
+   If there **are** arrays with text but with different field names, adapt `transformHealthCheck.ts` to map them into:
+
+   ```ts
+   viewModel.strengths: Array<{ title: string; description?: string }>;
+   viewModel.weaknesses: Array<{ title: string; description?: string }>;
+   ```
+
+2. If there are **no** such arrays at all in the JSON:
+
+   * Open `server/services/insuranceCheckService.ts` (or whichever file builds the AI prompt for the health check).
+
+   * Find the system prompt / schema for the AI. Update it so the model is **required** to output:
+
+     ```json
+     {
+       "strengths": [
+         { "title": "…", "description": "…" }
+       ],
+       "weaknesses": [
+         { "title": "…", "description": "…" }
+       ]
+     }
+     ```
+
+     Make it explicit in the prompt that it must always return these arrays (they can be empty, but must exist).
+
+   * Make sure the parsing and typing on the server side expects those exact fields and stores them into the health_check JSON.
+
+3. After updating the AI prompt + parsing, regenerate **one** health check for the same snapshotId:
+
+   * Either via an explicit “regenerate health check” endpoint, or by temporarily adding a script that re-runs the health-check generation for that snapshot.
+
+4. Call the health-check API and confirm that the JSON now contains non-empty `strengths` and `weaknesses` arrays.
+   Then check that `transformHealthCheck.ts` maps them into the ViewModel, and that the component `HealthCheckStrengthsWeaknesses` receives them and displays them.
+
+############################
+
+# TASK 6 – Manual test and summary
+
+############################
+
+1. Restart the dev server.
+
+2. In the browser:
+
+   * Go to a comparison page.
+   * Click an individual policy tab (e.g. Indbo) → click “Se detaljer” to open `/sundhedstjek/:snapshotId`.
+   * Verify:
+
+     * Årlig potentiel besparelse shows a **non-zero** kr amount and a percentage.
+     * The cumulative savings chart shows a rising line and the summary cards match the backend numbers.
+     * “Styrker & svagheder” shows two columns with bullet cards coming from the AI, not the empty state.
+
+3. Finally, write a short summary in the Replit output:
+
+   * Which files were changed.
+   * What the final JSON shape of a health check is (at least `overall`, `savingsOverTime`, `strengths`, `weaknesses`).
+   * How to regenerate a health check for a new snapshot.
+
+Do NOT change visual design/layout unless absolutely necessary. Focus on making the **data** correct and fully wired through from DB → services → API → transform → React components.
+
+```
+
+---
+
+Når du har kørt den prompt, bør vi:
+
+- Få rigtige benchmark-baserede besparelser på kort + graf.  
+- Få “Styrker & svagheder” fyldt med AI-genereret indhold.
+
+Når du har testet det, send gerne et nyt screenshot af sundhedstjek-siden – så kan vi bagefter finpudse copy / labels / micro-UX.
+::contentReference[oaicite:0]{index=0}
+```

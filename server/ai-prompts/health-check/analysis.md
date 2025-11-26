@@ -120,6 +120,49 @@ Identificér hvad der mangler:
 - Dækning: specifikke limits, undtagelser, dobbelterstatning
 - Vilkår: binding, opsigelse, karensperiode
 
+### 8) Styrker & Svagheder (OBLIGATORISK)
+**Du SKAL ALTID returnere mindst 2-3 styrker og 2-3 svagheder/forbedringsmuligheder!**
+
+**Styrker** - Find positive aspekter ved policen:
+- Gode dækningsbeløb over markedsgennemsnit
+- Lav selvrisiko sammenlignet med markedet
+- Ekstra dækninger inkluderet (fx udvidet vandskade, el-skade)
+- Fleksible vilkår (ingen binding, kort opsigelse)
+- God kundeservice eller hurtigt skadebehandling
+
+**Svagheder/Forbedringsmuligheder** - Find områder der kan forbedres:
+- Høj selvrisiko på vigtige dækninger
+- Manglende eller lave dækningsgrænser
+- Dyre tillægsdækninger der burde være inkluderet
+- Lang bindingsperiode eller dårlige opsigelsesvilkår
+- Manglende information om vigtige områder
+
+**Format for styrker og svagheder:**
+```json
+"strengths": [
+  {
+    "title": "Lav selvrisiko på brandskade",
+    "description": "Selvrisiko på kun 2.500 kr er under markedsgennemsnit"
+  },
+  {
+    "title": "Høj dækning for indbo",
+    "description": "Dækningssum på 500.000 kr giver god beskyttelse"
+  }
+],
+"weaknesses": [
+  {
+    "title": "Høj selvrisiko på vandskade",
+    "description": "5.000 kr selvrisiko er over markedsgennemsnit for denne dækning"
+  },
+  {
+    "title": "Manglende el-skadedækning",
+    "description": "Udvidet el-skadedækning er ikke inkluderet som standard"
+  }
+]
+```
+
+**VIGTIGT:** Arrays må ALDRIG være tomme - find altid mindst 2-3 punkter i hver kategori!
+
 ## OUTPUT FORMAT
 
 ```json
