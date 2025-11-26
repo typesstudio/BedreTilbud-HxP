@@ -193,27 +193,32 @@ class InsuranceCheckService {
    */
   async analyzeInsuranceHealth(input: Policy | OfferSnapshot): Promise<HealthCheckResult> {
     try {
-      // Determine if input is OfferSnapshot or legacy Policy
+      // Determine input type - support OfferSnapshot, PolicySnapshot, and legacy Policy
       const isOfferSnapshot = 'extractionVersion' in input;
+      const isPolicySnapshot = 'rawText' in input && 'kind' in input; // PolicySnapshot has rawText + kind fields
       
-      // Check if we have Phase 1 structured policy data (two-phase extraction)
-      const hasStructuredPolicy = isOfferSnapshot && 
-        (input as OfferSnapshot).structuredPolicy !== null && 
-        (input as OfferSnapshot).structuredPolicy !== undefined;
+      // Check if we have structured policy data (two-phase extraction)
+      // Works for both OfferSnapshot and PolicySnapshot which have structuredPolicy field
+      const inputAny = input as any;
+      const hasStructuredPolicy = inputAny.structuredPolicy !== null && 
+        inputAny.structuredPolicy !== undefined &&
+        Object.keys(inputAny.structuredPolicy).length > 0;
+      
+      // Check if we have rawText for AI analysis (PolicySnapshot canonical text)
+      const hasRawText = isPolicySnapshot && inputAny.rawText && inputAny.rawText.length > 0;
       
       const policyType = input.policyType || 'home';
-      const premium = isOfferSnapshot 
-        ? (input as OfferSnapshot).premium 
-        : (input as Policy).premium;
-      const deductible = isOfferSnapshot
-        ? (input as OfferSnapshot).deductible
-        : (input as Policy).deductible;
+      const premium = inputAny.premium 
+        || inputAny.pricing?.annualPremium
+        || inputAny.structuredPolicy?.pricing?.annualPremium
+        || null;
+      const deductible = inputAny.deductible || null;
       
       let prompt: string;
       
       if (hasStructuredPolicy) {
         // Phase 2: Use structured policy from Phase 1 extraction
-        const structuredPolicy = (input as OfferSnapshot).structuredPolicy as any;
+        const structuredPolicy = inputAny.structuredPolicy;
         console.log(`[Health Check Phase 2] Using structured policy from Phase 1`);
         console.log(`[Health Check Phase 2] Coverages: ${structuredPolicy.coverageDetails?.mainCoverages?.length || 0} main + ${structuredPolicy.coverageDetails?.additionalCoverages?.length || 0} additional`);
         
@@ -223,6 +228,22 @@ class InsuranceCheckService {
           premium: premium || 'N/A',
           deductible: deductible || 'N/A',
           structuredPolicy: JSON.stringify(structuredPolicy, null, 2)
+        });
+      } else if (hasRawText) {
+        // PolicySnapshot with rawText but no structuredPolicy - use rawText directly
+        // AI will extract coverages from the raw markdown text
+        console.log(`[Health Check RawText] Using PolicySnapshot rawText (${inputAny.rawText.length} chars) for ${policyType}`);
+        
+        const promptTemplate = loadPrompt('health-check/analysis');
+        prompt = replaceVariables(promptTemplate, {
+          policyType,
+          premium: premium || 'N/A',
+          deductible: deductible || 'N/A',
+          structuredPolicy: JSON.stringify({ 
+            _source: 'rawText',
+            rawPolicyDocument: inputAny.rawText,
+            companyName: inputAny.companyName || 'Ukendt'
+          }, null, 2)
         });
       } else {
         // Legacy: Use coverageDetails directly
