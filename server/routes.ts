@@ -2509,7 +2509,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
           companyName: 'Ukendt',
           documentId: s.documentId,
           pricing: (s.structuredPolicy as any)?.pricing || null,
+          structuredPolicy: s.structuredPolicy || null,
         }));
+      }
+
+      // Helper function to extract coverage sum from the correct data sources
+      function extractCoverageSum(structuredPolicy: any, healthCheckResult: any): string | null {
+        // 1) Prefer explicit sum from health_check.result.whatsIncluded
+        const whatsIncluded = healthCheckResult?.whatsIncluded ?? [];
+        const withSum = whatsIncluded.find(
+          (item: any) => item?.attributes?.sum
+        );
+        if (withSum?.attributes?.sum) {
+          return withSum.attributes.sum;
+        }
+
+        // 2) Fallback to first mainCoverage with a limit in structuredPolicy.coverageDetails.mainCoverages
+        const mainCoverages = structuredPolicy?.coverageDetails?.mainCoverages ?? [];
+        const coverageWithLimit = mainCoverages.find((c: any) => c?.limit);
+        if (coverageWithLimit?.limit) {
+          return coverageWithLimit.limit;
+        }
+
+        // 3) If nothing found, return null
+        return null;
       }
 
       // Fetch health checks for all siblings IN PARALLEL for better performance
