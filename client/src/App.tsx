@@ -7,6 +7,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import OffersOverview from "@/pages/offers-overview";
 import Comparison from "@/pages/comparison";
+import PolicyHealthCheck from "@/pages/policy-health-check";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
 const ModernLandingPage = lazy(() => import("@/pages/ModernLandingPage"));
@@ -23,7 +24,6 @@ const InsuranceCheck = lazy(() => import("@/pages/insurance-check"));
 const InsuranceCheckPage = lazy(() => import("@/pages/InsuranceCheckPage"));
 const OfferComparisonAll = lazy(() => import("@/pages/offer-comparison-all"));
 const OfferComparisonDetail = lazy(() => import("@/pages/offer-comparison-detail"));
-const PolicyHealthCheck = lazy(() => import("@/pages/policy-health-check"));
 
 const LoadingFallback = () => (
   <div className="flex items-center justify-center min-h-screen">

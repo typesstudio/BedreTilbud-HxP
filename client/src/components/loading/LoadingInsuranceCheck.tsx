@@ -1,0 +1,106 @@
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+
+function LoadingInsuranceCheck() {
+  return (
+    <DefaultPageLayout>
+      <div className="container max-w-none flex h-full w-full flex-col items-center gap-8 bg-default-background py-12">
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-8">
+          <div className="flex w-full flex-col items-start gap-6">
+            <div className="flex w-full flex-col items-start gap-2">
+              <div className="flex h-9 w-full max-w-[448px] flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+              <div className="flex h-5 w-full flex-none items-start rounded-md bg-neutral-100 animate-pulse" />
+              <div className="flex h-5 flex-none items-start rounded-md bg-neutral-100 w-4/5 animate-pulse" />
+            </div>
+            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-6 py-6">
+              <div className="flex w-full items-center gap-3">
+                <div className="flex h-10 w-10 flex-none items-start rounded-lg bg-neutral-200 animate-pulse" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <div className="flex h-5 w-48 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+                  <div className="flex h-4 w-64 flex-none items-start rounded-md bg-neutral-100 animate-pulse" />
+                </div>
+              </div>
+              <div className="flex h-10 w-full flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+            </div>
+            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+              <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+              <div className="flex w-full items-start gap-4">
+                <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md bg-neutral-50 px-4 py-4">
+                  <div className="flex h-10 w-10 flex-none items-start rounded-lg bg-neutral-200 animate-pulse" />
+                  <div className="flex flex-col items-start gap-1">
+                    <div className="flex h-5 w-28 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+                    <div className="flex h-4 w-36 flex-none items-start rounded-md bg-neutral-100 animate-pulse" />
+                  </div>
+                </div>
+                <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md bg-neutral-50 px-4 py-4">
+                  <div className="flex h-10 w-10 flex-none items-start rounded-lg bg-neutral-200 animate-pulse" />
+                  <div className="flex flex-col items-start gap-1">
+                    <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+                    <div className="flex h-4 w-40 flex-none items-start rounded-md bg-neutral-100 animate-pulse" />
+                  </div>
+                </div>
+                <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-3 rounded-md bg-neutral-50 px-4 py-4">
+                  <div className="flex h-10 w-10 flex-none items-start rounded-lg bg-neutral-200 animate-pulse" />
+                  <div className="flex flex-col items-start gap-1">
+                    <div className="flex h-5 w-24 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+                    <div className="flex h-4 w-32 flex-none items-start rounded-md bg-neutral-100 animate-pulse" />
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+              <div className="flex w-full items-center gap-3">
+                <div className="flex h-10 w-10 flex-none items-start rounded-lg bg-neutral-200 animate-pulse" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <div className="flex h-5 w-56 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+                  <div className="flex h-4 w-72 flex-none items-start rounded-md bg-neutral-100 animate-pulse" />
+                </div>
+              </div>
+              <div className="flex w-full flex-col items-start gap-3">
+                <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+                <div className="flex w-full items-center gap-4 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+                  <div className="flex h-10 w-10 flex-none items-start rounded-lg bg-neutral-200 animate-pulse" />
+                  <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                    <div className="flex h-5 w-56 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+                    <div className="flex h-4 w-32 flex-none items-start rounded-md bg-neutral-100 animate-pulse" />
+                  </div>
+                  <div className="flex h-8 w-8 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+                </div>
+                <div className="flex w-full items-center gap-4 rounded-md border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+                  <div className="flex h-10 w-10 flex-none items-start rounded-lg bg-neutral-200 animate-pulse" />
+                  <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                    <div className="flex h-5 w-48 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+                    <div className="flex h-4 w-32 flex-none items-start rounded-md bg-neutral-100 animate-pulse" />
+                  </div>
+                  <div className="flex h-8 w-8 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="flex w-full items-start gap-4 flex-wrap">
+            <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6">
+              <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+              <div className="flex h-10 w-full flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+              <div className="flex h-4 w-24 flex-none items-start rounded-md bg-neutral-100 animate-pulse" />
+            </div>
+            <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6">
+              <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+              <div className="flex h-10 w-full flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+              <div className="flex h-4 w-24 flex-none items-start rounded-md bg-neutral-100 animate-pulse" />
+            </div>
+            <div className="flex min-w-[192px] grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6">
+              <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+              <div className="flex h-10 w-full flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+              <div className="flex h-4 w-24 flex-none items-start rounded-md bg-neutral-100 animate-pulse" />
+            </div>
+          </div>
+          <div className="flex w-full items-center justify-between border-t border-solid border-neutral-border pt-4">
+            <div className="flex h-10 w-24 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+            <div className="flex h-10 w-48 flex-none items-start rounded-md bg-neutral-200 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    </DefaultPageLayout>
+  );
+}
+
+export default LoadingInsuranceCheck;

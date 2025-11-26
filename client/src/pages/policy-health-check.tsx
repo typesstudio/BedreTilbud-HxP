@@ -8,6 +8,7 @@ import { HealthCheckAnnualPotentialCard } from "@/components/healthCheck/HealthC
 import { HealthCheckBenefitsGrid } from "@/components/healthCheck/HealthCheckBenefitsGrid";
 import { HealthCheckStrengthsWeaknesses } from "@/components/healthCheck/HealthCheckStrengthsWeaknesses";
 import { HealthCheckSavingsSection } from "@/components/healthCheck/HealthCheckSavingsSection";
+import LoadingInsuranceCheck from "@/components/loading/LoadingInsuranceCheck";
 import { 
   FeatherHome, 
   FeatherShield, 
@@ -36,9 +37,7 @@ export default function PolicyHealthCheckPage() {
   if (isLoading) {
     return (
       <AppLayoutWithNav userId={userId}>
-        <div className="flex items-center justify-center min-h-screen bg-default-background">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-        </div>
+        <LoadingInsuranceCheck />
       </AppLayoutWithNav>
     );
   }
