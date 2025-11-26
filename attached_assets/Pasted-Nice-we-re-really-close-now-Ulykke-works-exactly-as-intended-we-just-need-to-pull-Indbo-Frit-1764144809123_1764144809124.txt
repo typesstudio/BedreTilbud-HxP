@@ -1,0 +1,111 @@
+Nice, we’re really close now – Ulykke works exactly as intended, we just need to “pull” Indbo + Fritidshus up to the same level by regenerating their health checks with the new logic.
+
+Here’s a ready-to-paste Replit prompt that should do exactly that:
+
+Context
+- The Ulykke health check at:
+  /sundhedstjek/9ba9a43c-0a4a-48d0-8bd6-51bee5aae479
+  is perfect: it shows a full “Hvad er inkluderet” table, strengths/weaknesses and savings based on the new PolicySnapshot flow.
+
+- For the SAME insurance document, the Indbo and Fritidshus policies do NOT show the “Hvad er inkluderet” table.
+- From your analysis you already saw:
+  - Ulykke health_check has whatsIncluded > 0 ✅
+  - Indbo + Fritidshus health_checks were generated BEFORE the PolicySnapshot fix and have whatsIncluded = 0 ❌
+
+Goal
+Fix Indbo + Fritidshus so they behave exactly like Ulykke:
+1. Regenerate health checks for the Indbo + Fritidshus snapshots using the **new** PolicySnapshot → AI → health_check pipeline.
+2. Make sure the regenerated health_checks have:
+   - result.whatsIncluded as a non-empty array.
+   - strengths/weaknesses populated.
+   - benchmark-based savings populated.
+3. Verify that the **UI** “Hvad er inkluderet” table shows rows for both Indbo and Fritidshus.
+
+Important constraints
+- Do NOT break the working Ulykke health check.
+- Scope changes only to this user/document, not globally.
+- Reuse the same “generate/regenerate health check for snapshot” helpers that are already used for Ulykke.
+
+Tasks
+
+1) Identify the affected snapshots (Indbo + Fritidshus)
+- Starting from the working Ulykke snapshot id:
+  9ba9a43c-0a4a-48d0-8bd6-51bee5aae479
+
+  a) Query policy_snapshots to find all snapshots that belong to the SAME document_id (and same user if needed), e.g.:
+
+     - policy_type = 'indbo'
+     - policy_type = 'fritidshus' (or relevant house type)
+     - policy_type = 'ulykke' (the working one)
+
+  b) For those snapshot IDs, check health_checks:
+     - json_array_length(result->'whatsIncluded') 
+     - We expect:
+       - Ulykke: > 0 → keep
+       - Indbo + Fritidshus: = 0 → must be regenerated
+
+  c) Print a small table of:
+     snapshot_id, policy_type, whatsIncluded_count
+     so we’re 100% sure which ones are broken before regenerating.
+
+2) Remove old, broken health_checks for Indbo + Fritidshus
+- For each snapshot in this document where:
+  - policy_type IN ('indbo', 'fritidshus', 'hus', etc. depending on what you find)
+  - AND json_array_length(result->'whatsIncluded') = 0
+
+  delete the corresponding health_checks rows.
+
+  Do NOT delete the Ulykke health check where whatsIncluded_count > 0.
+
+3) Regenerate health checks using the new pipeline
+- We already have working logic that generates a health check for a given PolicySnapshot:
+  something like:
+  - healthCheckService.getOrCreateHealthCheckForSnapshot(snapshotId, userId)
+  or similar helper.
+
+- Create a small script (e.g. server/scripts/regenerate-health-checks-for-document.ts) OR run a one-off tsx script that:
+
+  a) Takes the Ulykke snapshot id
+     9ba9a43c-0a4a-48d0-8bd6-51bee5aae479
+
+  b) Finds all policy_snapshots for the same document_id.
+
+  c) For each snapshot:
+     - If a health_check already exists and whatsIncluded_count > 0 → skip (that’s Ulykke).
+     - Otherwise:
+       - Call the same “generate health check for snapshot” function you use elsewhere (so the new PolicySnapshot + benchmark + strengths/weaknesses logic is applied).
+       - Save the result into health_checks.
+
+- After running, re-query the database for those snapshots and verify:
+  - json_array_length(result->'whatsIncluded') > 0
+  - strengths/weaknesses arrays are non-empty
+  - potentialSavings and cumulativeSavings fields are populated
+
+4) UI verification – “Hvad er inkluderet” table
+- Open the two pages in the browser:
+
+  - Indbo sundhedstjek page (snapshot id should be one of the regenerated ones)
+  - Fritidshus sundhedstjek page
+
+- Confirm that:
+  - The “Hvad er inkluderet” table now shows rows with coverages (same style as Ulykke).
+  - Strengths & weaknesses sections are filled.
+  - The cumulative savings chart shows non-zero data.
+
+5) Safety & logging
+- Add small comments or debug logs (if useful) near the regeneration script describing:
+  - That it was created to fix pre-fix health checks where whatsIncluded was empty.
+  - Which document/snapshot IDs it has been run against (so my expert can review).
+
+Deliverables
+- The regeneration script or inline code you used (in server/scripts/… or similar).
+- Confirmation in the logs (and optionally a short note in comments) that:
+
+  - Indbo + Fritidshus health_checks for the document containing snapshot
+    9ba9a43c-0a4a-48d0-8bd6-51bee5aae479
+    have been regenerated with non-empty whatsIncluded.
+  - The Indbo and Fritidshus sundhedstjek pages now visually show the “Hvad er inkluderet” table and behave like Ulykke.
+
+Please implement all of the above and then give me:
+- The snapshot IDs for Indbo and Fritidshus you regenerated.
+- A short summary of what changed + any script paths you added, so I can share it with my expert.
