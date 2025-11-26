@@ -1,0 +1,82 @@
+Nice, let’s turn that spinner into a proper skeleton loader.
+
+You already have the Subframe prompt for creating `LoadingOffers`. What you’re missing is:
+
+1. Small cleanup of the code (that `@keyframes pulse` thing).
+2. Clear instructions to Replit on **how to wire the skeleton into the existing Offers page instead of the icon**.
+
+---
+
+## 1. Small fix for your skeleton code
+
+Tailwind doesn’t understand `@keyframes pulse` inside `className`, so that string should not be there. You only need `animate-pulse`.
+
+So in your TSX, **everywhere** you have:
+
+```tsx
+className="... bg-neutral-200 @keyframes pulse animate-pulse"
+```
+
+tell Replit to make it:
+
+```tsx
+className="... bg-neutral-200 animate-pulse"
+```
+
+Same for other variants like `rounded-full bg-neutral-200 @keyframes pulse animate-pulse` → `rounded-full bg-neutral-200 animate-pulse`.
+
+You can let Replit handle that via the prompt (see below), instead of manually fixing all occurrences.
+
+---
+
+## 2. Additional prompt text for Replit (ready to paste)
+
+Here’s the extra block you can add under your existing Subframe instructions. This assumes the app is already using some loading spinner in the Offers page and TanStack Query or similar data fetching.
+
+````md
+3) Clean up the skeleton classes in `LoadingOffers`:
+
+- In the `LoadingOffers` component code above, remove any `@keyframes pulse` tokens from `className` strings.
+- Use the Tailwind utility class `animate-pulse` together with neutral background colors for all grey skeleton boxes.
+- Example: change `bg-neutral-200 @keyframes pulse animate-pulse` to `bg-neutral-200 animate-pulse` everywhere.
+
+4) Integrate `LoadingOffers` as the loading state for the Offers page:
+
+- Locate the existing Offers page component (the one that currently renders the spinning loading icon). Keep ALL existing business logic, hooks, and data fetching.
+- Import the new skeleton component at the top of that file:
+  ```tsx
+  import LoadingOffers from "@/app/loading-offers"; // or correct relative path to the new page/component
+````
+
+* Replace the existing loading spinner logic so that, when the offers data is loading, the page returns the `LoadingOffers` skeleton instead of the icon.
+
+* Example pattern (adapt to the existing hook names):
+
+  ```tsx
+  const { data, isLoading, isError } = useQuery(/* existing query config */);
+
+  if (isLoading) {
+    // IMPORTANT: only render the skeleton here, do not change how data is fetched
+    return <LoadingOffers />;
+  }
+  ```
+
+* Do NOT change the API calls, query keys, or how data is mapped to the UI. Only swap the loading UI from the current spinner/icon to the new skeleton.
+
+5. Make sure the transition from loading → data is smooth:
+
+* When `isLoading` is false and data is available, the normal Offers page layout should render exactly as before.
+* The skeleton page must not flash after the data has loaded. It should only be visible while `isLoading === true`.
+* Ensure there are no double layouts: `LoadingOffers` already wraps its content in `DefaultPageLayout`, so the normal Offers page should NOT wrap it again when returning the loader.
+
+6. Prepare for future reuse (no implementation needed yet, just structure):
+
+* Keep the `LoadingOffers` skeleton self-contained and in a reusable location, so the same pattern can later be copied for `LoadingComparison` and `LoadingHealthCheck` components.
+* Follow the same visual structure (large title skeleton, card skeletons, chart skeletons) to match the real Offers page layout, using only grey `bg-neutral-*` blocks with `animate-pulse`.
+
+```
+
+---
+
+If you want, next round we can do a similar skeleton prompt for Health Check and Comparison so all three pages share the same pattern.
+```

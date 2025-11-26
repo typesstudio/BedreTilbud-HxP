@@ -1,0 +1,146 @@
+1) Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync --all -p 34bd735365b5
+```
+  
+2) Create a new page using the following TSX code. If the page already exists, use it as reference to update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+"use client";
+
+import React from "react";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+
+function LoadingOffers() {
+  return (
+    <DefaultPageLayout>
+      <div className="container max-w-none flex h-full w-full flex-col items-center gap-6 bg-default-background py-12 mobile:flex-col mobile:flex-nowrap mobile:gap-4 mobile:px-0 mobile:py-6">
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4">
+          <div className="flex w-full flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+            <div className="flex w-full flex-col items-start gap-2">
+              <div className="flex h-9 w-64 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+              <div className="flex h-5 w-96 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+            </div>
+            <div className="flex w-full items-start gap-4 rounded-md bg-neutral-50 px-6 py-4 mobile:flex-row mobile:flex-wrap mobile:gap-3 mobile:px-4 mobile:py-3">
+              <div className="flex h-8 w-8 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse mobile:hidden" />
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+                <div className="flex h-5 w-48 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex h-5 w-full flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+              </div>
+            </div>
+          </div>
+          <div className="flex w-full flex-col items-start gap-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4">
+            <div className="flex w-full flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+              <div className="flex h-6 w-40 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+              <div className="flex w-full items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:px-4 mobile:py-4">
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+                  <div className="flex w-full items-center justify-between mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-3">
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+                      <div className="flex h-5 w-48 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-6 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    </div>
+                    <div className="flex h-8 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse mobile:h-8 mobile:w-full mobile:flex-none" />
+                  </div>
+                  <div className="flex w-full flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6 mobile:px-4 mobile:py-4">
+                    <div className="flex w-full items-center justify-between">
+                      <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-5 w-24 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    </div>
+                    <div className="flex w-full items-center justify-between">
+                      <div className="flex h-5 w-24 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-5 w-24 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    </div>
+                    <div className="flex w-full items-center justify-between">
+                      <div className="flex h-5 w-28 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-5 w-20 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    </div>
+                    <div className="flex w-full items-center justify-between">
+                      <div className="flex h-5 w-24 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-5 w-20 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex w-full items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:px-4 mobile:py-4">
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+                  <div className="flex w-full items-center justify-between mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-3">
+                    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+                      <div className="flex h-5 w-48 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-6 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    </div>
+                    <div className="flex h-8 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse mobile:h-8 mobile:w-full mobile:flex-none" />
+                  </div>
+                  <div className="flex w-full flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6 mobile:px-4 mobile:py-4">
+                    <div className="flex w-full items-center justify-between">
+                      <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-5 w-24 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    </div>
+                    <div className="flex w-full items-center justify-between">
+                      <div className="flex h-5 w-24 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-5 w-24 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    </div>
+                    <div className="flex w-full items-center justify-between">
+                      <div className="flex h-5 w-28 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-5 w-20 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    </div>
+                    <div className="flex w-full items-center justify-between">
+                      <div className="flex h-5 w-24 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-5 w-20 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex w-full flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+              <div className="flex h-6 w-36 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+              <div className="flex w-full items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:px-4 mobile:py-4">
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+                  <div className="flex w-full items-start justify-between mobile:flex-col mobile:flex-nowrap mobile:gap-2">
+                    <div className="flex flex-col items-start gap-2">
+                      <div className="flex h-5 w-40 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    </div>
+                    <div className="flex h-6 w-24 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                  </div>
+                  <div className="flex w-full flex-col items-start gap-2">
+                    <div className="flex h-5 w-full flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    <div className="flex w-full flex-col items-start gap-1">
+                      <div className="flex h-4 w-24 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-2 w-full flex-none items-start rounded-full bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-4 w-16 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="flex w-full items-start gap-4 rounded-md border border-solid border-neutral-border bg-default-background px-6 py-6 shadow-sm mobile:px-4 mobile:py-4">
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+                  <div className="flex w-full items-start justify-between mobile:flex-col mobile:flex-nowrap mobile:gap-2">
+                    <div className="flex flex-col items-start gap-2">
+                      <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    </div>
+                    <div className="flex h-6 w-20 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                  </div>
+                  <div className="flex w-full flex-col items-start gap-2">
+                    <div className="flex h-5 w-full flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    <div className="flex w-full flex-col items-start gap-1">
+                      <div className="flex h-4 w-24 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-2 w-full flex-none items-start rounded-full bg-neutral-200 @keyframes pulse animate-pulse" />
+                      <div className="flex h-4 w-16 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </DefaultPageLayout>
+  );
+}
+
+export default LoadingOffers;
+
+```
+  
