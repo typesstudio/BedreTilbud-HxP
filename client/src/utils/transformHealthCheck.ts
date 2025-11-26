@@ -75,29 +75,44 @@ export function transformPolicyHealthCheckToView(
 
   // Build sibling tabs from sibling snapshots, ordered by policy type
   const siblingTabs: PolicyTab[] = [];
+  
+  // Collect all siblings plus ensure current snapshot is included
+  const allSnapshots: SiblingSnapshot[] = [];
+  
+  // Add current snapshot first (will be deduplicated if already in siblings)
+  const currentAsTab: SiblingSnapshot = {
+    id: snapshot.id,
+    policyType: snapshot.policyType,
+    companyName: snapshot.companyName,
+  };
+  
   if (siblingSnapshots && siblingSnapshots.length > 0) {
-    // Sort siblings by policy type order
-    const sortedSiblings = [...siblingSnapshots].sort((a, b) => {
-      const aIndex = policyTypeOrder.indexOf(a.policyType);
-      const bIndex = policyTypeOrder.indexOf(b.policyType);
-      return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
-    });
-
-    for (const sibling of sortedSiblings) {
-      siblingTabs.push({
-        policyType: sibling.policyType,
-        label: policyTypeLabels[sibling.policyType] || sibling.policyType,
-        snapshotId: sibling.id,
-        isActive: sibling.id === snapshot.id,
-      });
+    // Check if current snapshot is already in siblings
+    const currentInSiblings = siblingSnapshots.some(s => s.id === snapshot.id);
+    
+    if (!currentInSiblings) {
+      allSnapshots.push(currentAsTab);
     }
+    allSnapshots.push(...siblingSnapshots);
   } else {
-    // Fallback: if no siblings, create a single tab for current snapshot
+    // No siblings - just show current snapshot
+    allSnapshots.push(currentAsTab);
+  }
+  
+  // Sort all snapshots by policy type order
+  const sortedSnapshots = allSnapshots.sort((a, b) => {
+    const aIndex = policyTypeOrder.indexOf(a.policyType);
+    const bIndex = policyTypeOrder.indexOf(b.policyType);
+    return (aIndex === -1 ? 999 : aIndex) - (bIndex === -1 ? 999 : bIndex);
+  });
+
+  // Build tabs from sorted snapshots
+  for (const snap of sortedSnapshots) {
     siblingTabs.push({
-      policyType: snapshot.policyType,
-      label: policyTypeLabel,
-      snapshotId: snapshot.id,
-      isActive: true,
+      policyType: snap.policyType,
+      label: policyTypeLabels[snap.policyType] || snap.policyType,
+      snapshotId: snap.id,
+      isActive: snap.id === snapshot.id,
     });
   }
   
