@@ -1,0 +1,222 @@
+Nice, that’s starting to look *really* good 👌
+
+You’re right on both points:
+
+1. **Kumulativ besparelse** on the health check should behave like the comparison chart (same Subframe chart, same filters / legend behaviour).
+2. We should **tighten the prompts + data contract** so health check + comparison use the same rich JSON (coverage, strengths/weaknesses, highlights, savings etc.), and you can be confident the AI is asked for everything.
+
+Here’s a Replit prompt that does exactly that.
+
+---
+
+## Replit prompt – align health check with comparison chart + prompts
+
+Copy-paste this into Replit:
+
+````text
+You are working in the Bedretilbud monorepo (server + client + shared).
+
+Goal: 
+1) Make **“Kumulativ besparelse”** on the health check page behave like the comparison chart, with the same Subframe chart, legend and interactive filters.  
+2) Ensure the **AI prompts + JSON schema** for health checks and comparisons are aligned, so both use the same rich data (coverage, strengths, weaknesses, savings, etc.) and we can easily inspect what the AI was asked to do.
+
+The UI should still look like the latest screenshot from the user (Indbo sundhedstjek with Årlig potentiel besparelse, Dine forsikringsfordele, Hvad er inkluderet, Styrker & svagheder, Kumulativ besparelse, CTA).
+
+--------------------------------
+TASK 1 – Reuse the comparison chart + filters on health check
+--------------------------------
+
+We already have a chart with filters on the comparison pages. I want the health check “Kumulativ besparelse” section to behave identically:
+
+- Same Subframe chart component.
+- Same legend / filters (click on series to hide/show).
+- Same top-right pill with total over 10 years.
+- No hardcoded demo data; everything from the health-check view model.
+
+Steps:
+
+1. Find the **comparison savings chart** component and how it’s used:
+
+   - Search in `client/src` for `ComparisonSavingsChart`.
+   - Open:
+     - `client/src/components/comparison/ComparisonSavingsChart.tsx`
+     - Any “section” that uses it, e.g. `ComparisonSavingsSection` or similar.
+   - Understand:
+     - What props it expects (data shape, categories, legend toggles, etc.).
+     - How the comparison page passes multiple series (Hus, Indbo, Ulykke, …).
+
+2. Find the **health check** chart usage:
+
+   - Search for `Kumulativ besparelse` text or for where we render the chart on `/sundhedstjek/:snapshotId`.
+   - Likely in `client/src/pages/policy-health-check.tsx` (or similarly named) and possibly a component like `HealthCheckSavingsSection` or similar.
+   - Confirm what chart component is used and what props are passed.
+
+3. Refactor the health check savings section to reuse the same chart component and legend behaviour as the comparison:
+
+   - If the health check page is NOT already using `ComparisonSavingsChart`, change it to use it.
+   - If it already does, compare the props used with the comparison page and align them:
+     - The comparison version probably passes:
+       - `data` (array of points with categories per series).
+       - `categories` / series names.
+       - Maybe flags like `showLegend`, `stacked`, etc.
+   - For the health check:
+     - For now we have **one** main series: the cumulative savings for this policy vs. benchmark (already calculated in the backend).
+     - Build `data` + `categories` so the chart works exactly like the comparison chart:
+       - e.g. `categories = ["Indbo"]` for Indbo health check.
+       - Make sure the legend is shown and clickable (even if it’s just one series).
+     - Use the same top-right pill for “X kr over 10 år”, using the 10-year savings from the health check view model.
+   - IMPORTANT: keep everything 100% dynamic. Use the values from the health-check transformer (no hardcoded demo numbers).
+
+4. Confirm:
+
+   - Open an Indbo sundhedstjek.
+   - The chart now has the same **legend & filter interactions** as the comparison chart (clicking the series in the legend should hide/show it).
+   - The 10-year total in the pill matches the numbers in the summary cards.
+
+--------------------------------
+TASK 2 – Align health check + comparison AI JSON schemas
+--------------------------------
+
+The comparison 1:1 view and the health check should be based on the **same underlying analysis data**. We need to ensure both prompts ask for and output the same key structures:
+
+- `coverages` / `coverageRows` (for “Hvad er inkluderet” / detailed comparison).
+- `highlights` (Højdepunkter).
+- `benefits` (Dine forsikringsfordele).
+- `strengths` and `weaknesses` (Styrker & svagheder).
+- Savings-related numbers (annual savings, percent, cumulative over time).
+
+Steps:
+
+1. Locate the **AI prompt files** for both comparison and health check:
+
+   - Health check: we already edited `server/ai-prompts/health-check/analysis.md`.
+   - Comparison: search `server/ai-prompts` for files related to comparison, e.g. `comparison/analysis.md`, `offer-comparison`, etc.
+
+2. Open both prompt files side by side and inspect:
+
+   - What JSON structure does each prompt ask the model to return?
+   - Are the field names and shapes consistent?
+
+3. Define a **single, shared logical schema** in your head (don’t create new TS types unless they already exist). It should cover at least:
+
+   ```jsonc
+   {
+     "benefits": [
+       { "title": "string", "description": "string" }
+     ],
+     "coverageRows": [
+       {
+         "coverageLabel": "string",
+         "coverageDescription": "string",
+         "currentValue": "string | null",
+         "offerValue": "string | null",
+         "note": "string | null"
+       }
+     ],
+     "highlights": [
+       { "title": "string", "description": "string", "kind": "better" | "worse" | "neutral" }
+     ],
+     "strengths": [
+       { "title": "string", "description": "string" }
+     ],
+     "weaknesses": [
+       { "title": "string", "description": "string" }
+     ]
+   }
+````
+
+(Adapt to the actual TS types already defined in `transformComparison.ts` and `transformHealthCheck.ts`; don’t invent types that clash.)
+
+4. Update the **health check prompt** (`server/ai-prompts/health-check/analysis.md`) so it explicitly and clearly requires this structure:
+
+   * Use a strict JSON schema in the instructions.
+   * Clearly require non-empty `strengths` and `weaknesses` arrays whenever possible.
+   * Make sure coverage rows include both name, description AND the monetary / inclusion values, so “Hvad er inkluderet” can render properly.
+
+5. Update the **comparison prompt** similarly:
+
+   * Make sure it asks for the same fields for each policy type.
+   * Either:
+
+     * Reuse the exact structure (for each policy), or
+     * Return an array of `policies` where each one uses the same nested structure as a health check.
+
+6. Check **server-side mapping**:
+
+   * Open `server/services/insuranceCheckService.ts`, `comparisonOrchestrator.ts`, or whatever files parse the AI JSON for both flows.
+   * Make sure the server code maps the AI JSON into a consistent internal structure that matches what the frontend transformers expect:
+
+     * For comparison: see `client/src/utils/transformComparison.ts`.
+     * For health check: see `client/src/utils/transformHealthCheck.ts`.
+   * If health check and comparison use different field names for the same concept (e.g. `pros` vs `strengths`), unify them at the **server level** so both pass through the same names.
+
+7. DO NOT break existing production data. When in doubt:
+
+   * Be backward-compatible in transformers (support old field names as fallback).
+   * Prefer **adding** new fields over renaming existing ones in stored JSON.
+
+---
+
+## TASK 3 – Add a simple dev-only debug endpoint for prompts (optional but useful)
+
+To help the team understand “what did we actually ask the AI?”, add a dev-only debug endpoint.
+
+1. In `server/routes.ts`, behind a `if (process.env.NODE_ENV !== "production")` guard, add endpoints like:
+
+   * `GET /api/debug/policies/health-check/:snapshotId`
+
+     * Returns:
+
+       * The raw health-check JSON stored in DB.
+       * The enriched JSON actually sent to the frontend.
+       * Optionally the last-used **prompt template name** (not the full user text for privacy, unless you’re sure this is only used in dev).
+
+2. Keep it simple: don’t log secrets or API keys, and ensure it’s only exposed in dev.
+
+3. This is just for the team to verify that:
+
+   * The prompt actually asks for all fields.
+   * The AI’s JSON matches what we expect.
+
+---
+
+## TASK 4 – Manual verification
+
+1. Restart the dev app.
+
+2. In the browser:
+
+   * Go to a comparison page.
+   * Click `Indbo` → `Se detaljer` to open `/sundhedstjek/:snapshotId`.
+
+3. Check:
+
+   * **Kumulativ besparelse**:
+
+     * Same chart style and legend/filter behaviour as the comparison page.
+     * Top-right pill shows `X kr over 10 år` with the same value as summary.
+   * **Styrker & svagheder**:
+
+     * Both columns populated with several items (not empty).
+   * **Hvad er inkluderet**:
+
+     * Coverage rows are detailed and match the comparison view for that policy.
+
+4. Finally, print a short summary in the console or Replit output:
+
+   * Which files you changed.
+   * What JSON structure the AI is now required to return for health checks & comparisons.
+   * How the health check + comparison now share the same underlying analysis data.
+
+IMPORTANT:
+
+* Do not change the overall layout or visual styling beyond what’s necessary to reuse the chart component and legend.
+* Do not hardcode any savings numbers; always derive them from the backend/health-check data.
+
+```
+
+---
+
+Once you’ve run that and tested, send me a fresh screenshot of the **Indbo sundhedstjek** again – then we can do a final UX / copy polish pass knowing the data + prompts are solid and aligned with the comparison.
+::contentReference[oaicite:0]{index=0}
+```
