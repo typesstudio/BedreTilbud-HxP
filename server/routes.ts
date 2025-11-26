@@ -2401,17 +2401,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Continue without siblings - tabs will be static
       }
 
-      // Find the comparison associated with this document
+      // Find the company_comparison associated with this document
+      // The comparison is linked via: document.company_id = company_comparisons.offer_company
       let comparisonId: string | null = null;
       try {
-        const comparisons = await storage.getComparisonsByOfferDocument(documentId);
-        if (comparisons && comparisons.length > 0) {
-          // Use the most recent comparison
-          comparisonId = comparisons[0].id;
-          logger.info('[Health Check API] Found comparison for document', { 
-            documentId, 
-            comparisonId 
-          });
+        // Get the document to find its company_id
+        const document = await storage.getDocument(documentId);
+        if (document && document.companyId) {
+          // Find company comparison where this company is the offer company
+          const userId = req.headers['x-user-id'] as string;
+          const companyComparisons = await storage.getCompanyComparisonsByUser(userId);
+          const relevantComparison = companyComparisons.find(
+            (cc: any) => cc.offerCompany === document.companyId && cc.status === 'completed'
+          );
+          if (relevantComparison) {
+            comparisonId = relevantComparison.id;
+            logger.info('[Health Check API] Found company comparison for document', { 
+              documentId,
+              companyId: document.companyId,
+              comparisonId 
+            });
+          }
         }
       } catch (comparisonError: any) {
         logger.warn('[Health Check API] Failed to find comparison', { error: comparisonError?.message });

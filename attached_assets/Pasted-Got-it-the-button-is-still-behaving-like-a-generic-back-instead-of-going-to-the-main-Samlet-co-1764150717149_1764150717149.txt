@@ -1,0 +1,159 @@
+Got it – the button is still behaving like a generic “back” instead of going to the main *Samlet* comparison for that offer.
+
+Here’s a ready-to-paste Replit prompt that should get this fixed properly:
+
+---
+
+````text
+Bug description
+The "Sammenlign tilbudet" button on the health check page is still acting like a back button (history.go(-1)).  
+
+Example:
+- Health check URL (Indbo):
+  /sundhedstjek/4ae81653-1501-4976-b62d-7371af05dfe2
+
+- The correct main comparison URL for this offer:
+  /sammenligning/ce529d3c-940b-4157-a9cd-c76e1e225668
+
+Expected behaviour
+- The "Sammenlign tilbudet" button should **always** navigate directly to the *Samlet* comparison page for the offer that this health check belongs to:
+  /sammenligning/{comparisonId}
+
+- It must **not** depend on browser history (no navigate(-1), history.back(), etc.).
+- If a comparisonId does not exist for some reason, the button can either be hidden/disabled, or fall back to a neutral page (e.g. “Se alle bedre tilbud”), but it should never behave like a back button.
+
+Important:  
+You already said:
+- Backend has been updated so the health check API returns `comparisonId`.
+- Frontend transformer was updated to expose `comparisonId` in the health-check view model.
+But in the UI the button still behaves like "back", so either:
+- comparisonId isn’t actually wired through to the component, OR
+- the button is still calling navigate(-1) regardless of comparisonId.
+
+Please fix this end-to-end.
+
+Tasks
+
+1) Verify API actually returns comparisonId
+- Call the health check API for the example snapshot with the correct X-User-ID:
+  - snapshotId: 4ae81653-1501-4976-b62d-7371af05dfe2
+
+- Confirm the JSON contains something like:
+  {
+    "comparisonId": "ce529d3c-940b-4157-a9cd-c76e1e225668",
+    ...
+  }
+
+- If it does NOT, fix the API route so it joins/derives the correct `comparisonId` from the snapshot and company_comparisons tables and returns it.
+  - Only change as much as needed; don’t touch other behaviour.
+
+2) Verify transformHealthCheck passes comparisonId through
+- Open `client/src/utils/transformHealthCheck.ts`.
+
+- Make sure the transformer that builds the `HealthCheckViewModel` includes a field, e.g.:
+
+  ```ts
+  export interface HealthCheckViewModel {
+    ...
+    comparisonId?: string;
+  }
+
+  export function transformHealthCheckResponse(data: HealthCheckApiResponse): HealthCheckViewModel {
+    return {
+      ...
+      comparisonId: data.comparisonId ?? undefined,
+    };
+  }
+````
+
+* Ensure there is **no** place that overrides or drops `comparisonId`.
+
+3. Fix the button click handler on the health check page
+
+* Open `client/src/pages/policy-health-check.tsx` (or equivalent health check page component).
+
+* Find the "Sammenlign tilbudet" button. Right now it likely does something like:
+
+  ```tsx
+  const navigate = useNavigate();
+
+  <Button
+    variant="neutral-primary"
+    onClick={() => navigate(-1)}   // or some other back navigation
+  >
+    Sammenlign tilbudet
+  </Button>
+  ```
+
+* Change this logic to:
+
+  ```tsx
+  const navigate = useNavigate();
+  const { comparisonId } = healthCheck; // from view model
+
+  const handleCompareClick = () => {
+    if (comparisonId) {
+      navigate(`/sammenligning/${comparisonId}`);
+    } else {
+      // Fallback behaviour: either disable button or send to a neutral page
+      // Example fallback:
+      // navigate('/se-alle-bedre-tilbud');
+    }
+  };
+
+  <Button
+    variant="neutral-primary"
+    onClick={handleCompareClick}
+    disabled={!comparisonId}
+  >
+    Sammenlign tilbudet
+  </Button>
+  ```
+
+* **Remove** any use of `navigate(-1)` or `history.back()` from this button specifically.
+  The only navigation for this button must be via `comparisonId`.
+
+4. Optional: ensure “Samlet” tab is the default on comparison page
+
+* If there is a tab system on `/sammenligning/:id` (Samlet / Indbo / Hus / etc.), make sure that when we navigate with just `/sammenligning/{comparisonId}` the *Samlet* tab is active by default.
+  If the page currently expects a query param (e.g. `?tab=samlet`), update the navigation accordingly:
+
+  ```ts
+  navigate(`/sammenligning/${comparisonId}?tab=samlet`);
+  ```
+
+5. Test paths explicitly (without history)
+
+* Manually go directly to the URL in the browser (no previous page):
+
+  1. Open:
+     /sundhedstjek/4ae81653-1501-4976-b62d-7371af05dfe2
+
+  2. Click "Sammenlign tilbudet"
+
+* Verify it navigates to:
+  /sammenligning/ce529d3c-940b-4157-a9cd-c76e1e225668
+  and *not* just “back”.
+
+* Repeat for Ulykke and Fritidshus health checks as well to ensure the same logic works consistently across all policy types.
+
+Deliverables / what to report back
+
+* Confirm:
+
+  * The health check API response for the example snapshot includes the correct comparisonId.
+  * The transformHealthCheck function exposes comparisonId in the view model.
+  * The button handler now always uses `navigate('/sammenligning/{comparisonId}')` and never calls navigate(-1).
+* Confirm that from:
+  /sundhedstjek/4ae81653-1501-4976-b62d-7371af05dfe2
+  the "Sammenlign tilbudet" button goes straight to:
+  /sammenligning/ce529d3c-940b-4157-a9cd-c76e1e225668
+  regardless of browser history.
+
+```
+
+---
+
+Paste that into Replit as-is and it should give the agent everything it needs to wire the button correctly.
+::contentReference[oaicite:0]{index=0}
+```
