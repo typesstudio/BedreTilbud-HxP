@@ -140,7 +140,11 @@ export default function PolicyHealthCheckPage() {
 
           {/* Savings Chart */}
           {data.savingsOverTime && (
-            <HealthCheckSavingsSection savingsOverTime={data.savingsOverTime} />
+            <HealthCheckSavingsSection 
+              savingsOverTime={data.savingsOverTime}
+              policyType={data.policyType}
+              policyTypeLabel={data.policyTypeLabel}
+            />
           )}
 
           {/* Footer CTA */}

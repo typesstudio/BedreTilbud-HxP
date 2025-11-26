@@ -2343,6 +2343,83 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // DEV-ONLY: Debug endpoint for health check data inspection
+  // Returns raw and enriched health check data for debugging prompts and schema
+  if (process.env.NODE_ENV !== "production") {
+    app.get("/api/debug/policies/health-check/:snapshotId", requireAuth, async (req, res) => {
+      try {
+        const { snapshotId } = req.params;
+        const userId = req.headers['x-user-id'] as string;
+
+        logger.info('[Debug Health Check] Fetching debug data', { snapshotId, userId });
+
+        // Get the raw health check from database
+        const healthCheck = await storage.getHealthCheckBySnapshot(snapshotId);
+        if (!healthCheck) {
+          return res.status(404).json({ message: "Health check not found" });
+        }
+
+        // Get snapshot details
+        const policySnapshotService = new (await import("./services/policySnapshots/PolicySnapshotService")).PolicySnapshotService();
+        let snapshot: any = await policySnapshotService.getSnapshotById(snapshotId);
+        
+        // Fallback to offer_snapshots
+        if (!snapshot) {
+          const offerSnapshot = await storage.getOfferSnapshot(snapshotId);
+          if (offerSnapshot) {
+            const structuredPolicy = offerSnapshot.structuredPolicy as any;
+            snapshot = {
+              id: offerSnapshot.id,
+              policyType: offerSnapshot.policyType,
+              kind: 'offer',
+              pricing: structuredPolicy?.pricing || null,
+              structuredPolicy: offerSnapshot.structuredPolicy,
+            };
+          }
+        }
+
+        // Get enriched result
+        const { enrichStoredHealthCheck } = await import("./services/healthCheckService");
+        const offerPremium = snapshot?.pricing?.annualPremium 
+          || snapshot?.structuredPolicy?.pricing?.annualPremium 
+          || null;
+        
+        const enrichedResult = await enrichStoredHealthCheck(
+          healthCheck.result as any,
+          snapshot?.policyType || 'indbo',
+          offerPremium,
+          storage
+        );
+
+        res.json({
+          debug: {
+            snapshotId,
+            policyType: snapshot?.policyType,
+            offerPremium,
+            healthCheckId: healthCheck.id,
+            dataSource: healthCheck.dataSource,
+            confidenceScore: healthCheck.confidenceScore,
+          },
+          rawResult: healthCheck.result,
+          enrichedResult,
+          snapshot: {
+            id: snapshot?.id,
+            policyType: snapshot?.policyType,
+            pricing: snapshot?.pricing,
+            structuredPolicy: snapshot?.structuredPolicy,
+          },
+          promptInfo: {
+            promptName: 'server/ai-prompts/health-check/analysis.md',
+            schemaVersion: 'v2-two-phase',
+          },
+        });
+      } catch (error: any) {
+        logger.error('[Debug Health Check] Error', error, { snapshotId: req.params.snapshotId });
+        res.status(500).json({ message: error.message });
+      }
+    });
+  }
+
   app.post("/api/insurance-check/analyze", aiLimiter, requireAuth, async (req, res) => {
     try {
       // Validate request body
