@@ -7,6 +7,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { FeatherArrowRight, FeatherMessageCircle, FeatherMail, FeatherShield } from "@subframe/core";
 import UserSelector from "@/components/user-selector";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
+import LoadingOffers from "@/components/loading/LoadingOffers";
 
 export default function OffersOverview() {
   const [, setLocation] = useLocation();
@@ -19,21 +20,32 @@ export default function OffersOverview() {
   }
 
   // Get user stats
-  const { data: stats } = useQuery({
+  const { data: stats, isLoading: isLoadingStats } = useQuery({
     queryKey: ["/api/stats", userId],
   });
 
   // Get email threads
-  const { data: threadsResponse } = useQuery<{ data: any[]; pagination: any }>({
+  const { data: threadsResponse, isLoading: isLoadingThreads } = useQuery<{ data: any[]; pagination: any }>({
     queryKey: ["/api/emails/threads", userId],
   });
   const threads = threadsResponse?.data || [];
 
   // Get all offers with comparison status (now includes comparisonData from company_comparisons)
-  const { data: offersResponse } = useQuery<{ data: any[]; pagination: any }>({
+  const { data: offersResponse, isLoading: isLoadingOffers } = useQuery<{ data: any[]; pagination: any }>({
     queryKey: ["/api/offers/user", userId],
   });
   const offers = offersResponse?.data || [];
+
+  // Show loading skeleton while initial data is loading
+  const isInitialLoading = isLoadingStats || isLoadingThreads || isLoadingOffers;
+
+  if (isInitialLoading) {
+    return (
+      <AppLayoutWithNav userId={userId}>
+        <LoadingOffers />
+      </AppLayoutWithNav>
+    );
+  }
 
   // Check inbox mutation
   const checkInboxMutation = useMutation({
