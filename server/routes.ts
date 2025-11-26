@@ -2514,7 +2514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Helper function to extract coverage sum from the correct data sources
-      function extractCoverageSum(structuredPolicy: any, healthCheckResult: any): string | null {
+      const extractCoverageSum = (structuredPolicy: any, healthCheckResult: any): string | null => {
         // 1) Prefer explicit sum from health_check.result.whatsIncluded
         const whatsIncluded = healthCheckResult?.whatsIncluded ?? [];
         const withSum = whatsIncluded.find(
@@ -2533,7 +2533,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // 3) If nothing found, return null
         return null;
-      }
+      };
 
       // Fetch health checks for all siblings IN PARALLEL for better performance
       const { enrichStoredHealthCheck } = await import("./services/healthCheckService");
@@ -2561,6 +2561,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process results and enrich in parallel
       const enrichmentPromises = healthCheckResults.map(async ({ sibling, healthCheck }) => {
         if (!healthCheck) {
+          // Even without health check, try to extract coverage sum from structuredPolicy
+          const fallbackCoverageSum = extractCoverageSum(sibling.structuredPolicy, null) ?? '—';
           return {
             summary: {
               policyId: sibling.id,
@@ -2568,7 +2570,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               policyLabel: policyTypeLabels[sibling.policyType] || sibling.policyType,
               annualSavings: 0,
               currentPremiumYear: 0,
-              coverageAmountLabel: '—',
+              coverageAmountLabel: fallbackCoverageSum,
               recommendation: 'pending' as const,
               recommendationLabel: 'Afventer analyse',
               issues: [],
@@ -2604,23 +2606,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           recommendationLabel = 'Kan forbedres';
         }
 
-        let coverageAmountLabel = '—';
-        const highlights = enrichedResult.highlights || [];
-        const keyFigures = enrichedResult.keyFigures || [];
-        
-        const sumHighlight = highlights.find((h: any) => 
-          h.title?.toLowerCase().includes('sum') || h.description?.toLowerCase().includes('kr')
-        );
-        if (sumHighlight?.description) {
-          coverageAmountLabel = sumHighlight.description;
-        } else if (keyFigures.length > 0) {
-          const sumFigure = keyFigures.find((k: any) => 
-            k.label?.toLowerCase().includes('sum') || k.label?.toLowerCase().includes('dækning')
-          );
-          if (sumFigure?.newValue) {
-            coverageAmountLabel = sumFigure.newValue;
-          }
-        }
+        // Extract coverage sum from structured policy or health check data
+        const coverageAmountLabel = extractCoverageSum(sibling.structuredPolicy, healthCheck.result) ?? '—';
 
         const issues = weaknesses.map((w: any) => ({
           id: `${sibling.id}-${w.title}`,
