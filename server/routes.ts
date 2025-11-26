@@ -2401,6 +2401,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Continue without siblings - tabs will be static
       }
 
+      // Find the comparison associated with this document
+      let comparisonId: string | null = null;
+      try {
+        const comparisons = await storage.getComparisonsByOfferDocument(documentId);
+        if (comparisons && comparisons.length > 0) {
+          // Use the most recent comparison
+          comparisonId = comparisons[0].id;
+          logger.info('[Health Check API] Found comparison for document', { 
+            documentId, 
+            comparisonId 
+          });
+        }
+      } catch (comparisonError: any) {
+        logger.warn('[Health Check API] Failed to find comparison', { error: comparisonError?.message });
+      }
+
       res.json({
         snapshot: {
           id: snapshot.id,
@@ -2415,6 +2431,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         },
         siblingSnapshots,
         documentId,
+        comparisonId,
       });
     } catch (error: any) {
       logger.error('[Health Check API] Error fetching/generating health check', error, { snapshotId: req.params.snapshotId });

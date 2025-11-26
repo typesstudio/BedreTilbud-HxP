@@ -87,7 +87,13 @@ export default function PolicyHealthCheckPage() {
             <div className="flex items-center gap-2 mobile:w-full mobile:flex-col">
               <Button
                 variant="neutral-secondary"
-                onClick={() => window.history.back()}
+                onClick={() => {
+                  if (data.comparisonId) {
+                    setLocation(`/sammenligning/${data.comparisonId}`);
+                  } else {
+                    window.history.back();
+                  }
+                }}
                 data-testid="button-compare-offer"
               >
                 Sammenlign tilbudet
