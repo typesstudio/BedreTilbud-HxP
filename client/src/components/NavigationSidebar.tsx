@@ -1,49 +1,19 @@
-import { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useLocation, useSearch } from "wouter";
+import { Link, useLocation } from "wouter";
 import { SidebarWithMinimalTextSections, Badge, Button } from "@/ui";
 import { 
   FeatherCoins, 
   FeatherRocket, 
-  FeatherUser, 
-  FeatherShield,
-  FeatherHome,
-  FeatherBuilding,
-  FeatherCar,
-  FeatherPlane,
-  FeatherChevronDown,
-  FeatherChevronRight
+  FeatherUser,
+  FeatherShield
 } from "@subframe/core";
 
 interface NavigationSidebarProps {
   userId?: string;
 }
 
-const policyTypeLabels: { [key: string]: string } = {
-  indbo: "Indbo",
-  ulykke: "Ulykke",
-  hus: "Hus",
-  bil: "Bil",
-  rejse: "Rejse"
-};
-
-const policyTypeIcons: { [key: string]: any } = {
-  indbo: FeatherHome,
-  ulykke: FeatherShield,
-  hus: FeatherBuilding,
-  bil: FeatherCar,
-  rejse: FeatherPlane
-};
-
 export function NavigationSidebar({ userId }: NavigationSidebarProps) {
   const [location] = useLocation();
-  const searchString = useSearch();
-  const [expandedCompanies, setExpandedCompanies] = useState<Set<string>>(new Set());
-  
-  const currentTab = useMemo(() => {
-    const params = new URLSearchParams(searchString);
-    return params.get('tab') || 'samlet';
-  }, [searchString]);
 
   const { data, isLoading } = useQuery({
     queryKey: ["/api/nav-data", userId],
@@ -60,34 +30,6 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
     }>;
     pendingThreads: Array<{ id: string; companyName: string; companyId: string }>;
   } | undefined;
-
-  useEffect(() => {
-    if (navData?.companies) {
-      const activeCompany = navData.companies.find(company => 
-        location.includes(`/sammenligning/${company.comparisonId}`)
-      );
-      
-      if (activeCompany) {
-        setExpandedCompanies(prev => {
-          const newSet = new Set(prev);
-          newSet.add(activeCompany.companyId);
-          return newSet;
-        });
-      }
-    }
-  }, [location, navData]);
-
-  const toggleCompany = (companyId: string) => {
-    setExpandedCompanies(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(companyId)) {
-        newSet.delete(companyId);
-      } else {
-        newSet.add(companyId);
-      }
-      return newSet;
-    });
-  };
 
   const isCompanyRoute = (comparisonId: string) => {
     return location.includes(`/sammenligning/${comparisonId}`);
@@ -184,68 +126,23 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
           </div>
         ) : (
           navData.companies.map((company) => {
-            const isExpanded = expandedCompanies.has(company.companyId);
             const isActive = isCompanyRoute(company.comparisonId);
             
             return (
-              <div key={company.companyId} className="flex flex-col w-full">
+              <Link key={company.companyId} href={`/sammenligning/${company.comparisonId}?tab=samlet`} className="w-full">
                 <div className="flex w-full items-center gap-2 pb-1">
-                  <button
-                    onClick={(e) => {
-                      e.preventDefault();
-                      toggleCompany(company.companyId);
-                    }}
-                    className="flex items-center justify-center p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded"
-                    data-testid={`toggle-company-${company.companyId}`}
+                  <SidebarWithMinimalTextSections.NavItem
+                    selected={isActive}
+                    className="flex-1"
+                    data-testid={`nav-company-${company.companyId}`}
                   >
-                    {isExpanded ? (
-                      <FeatherChevronDown className="w-4 h-4 text-subtext-color" />
-                    ) : (
-                      <FeatherChevronRight className="w-4 h-4 text-subtext-color" />
-                    )}
-                  </button>
-                  <Link href={`/sammenligning/${company.comparisonId}`} className="flex-1">
-                    <SidebarWithMinimalTextSections.NavItem
-                      selected={isActive}
-                      data-testid={`nav-company-${company.companyId}`}
-                    >
-                      {company.companyName}
-                    </SidebarWithMinimalTextSections.NavItem>
-                  </Link>
+                    {company.companyName}
+                  </SidebarWithMinimalTextSections.NavItem>
                   <Badge variant="brand" icon={null} iconRight={null} data-testid={`badge-company-${company.companyId}`}>
                     Se tilbud
                   </Badge>
                 </div>
-                
-                {isExpanded && (
-                  <div className="flex flex-col pl-8 gap-1">
-                    {company.hasCombinedView && (
-                      <Link href={`/sammenligning/${company.comparisonId}?tab=samlet`}>
-                        <SidebarWithMinimalTextSections.NavItem
-                          selected={isActive && currentTab === 'samlet'}
-                          data-testid={`nav-policy-${company.companyId}-samlet`}
-                        >
-                          Samlet oversigt
-                        </SidebarWithMinimalTextSections.NavItem>
-                      </Link>
-                    )}
-                    {company.policyTypes.map((policyType) => {
-                      const Icon = policyTypeIcons[policyType];
-                      return (
-                        <Link key={policyType} href={`/sammenligning/${company.comparisonId}?tab=${policyType}`}>
-                          <SidebarWithMinimalTextSections.NavItem
-                            icon={Icon ? <Icon /> : undefined}
-                            selected={isActive && currentTab === policyType}
-                            data-testid={`nav-policy-${company.companyId}-${policyType}`}
-                          >
-                            {policyTypeLabels[policyType] || policyType}
-                          </SidebarWithMinimalTextSections.NavItem>
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              </Link>
             );
           })
         )}
