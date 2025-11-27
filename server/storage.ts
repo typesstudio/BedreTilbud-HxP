@@ -121,6 +121,7 @@ export interface IStorage {
   getNavigationData(userId: string): Promise<{
     companies: Array<{
       companyId: string;
+      comparisonId: string;
       companyName: string;
       policyTypes: string[];
       hasCombinedView: boolean;
@@ -1601,6 +1602,7 @@ export class DatabaseStorage implements IStorage {
   async getNavigationData(userId: string): Promise<{
     companies: Array<{
       companyId: string;
+      comparisonId: string;
       companyName: string;
       policyTypes: string[];
       hasCombinedView: boolean;
@@ -1608,41 +1610,60 @@ export class DatabaseStorage implements IStorage {
     pendingThreads: Array<EmailThread & { companyName: string }>;
   }> {
     const { db } = await import("./db");
-    const { comparisons, emailThreads, companies } = await import("@shared/schema");
-    const { eq, and, or } = await import("drizzle-orm");
+    const { companyComparisons, emailThreads, companies } = await import("@shared/schema");
+    const { eq, and, or, desc } = await import("drizzle-orm");
 
-    // Fetch comparisons with company names using SQL join
-    const userComparisons = await db
+    // Fetch completed company_comparisons with company names using SQL join
+    const userCompanyComparisons = await db
       .select({
-        comparison: comparisons,
+        comparison: companyComparisons,
         company: companies
       })
-      .from(comparisons)
-      .leftJoin(companies, eq(comparisons.companyId, companies.id))
-      .where(eq(comparisons.userId, userId));
+      .from(companyComparisons)
+      .leftJoin(companies, eq(companyComparisons.offerCompany, companies.id))
+      .where(
+        and(
+          eq(companyComparisons.userId, userId),
+          eq(companyComparisons.status, 'completed')
+        )
+      )
+      .orderBy(desc(companyComparisons.createdAt));
 
-    const companyMap = new Map<string, { name: string; policyTypes: Set<string> }>();
+    // Group by offer company, using the most recent comparison for each company
+    const companyMap = new Map<string, { 
+      name: string; 
+      policyTypes: Set<string>;
+      comparisonId: string;
+    }>();
     
-    for (const row of userComparisons) {
-      const companyId = row.comparison.companyId || '';
+    for (const row of userCompanyComparisons) {
+      const companyId = row.comparison.offerCompany || '';
       const companyName = row.company?.name || 'Unknown Company';
       
+      // Only use the first (most recent) comparison per company
       if (!companyMap.has(companyId)) {
         companyMap.set(companyId, {
           name: companyName,
-          policyTypes: new Set()
+          policyTypes: new Set(),
+          comparisonId: row.comparison.id
         });
-      }
-      
-      if (row.comparison.policyType) {
-        companyMap.get(companyId)!.policyTypes.add(row.comparison.policyType);
+        
+        // Extract policy types from comparison_json.overall.perPolicySummary
+        const comparisonJSON = row.comparison.comparisonJSON as any;
+        const perPolicySummary = comparisonJSON?.overall?.perPolicySummary || [];
+        for (const policy of perPolicySummary) {
+          if (policy.policyType) {
+            companyMap.get(companyId)!.policyTypes.add(policy.policyType);
+          }
+        }
       }
     }
     
-    const companiesData = Array.from(companyMap.entries()).map(([companyId, data]) => {
+    const companiesData = Array.from(companyMap.entries()).map(([offerCompanyId, data]) => {
       const policyTypes = Array.from(data.policyTypes);
       return {
-        companyId,
+        companyId: offerCompanyId, // Keep original company ID for grouping/expansion
+        comparisonId: data.comparisonId, // Use comparison ID for URL routing
         companyName: data.name,
         policyTypes,
         hasCombinedView: policyTypes.length > 1

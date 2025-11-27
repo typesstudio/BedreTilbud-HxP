@@ -53,6 +53,7 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
   const navData = data as {
     companies: Array<{
       companyId: string;
+      comparisonId: string;
       companyName: string;
       policyTypes: string[];
       hasCombinedView: boolean;
@@ -63,7 +64,7 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
   useEffect(() => {
     if (navData?.companies) {
       const activeCompany = navData.companies.find(company => 
-        location.includes(`/sammenligning/${userId}/${company.companyId}`)
+        location.includes(`/sammenligning/${company.comparisonId}`)
       );
       
       if (activeCompany) {
@@ -74,7 +75,7 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
         });
       }
     }
-  }, [location, navData, userId]);
+  }, [location, navData]);
 
   const toggleCompany = (companyId: string) => {
     setExpandedCompanies(prev => {
@@ -88,8 +89,8 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
     });
   };
 
-  const isCompanyRoute = (companyId: string) => {
-    return location.includes(`/sammenligning/${userId}/${companyId}`);
+  const isCompanyRoute = (comparisonId: string) => {
+    return location.includes(`/sammenligning/${comparisonId}`);
   };
 
   return (
@@ -184,7 +185,7 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
         ) : (
           navData.companies.map((company) => {
             const isExpanded = expandedCompanies.has(company.companyId);
-            const isActive = isCompanyRoute(company.companyId);
+            const isActive = isCompanyRoute(company.comparisonId);
             
             return (
               <div key={company.companyId} className="flex flex-col w-full">
@@ -203,7 +204,7 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
                       <FeatherChevronRight className="w-4 h-4 text-subtext-color" />
                     )}
                   </button>
-                  <Link href={`/sammenligning/${userId}/${company.companyId}`} className="flex-1">
+                  <Link href={`/sammenligning/${company.comparisonId}`} className="flex-1">
                     <SidebarWithMinimalTextSections.NavItem
                       selected={isActive}
                       data-testid={`nav-company-${company.companyId}`}
@@ -219,7 +220,7 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
                 {isExpanded && (
                   <div className="flex flex-col pl-8 gap-1">
                     {company.hasCombinedView && (
-                      <Link href={`/sammenligning/${userId}/${company.companyId}?tab=samlet`}>
+                      <Link href={`/sammenligning/${company.comparisonId}?tab=samlet`}>
                         <SidebarWithMinimalTextSections.NavItem
                           selected={isActive && currentTab === 'samlet'}
                           data-testid={`nav-policy-${company.companyId}-samlet`}
@@ -231,7 +232,7 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
                     {company.policyTypes.map((policyType) => {
                       const Icon = policyTypeIcons[policyType];
                       return (
-                        <Link key={policyType} href={`/sammenligning/${userId}/${company.companyId}?tab=${policyType}`}>
+                        <Link key={policyType} href={`/sammenligning/${company.comparisonId}?tab=${policyType}`}>
                           <SidebarWithMinimalTextSections.NavItem
                             icon={Icon ? <Icon /> : undefined}
                             selected={isActive && currentTab === policyType}
