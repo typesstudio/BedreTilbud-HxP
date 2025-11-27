@@ -18,31 +18,44 @@ const DEFAULT_BENCHMARKS: Record<string, number> = {
 };
 
 /**
- * Computes savings using benchmark prices when no current policy baseline exists.
- * This ensures health checks always show meaningful savings data.
+ * Computes savings using benchmark prices.
+ * 
+ * For OFFERS (premium < benchmark): Shows how much cheaper the offer is vs market
+ * For CURRENT (premium > benchmark): Shows potential savings by switching to market average
  * 
  * @param policyType - The policy type (indbo, hus, ulykke, bil, rejse)
- * @param offerPremium - The annual premium of the offer policy
- * @param benchmark - The benchmark price to compare against (already fetched)
- * @returns Savings calculations with benchmark as baseline
+ * @param currentOrOfferPremium - The annual premium (current policy or offer)
+ * @param benchmark - The benchmark/market average price
+ * @returns Savings calculations
  */
 function computeBenchmarkSavings(
   policyType: string,
-  offerPremium: number,
+  currentOrOfferPremium: number,
   benchmark: number
 ): {
   annualSavings: number;
   annualSavingsPercent: number;
   benchmarkUsed: number;
 } {
-  // Calculate savings: benchmark - offer (positive = user saves money)
-  const annualSavings = benchmark - offerPremium;
+  // FIX BUG 2: Handle BOTH directions - cheaper than market AND potential savings from switching
+  // If premium > benchmark: user could save by switching to market average
+  // If premium < benchmark: user is already saving vs market
+  
+  // Calculate raw difference
+  const rawDifference = Math.abs(currentOrOfferPremium - benchmark);
+  
+  // Always show positive savings potential
+  // Whether it's "you're saving X kr vs market" or "you could save X kr by switching"
+  const annualSavings = currentOrOfferPremium > benchmark 
+    ? currentOrOfferPremium - benchmark  // Current is more expensive - potential savings by switching
+    : benchmark - currentOrOfferPremium; // Offer is cheaper - actual savings vs market
+  
   const annualSavingsPercent = benchmark > 0 
-    ? Math.round((annualSavings / benchmark) * 100 * 10) / 10 
+    ? Math.round((rawDifference / benchmark) * 100 * 10) / 10 
     : 0;
   
   return {
-    annualSavings: Math.max(0, annualSavings), // Don't show negative savings
+    annualSavings: Math.max(0, annualSavings),
     annualSavingsPercent: Math.max(0, annualSavingsPercent),
     benchmarkUsed: benchmark,
   };
@@ -308,6 +321,52 @@ export async function ensureHealthCheckForSnapshot(
     overallScore: healthCheckResult.overallScore,
     savingsAmount: healthCheckResult.potentialSavings?.realistic || 0
   });
+
+  // 4a) FIX BUG 3: Populate whatsIncluded from structuredPolicy if AI didn't generate any
+  // This ensures coverage details are shown even when AI analysis produces empty whatsIncluded
+  if ((!healthCheckResult.whatsIncluded || healthCheckResult.whatsIncluded.length === 0) 
+      && snapshot.structuredPolicy?.coverageDetails) {
+    const coverageDetails = snapshot.structuredPolicy.coverageDetails;
+    const mappedCoverages: Array<{ coverage: string; value?: string; status?: string; attributes?: Record<string, string> }> = [];
+
+    // Map mainCoverages
+    if (Array.isArray(coverageDetails.mainCoverages)) {
+      for (const coverage of coverageDetails.mainCoverages) {
+        mappedCoverages.push({
+          coverage: coverage.name || coverage.type || 'Dækning',
+          value: coverage.limit || coverage.coverage || 'inkluderet',
+          status: 'success',
+          attributes: {
+            ...(coverage.limit && { sum: coverage.limit }),
+            ...(coverage.deductible && { selvrisiko: coverage.deductible })
+          }
+        });
+      }
+    }
+
+    // Map extraCoverages
+    if (Array.isArray(coverageDetails.extraCoverages)) {
+      for (const coverage of coverageDetails.extraCoverages) {
+        mappedCoverages.push({
+          coverage: coverage.name || coverage.type || 'Tillægsdækning',
+          value: coverage.limit || coverage.coverage || 'inkluderet',
+          status: 'neutral',
+          attributes: {
+            ...(coverage.limit && { sum: coverage.limit }),
+            ...(coverage.deductible && { selvrisiko: coverage.deductible })
+          }
+        });
+      }
+    }
+
+    if (mappedCoverages.length > 0) {
+      healthCheckResult.whatsIncluded = mappedCoverages;
+      logger.info('[HealthCheckService] Populated whatsIncluded from structuredPolicy', {
+        snapshotId,
+        coverageCount: mappedCoverages.length
+      });
+    }
+  }
 
   // 4b) ALWAYS enrich with benchmark-based savings if AI didn't calculate them
   // This ensures health checks always show meaningful savings data

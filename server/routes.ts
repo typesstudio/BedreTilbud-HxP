@@ -2535,8 +2535,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return null;
       };
 
-      // Fetch health checks for all siblings IN PARALLEL for better performance
-      const { enrichStoredHealthCheck } = await import("./services/healthCheckService");
+      // Import health check service functions
+      const { enrichStoredHealthCheck, ensureHealthCheckForSnapshot } = await import("./services/healthCheckService");
 
       const policyTypeLabels: Record<string, string> = {
         indbo: 'Indboforsikring',
@@ -2550,12 +2550,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         retshjælp: 'Retshjælpsforsikring',
       };
 
-      // Fetch all health checks in parallel
-      const healthCheckPromises = siblingSnapshots.map(sibling => 
-        storage.getHealthCheckBySnapshot(sibling.id)
-          .then(hc => ({ sibling, healthCheck: hc }))
-          .catch(() => ({ sibling, healthCheck: null }))
-      );
+      // FIX BUG 4: Ensure health checks exist for ALL siblings (not just the requested one)
+      // This ensures Fritidshus and other policies get analyzed when viewing overview
+      logger.info('[Health Check Overview API] Ensuring health checks for all siblings', {
+        count: siblingSnapshots.length,
+        types: siblingSnapshots.map(s => s.policyType)
+      });
+
+      // Fetch/create health checks for all siblings IN PARALLEL
+      const healthCheckPromises = siblingSnapshots.map(async sibling => {
+        try {
+          // ensureHealthCheckForSnapshot creates the health check if it doesn't exist
+          const hc = await ensureHealthCheckForSnapshot(sibling.id, userId, storage);
+          return { sibling, healthCheck: hc };
+        } catch (error: any) {
+          logger.warn('[Health Check Overview API] Failed to ensure health check', { 
+            snapshotId: sibling.id, 
+            policyType: sibling.policyType,
+            error: error?.message 
+          });
+          return { sibling, healthCheck: null };
+        }
+      });
       const healthCheckResults = await Promise.all(healthCheckPromises);
 
       // Process results and enrich in parallel
@@ -2587,8 +2603,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           storage
         );
 
-        const annualSavings = enrichedResult.annualSavings?.amount || 
-                              enrichedResult.potentialSavings?.realistic || 0;
+        // FIX BUG 1: Use cumulativeSavings.after12Months as primary source (consistent with single-policy view)
+        // This ensures Overblik total matches sum of individual policy cards
+        const annualSavings = enrichedResult.cumulativeSavings?.after12Months 
+                              || enrichedResult.potentialSavings?.realistic 
+                              || enrichedResult.annualSavings?.amount 
+                              || 0;
         const currentPremium = offerPremium || 0;
 
         const weaknesses = enrichedResult.weaknesses || [];

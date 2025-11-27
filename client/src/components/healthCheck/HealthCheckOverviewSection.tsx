@@ -137,8 +137,8 @@ export function HealthCheckOverviewSection({
           <span className="text-heading-2 font-heading-2 text-default-font">
             Din dækningsstatus
           </span>
-          <Badge variant="success" icon={<FeatherCheckCircle />}>
-            {data.goodCount} af {data.totalCount} dækninger
+          <Badge variant={data.goodCount === data.totalCount ? "success" : "warning"} icon={<FeatherCheckCircle />}>
+            {data.goodCount} af {data.totalCount} policer godkendt
           </Badge>
         </div>
         <div className="flex w-full flex-col items-start rounded-lg border border-solid border-neutral-border bg-default-background overflow-x-auto">

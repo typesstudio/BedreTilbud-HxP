@@ -1,0 +1,335 @@
+Perfect, this is exactly the kind of thing you *should* hand to an expert.
+I’ll clean it up into a clear technical analysis + a Replit prompt.
+
+---
+
+## 1. High-level summary
+
+You have 4 separate bugs in the **“Forsikrings tjek” / sundhedstjek** flow:
+
+1. **Overblik total savings is wrong**
+   Overblik shows `127 kr` instead of the sum of the individual health checks (e.g. Ulykke `223 kr`).
+
+2. **Indbo has no savings, only “Kan forbedres” text / error message**
+   Indbo doesn’t get a final savings number, even though there *is* data to base it on.
+
+3. **“0 af 3 dækninger” on Overblik even though policies exist**
+   The coverage counter acts as if there are 0 coverages.
+
+4. **Fritidshus stuck at “Afventer analyse”**
+   The health check for that policy type is never produced.
+
+These are not random; they all come from **how the backend builds the Overblik summary**, not from the UI.
+
+---
+
+## 2. Detailed analysis for your expert
+
+### Bug 1 – Overblik total = 127 kr, Ulykke = 223 kr
+
+**Symptom**
+
+* Overblik “Årlig potentiel besparelse” shows **127 kr**.
+* The Ulykke health check card shows **223 kr** annual savings (which is correct based on that policy).
+
+Those numbers should either be:
+
+* equal (if only one policy is in the group), or
+* Overblik = **sum of all individual policies**.
+
+**Root cause**
+
+* Overblik endpoint is reading from an **old cached field** – something like `policy_snapshots.healthCheckSummary` or a similar cache – which contains an older benchmark-based calculation.
+* The **correct, latest numbers** live in `health_checks.result` (e.g. `result.cumulativeSavings.after12Months` or `result.potentialSavings.*`).
+* Ulykke’s card uses the **new** field, Overblik uses the **old** one → mismatch.
+
+**What to change**
+
+* For the Overblik aggregation endpoint (the one that returns `totalAnnualSavings` / `annualPotentialSavings`):
+
+  1. **Stop using** cached values from `policy_snapshots.healthCheckSummary` (or any “summary” column that isn’t updated by the new health check logic).
+  2. **Instead**, for every policy in the same snapshot group:
+
+     * Read the *latest* row from `health_checks` for that snapshot.
+     * Take the field you use on the single-policy view, e.g.:
+
+       * `health_checks.result.cumulativeSavings.after12Months` (or whatever you already trust in the card),
+       * or `health_checks.result.potentialSavings.realisticYearly`.
+  3. Sum those numbers to compute `totalAnnualSavings` for Overblik.
+  4. Use the same field for both the per-policy card and the Overblik total, so they can never drift.
+
+**Testing**
+
+* Pick a snapshotGroup with at least one finished health check.
+* Compare:
+
+  * Ulykke health check card’s number.
+  * Overblik’s total.
+* With the fix, Overblik should equal the sum of the per-policy numbers.
+
+---
+
+### Bug 2 – Indbo shows “Besparelsesberegning kræver en nuværende forsikring”
+
+**Symptom**
+
+* Indbo is analysed (it has a health check), but the UI shows something like:
+
+  > “Besparelsesberegning kræver en nuværende forsikring”
+* No final savings DKK value is shown.
+
+**Root cause**
+
+* In the Indbo health check JSON, `potentialSavings.realistic` (or similar) is **0**.
+* The enrichment logic that fills `annualPotentialSavings` treats **“0” as “valid value, no work needed”**, instead of “we didn’t manage to calculate anything”.
+* Because it sees a defined value (0), the code **skips the benchmark enrichment** that would normally compute a realistic saving based on current premium vs benchmark.
+* Result: `annualPotentialSavings` remains `null` / `undefined`, and the UI falls back to the error message.
+
+**What to change**
+
+* In the backend step that prepares the stored health check result:
+
+  1. Treat `0` and negative savings as **“missing/invalid”** when deciding whether to run the enrichment.
+
+     * Example rule:
+
+       ```ts
+       const hasValidRawSaving =
+         typeof potentialSavings.realistic === "number" &&
+         potentialSavings.realistic > 0;
+       ```
+  2. If `hasValidRawSaving` is false (including 0), run the **benchmark enrichment**:
+
+     * Use current premium and benchmark price to compute a realistic annual saving.
+  3. Only skip enrichment when there is a **positive** and explicit saving from the AI.
+
+**Result**
+
+* Indbo will get a calculated `annualPotentialSavings` value, and the UI will show a DKK saving instead of the error text.
+
+---
+
+### Bug 3 – “0 af 3 dækninger” even though policies exist
+
+**Symptom**
+
+* On Overblik, the “Din dækningsstatus” header shows “0 af X dækninger”.
+* The table might show rows, but the **counter** acts as if there are none.
+
+**Root cause**
+
+* The UI layer counts coverages using something like:
+
+  ```ts
+  const totalCoverages = healthCheck.result.coverageRows.length;
+  const goodCoverages = healthCheck.result.coverageRows.filter(...).length;
+  ```
+
+* For **user’s current insurances**, the `coverageRows` array is **never populated** in `health_checks.result`.
+  The structured coverage lives only in e.g.:
+
+  * `offer_snapshots.structured_policy.coverageDetails.mainCoverages`
+  * maybe `extraCoverages`, etc.
+
+* Because `coverageRows` is empty/undefined, the counter becomes “0 af 3 dækninger”, even though the raw coverage data exists elsewhere.
+
+**What to change**
+
+* When generating or saving the health check result for a policy:
+
+  1. Map the structured coverage data into the health check format:
+
+     ```ts
+     result.coverageRows = mapStructuredCoverageToCoverageRows(
+       structured_policy.coverageDetails
+     );
+     ```
+
+     Where `mapStructuredCoverageToCoverageRows` turns your `mainCoverages[]` / `extraCoverages[]` into rows like:
+
+     ```ts
+     {
+       coverageName: string;
+       isIncluded: boolean;
+       limit: string | null;
+       recommendation: "good" | "can_improve" | "missing";
+     }
+     ```
+
+  2. Save this on `health_checks.result` before persisting.
+
+* Overblik and the per-policy views should then reuse `coverageRows` instead of poking into `structured_policy` directly.
+
+**Result**
+
+* The “X af Y dækninger” text will correctly reflect real counts, and you can later reuse the same structure for the detailed tables.
+
+---
+
+### Bug 4 – Fritidshus stuck at “Afventer analyse”
+
+**Symptom**
+
+* The Fritidshus policy shows “Afventer analyse” and never gets a health check result on the front-end.
+
+**Root cause**
+
+* In your orchestration code, you have something like:
+
+  * `guessPolicyTypeFromCoverages(structured_policy)` returns `"hus"` for Fritidshus (because its coverages look like a normal house).
+  * Later, you validate with something like:
+
+    ```ts
+    if (guessedType !== snapshot.policyType) {
+      // abort or skip
+    }
+    ```
+
+    where `snapshot.policyType` is `"fritidshus"`.
+
+* Because `"hus" !== "fritidshus"`, the orchestrator **never runs** the health-check agent for that snapshot, so the UI correctly says “Afventer analyse” forever.
+
+**What to change**
+
+Two safe options:
+
+1. **Relax the validation** so “hus” and “fritidshus” are compatible:
+
+   ```ts
+   const normalizedGuessed = normalizeType(guessedType);
+   const normalizedSnapshot = normalizeType(snapshot.policyType);
+
+   if (normalizedGuessed !== normalizedSnapshot) {
+     // skip OR log, but don’t treat fritidshus as mismatch
+   }
+
+   function normalizeType(t: string) {
+     if (t === "hus" || t === "fritidshus") return "hus";
+     return t;
+   }
+   ```
+
+2. Or, **explicit mapping**:
+
+   * If `snapshot.policyType === "fritidshus"` and `guessedType === "hus"`, allow it and run the health check with type `"hus"`.
+
+**Result**
+
+* Fritidshus policies will flow through the same house health-check logic and will no longer be stuck at “Afventer analyse”.
+
+---
+
+## 3. Replit prompt you can paste for fixing all four issues
+
+Here’s a compact but precise prompt you can feed to Replit / your AI dev there:
+
+````md
+Goal
+Fix the “Forsikrings tjek” / sundhedstjek implementation so that:
+- Overblik total savings is correct (sum of individual health checks).
+- Indbo (and other policies) always get a realistic savings number when possible.
+- “Din dækningsstatus” shows correct coverage counts.
+- Fritidshus is actually analysed instead of stuck at “Afventer analyse”.
+
+Context
+We have:
+- health_checks.result: the new, rich JSON from the health check AI.
+- policy_snapshots (or offer_snapshots).healthCheckSummary: an older cached summary.
+- structured_policy.coverageDetails.*: raw coverage data (mainCoverages, etc.).
+
+Please implement the following changes.
+
+1) Overblik must use latest health_checks.result, not old cache
+
+- Locate the endpoint that builds the Overblik response for a snapshot group
+  (this is where total annual savings and coverage status are computed).
+- Today it reads savings from a cached field (e.g. policy_snapshots.healthCheckSummary).
+- Change it to:
+  - For each snapshot in the group, load the latest `health_checks` row.
+  - Use the same field used for the single-policy health check card, e.g.
+    `health_checks.result.cumulativeSavings.after12Months` or
+    `health_checks.result.potentialSavings.realisticYearly`.
+  - Sum these values to compute the Overblik total (`totalAnnualSavings`).
+- Remove dependence on any deprecated “summary” cache so the per-policy cards and Overblik always agree.
+
+2) Treat 0 savings as “missing data” so Indbo gets a benchmark-based value
+
+- In the code that prepares/saves `health_checks.result`, we have logic like:
+  - If `potentialSavings.realistic` is defined, we skip benchmark enrichment.
+- Update this logic so that 0 or negative values are treated as invalid:
+  ```ts
+  const hasValidRawSaving =
+    typeof potentialSavings.realistic === "number" &&
+    potentialSavings.realistic > 0;
+````
+
+* If `hasValidRawSaving` is false, run the benchmark-based enrichment
+  using the current premium vs benchmark to compute a realistic annual saving.
+* Store the final value in a common field (e.g. `result.annualPotentialSavings`),
+  and use that for both the single-policy card and the Overblik total.
+
+3. Populate coverageRows for current insurances so “0 af X dækninger” disappears
+
+* When generating each health check result, before persisting:
+
+  * Map `structured_policy.coverageDetails` into `result.coverageRows[]`:
+
+    * use mainCoverages / extraCoverages, etc.
+    * each row should include coverage name, isIncluded, limit, and recommendation.
+  * Example:
+
+    ```ts
+    result.coverageRows = mapStructuredCoverageToCoverageRows(
+      structured_policy.coverageDetails
+    );
+    ```
+* Ensure the Overblik endpoint and the per-policy health check views
+  use `result.coverageRows` to count and display coverage status.
+* After this, the header “X af Y dækninger” should reflect real data instead of always “0 af Y”.
+
+4. Allow Fritidshus to pass type validation and be analysed
+
+* In the health check orchestrator, find the logic that:
+
+  * guesses policy type from coverage (`guessPolicyTypeFromCoverages`), and
+  * compares it with `snapshot.policyType`.
+* Currently, Fritidshus fails because:
+
+  * guessPolicyTypeFromCoverages → "hus"
+  * snapshot.policyType → "fritidshus"
+  * strict equality fails and the orchestrator skips the analysis.
+* Implement a normalization/mapping:
+
+  ```ts
+  function normalizeType(t: string) {
+    if (t === "hus" || t === "fritidshus") return "hus";
+    return t;
+  }
+
+  const normalizedGuessed = normalizeType(guessedType);
+  const normalizedSnapshot = normalizeType(snapshot.policyType);
+
+  if (normalizedGuessed !== normalizedSnapshot) {
+    // handle mismatch as before (log/skip)
+  } else {
+    // run health check
+  }
+  ```
+* This allows Fritidshus policies to run through the same “hus” health check logic.
+
+5. Tests / sanity checks
+
+* Create or use an existing snapshot group with Indbo, Ulykke and Fritidshus:
+
+  * Verify each policy has a `health_checks` row with `result`.
+* After changes:
+
+  * Overblik total equals the sum of the per-policy savings.
+  * Indbo shows a numeric saving, not the “Besparelsesberegning kræver en nuværende forsikring” message.
+  * “Din dækningsstatus” shows a positive `X af Y dækninger` count.
+  * Fritidshus no longer shows “Afventer analyse” and has a proper health check result.
+
+```
+
+You can hand this message (sections 2 + 3) directly to your expert; it explains both **what’s wrong** and **what to change** without them needing the whole history.
+```
