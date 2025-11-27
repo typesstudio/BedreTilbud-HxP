@@ -2597,19 +2597,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
       const healthCheckResults = await Promise.all(healthCheckPromises);
 
+      // Helper to format annual premium as Danish currency
+      const formatAnnualPremium = (premium: number | null | undefined): string => {
+        if (premium == null || premium === 0) return '—';
+        return `${premium.toLocaleString('da-DK')} kr/år`;
+      };
+
       // Process results and enrich in parallel
       const enrichmentPromises = healthCheckResults.map(async ({ sibling, healthCheck }) => {
+        // Get annual premium from pricing data (works for both current and offer policies)
+        const annualPremium = sibling.pricing?.annualPremium 
+          || (sibling.structuredPolicy as any)?.pricing?.annualPremium 
+          || null;
+
         if (!healthCheck) {
-          // Even without health check, try to extract coverage sum from structuredPolicy or rawText
-          const fallbackCoverageSum = extractCoverageSum(sibling.structuredPolicy, null, sibling.rawText) ?? '—';
           return {
             summary: {
               policyId: sibling.id,
               policyType: sibling.policyType,
               policyLabel: policyTypeLabels[sibling.policyType] || sibling.policyType,
               annualSavings: 0,
-              currentPremiumYear: 0,
-              coverageAmountLabel: fallbackCoverageSum,
+              currentPremiumYear: annualPremium || 0,
+              annualPremiumLabel: formatAnnualPremium(annualPremium),
               recommendation: 'pending' as const,
               recommendationLabel: 'Afventer analyse',
               issues: [],
@@ -2618,7 +2627,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           };
         }
 
-        const offerPremium = sibling.pricing?.annualPremium || null;
+        const offerPremium = annualPremium;
         const enrichedResult = await enrichStoredHealthCheck(
           healthCheck.result as any,
           sibling.policyType,
@@ -2649,8 +2658,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           recommendationLabel = 'Kan forbedres';
         }
 
-        // Extract coverage sum from structured policy, health check data, or raw text
-        const coverageAmountLabel = extractCoverageSum(sibling.structuredPolicy, healthCheck.result, sibling.rawText) ?? '—';
+        // Use annual premium instead of coverage sum
+        const annualPremiumLabel = formatAnnualPremium(annualPremium);
 
         const issues = weaknesses.map((w: any) => ({
           id: `${sibling.id}-${w.title}`,
@@ -2667,7 +2676,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             policyLabel: policyTypeLabels[sibling.policyType] || sibling.policyType,
             annualSavings,
             currentPremiumYear: currentPremium,
-            coverageAmountLabel,
+            annualPremiumLabel,
             recommendation,
             recommendationLabel,
             issues: weaknesses.map((w: any) => ({

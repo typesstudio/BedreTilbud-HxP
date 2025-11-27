@@ -15,7 +15,7 @@ export interface SinglePolicySummary {
   policyLabel: string;
   annualSavings: number;
   currentPremiumYear: number;
-  coverageAmountLabel: string;
+  annualPremiumLabel: string;
   recommendation: 'good' | 'can_improve' | 'missing' | 'pending';
   recommendationLabel: string;
   issues: {

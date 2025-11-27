@@ -146,7 +146,7 @@ export function HealthCheckOverviewSection({
             header={
               <Table.HeaderRow>
                 <Table.HeaderCell>Dækningstype</Table.HeaderCell>
-                <Table.HeaderCell>Nuværende sum</Table.HeaderCell>
+                <Table.HeaderCell>Årlig pris</Table.HeaderCell>
                 <Table.HeaderCell>Anbefaling</Table.HeaderCell>
               </Table.HeaderRow>
             }
@@ -175,7 +175,7 @@ export function HealthCheckOverviewSection({
                       ? 'text-subtext-color'
                       : 'text-default-font'
                   }`}>
-                    {policy.coverageAmountLabel}
+                    {policy.annualPremiumLabel}
                   </span>
                 </Table.Cell>
                 <Table.Cell>
