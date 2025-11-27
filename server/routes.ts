@@ -2514,7 +2514,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Helper function to extract coverage sum from the correct data sources
-      const extractCoverageSum = (structuredPolicy: any, healthCheckResult: any): string | null => {
+      const extractCoverageSum = (structuredPolicy: any, healthCheckResult: any, rawText?: string): string | null => {
         // 1) Prefer explicit sum from health_check.result.whatsIncluded
         const whatsIncluded = healthCheckResult?.whatsIncluded ?? [];
         const withSum = whatsIncluded.find(
@@ -2531,7 +2531,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return coverageWithLimit.limit;
         }
 
-        // 3) If nothing found, return null
+        // 3) Fallback: Parse raw text for "Forsikringssummer" patterns (Danish insurance documents)
+        // Look for patterns like "Maks. pr. enkelt genstand: 66.595 kr" or "Forsikringssum: 500.000 kr"
+        if (rawText) {
+          const patterns = [
+            /Maks\.?\s*(?:pr\.?\s*)?enkelt\s*genstand:?\s*([\d.,]+)\s*kr/i,
+            /Forsikringssum:?\s*([\d.,]+)\s*kr/i,
+            /Indbo(?:forsikring)?:?\s*([\d.,]+)\s*kr/i,
+            /Sum\s*(?:forsikret)?:?\s*([\d.,]+)\s*kr/i,
+            /Dækningssum:?\s*([\d.,]+)\s*kr/i,
+          ];
+          for (const pattern of patterns) {
+            const match = rawText.match(pattern);
+            if (match && match[1]) {
+              // Format with proper Danish thousand separator
+              const value = match[1].replace(/\./g, '').replace(/,/g, '.');
+              const numValue = parseFloat(value);
+              if (!isNaN(numValue) && numValue > 1000) { // Only use if it looks like a coverage sum
+                return `${numValue.toLocaleString('da-DK')} kr`;
+              }
+            }
+          }
+        }
+
+        // 4) If nothing found, return null
         return null;
       };
 
@@ -2577,8 +2600,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Process results and enrich in parallel
       const enrichmentPromises = healthCheckResults.map(async ({ sibling, healthCheck }) => {
         if (!healthCheck) {
-          // Even without health check, try to extract coverage sum from structuredPolicy
-          const fallbackCoverageSum = extractCoverageSum(sibling.structuredPolicy, null) ?? '—';
+          // Even without health check, try to extract coverage sum from structuredPolicy or rawText
+          const fallbackCoverageSum = extractCoverageSum(sibling.structuredPolicy, null, sibling.rawText) ?? '—';
           return {
             summary: {
               policyId: sibling.id,
@@ -2626,8 +2649,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           recommendationLabel = 'Kan forbedres';
         }
 
-        // Extract coverage sum from structured policy or health check data
-        const coverageAmountLabel = extractCoverageSum(sibling.structuredPolicy, healthCheck.result) ?? '—';
+        // Extract coverage sum from structured policy, health check data, or raw text
+        const coverageAmountLabel = extractCoverageSum(sibling.structuredPolicy, healthCheck.result, sibling.rawText) ?? '—';
 
         const issues = weaknesses.map((w: any) => ({
           id: `${sibling.id}-${w.title}`,
