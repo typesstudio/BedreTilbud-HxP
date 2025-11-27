@@ -36,11 +36,18 @@ export function NavigationSidebar({ userId, isCollapsed = false, onToggleCollaps
       hasCombinedView: boolean;
     }>;
     pendingThreads: Array<{ id: string; companyName: string; companyId: string }>;
+    currentInsuranceSnapshotId: string | null;
   } | undefined;
 
   const isCompanyRoute = (comparisonId: string) => {
     return location.includes(`/sammenligning/${comparisonId}`);
   };
+
+  const forsikringstjekUrl = navData?.currentInsuranceSnapshotId 
+    ? `/sundhedstjek/${navData.currentInsuranceSnapshotId}`
+    : `/forsikringstjek/${userId}`;
+
+  const isForsikringstjekActive = location.startsWith('/sundhedstjek/') || location === `/forsikringstjek/${userId}`;
 
   if (isCollapsed) {
     return (
@@ -63,9 +70,9 @@ export function NavigationSidebar({ userId, isCollapsed = false, onToggleCollaps
           <div className="flex w-full flex-col items-center gap-4">
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link href={`/forsikringstjek/${userId}`}>
+                <Link href={forsikringstjekUrl}>
                   <IconButton
-                    variant={location === `/forsikringstjek/${userId}` ? "brand-tertiary" : "neutral-tertiary"}
+                    variant={isForsikringstjekActive ? "brand-tertiary" : "neutral-tertiary"}
                     icon={<FeatherShield />}
                     data-testid="nav-forsikringstjek-collapsed"
                   />
@@ -208,10 +215,10 @@ export function NavigationSidebar({ userId, isCollapsed = false, onToggleCollaps
     >
       {/* Oversigt Section */}
       <SidebarWithMinimalTextSections.NavSection label="Oversigt">
-        <Link href={`/forsikringstjek/${userId}`}>
+        <Link href={forsikringstjekUrl}>
           <SidebarWithMinimalTextSections.NavItem
             icon={<FeatherShield />}
-            selected={location === `/forsikringstjek/${userId}`}
+            selected={isForsikringstjekActive}
             data-testid="nav-forsikringstjek"
           >
             Forsikringstjek

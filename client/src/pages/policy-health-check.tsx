@@ -90,19 +90,17 @@ export default function PolicyHealthCheckPage() {
               </span>
             </div>
             <div className="flex items-center gap-2 mobile:w-full mobile:flex-col">
-              <Button
-                variant="neutral-secondary"
-                onClick={() => {
-                  if (data.comparisonId) {
+              {data.kind === "offer" && data.comparisonId && (
+                <Button
+                  variant="neutral-secondary"
+                  onClick={() => {
                     setLocation(`/sammenligning/${data.comparisonId}`);
-                  } else {
-                    window.history.back();
-                  }
-                }}
-                data-testid="button-compare-offer"
-              >
-                Sammenlign tilbudet
-              </Button>
+                  }}
+                  data-testid="button-compare-offer"
+                >
+                  Sammenlign tilbudet
+                </Button>
+              )}
               <Button
                 variant="brand-primary"
                 onClick={() => {
@@ -212,18 +210,24 @@ export default function PolicyHealthCheckPage() {
                 />
               )}
 
-              {/* Footer CTA */}
+              {/* Footer CTA - different messaging for current insurance vs offers */}
               <div className="flex w-full flex-col items-start gap-3 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:px-4 mobile:py-4">
                 <Button
                   className="w-full"
                   size="large"
-                  onClick={() => {}}
-                  data-testid="button-choose-and-switch"
+                  onClick={() => {
+                    // TODO: Navigate to appropriate action page
+                  }}
+                  data-testid={data.kind === "current" ? "button-get-offers" : "button-choose-and-switch"}
                 >
-                  Vælg og skift til {data.companyName}
+                  {data.kind === "current" 
+                    ? "Få bedre tilbud på din forsikring" 
+                    : `Vælg og skift til ${data.companyName}`}
                 </Button>
                 <span className="text-caption font-caption text-subtext-color text-center w-full">
-                  Sikre data. Du kan annullere når som helst før aktivering.
+                  {data.kind === "current"
+                    ? "Vi finder gratis tilbud fra andre forsikringsselskaber til dig"
+                    : "Sikre data. Du kan annullere når som helst før aktivering."}
                 </span>
               </div>
             </>

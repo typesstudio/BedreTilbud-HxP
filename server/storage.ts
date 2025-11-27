@@ -127,6 +127,7 @@ export interface IStorage {
       hasCombinedView: boolean;
     }>;
     pendingThreads: Array<EmailThread & { companyName: string }>;
+    currentInsuranceSnapshotId: string | null;
   }>;
 
   // Onboarding Progress
@@ -794,32 +795,35 @@ export class MemStorage implements IStorage {
   async getNavigationData(userId: string): Promise<{
     companies: Array<{
       companyId: string;
+      comparisonId: string;
       companyName: string;
       policyTypes: string[];
       hasCombinedView: boolean;
     }>;
     pendingThreads: Array<EmailThread & { companyName: string }>;
+    currentInsuranceSnapshotId: string | null;
   }> {
     const userComparisons = Array.from(this.comparisons.values())
       .filter(c => c.userId === userId);
     
-    const companyMap = new Map<string, Set<string>>();
+    const companyMap = new Map<string, { policyTypes: Set<string>; comparisonId: string }>();
     
     for (const comparison of userComparisons) {
       const companyId = comparison.companyId || '';
       if (!companyMap.has(companyId)) {
-        companyMap.set(companyId, new Set());
+        companyMap.set(companyId, { policyTypes: new Set(), comparisonId: comparison.id });
       }
       if (comparison.policyType) {
-        companyMap.get(companyId)!.add(comparison.policyType);
+        companyMap.get(companyId)!.policyTypes.add(comparison.policyType);
       }
     }
     
-    const companies = Array.from(companyMap.entries()).map(([companyId, policyTypesSet]) => {
+    const companies = Array.from(companyMap.entries()).map(([companyId, data]) => {
       const company = this.companies.get(companyId);
-      const policyTypes = Array.from(policyTypesSet);
+      const policyTypes = Array.from(data.policyTypes);
       return {
         companyId,
+        comparisonId: data.comparisonId,
         companyName: company?.name || 'Unknown Company',
         policyTypes,
         hasCombinedView: policyTypes.length > 1
@@ -839,7 +843,8 @@ export class MemStorage implements IStorage {
 
     return {
       companies,
-      pendingThreads: threadsWithCompany
+      pendingThreads: threadsWithCompany,
+      currentInsuranceSnapshotId: null
     };
   }
 
@@ -1608,9 +1613,10 @@ export class DatabaseStorage implements IStorage {
       hasCombinedView: boolean;
     }>;
     pendingThreads: Array<EmailThread & { companyName: string }>;
+    currentInsuranceSnapshotId: string | null;
   }> {
     const { db } = await import("./db");
-    const { companyComparisons, emailThreads, companies } = await import("@shared/schema");
+    const { companyComparisons, emailThreads, companies, policySnapshots } = await import("@shared/schema");
     const { eq, and, or, desc } = await import("drizzle-orm");
 
     // Fetch completed company_comparisons with company names using SQL join
@@ -1693,9 +1699,23 @@ export class DatabaseStorage implements IStorage {
       companyName: row.company?.name || 'Unknown Company'
     }));
 
+    // Get first current insurance policy snapshot for navigation link
+    const [currentSnapshot] = await db
+      .select({ id: policySnapshots.id })
+      .from(policySnapshots)
+      .where(
+        and(
+          eq(policySnapshots.userId, userId),
+          eq(policySnapshots.kind, 'current')
+        )
+      )
+      .orderBy(desc(policySnapshots.createdAt))
+      .limit(1);
+
     return {
       companies: companiesData,
-      pendingThreads: threadsWithCompany
+      pendingThreads: threadsWithCompany,
+      currentInsuranceSnapshotId: currentSnapshot?.id || null
     };
   }
 
