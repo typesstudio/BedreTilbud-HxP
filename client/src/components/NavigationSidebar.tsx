@@ -1,18 +1,25 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
-import { SidebarWithMinimalTextSections, Badge, Button } from "@/ui";
+import { SidebarWithMinimalTextSections, Badge, Button, IconButton } from "@/ui";
 import { 
   FeatherCoins, 
   FeatherRocket, 
   FeatherUser,
-  FeatherShield
+  FeatherShield,
+  FeatherChevronsLeft,
+  FeatherMenu,
+  FeatherFileText,
+  FeatherClock
 } from "@subframe/core";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface NavigationSidebarProps {
   userId?: string;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export function NavigationSidebar({ userId }: NavigationSidebarProps) {
+export function NavigationSidebar({ userId, isCollapsed = false, onToggleCollapse }: NavigationSidebarProps) {
   const [location] = useLocation();
 
   const { data, isLoading } = useQuery({
@@ -35,6 +42,125 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
     return location.includes(`/sammenligning/${comparisonId}`);
   };
 
+  if (isCollapsed) {
+    return (
+      <TooltipProvider>
+        <div className="flex h-full w-20 flex-none flex-col items-start gap-6 border-r border-solid border-neutral-border bg-default-background px-3 py-6 shadow-sm transition-all duration-300">
+          <div className="flex w-full flex-col items-center gap-4">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <IconButton
+                  icon={<FeatherMenu />}
+                  onClick={onToggleCollapse}
+                  data-testid="button-expand-sidebar"
+                />
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Udvid menu</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <div className="flex w-full flex-col items-center gap-4">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link href={`/forsikringstjek/${userId}`}>
+                  <IconButton
+                    variant={location === `/forsikringstjek/${userId}` ? "brand-tertiary" : "neutral-tertiary"}
+                    icon={<FeatherShield />}
+                    data-testid="nav-forsikringstjek-collapsed"
+                  />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Forsikringstjek</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link href="/offers">
+                  <IconButton
+                    variant={location === "/offers" ? "brand-tertiary" : "neutral-tertiary"}
+                    icon={<FeatherCoins />}
+                    data-testid="nav-offers-collapsed"
+                  />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Se alle bedre tilbud</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link href="#">
+                  <IconButton
+                    icon={<FeatherRocket />}
+                    data-testid="nav-get-offers-collapsed"
+                  />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Få flere tilbud</p>
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link href={`/profile/${userId}`}>
+                  <IconButton
+                    variant={location === `/profile/${userId}` ? "brand-tertiary" : "neutral-tertiary"}
+                    icon={<FeatherUser />}
+                    data-testid="nav-profile-collapsed"
+                  />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right">
+                <p>Din profil</p>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+          <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
+          <div className="flex w-full flex-col items-center gap-4">
+            {navData?.companies && navData.companies.length > 0 ? (
+              navData.companies.map((company) => (
+                <Tooltip key={company.companyId}>
+                  <TooltipTrigger asChild>
+                    <Link href={`/sammenligning/${company.comparisonId}?tab=samlet`}>
+                      <IconButton
+                        variant={isCompanyRoute(company.comparisonId) ? "brand-tertiary" : "neutral-tertiary"}
+                        icon={<FeatherFileText />}
+                        data-testid={`nav-company-collapsed-${company.companyId}`}
+                      />
+                    </Link>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>{company.companyName}</p>
+                  </TooltipContent>
+                </Tooltip>
+              ))
+            ) : null}
+          </div>
+          <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
+          <div className="flex w-full flex-col items-center gap-4">
+            {navData?.pendingThreads && navData.pendingThreads.length > 0 ? (
+              navData.pendingThreads.map((thread) => (
+                <Tooltip key={thread.id}>
+                  <TooltipTrigger asChild>
+                    <IconButton
+                      icon={<FeatherClock />}
+                      data-testid={`nav-pending-collapsed-${thread.id}`}
+                    />
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>{thread.companyName} - På vej</p>
+                  </TooltipContent>
+                </Tooltip>
+              ))
+            ) : null}
+          </div>
+        </div>
+      </TooltipProvider>
+    );
+  }
+
   return (
     <SidebarWithMinimalTextSections
       header={
@@ -42,6 +168,12 @@ export function NavigationSidebar({ userId }: NavigationSidebarProps) {
           <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
             Bedretilbud.com
           </span>
+          <IconButton
+            icon={<FeatherChevronsLeft />}
+            onClick={onToggleCollapse}
+            size="small"
+            data-testid="button-collapse-sidebar"
+          />
         </div>
       }
       footer={

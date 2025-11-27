@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { NavigationSidebar } from "./NavigationSidebar";
 
 interface AppLayoutWithNavProps {
@@ -6,11 +7,17 @@ interface AppLayoutWithNavProps {
 }
 
 export function AppLayoutWithNav({ children, userId }: AppLayoutWithNavProps) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+
   return (
     <div className="flex h-screen w-full overflow-hidden">
       {/* Navigation Sidebar */}
       <div className="hidden md:block">
-        <NavigationSidebar userId={userId} />
+        <NavigationSidebar 
+          userId={userId} 
+          isCollapsed={isCollapsed}
+          onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+        />
       </div>
       
       {/* Main Content Area */}
