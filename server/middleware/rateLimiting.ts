@@ -55,3 +55,12 @@ export const emailLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
 });
+
+// Webhook limiter - 100 requests per minute (higher in dev for testing)
+export const webhookLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: process.env.NODE_ENV === 'production' ? 100 : 1000,
+  message: { message: 'Too many webhook requests, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});

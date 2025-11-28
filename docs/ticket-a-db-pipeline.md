@@ -4,6 +4,33 @@
 
 This document describes the database schema changes and webhook endpoints for pre-computing and caching health check and comparison JSON data. This optimization reduces load times from 3-5 seconds to <500ms by eliminating repeated AI computation.
 
+## Security
+
+### Webhook Authentication
+
+All webhook endpoints require authentication via a shared secret header:
+
+```
+X-Webhook-Secret: your-secret-here
+```
+
+**Configuration**:
+- Set the `WEBHOOK_SECRET` environment variable on the server
+- Include the same secret in all webhook requests
+- In development mode, requests are allowed without the secret (with a warning logged)
+- In production, requests without valid secret receive `401 Unauthorized`
+
+**Rate Limiting**:
+- Webhooks are rate-limited to 100 requests per minute in production
+- Rate limit is relaxed to 1000/minute in development
+
+### Schema Validation
+
+All payloads are validated using Zod schemas before persisting:
+- Invalid payloads return `400 Bad Request` with detailed error messages
+- UUIDs are validated for proper format
+- Numeric ranges are enforced (e.g., score must be 0-100)
+
 ## Database Schema
 
 ### policy_snapshots.health_check_json
@@ -63,8 +90,11 @@ Persists pre-computed health check JSON for a policy snapshot.
 ```
 
 **Error Responses**:
-- `400`: Missing required fields
+- `400`: Invalid request body (Zod validation failed)
+- `401`: Missing X-Webhook-Secret header
+- `403`: Invalid webhook secret
 - `404`: Policy snapshot not found
+- `429`: Rate limit exceeded
 - `500`: Internal error
 
 ### POST /api/webhooks/comparison
@@ -109,7 +139,8 @@ Persists pre-computed comparison JSON for a company comparison.
   "method": "POST",
   "url": "{{$env.API_BASE_URL}}/api/webhooks/health-check",
   "headers": {
-    "Content-Type": "application/json"
+    "Content-Type": "application/json",
+    "X-Webhook-Secret": "{{$env.WEBHOOK_SECRET}}"
   },
   "body": {
     "policySnapshotId": "{{$node['Fetch Snapshot'].json.id}}",

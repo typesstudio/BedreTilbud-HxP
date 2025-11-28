@@ -11,7 +11,9 @@ import { policyComparisonService } from "./services/policySnapshots/PolicyCompar
 import { policySnapshotService } from "./services/policySnapshots/PolicySnapshotService";
 import { requireAuth, requireOwnership } from "./middleware/auth";
 import { validateFileUpload } from "./middleware/uploadValidation";
-import { uploadLimiter, emailLimiter, aiLimiter } from "./middleware/rateLimiting";
+import { uploadLimiter, emailLimiter, aiLimiter, webhookLimiter } from "./middleware/rateLimiting";
+import { requireWebhookSecret } from "./middleware/webhookAuth";
+import { healthCheckWebhookBodySchema, comparisonWebhookBodySchema } from "./validation/webhookSchemas";
 import { generateCSRFToken, requireCSRFToken } from "./middleware/csrf";
 import { apiCaching, noCache } from "./middleware/caching";
 import { generateSignedUrl, validateSignedUrl } from "./utils/signedUrls";
@@ -2960,18 +2962,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * POST /api/webhooks/health-check
    * Persist pre-computed health check JSON for a policy snapshot.
    * 
+   * Security:
+   * - Requires X-Webhook-Secret header for authentication
+   * - Rate limited to prevent abuse
+   * - Zod schema validation on payload
+   * 
    * Body: { policySnapshotId: string, healthCheckJson: HealthCheckJson }
    */
-  app.post("/api/webhooks/health-check", async (req, res) => {
+  app.post("/api/webhooks/health-check", webhookLimiter, requireWebhookSecret, async (req, res) => {
     try {
-      const { policySnapshotId, healthCheckJson } = req.body;
-      
-      if (!policySnapshotId || !healthCheckJson) {
+      // Validate request body with Zod schema
+      const parseResult = healthCheckWebhookBodySchema.safeParse(req.body);
+      if (!parseResult.success) {
+        logger.warn('[Webhook] Invalid health check payload', { 
+          errors: parseResult.error.errors 
+        });
         return res.status(400).json({ 
-          error: "Missing required fields",
-          required: ["policySnapshotId", "healthCheckJson"]
+          error: "Invalid request body",
+          details: parseResult.error.errors.map(e => ({
+            path: e.path.join('.'),
+            message: e.message
+          }))
         });
       }
+      
+      const { policySnapshotId, healthCheckJson } = parseResult.data;
       
       // Validate policySnapshotId exists
       const snapshot = await policySnapshotService.getSnapshotById(policySnapshotId);
@@ -2982,13 +2997,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Add computation timestamp if not provided
+      const enrichedJson = {
+        ...healthCheckJson,
+        computedAt: healthCheckJson.computedAt || new Date().toISOString(),
+      };
+      
       // Update the snapshot with health check JSON
-      await policySnapshotService.updateHealthCheckJson(policySnapshotId, healthCheckJson);
+      await policySnapshotService.updateHealthCheckJson(policySnapshotId, enrichedJson);
       
       logger.info('[Webhook] Health check JSON saved', { 
         policySnapshotId, 
         policyType: snapshot.policyType,
-        hasScore: !!healthCheckJson.score
+        score: healthCheckJson.score
       });
       
       return res.json({ 
@@ -3006,18 +3027,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * POST /api/webhooks/comparison
    * Persist pre-computed comparison JSON for a company comparison.
    * 
+   * Security:
+   * - Requires X-Webhook-Secret header for authentication
+   * - Rate limited to prevent abuse
+   * - Zod schema validation on payload
+   * 
    * Body: { comparisonId: string, comparisonJson: ComparisonJson }
    */
-  app.post("/api/webhooks/comparison", async (req, res) => {
+  app.post("/api/webhooks/comparison", webhookLimiter, requireWebhookSecret, async (req, res) => {
     try {
-      const { comparisonId, comparisonJson } = req.body;
-      
-      if (!comparisonId || !comparisonJson) {
+      // Validate request body with Zod schema
+      const parseResult = comparisonWebhookBodySchema.safeParse(req.body);
+      if (!parseResult.success) {
+        logger.warn('[Webhook] Invalid comparison payload', { 
+          errors: parseResult.error.errors 
+        });
         return res.status(400).json({ 
-          error: "Missing required fields",
-          required: ["comparisonId", "comparisonJson"]
+          error: "Invalid request body",
+          details: parseResult.error.errors.map(e => ({
+            path: e.path.join('.'),
+            message: e.message
+          }))
         });
       }
+      
+      const { comparisonId, comparisonJson } = parseResult.data;
       
       // Validate comparisonId exists
       const comparison = await storage.getCompanyComparison(comparisonId);
@@ -3028,12 +3062,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
       
+      // Add computation timestamp if not provided
+      const enrichedJson = {
+        ...comparisonJson,
+        meta: {
+          ...comparisonJson.meta,
+          computedAt: comparisonJson.meta?.computedAt || new Date().toISOString(),
+        },
+      };
+      
       // Update the comparison with JSON using existing method
-      await storage.updateCompanyComparisonStatus(comparisonId, 'completed', comparisonJson);
+      await storage.updateCompanyComparisonStatus(comparisonId, 'completed', enrichedJson);
       
       logger.info('[Webhook] Comparison JSON saved', { 
         comparisonId,
-        hasSummary: !!comparisonJson.summary
+        hasSummary: !!comparisonJson.summary,
+        pricingStatus: comparisonJson.meta?.pricingStatus
       });
       
       return res.json({ 
