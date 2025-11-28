@@ -249,6 +249,17 @@ export class PolicySnapshotService {
   }
 
   /**
+   * Get ALL snapshots for a user (both current and offer)
+   * Ticket B: Used for read-only overview endpoint
+   */
+  async getSnapshotsForUser(userId: string): Promise<PolicySnapshot[]> {
+    return await db
+      .select()
+      .from(policySnapshots)
+      .where(eq(policySnapshots.userId, userId));
+  }
+
+  /**
    * Get snapshots for a specific document
    */
   async getSnapshotsByDocument(documentId: string): Promise<PolicySnapshot[]> {

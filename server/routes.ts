@@ -2953,6 +2953,249 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // ============================================================================
+  // READ-ONLY ENDPOINTS FOR PRE-COMPUTED DATA (Ticket B)
+  // These endpoints serve cached health check and comparison JSON directly
+  // without any AI calls or heavy computation. Fast, deterministic responses.
+  // ============================================================================
+
+  /**
+   * GET /api/v2/health-check/user/:userId/overview
+   * Returns all policy summaries for a user from pre-computed healthCheckJson.
+   * No AI calls - purely reads from database.
+   */
+  app.get("/api/v2/health-check/user/:userId/overview", requireAuth, async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const requestUserId = req.headers['x-user-id'] as string;
+
+      // Authorization check
+      if (userId !== requestUserId) {
+        return res.status(403).json({ error: "Not authorized to view this user's data" });
+      }
+
+      logger.info('[Health Check Overview V2] Fetching from cached JSON', { userId });
+
+      // Import helper for policy labels
+      const { getPolicyTypeLabel } = await import("../shared/apiTypes");
+      
+      // Get all snapshots for this user
+      const snapshots = await policySnapshotService.getSnapshotsForUser(userId);
+
+      // Map to DTO format
+      const policies = snapshots.map((row) => {
+        const hc = row.healthCheckJson as any;
+        
+        return {
+          id: row.id,
+          policyType: row.policyType,
+          policyLabel: getPolicyTypeLabel(row.policyType),
+          companyName: row.companyName || null,
+          kind: row.kind,
+          annualPremium: hc?.annualPremium ?? null,
+          healthScore: hc?.score ?? null,
+          potentialSavingsAnnual: hc?.potentialSavingsAnnual ?? null,
+          statusLabel: hc?.statusLabel ?? null,
+          hasHealthCheck: !!hc,
+        };
+      });
+
+      const response = {
+        userId,
+        totalPolicies: policies.length,
+        policiesWithHealthCheck: policies.filter(p => p.hasHealthCheck).length,
+        policies,
+      };
+
+      logger.info('[Health Check Overview V2] Response prepared', { 
+        userId, 
+        totalPolicies: response.totalPolicies,
+        policiesWithHealthCheck: response.policiesWithHealthCheck
+      });
+
+      return res.json(response);
+    } catch (error: any) {
+      logger.error('[Health Check Overview V2] Failed', error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * GET /api/v2/health-check/policy/:policyId
+   * Returns the full pre-computed healthCheckJson for a single policy.
+   * Returns 404 if healthCheckJson is not yet populated.
+   */
+  app.get("/api/v2/health-check/policy/:policyId", requireAuth, async (req, res) => {
+    try {
+      const { policyId } = req.params;
+      const userId = req.headers['x-user-id'] as string;
+
+      logger.info('[Health Check Detail V2] Fetching cached JSON', { policyId, userId });
+
+      const snapshot = await policySnapshotService.getSnapshotById(policyId);
+
+      if (!snapshot) {
+        return res.status(404).json({ error: "Policy not found" });
+      }
+
+      // Authorization check
+      if (snapshot.userId !== userId) {
+        return res.status(403).json({ error: "Not authorized to view this policy" });
+      }
+
+      if (!snapshot.healthCheckJson) {
+        return res.status(404).json({ 
+          error: "Health check not ready",
+          message: "Sundhedstjek afventer analyse"
+        });
+      }
+
+      const hc = snapshot.healthCheckJson as any;
+      
+      // Return full healthCheckJson enriched with policy metadata
+      const response = {
+        ...hc,
+        policyId: snapshot.id,
+        policyType: snapshot.policyType,
+        companyName: snapshot.companyName,
+      };
+
+      logger.info('[Health Check Detail V2] Returning cached JSON', { 
+        policyId, 
+        hasScore: !!hc.score 
+      });
+
+      return res.json(response);
+    } catch (error: any) {
+      logger.error('[Health Check Detail V2] Failed', error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * GET /api/v2/comparisons/:comparisonId/overview
+   * Returns aggregated comparison summary from pre-computed comparisonJSON.
+   * No AI calls - purely reads from database.
+   */
+  app.get("/api/v2/comparisons/:comparisonId/overview", requireAuth, async (req, res) => {
+    try {
+      const { comparisonId } = req.params;
+      const userId = req.headers['x-user-id'] as string;
+
+      logger.info('[Comparison Overview V2] Fetching cached JSON', { comparisonId, userId });
+
+      const comparison = await storage.getCompanyComparison(comparisonId);
+
+      if (!comparison) {
+        return res.status(404).json({ error: "Comparison not found" });
+      }
+
+      // Authorization check
+      if (comparison.userId !== userId) {
+        return res.status(403).json({ error: "Not authorized to view this comparison" });
+      }
+
+      const cj = comparison.comparisonJSON as any;
+      const hasComparison = !!cj;
+
+      // Extract summary data if available
+      const overall = cj?.overall ?? cj?.summary ?? {};
+      const policyBreakdown = cj?.policyBreakdown ?? cj?.policies ?? [];
+
+      // Import helper for policy labels
+      const { getPolicyTypeLabel } = await import("../shared/apiTypes");
+
+      // Map policy breakdown to DTO
+      const policies = (Array.isArray(policyBreakdown) ? policyBreakdown : []).map((p: any) => ({
+        policyType: p.policyType,
+        policyLabel: getPolicyTypeLabel(p.policyType || p.type || ''),
+        currentPremium: p.currentPremium ?? p.currentAnnual ?? null,
+        offerPremium: p.offerPremium ?? p.offerAnnual ?? null,
+        annualSavings: p.savings ?? p.annualSavings ?? null,
+        savingsPercent: p.savingsPercent ?? null,
+        recommendation: p.recommendation,
+      }));
+
+      const response = {
+        comparisonId: comparison.id,
+        currentCompany: comparison.currentCompany,
+        offerCompany: comparison.offerCompany,
+        status: comparison.status,
+        totalAnnualCurrent: overall.totalCurrentAnnualPremium ?? overall.annualCurrent ?? null,
+        totalAnnualOffer: overall.totalOfferAnnualPremium ?? overall.annualOffer ?? null,
+        totalAnnualSavings: overall.annualSavings ?? null,
+        savingsPercent: overall.annualSavingsPercent ?? overall.savingsPercent ?? null,
+        pricingStatus: cj?.meta?.pricingStatus ?? null,
+        policies,
+        highlights: cj?.highlights ?? [],
+        hasComparison,
+      };
+
+      logger.info('[Comparison Overview V2] Response prepared', { 
+        comparisonId, 
+        hasComparison,
+        policyCount: policies.length
+      });
+
+      return res.json(response);
+    } catch (error: any) {
+      logger.error('[Comparison Overview V2] Failed', error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * GET /api/v2/comparisons/:comparisonId/detail
+   * Returns the full pre-computed comparisonJSON.
+   * Returns 404 if comparisonJSON is not yet populated.
+   */
+  app.get("/api/v2/comparisons/:comparisonId/detail", requireAuth, async (req, res) => {
+    try {
+      const { comparisonId } = req.params;
+      const userId = req.headers['x-user-id'] as string;
+
+      logger.info('[Comparison Detail V2] Fetching cached JSON', { comparisonId, userId });
+
+      const comparison = await storage.getCompanyComparison(comparisonId);
+
+      if (!comparison) {
+        return res.status(404).json({ error: "Comparison not found" });
+      }
+
+      // Authorization check
+      if (comparison.userId !== userId) {
+        return res.status(403).json({ error: "Not authorized to view this comparison" });
+      }
+
+      if (!comparison.comparisonJSON) {
+        return res.status(404).json({ 
+          error: "Comparison not ready",
+          message: "Sammenligning afventer analyse"
+        });
+      }
+
+      const cj = comparison.comparisonJSON as any;
+
+      // Return full comparisonJSON enriched with metadata
+      const response = {
+        ...cj,
+        comparisonId: comparison.id,
+        currentCompany: comparison.currentCompany,
+        offerCompany: comparison.offerCompany,
+      };
+
+      logger.info('[Comparison Detail V2] Returning cached JSON', { 
+        comparisonId,
+        hasSummary: !!cj.summary || !!cj.overall
+      });
+
+      return res.json(response);
+    } catch (error: any) {
+      logger.error('[Comparison Detail V2] Failed', error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  // ============================================================================
   // WEBHOOK ENDPOINTS (Ticket A - DB & Pipeline)
   // These endpoints allow external flows (n8n, AI agents) to persist
   // pre-computed health check and comparison JSON directly to the database.
