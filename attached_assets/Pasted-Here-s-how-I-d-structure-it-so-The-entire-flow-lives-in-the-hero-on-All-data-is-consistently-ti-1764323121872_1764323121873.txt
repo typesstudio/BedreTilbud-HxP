@@ -1,0 +1,404 @@
+Here’s how I’d structure it so:
+
+The entire flow lives in the hero on /
+
+All data is consistently tied to a single user/onboarding “session”
+
+As soon as there is at least one uploaded police, the health check pipeline is kicked off automatically
+
+I’ll split it into:
+
+UX / wizard behaviour on the homepage
+
+Data model & backend endpoints
+
+Frontend implementation details
+
+Automatic health check trigger after signup
+
+1. UX: Wizard in the hero on /
+
+Goal: User never leaves the homepage. The hero card simply “morphs” through the steps.
+
+Steps inside the hero
+
+Visually you can keep the layouts from your screenshots, but treat them as different states of the same hero card:
+
+Step 1 – Email (Start)
+
+Hero heading: “Stop med at betale for meget”
+
+Card content: Email field + CTA Få bedre tilbud
+
+Microcopy: “Tager kun 2 minutter”
+
+On submit:
+
+Create/attach an onboarding_session for this email
+
+Show stepper at top of card: 1/4 (E-mail) → 2/4 (Upload) → 3/4 (Information) → 4/4 (Vælg selskaber)
+
+Slide to Step 2 without page reload
+
+Step 2 – Upload policer
+
+Use your “Upload din forsikringspolice” layout inside the same hero card
+
+Elements:
+
+Drag & drop area
+
+“Log ind og download” helper
+
+“Upload din police” CTA
+
+On upload success:
+
+Store file(s) against onboarding_session_id
+
+Immediately POST to your OCR/health-check webhook (async)
+
+Proceed to Step 3 on “Find bedre tilbud” click
+
+Step 3 – Dine informationer
+
+Use “Dine informationer” layout:
+
+Navn
+
+CPR-nummer (or last 4 / masked depending on compliance)
+
+Preference: Den billigste / Bedst dækning / Samlet et sted
+
+On submit:
+
+Update onboarding_session and (if user already exists) user_profile
+
+Move to Step 4
+
+Step 4 – Vælg forsikringsselskaber
+
+Use “Vælg forsikringsselskaber” card
+
+Allow:
+
+Multi-select of selskaber
+
+“Vælg alle”
+
+Possibly a “Lad mig slippe – I vælger for mig” toggle
+
+On “Fortsæt med X valgte selskaber”:
+
+Persist selected companies
+
+Finalise onboarding
+
+Show final state: “Tak – Vi analyserer dine policer” + link/redirect to dashboard/health check
+
+Extra UX touches
+
+Progress indicator in the hero: small pill above heading: “Trin 2 af 4”
+
+Back button inside card (for older users, makes them feel safe)
+
+Persist step + data in localStorage so they don’t lose progress
+
+For returning visitors:
+
+If there’s an unfinished onboarding_session, show a small banner:
+“Vil du fortsætte hvor du slap?” → jumps to current step
+
+2. Data model & backend
+
+You want one canonical object that ties everything together: OnboardingSession.
+
+Core tables (simplified)
+
+users (existing Supabase auth)
+
+id (uuid)
+
+email
+
+…
+
+profiles
+
+user_id (fk -> users.id)
+
+full_name
+
+cpr_hashed / cpr_last4
+
+preference (enum: cheapest / coverage / samlet)
+
+…
+
+onboarding_sessions
+
+id (uuid)
+
+email
+
+user_id (nullable until verified)
+
+current_step (enum: email | upload | info | companies | done)
+
+full_name
+
+cpr / cpr_last4 (or store only in profile once user created)
+
+preference
+
+selected_companies (array of company_ids)
+
+status (draft | in_progress | completed)
+
+health_check_status (not_started | running | done | error)
+
+created_at, updated_at
+
+insurance_policies (user’s current policer from upload)
+
+id (uuid)
+
+user_id (nullable until user is created)
+
+onboarding_session_id
+
+file_url (Supabase Storage)
+
+kind = 'current'
+
+ocr_status (not_started | running | done | error)
+
+ocr_json_url (where Eden/Mistral JSON is stored)
+
+health_check_json (cached result you just added in ticket A)
+
+policy_type (indbo, hus, bil … once OCR is done)
+
+company_requests (for the selected companies)
+
+id
+
+user_id
+
+onboarding_session_id
+
+company_id
+
+status (pending, sent, responding, completed)
+
+Key endpoints
+
+POST /api/onboarding/start
+
+Body: { email }
+
+Creates onboarding_sessions row if none open for that email
+
+Returns: { onboardingSessionId, currentStep }
+
+POST /api/onboarding/upload
+
+Auth: onboardingSessionId (and CSRF / signed token)
+
+Body: files
+
+Stores files in storage, creates insurance_policies
+
+Kicks off OCR/health-check pipeline asynchronously
+
+Returns updated session: { onboardingSessionId, policyIds }
+
+POST /api/onboarding/info
+
+Body: { onboardingSessionId, fullName, cpr, preference }
+
+Updates session (and optionally profiles if user exists)
+
+POST /api/onboarding/companies
+
+Body: { onboardingSessionId, selectedCompanyIds }
+
+Creates company_requests rows
+
+Marks onboarding_sessions.status = 'completed'
+
+If user_id is null:
+
+Trigger sign-up / magic-link flow, embedding onboardingSessionId in redirect URL param
+
+POST /api/onboarding/attach-user (called when magic link is used)
+
+Body: { onboardingSessionId }
+
+Uses authenticated Supabase user.id
+
+Writes user_id into:
+
+onboarding_sessions
+
+insurance_policies for that session
+
+company_requests for that session
+
+Copies info into profiles if empty
+
+POST /webhooks/health-check (already existing from your other tickets)
+
+Payload: { onboardingSessionId, policyIds }
+
+n8n/Eden/Mistral does:
+
+OCR → JSON → health check per policy
+
+Updates insurance_policies.ocr_json_url + .health_check_json
+
+Updates onboarding_sessions.health_check_status = 'done'
+
+3. Frontend implementation in the hero
+
+Assuming React + TanStack Query + Subframe components.
+
+State model
+
+const [step, setStep] = useState<'email'|'upload'|'info'|'companies'>()
+
+const [session, setSession] = useState<OnboardingSession | null>()
+
+Persist session.id + step in localStorage (key: bt_onboarding_session)
+
+Flow
+
+On mount
+
+Check localStorage for sessionId
+
+If exists → GET /api/onboarding/session/:id
+
+Restore and set step = session.current_step
+
+Step 1 – Email
+
+On submit:
+
+POST /api/onboarding/start
+
+Save sessionId locally
+
+setSession(response) and setStep('upload')
+
+Step 2 – Upload
+
+The upload component calls /api/onboarding/upload
+
+Show upload progress
+
+After upload completes:
+
+Show “Vi analyserer din forsikring i baggrunden”
+
+Enable CTA “Fortsæt”
+
+On click: setStep('info')
+
+Step 3 – Info
+
+Controlled form
+
+On submit:
+
+POST /api/onboarding/info
+
+setStep('companies')
+
+Step 4 – Companies
+
+Multi-select component
+
+On submit:
+
+POST /api/onboarding/companies
+
+If user is already authenticated:
+
+Redirect to /sundhedstjek (or /dashboard) where health check lives
+
+If not authenticated:
+
+Show “Tjek din email for at aktivere din konto” state
+
+Start polling /api/onboarding/session/:id for user_id + health_check_status
+
+Performance / UX sweeteners
+
+Start lazy-loading dashboard bundle (import('../pages/HealthCheck')) as soon as Step 2 is reached.
+
+Start OCR + health-check pipeline already at upload; don’t wait for signup completion.
+
+On health-check page load:
+
+If health_check_status === 'running', show skeleton with “Vi analyserer dine policer (typisk under X min)”
+
+Poll until health_check_status === 'done'
+
+4. Automatic health check after signup
+
+When does the health check start?
+
+Best setup:
+
+Trigger 1: Immediately after each successful upload in Step 2:
+
+Frontend: nothing extra
+
+Backend:
+
+POST /webhooks/health-check (with onboardingSessionId & policyIds)
+
+Status → onboarding_sessions.health_check_status = 'running'
+
+Trigger 2 (safety): When onboarding is completed (after companies selected)
+
+If health_check_status = 'not_started', trigger pipeline again (fallback)
+
+Pipeline behaviour (n8n / backend services)
+
+Receive webhook with onboardingSessionId
+
+Fetch insurance_policies for that session with ocr_status = 'not_started'
+
+For each file:
+
+Run OCR (Eden/Mistral)
+
+Save JSON to storage (ocr_json_url)
+
+Run HealthCheckService to calculate:
+
+Total årlig præmie
+
+Mulige besparelser (benchmarked vs. market)
+
+Highlights, strengths/weaknesses
+
+Store result in insurance_policies.health_check_json
+
+When all policies done:
+
+Set onboarding_sessions.health_check_status = 'done'
+
+Link to user profile
+
+When the user eventually verifies their email / logs in:
+
+attach-user endpoint (above) links:
+
+onboarding_session → user_id
+
+All insurance_policies & company_requests → user_id
+
+Health check is already calculated; the dashboard just reads health_check_json for the user’s policies.
