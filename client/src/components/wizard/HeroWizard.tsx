@@ -22,13 +22,13 @@ import {
   FeatherBuilding,
   FeatherCheckSquare,
   FeatherBell,
-  FeatherHelpCircle
+  FeatherHelpCircle,
+  FeatherLoader
 } from "@subframe/core";
 import { useDropzone } from "react-dropzone";
 import { useToast } from "@/hooks/use-toast";
-import { apiRequest } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
-import { useWizardFlow, type WizardStep } from "@/hooks/useWizardFlow";
+import { useWizardFlow, type WizardStep, type UploadStatus } from "@/hooks/useWizardFlow";
 
 interface HeroWizardProps {
   onComplete?: () => void;
@@ -58,6 +58,9 @@ export function HeroWizard({ onComplete, onStepChange }: HeroWizardProps) {
     setSelectedCompanies,
     showResumeBanner,
     isProcessingStep1,
+    uploadStatus,
+    uploadProgress,
+    uploadFileName,
     handleStep1Complete,
     handleStep2Complete,
     handleStep3Complete,
@@ -87,36 +90,16 @@ export function HeroWizard({ onComplete, onStepChange }: HeroWizardProps) {
     }
     console.log('[Upload] Processing file:', file.name, file.type, file.size);
 
-    const formData = new FormData();
-    formData.append('files', file);
-    
     const userId = localStorage.getItem('userId');
     if (!userId) {
       toast({ title: "Fejl", description: 'Bruger ID mangler', variant: "destructive" });
       return;
     }
     
-    formData.append('userId', userId);
-    formData.append('documentType', 'current');
-
-    try {
-      console.log('[Upload] Sending upload request...');
-      const response = await apiRequest('POST', '/api/documents/upload', formData);
-      console.log('[Upload] Response received:', response.status);
-      const result = await response.json();
-      console.log('[Upload] Result:', result);
-      const documents = Array.isArray(result) ? result : [result];
-      
-      toast({ title: "Succes!", description: "Police uploaded - vi analyserer den i baggrunden" });
-      console.log('[Upload] Calling handleStep2Complete with docId:', documents[0]?.id);
-      
-      await handleStep2Complete(documents[0]?.id || null, false);
-      console.log('[Upload] Step 2 complete, transitioning to step 3');
-      onStepChange?.(3);
-    } catch (error: any) {
-      console.error('[Upload] Error:', error);
-      toast({ title: "Fejl", description: error.message || 'Upload fejlede', variant: "destructive" });
-    }
+    toast({ title: "Fil valgt!", description: `${file.name} uploades i baggrunden` });
+    
+    await handleStep2Complete(null, false, file);
+    onStepChange?.(3);
   }, [handleStep2Complete, onStepChange, toast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -183,6 +166,14 @@ export function HeroWizard({ onComplete, onStepChange }: HeroWizardProps) {
             Start forfra
           </Button>
         </div>
+      )}
+
+      {uploadStatus !== 'idle' && uploadStatus !== 'complete' && (
+        <UploadProgressBanner 
+          status={uploadStatus} 
+          progress={uploadProgress} 
+          fileName={uploadFileName} 
+        />
       )}
 
       <div className="flex min-h-[576px] w-full flex-col items-center justify-center gap-16 px-4 pt-16 pb-32 bg-gradient-to-br from-brand-50 via-white to-neutral-50">
@@ -650,5 +641,55 @@ function Step4Companies({ companies, selectedCompanies, toggleCompany, selectAll
         </div>
       </div>
     </>
+  );
+}
+
+function UploadProgressBanner({ status, progress, fileName }: {
+  status: UploadStatus;
+  progress: number;
+  fileName: string;
+}) {
+  const getStatusText = () => {
+    switch (status) {
+      case 'uploading':
+        return 'Uploader...';
+      case 'processing':
+        return 'Analyserer...';
+      case 'error':
+        return 'Fejl ved upload';
+      default:
+        return '';
+    }
+  };
+
+  const getStatusColor = () => {
+    if (status === 'error') return 'border-error-300 bg-error-50';
+    return 'border-brand-200 bg-brand-50';
+  };
+
+  return (
+    <div className={`fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-lg border px-4 py-3 shadow-lg ${getStatusColor()}`} data-testid="banner-upload-progress">
+      {status !== 'error' && (
+        <div className="animate-spin">
+          <FeatherLoader className="text-body font-body text-brand-600" />
+        </div>
+      )}
+      <div className="flex flex-col items-start gap-1">
+        <span className="text-body-bold font-body-bold text-default-font">
+          {getStatusText()}
+        </span>
+        <span className="text-caption font-caption text-subtext-color max-w-[200px] truncate">
+          {fileName}
+        </span>
+      </div>
+      {status !== 'error' && (
+        <div className="w-16 h-1.5 bg-neutral-200 rounded-full overflow-hidden">
+          <div 
+            className="h-full bg-brand-600 transition-all duration-300 ease-out rounded-full"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+    </div>
   );
 }

@@ -7,6 +7,8 @@ import type { OnboardingProgress, User } from "@shared/schema";
 
 export type WizardStep = 1 | 2 | 3 | 4;
 
+export type UploadStatus = 'idle' | 'uploading' | 'processing' | 'complete' | 'error';
+
 const STORAGE_KEY = 'bt_onboarding_session';
 
 interface LocalSession {
@@ -35,6 +37,9 @@ export function useWizardFlow() {
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
   const [showResumeBanner, setShowResumeBanner] = useState(false);
   const [savedStep, setSavedStep] = useState<WizardStep | null>(null);
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [uploadFileName, setUploadFileName] = useState<string>('');
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -190,25 +195,90 @@ export function useWizardFlow() {
     }
   };
 
-  const handleStep2Complete = async (docId: string | null, skipped: boolean) => {
-    setDocumentId(docId);
-    setUploadSkipped(skipped);
+  const startBackgroundUpload = useCallback(async (file: File): Promise<string | null> => {
+    const userId = localStorage.getItem('userId');
+    if (!userId) {
+      throw new Error('Bruger ID mangler');
+    }
+
+    setUploadStatus('uploading');
+    setUploadFileName(file.name);
+    setUploadProgress(10);
+
+    const formData = new FormData();
+    formData.append('files', file);
+    formData.append('userId', userId);
+    formData.append('documentType', 'current');
 
     try {
+      setUploadProgress(30);
+      console.log('[BackgroundUpload] Starting upload for:', file.name);
+      
+      const response = await apiRequest('POST', '/api/documents/upload', formData);
+      setUploadProgress(70);
+      setUploadStatus('processing');
+      
+      const result = await response.json();
+      const documents = Array.isArray(result) ? result : [result];
+      const docId = documents[0]?.id || null;
+      
+      console.log('[BackgroundUpload] Upload complete, docId:', docId);
+      setUploadProgress(100);
+      setUploadStatus('complete');
+      setDocumentId(docId);
+      
       await updateProgressMutation.mutateAsync({
         documentId: docId,
         completedSteps: [1, 2],
         currentStep: 3
       });
-
-      setCurrentStep(3);
-    } catch (error: any) {
-      console.error('Error in step 2:', error);
+      
       toast({
-        title: "Fejl",
-        description: "Kunne ikke gemme fremskridt",
+        title: "Upload færdig!",
+        description: "Din police er modtaget og bliver analyseret",
+      });
+      
+      return docId;
+    } catch (error: any) {
+      console.error('[BackgroundUpload] Error:', error);
+      setUploadStatus('error');
+      toast({
+        title: "Upload fejlede",
+        description: error.message || "Prøv venligst igen",
         variant: "destructive"
       });
+      throw error;
+    }
+  }, [updateProgressMutation, toast]);
+
+  const handleStep2Complete = async (docId: string | null, skipped: boolean, file?: File) => {
+    setUploadSkipped(skipped);
+    
+    if (file && !skipped) {
+      setUploadStatus('uploading');
+      setUploadFileName(file.name);
+      setCurrentStep(3);
+      
+      startBackgroundUpload(file).catch((error) => {
+        console.error('[Step2] Background upload failed:', error);
+      });
+    } else {
+      setDocumentId(docId);
+      try {
+        await updateProgressMutation.mutateAsync({
+          documentId: docId,
+          completedSteps: [1, 2],
+          currentStep: 3
+        });
+        setCurrentStep(3);
+      } catch (error: any) {
+        console.error('Error in step 2:', error);
+        toast({
+          title: "Fejl",
+          description: "Kunne ikke gemme fremskridt",
+          variant: "destructive"
+        });
+      }
     }
   };
 
@@ -344,6 +414,9 @@ export function useWizardFlow() {
     selectedCompanies,
     setSelectedCompanies,
     showResumeBanner,
+    uploadStatus,
+    uploadProgress,
+    uploadFileName,
     handleStep1Complete,
     handleStep2Complete,
     handleStep3Complete,
