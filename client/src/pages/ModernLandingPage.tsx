@@ -36,34 +36,36 @@ export default function ModernLandingPage() {
 
   return (
     <div className="flex h-full w-full flex-col items-center bg-default-background">
-      <div className="flex w-full flex-col items-center">
-        {/* Navigation Header */}
-        <div className="flex w-full max-w-[1024px] items-center justify-between rounded-lg border border-solid border-neutral-200 bg-white px-6 py-4 shadow-sm mx-4 mt-4">
-          <span className="text-heading-3 font-heading-3 text-default-font">
-            Bedretilbud.com
-          </span>
-          <div className="hidden md:flex items-center gap-8">
-            <LinkButton onClick={() => {}}>
-              Få bedre tilbud
-            </LinkButton>
-            <LinkButton onClick={() => {}}>
-              Sådan virker det
-            </LinkButton>
-            <LinkButton onClick={() => {}}>
-              Kontakt
-            </LinkButton>
-          </div>
-          <div className="flex items-center gap-4">
-            <LinkButton onClick={() => setLocation('/login')}>
-              Log ind
-            </LinkButton>
-            <Button onClick={() => {
-              const heroElement = document.querySelector('[data-testid="input-email"]');
-              heroElement?.scrollIntoView({ behavior: 'smooth' });
-              (heroElement as HTMLInputElement)?.focus();
-            }}>
-              Kom i gang
-            </Button>
+      <div className="flex w-full flex-col items-center relative">
+        {/* Navigation Header - Floating on top of hero */}
+        <div className="absolute top-4 left-0 right-0 z-50 flex justify-center px-4">
+          <div className="flex w-full max-w-[1024px] items-center justify-between rounded-lg border border-solid border-neutral-200 bg-white/95 backdrop-blur-sm px-6 py-4 shadow-sm">
+            <span className="text-heading-3 font-heading-3 text-default-font">
+              Bedretilbud.com
+            </span>
+            <div className="hidden md:flex items-center gap-8">
+              <LinkButton onClick={() => {}}>
+                Få bedre tilbud
+              </LinkButton>
+              <LinkButton onClick={() => {}}>
+                Sådan virker det
+              </LinkButton>
+              <LinkButton onClick={() => {}}>
+                Kontakt
+              </LinkButton>
+            </div>
+            <div className="flex items-center gap-4">
+              <LinkButton onClick={() => setLocation('/login')}>
+                Log ind
+              </LinkButton>
+              <Button onClick={() => {
+                const heroElement = document.querySelector('[data-testid="input-email"]');
+                heroElement?.scrollIntoView({ behavior: 'smooth' });
+                (heroElement as HTMLInputElement)?.focus();
+              }}>
+                Kom i gang
+              </Button>
+            </div>
           </div>
         </div>
 

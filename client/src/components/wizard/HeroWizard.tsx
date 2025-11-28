@@ -176,7 +176,7 @@ export function HeroWizard({ onComplete, onStepChange }: HeroWizardProps) {
         />
       )}
 
-      <div className="flex min-h-[576px] w-full flex-col items-center justify-center gap-16 px-4 pt-16 pb-32 bg-gradient-to-br from-brand-50 via-white to-neutral-50">
+      <div className="flex min-h-[576px] w-full flex-col items-center justify-center gap-16 px-4 pt-24 pb-32 bg-gradient-to-br from-brand-50 via-white to-neutral-50">
         <div className="flex w-full max-w-[576px] flex-col items-center gap-8">
           <div className="flex items-center gap-1 rounded-md border border-solid border-brand-200 bg-brand-50 pl-3 pr-2 py-1">
             <span className="whitespace-nowrap text-body font-body text-brand-700">
