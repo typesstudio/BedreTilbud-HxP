@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { pgTable, text, varchar, timestamp, json, jsonb, boolean, integer, numeric, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+import type { HealthCheckJson, ComparisonJson } from "./types/healthCheck";
 
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -209,6 +210,10 @@ export const policySnapshots = pgTable("policy_snapshots", {
   // OPTIONAL enrichment data (can be NULL - system works without them)
   structuredPolicy: jsonb("structured_policy"), // From stage3 extraction (coverages, limits, etc.)
   pricing: jsonb("pricing"), // From PricingAgent: { status, annualPremium, currency, confidence, components }
+  
+  // PRE-COMPUTED health check result (Ticket A - Dec 2025)
+  // Populated by external flows (n8n, AI agents) - served directly without re-computation
+  healthCheckJson: jsonb("health_check_json").$type<HealthCheckJson | null>(),
   
   // Source traceability - where in the original document did this come from?
   sourceSegmentMeta: jsonb("source_segment_meta").notNull(), // { pageSpan, segmentIndex, confidence, extractedFields }
