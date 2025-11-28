@@ -1,0 +1,327 @@
+Here’s a ready-to-paste Replit prompt for **Ticket A (DB & pipeline)**.
+
+---
+
+**Replit prompt – Ticket A: DB & pipeline (precomputed JSON)**
+
+You are working on a TypeScript/React + Node backend project called **BedreTilbud**.
+It’s an insurance app that does AI-based **health checks** and **comparisons** of insurance policies.
+
+We’re now implementing **Ticket A – DB & pipeline**:
+
+> Add persistent JSON columns for health checks and comparisons, and wire the code so these are used as the single source of truth.
+> (No API handlers should call AI or recompute these on request – that will be handled by external flows like n8n / AI agents.)
+
+---
+
+## High-level goal
+
+1. **Database**
+
+   * Add a `jsonb` column `health_check_json` to the table that represents **policy snapshots** (user’s current insurances and incoming offers).
+   * Add a `jsonb` column `comparison_json` to the table that represents **per-policy comparisons** (current vs offer).
+
+2. **Pipeline hooks**
+
+   * Identify where **health check JSON** and **comparison JSON** are currently produced in the code (if at all).
+   * If they are produced outside this repo (e.g. n8n), create **clear integration points**:
+
+     * A helper function or a minimal webhook endpoint to update these new columns, **or**
+     * A documented SQL update that can be called from n8n / Supabase node.
+
+3. **Do NOT change behavior for the frontend yet**
+
+   * Ticket A is only about DB & pipeline.
+   * Do **not** refactor the frontend queries or the read endpoints here (that’s later tickets).
+
+---
+
+## Step 1 – Find the relevant DB schema and tables
+
+1. Search the repo for the Drizzle schema file(s), likely something like:
+
+   * `server/db/schema.ts`
+   * `server/db/schema/*.ts`
+   * `db/schema.ts`
+2. Locate the table that represents **policy snapshots**. It might be named something like:
+
+   * `policySnapshots`
+   * `policy_snapshots`
+   * `insurancePolicies`
+   * or similar.
+3. Locate the table that represents **per-policy comparisons** between current and offer. Likely names:
+
+   * `comparisonPairs`
+   * `comparison_pairs`
+   * `policyComparisons`
+   * or similar.
+
+> If the exact table names don’t match `policy_snapshots` and `comparison_pairs`, use the ones that clearly map to:
+>
+> * “one row per policy snapshot (current or offer)”
+> * “one row per comparison between a current policy and an offer policy”.
+
+---
+
+## Step 2 – Add JSON columns to the Drizzle schema
+
+Once you’ve identified the correct tables, extend them with `jsonb` columns:
+
+For the **policy snapshots** table (example Drizzle code):
+
+```ts
+import { jsonb } from "drizzle-orm/pg-core";
+
+// ...
+
+export const policySnapshots = pgTable("policy_snapshots", {
+  // existing columns...
+  // id, userId, type, company, premiumAnnual, etc.
+
+  healthCheckJson: jsonb("health_check_json").$type<HealthCheckJson | null>(),
+});
+```
+
+For the **comparison pairs** table:
+
+```ts
+import { jsonb } from "drizzle-orm/pg-core";
+
+// ...
+
+export const comparisonPairs = pgTable("comparison_pairs", {
+  // existing columns...
+  // id, comparisonId, currentPolicyId, offerPolicyId, etc.
+
+  comparisonJson: jsonb("comparison_json").$type<ComparisonJson | null>(),
+});
+```
+
+Add lightweight TypeScript types for the JSON shape in a shared file, for example `server/types/healthCheck.ts`:
+
+```ts
+export type HealthCheckJson = {
+  score: number;
+  statusLabel: string; // e.g. "God", "Kan forbedres"
+  annualPremium: number;
+  potentialSavingsAnnual?: number;
+  strengths: string[];
+  weaknesses: string[];
+  coverages: {
+    name: string;
+    amount?: number | null;
+    description?: string | null;
+    included?: boolean;
+  }[];
+  tenYearSavings?: {
+    year: number;
+    cumulativeSavings: number;
+  }[];
+  // allow unknown extra fields without breaking
+  [key: string]: unknown;
+};
+
+export type ComparisonJson = {
+  summary: {
+    annualCurrent: number;
+    annualOffer: number;
+    annualSavings: number;
+    savingsPercent: number;
+  };
+  highlights: string[];
+  coverages: {
+    name: string;
+    current?: {
+      included: boolean;
+      amount?: number | null;
+      description?: string | null;
+    };
+    offer?: {
+      included: boolean;
+      amount?: number | null;
+      description?: string | null;
+    };
+  }[];
+  tenYearProjection?: {
+    year: number;
+    cumulativeSavings: number;
+  }[];
+  [key: string]: unknown;
+};
+```
+
+Then import and use these types in the schema definitions with `.$type<...>()` to avoid `any`.
+
+**Important constraints:**
+
+* Do **not** remove, rename, or change types of existing columns.
+* Only **add** these new columns.
+* Keep the project compiling with strict TypeScript settings.
+
+---
+
+## Step 3 – Create migrations for these columns
+
+Depending on how migrations are set up (Drizzle migrations, Supabase SQL, etc.), create a migration that:
+
+1. Adds `health_check_json` to the policy snapshots table **if not exists**.
+2. Adds `comparison_json` to the comparison pairs table **if not exists**.
+
+Example SQL migration (adapt names to real table names):
+
+```sql
+ALTER TABLE policy_snapshots
+ADD COLUMN IF NOT EXISTS health_check_json jsonb;
+
+ALTER TABLE comparison_pairs
+ADD COLUMN IF NOT EXISTS comparison_json jsonb;
+```
+
+Or in Drizzle migration format, if the project uses code-based migrations.
+
+Requirements:
+
+* Migrations must be **idempotent** (using `IF NOT EXISTS` where supported) to avoid issues when rerun.
+* Ensure migration ordering matches current migration system (file naming, export, etc.).
+
+---
+
+## Step 4 – Identify where health check & comparison JSON is produced
+
+Search the codebase for:
+
+* `"HealthCheck"` or `"healthCheck"`
+* `"Comparison"` or `"comparison"`
+* `"health_check"` / `"comparison_json"`
+
+You’re looking for:
+
+1. Any backend code that:
+
+   * Talks to Mistral, Eden AI, or another AI provider.
+   * Builds a complex object representing a health check or comparison.
+
+2. If those are **not** inside this repo (likely handled entirely in n8n), then:
+
+   * We won’t implement the AI calls here.
+   * Instead, we’ll provide either:
+
+     * a small **webhook endpoint** to receive precomputed JSON and update the DB, or
+     * clear DB update helpers/instructions that can be called by external tooling.
+
+---
+
+## Step 5 – Add minimal integration points (webhooks or helpers)
+
+### Option A – Webhook endpoints (recommended if the backend already exposes APIs to n8n)
+
+If the backend already has an API router (e.g., `server/routes.ts` or `server/api/*.ts`), add:
+
+1. A POST endpoint to save health check JSON:
+
+   ```ts
+   app.post("/api/webhooks/health-check", async (req, res) => {
+     // expected payload:
+     // { policySnapshotId: string, healthCheckJson: HealthCheckJson }
+     const { policySnapshotId, healthCheckJson } = req.body;
+
+     if (!policySnapshotId || !healthCheckJson) {
+       return res.status(400).json({ error: "Missing payload" });
+     }
+
+     await db
+       .update(policySnapshots)
+       .set({ healthCheckJson })
+       .where(eq(policySnapshots.id, policySnapshotId));
+
+     return res.json({ ok: true });
+   });
+   ```
+
+2. A POST endpoint to save comparison JSON:
+
+   ```ts
+   app.post("/api/webhooks/comparison", async (req, res) => {
+     // expected payload:
+     // { comparisonPairId: string, comparisonJson: ComparisonJson }
+     const { comparisonPairId, comparisonJson } = req.body;
+
+     if (!comparisonPairId || !comparisonJson) {
+       return res.status(400).json({ error: "Missing payload" });
+     }
+
+     await db
+       .update(comparisonPairs)
+       .set({ comparisonJson })
+       .where(eq(comparisonPairs.id, comparisonPairId));
+
+     return res.json({ ok: true });
+   });
+   ```
+
+* Make sure body parsing (JSON middleware) is already in place; if not, add it.
+* Do **not** add any AI logic here. These endpoints simply **persist** JSON.
+
+### Option B – Only helper functions + documentation (if persistence is done directly from n8n via Supabase)
+
+If n8n connects directly to Supabase / Postgres, then:
+
+1. Create a small util module, e.g. `server/db/updateJson.ts`, that exposes:
+
+   ```ts
+   export async function saveHealthCheckJson(policySnapshotId: string, healthCheckJson: HealthCheckJson) { ... }
+
+   export async function saveComparisonJson(comparisonPairId: string, comparisonJson: ComparisonJson) { ... }
+   ```
+
+2. Also create a short markdown file, e.g. `docs/ticket-a-db-pipeline.md`, explaining the **exact SQL** to run from n8n:
+
+   ```sql
+   -- Save health check
+   UPDATE policy_snapshots
+   SET health_check_json = :health_check_json
+   WHERE id = :policy_snapshot_id;
+
+   -- Save comparison
+   UPDATE comparison_pairs
+   SET comparison_json = :comparison_json
+   WHERE id = :comparison_pair_id;
+   ```
+
+   The docs should:
+
+   * Describe the expected JSON fields (link to `HealthCheckJson` and `ComparisonJson` types).
+   * Show example payloads.
+
+---
+
+## Step 6 – Acceptance criteria
+
+Implement everything above so that the following conditions are met:
+
+1. **Schema & migrations**
+
+   * Drizzle schema has:
+
+     * `healthCheckJson` on the policy snapshots table.
+     * `comparisonJson` on the comparison pairs table.
+   * A migration exists and runs without errors, adding `jsonb` columns with `IF NOT EXISTS`.
+
+2. **Type safety**
+
+   * `HealthCheckJson` and `ComparisonJson` types exist in a shared location.
+   * Drizzle columns use `.$type<...>()` instead of `any`.
+
+3. **Pipeline integration**
+
+   * Either:
+
+     * Webhook endpoints exist to receive precomputed JSON and persist it, **or**
+     * There is a documented approach (SQL + optional helper functions) that n8n / external tools can call to update these columns.
+
+4. **No behavior changes on read yet**
+
+   * Existing API endpoints that serve health checks and comparisons are untouched in this ticket (we’ll refactor them in later tickets).
+   * The app compiles and tests (if present) pass.
+
+Please now implement Ticket A exactly as described, making minimal but robust changes, and leave helpful comments and a short `docs/ticket-a-db-pipeline.md` file describing how external flows (like n8n) should call these new persistence points.
