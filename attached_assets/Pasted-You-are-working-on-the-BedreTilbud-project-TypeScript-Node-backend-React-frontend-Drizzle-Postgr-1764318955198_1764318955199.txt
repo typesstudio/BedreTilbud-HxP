@@ -1,0 +1,360 @@
+You are working on the BedreTilbud project (TypeScript/Node backend + React frontend, Drizzle/Postgres).
+
+Ticket B goal:
+
+Implement read-only API endpoints for health checks and comparisons that:
+
+Read from the precomputed health_check_json and comparison_json columns.
+
+Return “screen-shaped” responses for Samlet oversigt and per-policy detail.
+
+Do not call AI, OCR, or any heavy logic inside the request handlers.
+
+Ticket A is already completed:
+
+policy_snapshots.health_check_json exists.
+
+comparison_pairs.comparison_json (or similar) exists.
+
+Secure webhooks exist that write these JSON blobs.
+
+Now we want to consume those JSON blobs from the backend.
+
+Step 1 – Inspect existing schema & services
+
+Open shared/schema.ts and confirm:
+
+policy_snapshots has healthCheckJson / health_check_json.
+
+comparison_pairs (or equivalent) has comparisonJson / comparison_json.
+
+Check services:
+
+server/services/policySnapshots/PolicySnapshotService.ts
+See what methods already exist:
+
+getSnapshotById
+
+maybe getSnapshotsForUser / getSnapshotsForRequest etc.
+
+If there is a service for comparisons (e.g. ComparisonService, ComparisonPairService), locate it.
+
+If not, we will add a minimal one for reading comparison pairs.
+
+Do not change the schema now, just understand what’s there.
+
+Step 2 – Define DTO types for the new endpoints
+
+Create or extend a shared types file (e.g. shared/apiTypes.ts or similar). If no such file exists yet, create shared/apiTypes.ts and add:
+
+// Health check API DTOs
+export type HealthCheckOverviewPolicyDto = {
+  id: string;
+  type: string;         // e.g. "Indbo", "Hus", "Ulykke"
+  company: string | null;
+  annualPremium: number | null;
+  healthScore: number | null;
+  potentialSavingsAnnual: number | null;
+  statusLabel: string | null; // "God", "Kan forbedres", "Kritisk", etc.
+};
+
+export type HealthCheckOverviewResponse = {
+  userId: string;
+  policies: HealthCheckOverviewPolicyDto[];
+};
+
+// Detail returns the full precomputed JSON
+export type HealthCheckDetailResponse = HealthCheckJson;
+
+// Comparison API DTOs
+export type ComparisonOverviewPolicyDto = {
+  pairId: string;
+  currentPolicyId: string;
+  offerPolicyId: string;
+  type: string;
+  currentAnnual: number;
+  offerAnnual: number;
+  annualSavings: number;
+  savingsPercent: number;
+  keyHighlights: string[];
+};
+
+export type ComparisonOverviewResponse = {
+  comparisonId: string;
+  totalAnnualCurrent: number;
+  totalAnnualOffer: number;
+  totalAnnualSavings: number;
+  policies: ComparisonOverviewPolicyDto[];
+};
+
+// Detail returns the full precomputed JSON
+export type ComparisonDetailResponse = ComparisonJson;
+
+
+Import HealthCheckJson and ComparisonJson from wherever Ticket A defined them (probably shared/types/healthCheck.ts or similar).
+
+These DTOs are what the new endpoints should return.
+
+Step 3 – Implement Health Check OVERVIEW endpoint
+
+We’ll add a new endpoint that returns all policy summaries for a given user, purely from health_check_json.
+
+Route design (avoid conflicts):
+
+GET /api/health-check/user/:userId/overview
+
+Implementation steps:
+
+Open server/routes.ts.
+
+Add a new handler:
+
+It should:
+
+Read req.params.userId.
+
+Use PolicySnapshotService (or direct DB query) to fetch all snapshots for that user.
+
+Only select:
+
+id
+
+type
+
+company
+
+healthCheckJson
+
+Map DB rows → HealthCheckOverviewPolicyDto:
+
+Pseudocode:
+
+app.get("/api/health-check/user/:userId/overview", async (req, res) => {
+  const userId = req.params.userId;
+
+  const snapshots = await PolicySnapshotService.getSnapshotsForUser(userId);
+  // If getSnapshotsForUser doesn't exist, implement it using Drizzle
+
+  const policies: HealthCheckOverviewPolicyDto[] = snapshots.map((row) => {
+    const hc = row.healthCheckJson as HealthCheckJson | null;
+
+    return {
+      id: row.id,
+      type: row.type,
+      company: row.company ?? null,
+      annualPremium: hc?.annualPremium ?? null,
+      healthScore: hc?.score ?? null,
+      potentialSavingsAnnual: hc?.potentialSavingsAnnual ?? null,
+      statusLabel: hc?.statusLabel ?? null,
+    };
+  });
+
+  const response: HealthCheckOverviewResponse = {
+    userId,
+    policies,
+  };
+
+  return res.json(response);
+});
+
+
+Rules:
+
+Do not call AI or re-run any health-check logic here.
+
+If healthCheckJson is null for some rows, just set those fields to null in the DTO – the frontend can decide to show “afventer analyse” or similar.
+
+If there’s already an existing “overview” endpoint, either:
+
+Reuse and refactor it to use healthCheckJson, or
+
+Implement this as a new endpoint and leave the old one untouched (preferred if refactor is risky).
+
+Step 4 – Implement Health Check DETAIL endpoint
+
+We also need a per-policy detail endpoint that returns the full health_check_json.
+
+Route:
+
+GET /api/health-check/policy/:policyId
+
+Implementation:
+
+In server/routes.ts, add:
+
+app.get("/api/health-check/policy/:policyId", async (req, res) => {
+  const policyId = req.params.policyId;
+
+  const snapshot = await PolicySnapshotService.getSnapshotById(policyId);
+
+  if (!snapshot || !snapshot.healthCheckJson) {
+    return res.status(404).json({ error: "Health check not ready" });
+  }
+
+  const hc = snapshot.healthCheckJson as HealthCheckJson;
+  const response: HealthCheckDetailResponse = hc;
+
+  return res.json(response);
+});
+
+
+Again, no AI calls or heavy computation here.
+
+Step 5 – Implement Comparison OVERVIEW endpoint
+
+Now do the same pattern for comparisons.
+
+Assumptions (adapt to real names):
+
+There is a comparisons table (main comparison entity) and comparison_pairs table (per-policy pair).
+
+Each comparison_pairs row has:
+
+id (pairId)
+
+comparisonId
+
+currentPolicyId
+
+offerPolicyId
+
+type
+
+comparisonJson (with summary info).
+
+Route:
+
+GET /api/comparisons/:comparisonId/overview
+
+Implementation steps:
+
+If there is no comparison service yet, create server/services/comparisons/ComparisonService.ts with methods like:
+
+getPairsForComparison(comparisonId: string): Promise<ComparisonPairRow[]>
+
+
+In server/routes.ts, add:
+
+app.get("/api/comparisons/:comparisonId/overview", async (req, res) => {
+  const comparisonId = req.params.comparisonId;
+
+  const pairs = await ComparisonService.getPairsForComparison(comparisonId);
+
+  if (!pairs.length) {
+    return res.status(404).json({ error: "Comparison not found" });
+  }
+
+  let totalAnnualCurrent = 0;
+  let totalAnnualOffer = 0;
+
+  const policies: ComparisonOverviewPolicyDto[] = pairs.map((pair) => {
+    const cj = pair.comparisonJson as ComparisonJson | null;
+    const summary = cj?.summary;
+
+    const currentAnnual = summary?.annualCurrent ?? 0;
+    const offerAnnual = summary?.annualOffer ?? 0;
+    const annualSavings = summary?.annualSavings ?? (currentAnnual - offerAnnual);
+    const savingsPercent = summary?.savingsPercent ?? (
+      currentAnnual > 0 ? (annualSavings / currentAnnual) * 100 : 0
+    );
+    const keyHighlights = cj?.highlights ?? [];
+
+    totalAnnualCurrent += currentAnnual;
+    totalAnnualOffer += offerAnnual;
+
+    return {
+      pairId: pair.id,
+      currentPolicyId: pair.currentPolicyId,
+      offerPolicyId: pair.offerPolicyId,
+      type: pair.type,
+      currentAnnual,
+      offerAnnual,
+      annualSavings,
+      savingsPercent,
+      keyHighlights,
+    };
+  });
+
+  const response: ComparisonOverviewResponse = {
+    comparisonId,
+    totalAnnualCurrent,
+    totalAnnualOffer,
+    totalAnnualSavings: totalAnnualCurrent - totalAnnualOffer,
+    policies,
+  };
+
+  return res.json(response);
+});
+
+
+Again: only reading from comparisonJson.
+
+Step 6 – Implement Comparison DETAIL endpoint
+
+Route:
+
+GET /api/comparisons/pair/:pairId
+
+Implementation:
+
+app.get("/api/comparisons/pair/:pairId", async (req, res) => {
+  const pairId = req.params.pairId;
+
+  const pair = await ComparisonService.getPairById(pairId);
+
+  if (!pair || !pair.comparisonJson) {
+    return res.status(404).json({ error: "Comparison not ready" });
+  }
+
+  const cj = pair.comparisonJson as ComparisonJson;
+  const response: ComparisonDetailResponse = cj;
+
+  return res.json(response);
+});
+
+Step 7 – Wire services (if needed)
+
+If PolicySnapshotService doesn’t have getSnapshotsForUser, add it using Drizzle:
+
+async function getSnapshotsForUser(userId: string) {
+  return db.query.policySnapshots.findMany({
+    where: (ps, { eq }) => eq(ps.userId, userId),
+    columns: {
+      id: true,
+      type: true,
+      company: true,
+      healthCheckJson: true,
+    },
+  });
+}
+
+
+Similarly, implement ComparisonService.getPairsForComparison and getPairById using the existing Drizzle schema.
+
+Step 8 – Acceptance criteria
+
+Ticket B is considered complete when:
+
+New endpoints exist and compile:
+
+GET /api/health-check/user/:userId/overview
+
+GET /api/health-check/policy/:policyId
+
+GET /api/comparisons/:comparisonId/overview
+
+GET /api/comparisons/pair/:pairId
+
+They all:
+
+Only read from precomputed JSON (healthCheckJson, comparisonJson).
+
+Return data shaped exactly as HealthCheckOverviewResponse, HealthCheckDetailResponse, ComparisonOverviewResponse, ComparisonDetailResponse.
+
+Return 404 if JSON is missing for detail endpoints.
+
+No AI / OCR / heavy computation is triggered in these handlers.
+
+Existing old endpoints are left untouched for now (unless trivially safe to refactor).
+
+Please implement Ticket B exactly as described, with minimal but clean changes, and add any small comments/doc updates where helpful.
