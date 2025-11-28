@@ -79,8 +79,13 @@ export function HeroWizard({ onComplete, onStepChange }: HeroWizardProps) {
   };
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
+    console.log('[Upload] onDrop triggered with files:', acceptedFiles.length);
     const file = acceptedFiles[0];
-    if (!file) return;
+    if (!file) {
+      console.log('[Upload] No file in acceptedFiles');
+      return;
+    }
+    console.log('[Upload] Processing file:', file.name, file.type, file.size);
 
     const formData = new FormData();
     formData.append('files', file);
@@ -95,15 +100,21 @@ export function HeroWizard({ onComplete, onStepChange }: HeroWizardProps) {
     formData.append('documentType', 'current');
 
     try {
+      console.log('[Upload] Sending upload request...');
       const response = await apiRequest('POST', '/api/documents/upload', formData);
+      console.log('[Upload] Response received:', response.status);
       const result = await response.json();
+      console.log('[Upload] Result:', result);
       const documents = Array.isArray(result) ? result : [result];
       
       toast({ title: "Succes!", description: "Police uploaded - vi analyserer den i baggrunden" });
+      console.log('[Upload] Calling handleStep2Complete with docId:', documents[0]?.id);
       
       await handleStep2Complete(documents[0]?.id || null, false);
+      console.log('[Upload] Step 2 complete, transitioning to step 3');
       onStepChange?.(3);
     } catch (error: any) {
+      console.error('[Upload] Error:', error);
       toast({ title: "Fejl", description: error.message || 'Upload fejlede', variant: "destructive" });
     }
   }, [handleStep2Complete, onStepChange, toast]);
@@ -292,6 +303,7 @@ function Step2Upload({ getRootProps, getInputProps, isDragActive, onBack }: {
   isDragActive: boolean;
   onBack: () => void;
 }) {
+  console.log('[Step2Upload] Rendering, isDragActive:', isDragActive);
   return (
     <>
       <div className="flex w-full flex-col items-center gap-4">
