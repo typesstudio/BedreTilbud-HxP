@@ -8,6 +8,7 @@ import { emailService } from "./services/emailService";
 import { gmailOAuthService } from "./services/gmailOAuthService";
 import { PolicyMatchingService } from "./services/policyMatchingService";
 import { policyComparisonService } from "./services/policySnapshots/PolicyComparisonService";
+import { policySnapshotService } from "./services/policySnapshots/PolicySnapshotService";
 import { requireAuth, requireOwnership } from "./middleware/auth";
 import { validateFileUpload } from "./middleware/uploadValidation";
 import { uploadLimiter, emailLimiter, aiLimiter } from "./middleware/rateLimiting";
@@ -2946,6 +2947,103 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(204).send();
     } catch (error: any) {
       res.status(500).json({ message: error.message });
+    }
+  });
+
+  // ============================================================================
+  // WEBHOOK ENDPOINTS (Ticket A - DB & Pipeline)
+  // These endpoints allow external flows (n8n, AI agents) to persist
+  // pre-computed health check and comparison JSON directly to the database.
+  // ============================================================================
+
+  /**
+   * POST /api/webhooks/health-check
+   * Persist pre-computed health check JSON for a policy snapshot.
+   * 
+   * Body: { policySnapshotId: string, healthCheckJson: HealthCheckJson }
+   */
+  app.post("/api/webhooks/health-check", async (req, res) => {
+    try {
+      const { policySnapshotId, healthCheckJson } = req.body;
+      
+      if (!policySnapshotId || !healthCheckJson) {
+        return res.status(400).json({ 
+          error: "Missing required fields",
+          required: ["policySnapshotId", "healthCheckJson"]
+        });
+      }
+      
+      // Validate policySnapshotId exists
+      const snapshot = await policySnapshotService.getSnapshotById(policySnapshotId);
+      if (!snapshot) {
+        return res.status(404).json({ 
+          error: "Policy snapshot not found",
+          policySnapshotId 
+        });
+      }
+      
+      // Update the snapshot with health check JSON
+      await policySnapshotService.updateHealthCheckJson(policySnapshotId, healthCheckJson);
+      
+      logger.info('[Webhook] Health check JSON saved', { 
+        policySnapshotId, 
+        policyType: snapshot.policyType,
+        hasScore: !!healthCheckJson.score
+      });
+      
+      return res.json({ 
+        ok: true, 
+        policySnapshotId,
+        message: "Health check JSON saved successfully"
+      });
+    } catch (error: any) {
+      logger.error('[Webhook] Failed to save health check JSON', error);
+      return res.status(500).json({ error: error.message });
+    }
+  });
+
+  /**
+   * POST /api/webhooks/comparison
+   * Persist pre-computed comparison JSON for a company comparison.
+   * 
+   * Body: { comparisonId: string, comparisonJson: ComparisonJson }
+   */
+  app.post("/api/webhooks/comparison", async (req, res) => {
+    try {
+      const { comparisonId, comparisonJson } = req.body;
+      
+      if (!comparisonId || !comparisonJson) {
+        return res.status(400).json({ 
+          error: "Missing required fields",
+          required: ["comparisonId", "comparisonJson"]
+        });
+      }
+      
+      // Validate comparisonId exists
+      const comparison = await storage.getCompanyComparison(comparisonId);
+      if (!comparison) {
+        return res.status(404).json({ 
+          error: "Company comparison not found",
+          comparisonId 
+        });
+      }
+      
+      // Update the comparison with JSON using existing method
+      await storage.updateCompanyComparisonStatus(comparisonId, 'completed', comparisonJson);
+      
+      logger.info('[Webhook] Comparison JSON saved', { 
+        comparisonId,
+        hasSummary: !!comparisonJson.summary
+      });
+      
+      return res.json({ 
+        ok: true, 
+        comparisonId,
+        message: "Comparison JSON saved successfully"
+      });
+    } catch (error: any) {
+      logger.error('[Webhook] Failed to save comparison JSON', error);
+      return res.status(500).json({ error: error.message });
     }
   });
 

@@ -291,6 +291,25 @@ export class PolicySnapshotService {
 
     console.log(`[PolicySnapshotService] Updated enrichment for snapshot ${snapshotId}`);
   }
+
+  /**
+   * Update a snapshot's pre-computed health check JSON (Ticket A - DB & Pipeline)
+   * Called by external flows (n8n, AI agents) via webhook
+   */
+  async updateHealthCheckJson(
+    snapshotId: string,
+    healthCheckJson: any
+  ): Promise<void> {
+    await db
+      .update(policySnapshots)
+      .set({
+        healthCheckJson,
+        updatedAt: new Date(),
+      })
+      .where(eq(policySnapshots.id, snapshotId));
+
+    console.log(`[PolicySnapshotService] Updated health check JSON for snapshot ${snapshotId}`);
+  }
 }
 
 export const policySnapshotService = new PolicySnapshotService();
