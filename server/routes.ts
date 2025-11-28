@@ -1283,13 +1283,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const company = await storage.getCompany(companyId);
         if (!company) continue;
 
-        // Generate personalized email
+        // Generate personalized email with full user context
         const emailBody = customMessage || await comparisonService.generatePersonalizedEmail(
           company.name,
           {
+            userName: user.name || undefined,
+            cprNumber: user.cpr || undefined,
+            email: user.email || undefined,
+            phone: user.phone || undefined,
+            address: user.address || undefined,
             housingType: user.housingType || undefined,
             hasCar: user.hasCar || undefined,
             deductible: user.deductible || undefined,
+            insuranceTypes: user.insuranceTypes || undefined,
+            importantPoints: user.preference || undefined,
             additionalInfo: user.additionalInfo || undefined
           },
           currentDocs.map(doc => doc.ocrData).filter(Boolean) as any[]

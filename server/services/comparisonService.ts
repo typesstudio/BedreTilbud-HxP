@@ -231,9 +231,16 @@ export class ComparisonService {
   async generatePersonalizedEmail(
     companyName: string,
     userInfo: {
+      userName?: string;
+      cprNumber?: string;
+      email?: string;
+      phone?: string;
+      address?: string;
       housingType?: string;
       hasCar?: boolean;
       deductible?: string;
+      insuranceTypes?: string[];
+      importantPoints?: string;
       additionalInfo?: string;
     },
     currentPolicies: InsuranceData[]
@@ -268,32 +275,45 @@ export class ComparisonService {
     // Try 2: OpenAI gpt-4o-mini (cheaper than GPT-4)
     try {
       console.log("[Email Gen] Attempting OpenAI gpt-4o-mini fallback...");
-      const prompt = `Generate a personalized insurance inquiry email in Danish to ${companyName}.
+      const insuranceTypesList = userInfo.insuranceTypes?.length 
+        ? userInfo.insuranceTypes.join(', ')
+        : 'Ikke angivet';
+      const policySummary = currentPolicies.length > 0
+        ? currentPolicies.map(p => `- ${p.policyType}: ${p.annualPremium} kr./år (${p.companyName})`).join('\n')
+        : 'Ingen nuværende policer vedhæftet';
+      
+      const prompt = `Generér en personlig forsikringshenvendelse til ${companyName}.
 
-User Information:
+Kundens oplysninger:
+- Navn: ${userInfo.userName || 'Ikke angivet'}
+- CPR-nummer: ${userInfo.cprNumber || 'Ikke angivet'}
+- E-mail: ${userInfo.email || 'Ikke angivet'}
+- Telefon: ${userInfo.phone || 'Ikke angivet'}
+- Adresse: ${userInfo.address || 'Ikke angivet'}
 - Boligtype: ${userInfo.housingType || 'Ikke angivet'}
 - Har bil: ${userInfo.hasCar ? 'Ja' : 'Nej'}
 - Ønsket selvrisiko: ${userInfo.deductible || 'Ikke angivet'}
-- Yderligere oplysninger: ${userInfo.additionalInfo || 'Ingen'}
+- Ønskede forsikringstyper: ${insuranceTypesList}
+- Det der er vigtigst for kunden: ${userInfo.importantPoints || userInfo.additionalInfo || 'Ingen'}
 
-Current Policies Summary:
-${currentPolicies.map(p => `- ${p.policyType}: ${p.annualPremium} kr./år (${p.companyName})`).join('\n')}
+Nuværende policer:
+${policySummary}
 
-Write a professional, friendly email that:
-1. Introduces the inquiry
-2. Mentions specific user requirements
-3. Asks for a competitive quote
-4. Mentions that current policies are attached for reference
-5. Is polite and professional
+Skriv en kort mail (maks. 10-12 linjer), der:
+1. Kort præsenterer henvendelsen
+2. Opsummerer ønskede forsikringstyper
+3. Angiver CPR og kontaktoplysninger
+4. Forklarer at nuværende policer er vedhæftet
+5. Beder tydeligt om et konkret tilbud som PDF vedhæftet svaret
 
-Return only the email body text, no subject line.`;
+Returnér kun selve e-mailens brødtekst, ingen emnelinje.`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
-            content: "You are a professional insurance broker writing on behalf of clients. Write clear, polite emails in Danish that get results."
+            content: "Du er en professionel forsikringsmægler hos BedreTilbud, der skriver på vegne af en privatkunde. Skriv korte, klare og høflige mails på dansk."
           },
           {
             role: "user",
@@ -319,35 +339,47 @@ Return only the email body text, no subject line.`;
   private generateTemplateEmail(
     companyName: string,
     userInfo: {
+      userName?: string;
+      cprNumber?: string;
+      email?: string;
+      phone?: string;
+      address?: string;
       housingType?: string;
       hasCar?: boolean;
       deductible?: string;
+      insuranceTypes?: string[];
+      importantPoints?: string;
       additionalInfo?: string;
     },
     currentPolicies: InsuranceData[]
   ): string {
-    const policySummary = currentPolicies.map(p => 
-      `- ${p.policyType}: ${p.annualPremium} kr./år (${p.companyName})`
-    ).join('\n');
+    const policySummary = currentPolicies.length > 0
+      ? currentPolicies.map(p => `- ${p.policyType}: ${p.annualPremium} kr./år (${p.companyName})`).join('\n')
+      : 'Se vedhæftede policer';
+    
+    const insuranceTypesList = userInfo.insuranceTypes?.length 
+      ? userInfo.insuranceTypes.join(', ')
+      : 'Alle relevante forsikringstyper';
 
     return `Hej ${companyName},
 
-Jeg søger et konkurrencedygtigt forsikringstilbud og vil gerne høre, hvad I kan tilbyde.
+BedreTilbud skriver på vegne af en kunde, der søger forsikringstilbud.
 
-Mine oplysninger:
-- Boligtype: ${userInfo.housingType || 'Ikke angivet'}
-- Har bil: ${userInfo.hasCar ? 'Ja' : 'Nej'}
-- Ønsket selvrisiko: ${userInfo.deductible || 'Ikke angivet'}
-${userInfo.additionalInfo ? `- Yderligere oplysninger: ${userInfo.additionalInfo}` : ''}
+Kundens oplysninger:
+- Navn: ${userInfo.userName || 'Se vedhæftede dokumenter'}
+- CPR: ${userInfo.cprNumber || 'Se vedhæftede dokumenter'}
+- E-mail: ${userInfo.email || 'Ikke angivet'}
+- Telefon: ${userInfo.phone || 'Ikke angivet'}
 
-Mine nuværende forsikringer:
+Ønskede forsikringstyper: ${insuranceTypesList}
+
+Nuværende forsikringer:
 ${policySummary}
 
-Jeg har vedhæftet mine nuværende policer som reference. Vil I venligst komme med et tilbud, der matcher eller forbedrer min nuværende dækning?
+Nuværende policer er vedhæftet som reference. Vi beder venligst om et konkret, skriftligt tilbud sendt som PDF vedhæftet jeres svar på denne mail.
 
-Jeg ser frem til at høre fra jer.
-
-Med venlig hilsen`;
+Med venlig hilsen
+BedreTilbud`;
   }
 
   async generateAutoResponse(

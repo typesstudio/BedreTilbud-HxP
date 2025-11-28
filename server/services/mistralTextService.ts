@@ -50,28 +50,48 @@ export class MistralTextService {
   async generatePersonalizedEmail(
     companyName: string,
     userInfo: {
+      userName?: string;
+      cprNumber?: string;
+      email?: string;
+      phone?: string;
+      address?: string;
       housingType?: string;
       hasCar?: boolean;
       deductible?: string;
+      insuranceTypes?: string[];
+      importantPoints?: string;
       additionalInfo?: string;
     },
     currentPolicies: { policyType: string; annualPremium: number; companyName: string; }[]
   ): Promise<string> {
+    const systemPrompt = loadPrompt('emails/system-prompt');
     const promptTemplate = loadPrompt('emails/personalized-inquiry');
-    const currentPoliciesSummary = currentPolicies.map(p => 
-      `- ${p.policyType}: ${p.annualPremium} kr./år (${p.companyName})`
-    ).join('\n');
+    const currentPoliciesSummary = currentPolicies.length > 0 
+      ? currentPolicies.map(p => 
+          `- ${p.policyType}: ${p.annualPremium} kr./år (${p.companyName})`
+        ).join('\n')
+      : 'Ingen nuværende policer vedhæftet';
+    
+    const insuranceTypesList = userInfo.insuranceTypes?.length 
+      ? userInfo.insuranceTypes.join(', ')
+      : 'Ikke angivet';
     
     const prompt = replaceVariables(promptTemplate, {
       companyName,
+      userName: userInfo.userName || 'Ikke angivet',
+      cprNumber: userInfo.cprNumber || 'Ikke angivet',
+      email: userInfo.email || 'Ikke angivet',
+      phone: userInfo.phone || 'Ikke angivet',
+      address: userInfo.address || 'Ikke angivet',
       housingType: userInfo.housingType || 'Ikke angivet',
       hasCar: userInfo.hasCar ? 'Ja' : 'Nej',
       deductible: userInfo.deductible || 'Ikke angivet',
-      additionalInfo: userInfo.additionalInfo || 'Ingen',
+      insuranceTypes: insuranceTypesList,
+      importantPoints: userInfo.importantPoints || userInfo.additionalInfo || 'Ingen',
       currentPolicies: currentPoliciesSummary
     });
 
-    return this.generateText(prompt, prompt, { maxTokens: 1024 });
+    return this.generateText(systemPrompt, prompt, { maxTokens: 1024 });
   }
 
   async generateAutoResponse(
@@ -82,6 +102,7 @@ export class MistralTextService {
       sentEmail: string;
     }
   ): Promise<string> {
+    const systemPrompt = loadPrompt('emails/system-prompt');
     const promptTemplate = loadPrompt('emails/auto-response');
     const prompt = replaceVariables(promptTemplate, {
       incomingEmailBody,
@@ -89,13 +110,14 @@ export class MistralTextService {
       sentEmail: context.sentEmail
     });
 
-    return this.generateText(prompt, prompt, { maxTokens: 1024 });
+    return this.generateText(systemPrompt, prompt, { maxTokens: 1024 });
   }
 
   async generateMissingInfoEmail(
     companyName: string,
     questions: string[]
   ): Promise<string> {
+    const systemPrompt = loadPrompt('emails/system-prompt');
     const promptTemplate = loadPrompt('emails/missing-info');
     const questionsList = questions.map((q, i) => `${i + 1}. ${q}`).join('\n');
     
@@ -104,7 +126,7 @@ export class MistralTextService {
       questions: questionsList
     });
 
-    return this.generateText(prompt, prompt, { maxTokens: 800 });
+    return this.generateText(systemPrompt, prompt, { maxTokens: 800 });
   }
 }
 
