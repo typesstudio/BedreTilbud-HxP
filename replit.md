@@ -66,6 +66,24 @@ The `policy_snapshots.health_check_json` JSONB column enables pre-computed healt
 -   **Types**: `HealthCheckJson` and `ComparisonJson` types in `shared/types/healthCheck.ts`
 -   **Documentation**: See `docs/ticket-a-db-pipeline.md` for integration details
 
+### Read-Only V2 API Endpoints (Ticket B - Nov 2025)
+
+Fast, read-only endpoints that serve cached JSON without AI computation:
+
+**Health Check Endpoints:**
+-   `GET /api/v2/health-check/user/:userId/overview` - Returns all policy summaries for a user (requires auth, user-scoped)
+-   `GET /api/v2/health-check/policy/:policyId` - Returns full `healthCheckJson` for a policy (404 if not cached)
+
+**Comparison Endpoints:**
+-   `GET /api/v2/comparisons/:comparisonId/overview` - Returns aggregated comparison summary from `comparisonJSON`
+-   `GET /api/v2/comparisons/:comparisonId/detail` - Returns full `comparisonJSON` (404 if not cached)
+
+**Design Principles:**
+-   **No AI calls** - Pure database reads for sub-500ms response times
+-   **Auth required** - All endpoints require session auth via `x-user-id` header
+-   **404 for missing cache** - Returns Danish error messages when cached JSON not yet populated
+-   **DTOs in `shared/apiTypes.ts`** - Clean response types with Danish policy labels
+
 ### Comparison Pipeline Architecture
 This pipeline generates comprehensive comparison analyses:
 1.  **Phase 3: Deterministic Policy Matching**: Pairs current and offer policies using scoring heuristics, with fallback logic for single-policy-per-type pairs. The matcher implements **Snapshot Quality Scoring** to select the best offer snapshots: +1000 points for snapshots with pricing data (`pricingStatus ≠ 'missing'`), +100 points for health check presence. This ensures PricingAgent-backed snapshots are prioritized over legacy snapshots without pricing data.
