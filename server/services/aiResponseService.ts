@@ -24,6 +24,77 @@ export interface AIResponseContext {
     body: string;
     sentAt: Date;
   }[];
+  responseMode?: AutoRespondMode;
+}
+
+export type AutoRespondMode = 'none' | 'normal' | 'mitid';
+
+function isMitIdOnlyEmail(body: string): boolean {
+  const lower = body.toLowerCase();
+
+  const patterns = [
+    'mitid',
+    'mit id',
+    'log ind med mitid',
+    'log på med mitid',
+    'gå ind på mitid',
+    'selvbetjening',
+    'selvbetjeningen',
+    'min side',
+    'minside',
+    'kundeportal',
+    'kundeportalen',
+    'log ind på',
+    'log på vores',
+    'via din profil',
+    'din kundeprofil',
+    'online selvbetjening',
+    'digital selvbetjening',
+  ];
+
+  return patterns.some((p) => lower.includes(p));
+}
+
+export function classifyIncomingEmailForAutoResponse(email: {
+  body: string;
+  attachments?: { mimeType?: string; contentType?: string; fileName?: string }[];
+}): AutoRespondMode {
+  const body = email.body ?? '';
+  const attachments = email.attachments ?? [];
+
+  const hasPdfAttachment = attachments.some((a) => {
+    const type = (a.mimeType || a.contentType || '').toLowerCase();
+    const fileName = (a.fileName || '').toLowerCase();
+    return type.includes('pdf') || fileName.endsWith('.pdf');
+  });
+
+  // 1) MitID / self-service mail without PDF => always auto-respond in "mitid" mode
+  if (isMitIdOnlyEmail(body) && !hasPdfAttachment) {
+    console.log('[Email Classifier] Detected MitID/selvbetjening without PDF -> mitid mode');
+    return 'mitid';
+  }
+
+  // 2) If there is a PDF offer attached, we generally do NOT auto-respond by default.
+  if (hasPdfAttachment) {
+    console.log('[Email Classifier] PDF attachment detected -> none mode (no auto-response)');
+    return 'none';
+  }
+
+  // 3) Filter out spam/system mails
+  if (/noreply|no-reply|do not reply|unsubscribe|denne mail er sendt automatisk/i.test(body)) {
+    console.log('[Email Classifier] Spam/system mail detected -> none mode');
+    return 'none';
+  }
+
+  // 4) Very short messages -> no auto-response
+  if (body.trim().length < 20) {
+    console.log('[Email Classifier] Message too short -> none mode');
+    return 'none';
+  }
+
+  // 5) Default -> normal auto-response mode for "ordinary" emails
+  console.log('[Email Classifier] Normal email -> normal mode');
+  return 'normal';
 }
 
 export class AIResponseService {
@@ -64,6 +135,30 @@ export class AIResponseService {
         })
         .join('\n\n---\n\n');
 
+      // Determine response mode
+      const responseMode = context.responseMode || 'normal';
+      console.log(`[AI Response] Response mode: ${responseMode}`);
+
+      // Build response mode specific instructions
+      let responseModeInstructions = '';
+      if (responseMode === 'mitid') {
+        responseModeInstructions = `
+**VIGTIGT - MITID/SELVBETJENING SVAR:**
+Selskabet har henvist til MitID, selvbetjening, kundeportal eller lignende UDEN at vedhæfte et konkret tilbud som PDF.
+Du SKAL:
+1. Takke kort for deres svar
+2. Forklare høfligt men tydeligt at BedreTilbud arbejder på vegne af kunden
+3. Forklare at vi ikke kan bruge MitID-login eller selvbetjeningslinks alene
+4. Bede dem eksplicit om at sende det fulde, konkrete tilbud som PDF vedhæftet deres svar på denne mail
+5. Holde svaret kort og professionelt (maks. 8-10 linjer)
+`;
+      } else {
+        responseModeInstructions = `
+**Response Mode: Normal**
+Skriv et normalt opfølgende svar baseret på indholdet af deres mail.
+`;
+      }
+
       // Build the user message
       const userMessage = `
 **Company Name:** ${context.companyName}
@@ -76,6 +171,8 @@ ${conversationText}
 
 **New Message from ${context.companyName}:**
 ${context.incomingMessage}
+
+${responseModeInstructions}
 
 ---
 

@@ -524,79 +524,94 @@ export class EmailService {
 
       // Generate and send AI auto-response (for text-only replies)
       if (body && existingThread.companyId) {
-        const hasAttachments = attachments.length > 0;
-        
         // Check user's AI auto-response preference
         const user = await storage.getUser(existingThread.userId ?? '');
         const aiEnabled = user?.aiAutoResponseEnabled !== false; // Default to true if not set
         
-        // Check if we should auto-respond
-        if (aiEnabled && aiResponseService.shouldAutoRespond(body, hasAttachments)) {
-          try {
-            const company = await storage.getCompany(existingThread.companyId);
-            const conversationHistory = await storage.getThreadEmails(existingThread.id);
-            
-            if (company) {
-              console.log(`[AI Auto-Response] Generating response for thread ${existingThread.id}`);
+        if (!aiEnabled) {
+          console.log(`[AI Auto-Response] Disabled for user ${existingThread.userId}`);
+        } else {
+          // Use new classifier to determine response mode
+          const { classifyIncomingEmailForAutoResponse } = await import('./aiResponseService');
+          const responseMode = classifyIncomingEmailForAutoResponse({
+            body,
+            attachments: attachments.map(a => ({
+              fileName: a.fileName,
+              mimeType: a.mimeType || a.contentType
+            }))
+          });
+          
+          console.log(`[AI Auto-Response] Classified email as: ${responseMode}`);
+          
+          // Only proceed if mode is not 'none'
+          if (responseMode !== 'none') {
+            try {
+              const company = await storage.getCompany(existingThread.companyId);
+              const conversationHistory = await storage.getThreadEmails(existingThread.id);
               
-              // Generate AI response
-              const aiResponse = await aiResponseService.generateResponse({
-                userId: existingThread.userId ?? '',
-                companyName: company.name,
-                threadId: existingThread.id,
-                incomingMessage: body,
-                conversationHistory: conversationHistory.map(e => ({
-                  direction: e.direction || '',
-                  body: e.body || '',
-                  sentAt: e.sentAt || new Date()
-                }))
-              });
-
-              // Check if AI flagged for human review
-              if (aiResponse.includes('DO NOT RESPOND - FLAG FOR HUMAN REVIEW')) {
-                console.log(`[AI Auto-Response] Flagged for human review, not sending`);
+              if (company) {
+                console.log(`[AI Auto-Response] Generating ${responseMode} response for thread ${existingThread.id}`);
                 
-                // Store as draft for human review
-                await storage.createEmail({
+                // Generate AI response with the classified mode
+                const aiResponse = await aiResponseService.generateResponse({
+                  userId: existingThread.userId ?? '',
+                  companyName: company.name,
                   threadId: existingThread.id,
-                  messageId: '',
-                  direction: 'auto',
-                  subject: `[NEEDS REVIEW] Re: ${subject}`,
-                  body: aiResponse,
-                  attachments: [],
-                  sentAt: new Date()
-                });
-              } else {
-                // Send via Resend
-                const { client: resend, fromEmail } = await getUncachableResendClient();
-                
-                const emailResult = await resend.emails.send({
-                  from: fromEmail,
-                  to: company.email,
-                  subject: `Re: ${subject}`,
-                  text: aiResponse,
-                  replyTo: formatReplyToEmail(existingThread.requestToken || '')
+                  incomingMessage: body,
+                  conversationHistory: conversationHistory.map(e => ({
+                    direction: e.direction || '',
+                    body: e.body || '',
+                    sentAt: e.sentAt || new Date()
+                  })),
+                  responseMode
                 });
 
-                console.log(`[AI Auto-Response] Email sent via Resend: ${emailResult.data?.id}`);
+                // Check if AI flagged for human review
+                if (aiResponse.includes('DO NOT RESPOND - FLAG FOR HUMAN REVIEW')) {
+                  console.log(`[AI Auto-Response] Flagged for human review, not sending`);
+                  
+                  // Store as draft for human review
+                  await storage.createEmail({
+                    threadId: existingThread.id,
+                    messageId: '',
+                    direction: 'auto',
+                    subject: `[NEEDS REVIEW] Re: ${subject}`,
+                    body: aiResponse,
+                    attachments: [],
+                    sentAt: new Date()
+                  });
+                } else {
+                  // Send via Resend
+                  const { client: resend, fromEmail } = await getUncachableResendClient();
+                  
+                  const emailResult = await resend.emails.send({
+                    from: fromEmail,
+                    to: company.email,
+                    subject: `Re: ${subject}`,
+                    text: aiResponse,
+                    replyTo: formatReplyToEmail(existingThread.requestToken || '')
+                  });
 
-                // Store sent auto-response
-                await storage.createEmail({
-                  threadId: existingThread.id,
-                  messageId: emailResult.data?.id || '',
-                  direction: 'auto',
-                  subject: `Re: ${subject}`,
-                  body: aiResponse,
-                  attachments: [],
-                  sentAt: new Date()
-                });
+                  console.log(`[AI Auto-Response] Email sent via Resend: ${emailResult.data?.id}`);
 
-                console.log(`[AI Auto-Response] Successfully responded to ${company.name}`);
+                  // Store sent auto-response
+                  await storage.createEmail({
+                    threadId: existingThread.id,
+                    messageId: emailResult.data?.id || '',
+                    direction: 'auto',
+                    subject: `Re: ${subject}`,
+                    body: aiResponse,
+                    attachments: [],
+                    sentAt: new Date()
+                  });
+
+                  console.log(`[AI Auto-Response] Successfully responded to ${company.name} (mode: ${responseMode})`);
+                }
               }
+            } catch (error) {
+              console.error('[AI Auto-Response] Failed to generate/send response:', error);
+              // Continue processing - don't fail the whole inbox check
             }
-          } catch (error) {
-            console.error('[AI Auto-Response] Failed to generate/send response:', error);
-            // Continue processing - don't fail the whole inbox check
           }
         }
       }
