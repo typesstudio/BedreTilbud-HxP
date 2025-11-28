@@ -1,19 +1,81 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient, clearCSRFToken } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { OnboardingProgress, User } from "@shared/schema";
 
+export type WizardStep = 1 | 2 | 3 | 4;
+
+const STORAGE_KEY = 'bt_onboarding_session';
+
+interface LocalSession {
+  step: WizardStep;
+  email: string;
+  userId: string;
+  documentId: string | null;
+  name: string;
+  cpr: string;
+  preference: 'cheapest' | 'coverage' | 'convenience';
+  selectedCompanies: string[];
+}
+
 export function useWizardFlow() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
-  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
+  const [currentStep, setCurrentStep] = useState<WizardStep>(1);
   const [email, setEmail] = useState<string>('');
   const [userId, setUserId] = useState<string>('');
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [uploadSkipped, setUploadSkipped] = useState(false);
   const [isProcessingStep1, setIsProcessingStep1] = useState(false);
+  const [name, setName] = useState<string>('');
+  const [cpr, setCpr] = useState<string>('');
+  const [preference, setPreference] = useState<'cheapest' | 'coverage' | 'convenience'>('cheapest');
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
+  const [showResumeBanner, setShowResumeBanner] = useState(false);
+  const [savedStep, setSavedStep] = useState<WizardStep | null>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (saved) {
+      try {
+        const session: LocalSession = JSON.parse(saved);
+        if (session.step && session.step > 1) {
+          setShowResumeBanner(true);
+          setSavedStep(session.step);
+          setEmail(session.email || "");
+          setUserId(session.userId || "");
+          setDocumentId(session.documentId);
+          setName(session.name || "");
+          setPreference(session.preference || 'cheapest');
+          setSelectedCompanies(session.selectedCompanies || []);
+        }
+      } catch (e) {
+        localStorage.removeItem(STORAGE_KEY);
+      }
+    }
+  }, []);
+
+  const saveSession = useCallback(() => {
+    const session: LocalSession = {
+      step: currentStep,
+      email,
+      userId,
+      documentId,
+      name,
+      cpr: '',
+      preference,
+      selectedCompanies
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  }, [currentStep, email, userId, documentId, name, preference, selectedCompanies]);
+
+  useEffect(() => {
+    if (currentStep > 1 && email) {
+      saveSession();
+    }
+  }, [currentStep, saveSession, email]);
 
   const { data: progress } = useQuery<OnboardingProgress>({
     queryKey: ['/api/onboarding/progress', email],
@@ -23,9 +85,15 @@ export function useWizardFlow() {
 
   useEffect(() => {
     if (progress) {
-      setCurrentStep(progress.currentStep as 1 | 2 | 3);
+      const step = progress.currentStep as WizardStep;
+      if (step >= 1 && step <= 4) {
+        setCurrentStep(step);
+      }
       if (progress.userId) setUserId(progress.userId);
       if (progress.documentId) setDocumentId(progress.documentId);
+      if (progress.name) setName(progress.name);
+      if (progress.priority) setPreference(progress.priority as any);
+      if (progress.selectedCompanyIds) setSelectedCompanies(progress.selectedCompanyIds);
     }
   }, [progress]);
 
@@ -76,7 +144,7 @@ export function useWizardFlow() {
         const { exists, user } = await checkResponse.json();
         
         if (exists && user) {
-          console.log('[Step1] User exists - logging in...');
+          console.log('[Step1] Returning user detected');
           setUserId(user.id);
           localStorage.setItem("userId", user.id);
           
@@ -144,6 +212,42 @@ export function useWizardFlow() {
     }
   };
 
+  const updateUserMutation = useMutation({
+    mutationFn: async (data: { name: string; cpr: string; priority: string }) =>
+      apiRequest('PUT', `/api/users/${userId}`, {
+        name: data.name,
+        personalIdNumber: data.cpr,
+        insurancePriority: data.priority
+      }),
+  });
+
+  const handleStep3Complete = async (userName: string, userCpr: string, userPreference: 'cheapest' | 'coverage' | 'convenience') => {
+    setName(userName);
+    setCpr(userCpr);
+    setPreference(userPreference);
+
+    try {
+      await updateUserMutation.mutateAsync({ name: userName, cpr: userCpr, priority: userPreference });
+
+      await updateProgressMutation.mutateAsync({
+        name: userName,
+        cpr: userCpr,
+        priority: userPreference,
+        completedSteps: [1, 2, 3],
+        currentStep: 4
+      });
+
+      setCurrentStep(4);
+    } catch (error: any) {
+      console.error('Error in step 3:', error);
+      toast({
+        title: "Fejl",
+        description: error.message || "Kunne ikke gemme dine oplysninger",
+        variant: "destructive"
+      });
+    }
+  };
+
   const sendInquiriesMutation = useMutation({
     mutationFn: async (data: { 
       userId: string; 
@@ -162,31 +266,14 @@ export function useWizardFlow() {
     }
   });
 
-  const updateUserMutation = useMutation({
-    mutationFn: async (data: { name: string; cpr: string; priority: string }) =>
-      apiRequest('PUT', `/api/users/${userId}`, {
-        name: data.name,
-        personalIdNumber: data.cpr,
-        insurancePriority: data.priority
-      }),
-  });
+  const handleStep4Complete = async (companyIds: string[]) => {
+    setSelectedCompanies(companyIds);
 
-  const handleStep3Complete = async (
-    companyIds: string[],
-    name: string,
-    cpr: string,
-    priority: string
-  ) => {
     try {
-      await updateUserMutation.mutateAsync({ name, cpr, priority });
-
       await updateProgressMutation.mutateAsync({
         selectedCompanyIds: companyIds,
-        name,
-        cpr,
-        priority,
-        completedSteps: [1, 2, 3],
-        currentStep: 3
+        completedSteps: [1, 2, 3, 4],
+        currentStep: 4
       });
 
       const result = await sendInquiriesMutation.mutateAsync({
@@ -194,6 +281,8 @@ export function useWizardFlow() {
         companyIds,
         documentId
       });
+
+      localStorage.removeItem(STORAGE_KEY);
 
       toast({
         title: "Forespørgsler sendt!",
@@ -204,7 +293,7 @@ export function useWizardFlow() {
         setLocation('/offers');
       }, 1000);
     } catch (error: any) {
-      console.error('Error in step 3:', error);
+      console.error('Error in step 4:', error);
       toast({
         title: "Fejl",
         description: error.message || "Kunne ikke sende forespørgsler",
@@ -213,15 +302,54 @@ export function useWizardFlow() {
     }
   };
 
+  const goToStep = (step: WizardStep) => {
+    setCurrentStep(step);
+    saveSession();
+  };
+
+  const handleResume = () => {
+    if (savedStep) {
+      setCurrentStep(savedStep);
+    }
+    setShowResumeBanner(false);
+  };
+
+  const handleStartFresh = () => {
+    localStorage.removeItem(STORAGE_KEY);
+    setShowResumeBanner(false);
+    setEmail("");
+    setUserId("");
+    setDocumentId(null);
+    setName("");
+    setCpr("");
+    setPreference('cheapest');
+    setSelectedCompanies([]);
+    setCurrentStep(1);
+  };
+
   return {
     currentStep,
     email,
+    setEmail,
     userId,
     documentId,
     uploadSkipped,
     isProcessingStep1,
+    name,
+    setName,
+    cpr,
+    setCpr,
+    preference,
+    setPreference,
+    selectedCompanies,
+    setSelectedCompanies,
+    showResumeBanner,
     handleStep1Complete,
     handleStep2Complete,
     handleStep3Complete,
+    handleStep4Complete,
+    goToStep,
+    handleResume,
+    handleStartFresh,
   };
 }

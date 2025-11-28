@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useCallback } from "react";
 import { Button } from "@/ui/components/Button";
 import { TextField } from "@/ui/components/TextField";
 import { CheckboxCard } from "@/ui/components/CheckboxCard";
@@ -9,7 +9,6 @@ import {
   FeatherArrowLeft,
   FeatherCheckCircle,
   FeatherTimer,
-  FeatherSparkles,
   FeatherUploadCloud,
   FeatherLogIn,
   FeatherCoins,
@@ -29,21 +28,11 @@ import { useDropzone } from "react-dropzone";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { useQuery } from "@tanstack/react-query";
-
-export type WizardStep = 1 | 2 | 3 | 4;
+import { useWizardFlow, type WizardStep } from "@/hooks/useWizardFlow";
 
 interface HeroWizardProps {
-  onComplete: (data: OnboardingData) => void;
+  onComplete?: () => void;
   onStepChange?: (step: WizardStep) => void;
-}
-
-interface OnboardingData {
-  email: string;
-  documentId: string | null;
-  name: string;
-  cpr: string;
-  preference: 'cheapest' | 'coverage' | 'convenience';
-  selectedCompanyIds: string[];
 }
 
 interface Company {
@@ -52,149 +41,52 @@ interface Company {
   description?: string;
 }
 
-const STORAGE_KEY = 'bt_onboarding_session';
-
 export function HeroWizard({ onComplete, onStepChange }: HeroWizardProps) {
   const { toast } = useToast();
   
-  const [step, setStep] = useState<WizardStep>(1);
-  const [email, setEmail] = useState("");
-  const [documentId, setDocumentId] = useState<string | null>(null);
-  const [name, setName] = useState("");
-  const [cpr, setCpr] = useState("");
-  const [preference, setPreference] = useState<'cheapest' | 'coverage' | 'convenience'>('cheapest');
-  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [showResumeBanner, setShowResumeBanner] = useState(false);
+  const {
+    currentStep,
+    email,
+    setEmail,
+    name,
+    setName,
+    cpr,
+    setCpr,
+    preference,
+    setPreference,
+    selectedCompanies,
+    setSelectedCompanies,
+    showResumeBanner,
+    isProcessingStep1,
+    handleStep1Complete,
+    handleStep2Complete,
+    handleStep3Complete,
+    handleStep4Complete,
+    goToStep,
+    handleResume,
+    handleStartFresh,
+  } = useWizardFlow();
 
   const { data: companies = [] } = useQuery<Company[]>({
     queryKey: ['/api/companies'],
   });
 
-  useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        const session = JSON.parse(saved);
-        if (session.step && session.step > 1) {
-          setShowResumeBanner(true);
-          setSessionId(session.sessionId);
-          setEmail(session.email || "");
-          setDocumentId(session.documentId);
-          setName(session.name || "");
-          setCpr(session.cpr || "");
-          setPreference(session.preference || 'cheapest');
-          setSelectedCompanies(session.selectedCompanies || []);
-        }
-      } catch (e) {
-        localStorage.removeItem(STORAGE_KEY);
-      }
-    }
-  }, []);
-
-  const saveSession = useCallback((currentStep: WizardStep) => {
-    const session = {
-      sessionId,
-      step: currentStep,
-      email,
-      documentId,
-      name,
-      cpr,
-      preference,
-      selectedCompanies
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-  }, [sessionId, email, documentId, name, cpr, preference, selectedCompanies]);
-
-  const goToStep = (newStep: WizardStep) => {
-    setStep(newStep);
-    saveSession(newStep);
-    onStepChange?.(newStep);
-  };
-
-  const handleResume = () => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const session = JSON.parse(saved);
-      setStep(session.step as WizardStep);
-    }
-    setShowResumeBanner(false);
-  };
-
-  const handleStartFresh = () => {
-    localStorage.removeItem(STORAGE_KEY);
-    setShowResumeBanner(false);
-    setEmail("");
-    setDocumentId(null);
-    setName("");
-    setCpr("");
-    setPreference('cheapest');
-    setSelectedCompanies([]);
-    setStep(1);
-  };
-
-  const handleStep1Submit = async (e: React.FormEvent) => {
+  const handleEmailSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email) return;
-    
-    setIsLoading(true);
-    try {
-      const checkResponse = await fetch(`/api/users/check/${encodeURIComponent(email)}`, {
-        credentials: 'include'
-      });
-      
-      if (checkResponse.ok) {
-        const { exists, user } = await checkResponse.json();
-        if (exists && user) {
-          localStorage.setItem("userId", user.id);
-          toast({ title: "Velkommen tilbage!", description: "Du er nu logget ind" });
-          window.location.href = '/offers';
-          return;
-        }
-      }
-
-      const progressResponse = await apiRequest('POST', '/api/onboarding/progress', { 
-        email, 
-        currentStep: 1, 
-        completedSteps: [] 
-      });
-      
-      const userResponse = await apiRequest('POST', '/api/users', { email });
-      const user = await userResponse.json();
-      localStorage.setItem("userId", user.id);
-      setSessionId(user.id);
-
-      await apiRequest('PUT', `/api/onboarding/progress/${email}`, {
-        userId: user.id,
-        completedSteps: [1],
-        currentStep: 2
-      });
-
-      goToStep(2);
-    } catch (error: any) {
-      toast({
-        title: "Fejl",
-        description: error.message || "Kunne ikke fortsætte",
-        variant: "destructive"
-      });
-    } finally {
-      setIsLoading(false);
-    }
+    await handleStep1Complete(email);
+    onStepChange?.(2);
   };
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     const file = acceptedFiles[0];
     if (!file) return;
 
-    setUploadStatus('uploading');
     const formData = new FormData();
     formData.append('files', file);
     
     const userId = localStorage.getItem('userId');
     if (!userId) {
-      setUploadStatus('error');
       toast({ title: "Fejl", description: 'Bruger ID mangler', variant: "destructive" });
       return;
     }
@@ -206,96 +98,57 @@ export function HeroWizard({ onComplete, onStepChange }: HeroWizardProps) {
       const response = await apiRequest('POST', '/api/documents/upload', formData);
       const result = await response.json();
       const documents = Array.isArray(result) ? result : [result];
-      setDocumentId(documents[0]?.id || null);
-      setUploadStatus('success');
       
       toast({ title: "Succes!", description: "Police uploaded - vi analyserer den i baggrunden" });
-
-      await apiRequest('PUT', `/api/onboarding/progress/${email}`, {
-        documentId: documents[0]?.id,
-        completedSteps: [1, 2],
-        currentStep: 3
-      });
+      
+      await handleStep2Complete(documents[0]?.id || null, false);
+      onStepChange?.(3);
     } catch (error: any) {
-      setUploadStatus('error');
       toast({ title: "Fejl", description: error.message || 'Upload fejlede', variant: "destructive" });
     }
-  }, [email, toast]);
+  }, [handleStep2Complete, onStepChange, toast]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: { 'application/pdf': ['.pdf'], 'image/jpeg': ['.jpg', '.jpeg'], 'image/png': ['.png'] },
     maxSize: 10 * 1024 * 1024,
-    maxFiles: 1,
-    disabled: uploadStatus === 'uploading' || uploadStatus === 'success' || isLoading
+    maxFiles: 1
   });
 
-  const handleStep2Continue = async () => {
-    goToStep(3);
-  };
-
-  const handleStep3Submit = async (e: React.FormEvent) => {
+  const handleInfoSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name) return;
-
-    setIsLoading(true);
-    try {
-      await apiRequest('PUT', `/api/onboarding/progress/${email}`, {
-        name,
-        cpr,
-        priority: preference,
-        completedSteps: [1, 2, 3],
-        currentStep: 4
-      });
-      goToStep(4);
-    } catch (error: any) {
-      toast({ title: "Fejl", description: error.message, variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
+    await handleStep3Complete(name, cpr, preference);
+    onStepChange?.(4);
   };
 
-  const handleStep4Submit = async () => {
+  const handleCompaniesSubmit = async () => {
     if (selectedCompanies.length === 0) {
       toast({ title: "Vælg mindst ét selskab", variant: "destructive" });
       return;
     }
-
-    setIsLoading(true);
-    try {
-      await apiRequest('PUT', `/api/onboarding/progress/${email}`, {
-        selectedCompanyIds: selectedCompanies,
-        completedSteps: [1, 2, 3, 4],
-        currentStep: 4
-      });
-
-      localStorage.removeItem(STORAGE_KEY);
-      
-      onComplete({
-        email,
-        documentId,
-        name,
-        cpr,
-        preference,
-        selectedCompanyIds: selectedCompanies
-      });
-    } catch (error: any) {
-      toast({ title: "Fejl", description: error.message, variant: "destructive" });
-    } finally {
-      setIsLoading(false);
-    }
+    await handleStep4Complete(selectedCompanies);
+    onComplete?.();
   };
 
   const toggleCompany = (companyId: string) => {
-    setSelectedCompanies(prev => 
+    setSelectedCompanies((prev: string[]) => 
       prev.includes(companyId) 
-        ? prev.filter(id => id !== companyId)
+        ? prev.filter((id: string) => id !== companyId)
         : [...prev, companyId]
     );
   };
 
   const selectAllCompanies = () => {
     setSelectedCompanies(companies.map(c => c.id));
+  };
+
+  const formatCpr = (value: string) => {
+    const digits = value.replace(/\D/g, '').slice(0, 10);
+    if (digits.length > 6) {
+      return `${digits.slice(0, 6)}-${digits.slice(6)}`;
+    }
+    return digits;
   };
 
   const stepLabels: Record<WizardStep, string> = {
@@ -308,14 +161,14 @@ export function HeroWizard({ onComplete, onStepChange }: HeroWizardProps) {
   return (
     <div className="flex w-full flex-col items-center">
       {showResumeBanner && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 rounded-lg border border-brand-200 bg-brand-50 px-6 py-4 shadow-lg">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 flex items-center gap-4 rounded-lg border border-brand-200 bg-brand-50 px-6 py-4 shadow-lg" data-testid="banner-resume">
           <span className="text-body-bold font-body-bold text-brand-700">
             Vil du fortsætte hvor du slap?
           </span>
-          <Button variant="brand-primary" size="small" onClick={handleResume}>
+          <Button variant="brand-primary" size="small" onClick={handleResume} data-testid="button-resume">
             Fortsæt
           </Button>
-          <Button variant="neutral-secondary" size="small" onClick={handleStartFresh}>
+          <Button variant="neutral-secondary" size="small" onClick={handleStartFresh} data-testid="button-start-fresh">
             Start forfra
           </Button>
         </div>
@@ -324,38 +177,52 @@ export function HeroWizard({ onComplete, onStepChange }: HeroWizardProps) {
       <div className="flex min-h-[576px] w-full flex-col items-center justify-center gap-16 px-4 pt-16 pb-32 bg-gradient-to-br from-brand-50 via-white to-neutral-50">
         <div className="flex w-full max-w-[576px] flex-col items-center gap-8">
           <div className="flex items-center gap-1 rounded-md border border-solid border-brand-200 bg-brand-50 pl-3 pr-2 py-1">
-            <span className="whitespace-nowrap font-['Inter'] text-[14px] font-[500] leading-[20px] text-brand-700">
-              {stepLabels[step]}
+            <span className="whitespace-nowrap text-body font-body text-brand-700">
+              {stepLabels[currentStep]}
             </span>
-            <FeatherTimer className="font-['Inter'] text-[14px] font-[400] leading-[20px] text-brand-700" />
+            <FeatherTimer className="text-body font-body text-brand-700" />
           </div>
 
-          {step === 1 && <Step1Email email={email} setEmail={setEmail} onSubmit={handleStep1Submit} isLoading={isLoading} />}
-          {step === 2 && <Step2Upload 
-            getRootProps={getRootProps} 
-            getInputProps={getInputProps} 
-            isDragActive={isDragActive}
-            uploadStatus={uploadStatus}
-            onContinue={handleStep2Continue}
-            onBack={() => goToStep(1)}
-          />}
-          {step === 3 && <Step3Info 
-            name={name} setName={setName}
-            cpr={cpr} setCpr={setCpr}
-            preference={preference} setPreference={setPreference}
-            onSubmit={handleStep3Submit}
-            onBack={() => goToStep(2)}
-            isLoading={isLoading}
-          />}
-          {step === 4 && <Step4Companies
-            companies={companies}
-            selectedCompanies={selectedCompanies}
-            toggleCompany={toggleCompany}
-            selectAllCompanies={selectAllCompanies}
-            onSubmit={handleStep4Submit}
-            onBack={() => goToStep(3)}
-            isLoading={isLoading}
-          />}
+          {currentStep === 1 && (
+            <Step1Email 
+              email={email} 
+              setEmail={setEmail} 
+              onSubmit={handleEmailSubmit} 
+              isLoading={isProcessingStep1} 
+            />
+          )}
+          {currentStep === 2 && (
+            <Step2Upload 
+              getRootProps={getRootProps} 
+              getInputProps={getInputProps} 
+              isDragActive={isDragActive}
+              onBack={() => goToStep(1)}
+            />
+          )}
+          {currentStep === 3 && (
+            <Step3Info 
+              name={name} 
+              setName={setName}
+              cpr={cpr} 
+              setCpr={(val) => setCpr(formatCpr(val))}
+              preference={preference} 
+              setPreference={setPreference}
+              onSubmit={handleInfoSubmit}
+              onBack={() => goToStep(2)}
+              isLoading={false}
+            />
+          )}
+          {currentStep === 4 && (
+            <Step4Companies
+              companies={companies}
+              selectedCompanies={selectedCompanies}
+              toggleCompany={toggleCompany}
+              selectAllCompanies={selectAllCompanies}
+              onSubmit={handleCompaniesSubmit}
+              onBack={() => goToStep(3)}
+              isLoading={false}
+            />
+          )}
         </div>
 
         <div className="flex w-full flex-col items-center gap-4">
@@ -384,10 +251,10 @@ function Step1Email({ email, setEmail, onSubmit, isLoading }: {
   return (
     <>
       <div className="flex w-full flex-col items-center gap-4">
-        <span className="w-full font-['Inter'] text-[48px] sm:text-[64px] font-[600] leading-[52px] sm:leading-[68px] text-default-font text-center -tracking-[0.04em]">
+        <span className="w-full text-heading-1 font-heading-1 text-default-font text-center">
           Stop med at betale for meget
         </span>
-        <span className="w-full font-['Inter'] text-[18px] sm:text-[20px] font-[500] leading-[26px] sm:leading-[28px] text-subtext-color text-center -tracking-[0.02em]">
+        <span className="w-full text-body font-body text-subtext-color text-center max-w-[480px]">
           Vi forhandler automatisk med forsikringsselskaber på dine vegne. Upload din police og spar uden besvær.
         </span>
       </div>
@@ -419,21 +286,19 @@ function Step1Email({ email, setEmail, onSubmit, isLoading }: {
   );
 }
 
-function Step2Upload({ getRootProps, getInputProps, isDragActive, uploadStatus, onContinue, onBack }: {
+function Step2Upload({ getRootProps, getInputProps, isDragActive, onBack }: {
   getRootProps: any;
   getInputProps: any;
   isDragActive: boolean;
-  uploadStatus: 'idle' | 'uploading' | 'success' | 'error';
-  onContinue: () => void;
   onBack: () => void;
 }) {
   return (
     <>
       <div className="flex w-full flex-col items-center gap-4">
-        <span className="w-full font-['Inter'] text-[48px] sm:text-[64px] font-[600] leading-[52px] sm:leading-[68px] text-default-font text-center -tracking-[0.04em]">
+        <span className="w-full text-heading-1 font-heading-1 text-default-font text-center">
           Upload din forsikringspolice
         </span>
-        <span className="w-full font-['Inter'] text-[18px] sm:text-[20px] font-[500] leading-[26px] sm:leading-[28px] text-subtext-color text-center -tracking-[0.02em]">
+        <span className="w-full text-body font-body text-subtext-color text-center max-w-[480px]">
           Vi analyserer automatisk og finder bedre tilbud fra alle forsikringsselskaber
         </span>
       </div>
@@ -451,30 +316,16 @@ function Step2Upload({ getRootProps, getInputProps, isDragActive, uploadStatus, 
           <div 
             {...getRootProps()} 
             className={`flex w-full flex-col items-center justify-center gap-4 rounded-lg border-2 border-dashed px-8 py-12 cursor-pointer transition-all ${
-              isDragActive ? 'border-brand-600 bg-brand-50' : 
-              uploadStatus === 'success' ? 'border-success-600 bg-success-50' :
-              uploadStatus === 'error' ? 'border-error-600 bg-error-50' :
-              'border-brand-600 bg-neutral-50 hover:bg-brand-50'
+              isDragActive ? 'border-brand-600 bg-brand-50' : 'border-brand-600 bg-neutral-50 hover:bg-brand-50'
             }`}
           >
             <input {...getInputProps()} data-testid="input-file-upload" />
-            <div className={`flex h-16 w-16 flex-none items-center justify-center rounded-full ${
-              uploadStatus === 'success' ? 'bg-success-600' : 
-              uploadStatus === 'error' ? 'bg-error-600' : 
-              'bg-brand-600'
-            }`}>
-              {uploadStatus === 'success' ? (
-                <FeatherCheckCircle className="text-body font-body text-white" />
-              ) : (
-                <FeatherUploadCloud className="text-body font-body text-white" />
-              )}
+            <div className="flex h-16 w-16 flex-none items-center justify-center rounded-full bg-brand-600">
+              <FeatherUploadCloud className="text-body font-body text-white" />
             </div>
             <div className="flex flex-col items-center gap-2">
               <span className="text-heading-3 font-heading-3 text-default-font text-center">
-                {uploadStatus === 'uploading' ? 'Uploader...' :
-                 uploadStatus === 'success' ? 'Police uploaded!' :
-                 uploadStatus === 'error' ? 'Prøv igen' :
-                 'Klik for at uploade din police'}
+                Klik for at uploade din police
               </span>
               <span className="text-body font-body text-subtext-color text-center">
                 PDF, JPG eller PNG - maks 10MB
@@ -513,19 +364,11 @@ function Step2Upload({ getRootProps, getInputProps, isDragActive, uploadStatus, 
           </div>
 
           <div className="flex w-full items-center justify-between">
-            <Button variant="neutral-secondary" icon={<FeatherArrowLeft />} onClick={onBack}>
+            <Button variant="neutral-secondary" icon={<FeatherArrowLeft />} onClick={onBack} data-testid="button-back-step2">
               Tilbage
             </Button>
             <span className="text-caption font-caption text-subtext-color">Trin 2 af 4</span>
-            <Button 
-              data-testid="button-continue-upload"
-              variant="variation" 
-              iconRight={<FeatherArrowRight />} 
-              onClick={onContinue}
-              disabled={uploadStatus !== 'success'}
-            >
-              Find bedre tilbud
-            </Button>
+            <div className="w-[100px]" />
           </div>
 
           <div className="flex items-center justify-center gap-6 flex-wrap">
@@ -559,21 +402,13 @@ function Step3Info({ name, setName, cpr, setCpr, preference, setPreference, onSu
   onBack: () => void;
   isLoading: boolean;
 }) {
-  const formatCpr = (value: string) => {
-    const digits = value.replace(/\D/g, '').slice(0, 10);
-    if (digits.length > 6) {
-      return `${digits.slice(0, 6)}-${digits.slice(6)}`;
-    }
-    return digits;
-  };
-
   return (
     <>
       <div className="flex w-full flex-col items-center gap-4">
-        <span className="w-full font-['Inter'] text-[48px] sm:text-[64px] font-[600] leading-[52px] sm:leading-[68px] text-default-font text-center -tracking-[0.04em]">
+        <span className="w-full text-heading-1 font-heading-1 text-default-font text-center">
           Dine informationer
         </span>
-        <span className="w-full font-['Inter'] text-[18px] sm:text-[20px] font-[500] leading-[26px] sm:leading-[28px] text-subtext-color text-center -tracking-[0.02em]">
+        <span className="w-full text-body font-body text-subtext-color text-center max-w-[480px]">
           Vi har brug for lidt information for at kunne indhente de bedste tilbud til dig
         </span>
       </div>
@@ -600,7 +435,7 @@ function Step3Info({ name, setName, cpr, setCpr, preference, setPreference, onSu
 
           <TextField 
             className="h-auto w-full flex-none" 
-            label="CPR-nummer" 
+            label="CPR-nummer (valgfrit)" 
             helpText="Bruges til identifikation hos forsikringsselskaber"
             icon={<FeatherCreditCard />}
           >
@@ -608,7 +443,7 @@ function Step3Info({ name, setName, cpr, setCpr, preference, setPreference, onSu
               data-testid="input-cpr"
               placeholder="XXXXXX-XXXX"
               value={cpr}
-              onChange={(e) => setCpr(formatCpr(e.target.value))}
+              onChange={(e) => setCpr(e.target.value)}
               disabled={isLoading}
             />
           </TextField>
@@ -637,18 +472,22 @@ function Step3Info({ name, setName, cpr, setCpr, preference, setPreference, onSu
             </ToggleGroup>
           </div>
 
-          <Button
-            data-testid="button-continue-info"
-            className="h-10 w-full flex-none"
-            variant="variation"
-            size="large"
-            type="submit"
-            icon={<FeatherCheckCircle />}
-            disabled={isLoading || !name}
-            loading={isLoading}
-          >
-            Få dine personlige tilbud
-          </Button>
+          <div className="flex w-full items-center justify-between">
+            <Button variant="neutral-secondary" icon={<FeatherArrowLeft />} onClick={onBack} type="button" data-testid="button-back-step3">
+              Tilbage
+            </Button>
+            <span className="text-caption font-caption text-subtext-color">Trin 3 af 4</span>
+            <Button
+              data-testid="button-continue-info"
+              variant="variation"
+              type="submit"
+              iconRight={<FeatherArrowRight />}
+              disabled={isLoading || !name}
+              loading={isLoading}
+            >
+              Fortsæt
+            </Button>
+          </div>
 
           <div className="flex w-full flex-col items-start gap-3 rounded-lg border border-solid border-brand-200 bg-brand-50 px-4 py-3">
             <div className="flex w-full items-center gap-2">
@@ -697,10 +536,10 @@ function Step4Companies({ companies, selectedCompanies, toggleCompany, selectAll
   return (
     <>
       <div className="flex w-full flex-col items-center gap-4">
-        <span className="w-full font-['Inter'] text-[48px] sm:text-[64px] font-[600] leading-[52px] sm:leading-[68px] text-default-font text-center -tracking-[0.04em]">
+        <span className="w-full text-heading-1 font-heading-1 text-default-font text-center">
           Vælg forsikringsselskaber
         </span>
-        <span className="w-full font-['Inter'] text-[18px] sm:text-[20px] font-[500] leading-[26px] sm:leading-[28px] text-subtext-color text-center -tracking-[0.02em]">
+        <span className="w-full text-body font-body text-subtext-color text-center max-w-[480px]">
           Vælg hvilke forsikringsselskaber du vil have tilbud fra
         </span>
       </div>
@@ -722,6 +561,7 @@ function Step4Companies({ companies, selectedCompanies, toggleCompany, selectAll
               size="small"
               icon={<FeatherCheckSquare />}
               onClick={selectAllCompanies}
+              data-testid="button-select-all"
             >
               Vælg alle
             </Button>
@@ -764,18 +604,22 @@ function Step4Companies({ companies, selectedCompanies, toggleCompany, selectAll
             </span>
           </div>
 
-          <Button
-            data-testid="button-complete"
-            className="h-10 w-full flex-none"
-            variant="variation"
-            size="large"
-            icon={<FeatherCheckCircle />}
-            onClick={onSubmit}
-            disabled={isLoading || selectedCompanies.length === 0}
-            loading={isLoading}
-          >
-            Fortsæt med {selectedCompanies.length} valgte selskaber
-          </Button>
+          <div className="flex w-full items-center justify-between">
+            <Button variant="neutral-secondary" icon={<FeatherArrowLeft />} onClick={onBack} data-testid="button-back-step4">
+              Tilbage
+            </Button>
+            <span className="text-caption font-caption text-subtext-color">Trin 4 af 4</span>
+            <Button
+              data-testid="button-complete"
+              variant="variation"
+              icon={<FeatherCheckCircle />}
+              onClick={onSubmit}
+              disabled={isLoading || selectedCompanies.length === 0}
+              loading={isLoading}
+            >
+              Fortsæt ({selectedCompanies.length})
+            </Button>
+          </div>
 
           <div className="flex w-full items-center justify-center gap-6">
             <div className="flex items-center gap-1">
