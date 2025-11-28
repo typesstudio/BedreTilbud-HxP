@@ -1,0 +1,268 @@
+Perfekt, så kører vi “Replit-mode” 🔧
+Jeg giver dig:
+
+1. **Arkitektur-sparring** – hvordan systemet bør bygges.
+2. **Klar Replit-prompt**, du kan copy/paste direkte ind i Replit.
+
+(Jeg antager, at dine prompts allerede er opdateret til at kræve PDF-tilbud – nu får vi koden til at opføre sig rigtigt.)
+
+---
+
+## 1. Arkitektur – hvordan det bør fungere
+
+Mål:
+Når et selskab svarer med noget a la:
+
+> “For at se tilbuddet skal kunden logge ind med MitID / gå på selvbetjening / Min Side.”
+
+**og der ikke er nogen PDF vedhæftet**,
+så skal systemet **automatisk svare**:
+
+* Tak for mailen
+* Vi arbejder på vegne af kunden
+* Vi kan ikke nøjes med MitID/link
+* De skal sende **det konkrete tilbud som PDF vedhæftet denne mail**
+
+### Bedste system-setup
+
+**Flow for indgående mails:**
+
+1. IMAP/webhook → vi får en `incomingEmail` (body + attachments + company + thread osv.).
+
+2. Vi kører en central funktion, fx:
+
+   ```ts
+   const mode = classifyIncomingEmailForAutoResponse(incomingEmail);
+   ```
+
+3. `mode` kan være:
+
+   * `"none"` – svar ikke automatisk
+   * `"normal"` – brug almindelig auto-response (fx opklarende spørgsmål)
+   * `"mitid"` – special-case: MitID/selvbetjening uden PDF → **send “send PDF-tilbud” svar**
+
+4. Hvis `mode === "mitid"`:
+
+   * Kald `generateResponse({ ..., responseMode: "mitid" })`
+   * Send mailen tilbage via `emailService.sendEmail(...)`.
+
+**Fordele ved denne struktur:**
+
+* Du har **én samlet klassifikation**, som du senere kan udvide (fx “offer_with_pdf”, “complaint”, “legal_risk” osv.).
+* Du kan logge `mode` i databasen, hvis du vil analysere, hvilke selskaber spammer med MitID-links.
+* Du holder prompts rene:
+  – logikken (MitID-detektion) ligger i kode,
+  – formuleringen (“send PDF i denne mail”) ligger i prompten.
+
+---
+
+## 2. Replit-prompt – klar til copy/paste
+
+Her får du en Replit-prompt, der fortæller Replit præcis, hvad den skal gøre i koden.
+Du kan tilpasse småting (fx filnavne) hvis din struktur er lidt anderledes.
+
+---
+
+### 🔧 Replit Prompt: Implementer MitID-detektion og auto-svar
+
+> **Copy/paste nedenfor direkte ind i Replit:**
+
+````text
+You are working in a TypeScript/Node monorepo for the BedreTilbud insurance app.
+
+Goal
+Implement a robust MitID/“self-service only” detector for incoming emails from insurance companies.  
+If a company email tells the user to log in with MitID / go to self-service / “Min Side” AND there is no PDF attachment, the system must automatically reply and ask them to send the full offer as a PDF attached to the reply email.
+
+Important:
+- Do NOT break existing flows.
+- Keep the implementation small and focused.
+- Reuse the existing aiResponseService and emailService.
+- The AI prompt files have already been updated to handle a “mitid” response mode and to request PDF offers instead of MitID-only flows.
+
+Repository structure hints
+There are existing services like:
+- server/services/aiResponseService.ts  (generateResponse or similar)
+- server/services/emailService.ts       (sending emails)
+- server/ai-prompts/emails/auto-response.md
+- server/ai-prompts/emails/system-prompt.md
+
+Step 1 – Find the incoming email handling flow
+1. Search the repo for where incoming emails are processed (IMAP/webhook handler).
+   - Look for code that:
+     - parses incoming emails
+     - calls aiResponseService.generateResponse (or similar)
+     - and/or sends auto replies via emailService.
+2. Identify the function that decides whether to auto-respond or not.
+   - If there is a function like shouldAutoRespond, reuse it.
+   - If not, introduce a small classifier function in aiResponseService.ts.
+
+Step 2 – Introduce a classifier with a special "mitid" mode
+In server/services/aiResponseService.ts (or the most appropriate place), implement:
+
+- A helper function:
+
+  ```ts
+  function isMitIdOnlyEmail(body: string): boolean {
+    const lower = body.toLowerCase();
+
+    const patterns = [
+      'mitid',
+      'mit id',
+      'log ind med mitid',
+      'log på med mitid',
+      'gå ind på mitid',
+      'selvbetjening',
+      'selvbetjeningen',
+      'min side',
+      'minside',
+      'kundeportal',
+    ];
+
+    return patterns.some((p) => lower.includes(p));
+  }
+````
+
+* A classifier function that returns a mode:
+
+  ```ts
+  export type AutoRespondMode = 'none' | 'normal' | 'mitid';
+
+  export function classifyIncomingEmailForAutoResponse(email: {
+    body: string;
+    attachments?: { mimeType?: string; contentType?: string }[];
+  }): AutoRespondMode {
+    const body = email.body ?? '';
+    const attachments = email.attachments ?? [];
+
+    const hasPdfAttachment = attachments.some((a) => {
+      const type = (a.mimeType || a.contentType || '').toLowerCase();
+      return type.includes('pdf');
+    });
+
+    // 1) MitID / self-service mail without PDF => always auto-respond in "mitid" mode
+    if (isMitIdOnlyEmail(body) && !hasPdfAttachment) {
+      return 'mitid';
+    }
+
+    // 2) If there is a PDF offer attached, we generally do NOT auto-respond by default.
+    //    (You can tweak this logic later if you want.)
+    if (hasPdfAttachment) {
+      return 'none';
+    }
+
+    // 3) Filter out spam/system mails
+    if (/noreply|no-reply|do not reply|unsubscribe/i.test(body)) {
+      return 'none';
+    }
+
+    // 4) Very short messages -> no auto-response
+    if (body.trim().length < 20) {
+      return 'none';
+    }
+
+    // 5) Default -> normal auto-response mode for "ordinary" emails
+    return 'normal';
+  }
+  ```
+
+Adjust the parameter shape if your email object is typed differently (e.g. ParsedEmail).
+
+Step 3 – Wire the classifier into the incoming email flow
+In the file where incoming company emails are handled (IMAP/webhook handler):
+
+1. After parsing the incoming email into an object with body + attachments, call:
+
+   ```ts
+   import { classifyIncomingEmailForAutoResponse, AutoRespondMode } from '../services/aiResponseService';
+   // adjust the path as needed
+
+   const mode: AutoRespondMode = classifyIncomingEmailForAutoResponse({
+     body: incomingEmail.body,
+     attachments: incomingEmail.attachments,
+   });
+   ```
+
+2. If mode is 'none', do nothing (no auto-reply):
+
+   ```ts
+   if (mode === 'none') {
+     return;
+   }
+   ```
+
+3. For mode === 'mitid':
+
+   * Call aiResponseService.generateResponse with an extra hint/parameter telling the model that this is a MitID-only case.
+   * Pass responseMode = 'mitid' so the updated auto-response prompt can focus on “please send PDF offer attached to this email”.
+
+   Example (adapt to your function signature):
+
+   ```ts
+   const replyBody = await aiResponseService.generateResponse({
+     incomingEmailBody: incomingEmail.body,
+     companyName,
+     sentEmail: originalOutgoingEmailBody,
+     responseMode: 'mitid', // NEW: tell the prompt this is a MitID-only case
+   });
+
+   await emailService.sendEmail({
+     to: companyEmail,
+     subject: incomingEmail.subject ?? `Vedr. jeres tilbud`,
+     body: replyBody,
+     threadId: incomingEmail.threadId, // or whatever your threading identifier is
+   });
+   ```
+
+4. For mode === 'normal':
+
+   * Keep your existing behavior (whatever you already do for generic auto-responses), but consider passing `responseMode: 'normal'` so the prompt can adjust slightly if needed.
+
+Step 4 – Ensure generateResponse supports responseMode (optional but recommended)
+Open server/services/aiResponseService.ts and update generateResponse so it:
+
+1. Accepts a `responseMode?: 'normal' | 'mitid'` parameter.
+2. Injects this into the prompt variables when loading the auto-response prompt.
+
+For example (simplified):
+
+```ts
+export async function generateResponse(params: {
+  incomingEmailBody: string;
+  companyName: string;
+  sentEmail: string;
+  responseMode?: 'normal' | 'mitid';
+}) {
+  const { incomingEmailBody, companyName, sentEmail, responseMode = 'normal' } = params;
+
+  const prompt = await promptLoader.loadPrompt('emails/auto-response.md', {
+    incomingEmailBody,
+    companyName,
+    sentEmail,
+    responseMode,
+  });
+
+  // Call the LLM with this prompt as today
+  // ...
+}
+```
+
+Note: The markdown prompt auto-response.md has already been updated to mention ResponseMode and handle the "mitid" case by explicitly asking for a PDF offer instead of MitID-only self-service. Do NOT rework the prompt text in this change, just make sure `responseMode` is passed into the template.
+
+Step 5 – Sanity checks
+
+* Run the test/dev server.
+* Manually simulate three scenarios in code or via unit tests:
+
+  1. Email with “MitID/selvbetjening/Min Side” in the body and no PDF → auto-response is sent, using responseMode = 'mitid'.
+  2. Email with a PDF attachment (mimeType = application/pdf) → mode = 'none' (no auto-response).
+  3. Short emails or noreply emails → mode = 'none'.
+
+Keep changes small, well-typed and consistent with the existing code style.
+
+```
+
+---
+
+Hvis du vil, kan vi bagefter lave en **anden Replit-prompt**, der opretter små jest-tests omkring `classifyIncomingEmailForAutoResponse`, så du har automatiske tests på MitID-case.
+```
