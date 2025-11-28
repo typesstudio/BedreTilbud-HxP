@@ -56,6 +56,16 @@ This architecture provides deterministic mapping, reprocessability, and cost-eff
 
 An **Extraction Stages Debugging System** persists intermediate outputs (OCR, Segmentation, Extraction) to `documents.extraction_stages` for quality monitoring and debugging.
 
+### Health Check Caching Architecture (Ticket A - Nov 2025)
+
+The `policy_snapshots.health_check_json` JSONB column enables pre-computed health check caching:
+-   **Webhook Endpoints**: `/api/webhooks/health-check` and `/api/webhooks/comparison` allow external flows (n8n, AI agents) to persist pre-computed JSON
+-   **Security**: Requires `X-Webhook-Secret` header with `WEBHOOK_SECRET` env var; rate-limited to 100/min
+-   **Validation**: Zod schema validation on all payloads before persisting
+-   **Development**: Set `ALLOW_INSECURE_WEBHOOKS=true` to bypass auth for local testing only
+-   **Types**: `HealthCheckJson` and `ComparisonJson` types in `shared/types/healthCheck.ts`
+-   **Documentation**: See `docs/ticket-a-db-pipeline.md` for integration details
+
 ### Comparison Pipeline Architecture
 This pipeline generates comprehensive comparison analyses:
 1.  **Phase 3: Deterministic Policy Matching**: Pairs current and offer policies using scoring heuristics, with fallback logic for single-policy-per-type pairs. The matcher implements **Snapshot Quality Scoring** to select the best offer snapshots: +1000 points for snapshots with pricing data (`pricingStatus ≠ 'missing'`), +100 points for health check presence. This ensures PricingAgent-backed snapshots are prioritized over legacy snapshots without pricing data.

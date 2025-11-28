@@ -105,3 +105,6 @@ waitForPort = 5000
 
 [userenv.shared]
 ENABLE_TWO_PHASE_HEALTHCHECK = "true"
+
+[userenv.development]
+ALLOW_INSECURE_WEBHOOKS = "true"

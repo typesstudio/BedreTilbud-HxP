@@ -11,22 +11,37 @@ import { logger } from '../utils/logging';
  * - Constant-time comparison to prevent timing attacks
  * - Rate limiting should be applied separately via webhookLimiter
  * - Logging for audit trail
+ * 
+ * Environment variables:
+ * - WEBHOOK_SECRET: Required shared secret for authentication
+ * - ALLOW_INSECURE_WEBHOOKS: Set to "true" to bypass auth in development (NOT for production)
  */
 export function requireWebhookSecret(req: Request, res: Response, next: NextFunction) {
   const webhookSecret = process.env.WEBHOOK_SECRET;
+  const allowInsecure = process.env.ALLOW_INSECURE_WEBHOOKS === 'true';
   
-  // If no secret is configured, allow in development but block in production
+  // If no secret is configured
   if (!webhookSecret) {
-    if (process.env.NODE_ENV === 'production') {
-      logger.error('[WebhookAuth] WEBHOOK_SECRET not configured in production');
-      return res.status(503).json({ 
-        error: 'Webhook endpoint not configured',
-        message: 'Contact administrator to configure webhook authentication'
-      });
+    // Only allow bypass if explicitly enabled AND not in production
+    if (allowInsecure && process.env.NODE_ENV !== 'production') {
+      logger.warn('[WebhookAuth] ALLOW_INSECURE_WEBHOOKS enabled - bypassing authentication (DEV ONLY)');
+      return next();
     }
-    // In development, warn but allow
-    logger.warn('[WebhookAuth] WEBHOOK_SECRET not set - allowing request in development mode');
-    return next();
+    
+    // Block the request
+    const message = process.env.NODE_ENV === 'production' 
+      ? 'Webhook endpoint not configured - contact administrator'
+      : 'WEBHOOK_SECRET not set. Set WEBHOOK_SECRET env var or set ALLOW_INSECURE_WEBHOOKS=true for testing';
+    
+    logger.error('[WebhookAuth] WEBHOOK_SECRET not configured', { 
+      isProduction: process.env.NODE_ENV === 'production',
+      allowInsecure
+    });
+    
+    return res.status(503).json({ 
+      error: 'Webhook endpoint not configured',
+      message
+    });
   }
   
   const providedSecret = req.headers['x-webhook-secret'] as string;

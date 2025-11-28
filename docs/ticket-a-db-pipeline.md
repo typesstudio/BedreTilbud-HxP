@@ -16,9 +16,13 @@ X-Webhook-Secret: your-secret-here
 
 **Configuration**:
 - Set the `WEBHOOK_SECRET` environment variable on the server
-- Include the same secret in all webhook requests
-- In development mode, requests are allowed without the secret (with a warning logged)
-- In production, requests without valid secret receive `401 Unauthorized`
+- Include the same secret in all webhook requests (X-Webhook-Secret header)
+- In production, requests without valid secret receive `401 Unauthorized` or `503` if not configured
+
+**Development Testing**:
+- By default, authentication is enforced even in development
+- Set `ALLOW_INSECURE_WEBHOOKS=true` to bypass authentication for local testing (NOT for production)
+- A warning is logged when authentication is bypassed
 
 **Rate Limiting**:
 - Webhooks are rate-limited to 100 requests per minute in production
