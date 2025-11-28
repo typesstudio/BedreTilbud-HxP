@@ -76,45 +76,45 @@ export default function ModernLandingPage() {
         <div className="flex w-full max-w-[1024px] flex-wrap items-center gap-12 py-16 px-4">
           <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-2">
             <div className="flex items-center gap-2">
-              <FeatherSpeech className="font-['Inter'] text-[16px] font-[400] leading-[16px] text-default-font" />
-              <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-default-font -tracking-[0.01em]">
+              <FeatherSpeech className="w-4 h-4 text-default-font" />
+              <span className="text-body-bold font-body-bold text-default-font">
                 Ingen telefonkøer
               </span>
             </div>
-            <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
+            <span className="text-body font-body text-subtext-color">
               Alt klares online, uden app, eller glemte kodeord, kun din email
             </span>
           </div>
           <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-2">
             <div className="flex items-center gap-2">
-              <FeatherEye className="font-['Inter'] text-[16px] font-[400] leading-[16px] text-default-font" />
-              <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-default-font -tracking-[0.01em]">
+              <FeatherEye className="w-4 h-4 text-default-font" />
+              <span className="text-body-bold font-body-bold text-default-font">
                 Side-om-side overblik
               </span>
             </div>
-            <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
+            <span className="text-body font-body text-subtext-color">
               Dækning, pris, selvrisiko og udelukkelser på én skærm
             </span>
           </div>
           <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-2">
             <div className="flex items-center gap-2">
-              <FeatherTypeOutline className="font-['Inter'] text-[16px] font-[400] leading-[16px] text-default-font" />
-              <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-default-font -tracking-[0.01em]">
+              <FeatherTypeOutline className="w-4 h-4 text-default-font" />
+              <span className="text-body-bold font-body-bold text-default-font">
                 Simpel forklaring
               </span>
             </div>
-            <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
+            <span className="text-body font-body text-subtext-color">
               Vi oversætter jura og gebyrer til klart dansk simpelt og nemt
             </span>
           </div>
           <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-2">
             <div className="flex items-center gap-2">
-              <FeatherPercent className="font-['Inter'] text-[16px] font-[400] leading-[16px] text-default-font" />
-              <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-default-font -tracking-[0.01em]">
+              <FeatherPercent className="w-4 h-4 text-default-font" />
+              <span className="text-body-bold font-body-bold text-default-font">
                 Pris-pres
               </span>
             </div>
-            <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
+            <span className="text-body font-body text-subtext-color">
               Vi bruger de billigste tilbud til at presse konkurrenter.
             </span>
           </div>
@@ -124,10 +124,10 @@ export default function ModernLandingPage() {
         <div className="flex w-full flex-col items-center justify-center px-6 pt-12 bg-gradient-to-b from-transparent via-neutral-100 to-transparent">
           <div className="flex w-full max-w-[1024px] flex-col items-start gap-16">
             <div className="flex w-full items-end gap-12 flex-wrap">
-              <span className="grow shrink-0 basis-0 whitespace-pre-wrap font-['Inter'] text-[56px] font-[600] leading-[62px] text-default-font -tracking-[0.04em]">
+              <span className="grow shrink-0 basis-0 whitespace-pre-wrap text-[48px] md:text-[56px] font-semibold leading-tight text-default-font tracking-tight font-heading-1">
                 {"Sådan får du\nbedre forsikringer"}
               </span>
-              <span className="grow shrink-0 basis-0 font-['Inter'] text-[17px] font-[500] leading-[24px] text-subtext-color -tracking-[0.01em]">
+              <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-subtext-color">
                 Vi tager os af alt det besværlige. Upload din police én gang, så
                 sørger vi for at du altid har bedre tilbud.
               </span>
@@ -140,7 +140,7 @@ export default function ModernLandingPage() {
                   alt="Upload policer"
                 />
                 <div className="flex w-full grow shrink-0 basis-0 items-end gap-2 bg-default-background px-8 py-6">
-                  <span className="grow shrink-0 basis-0 font-['Inter'] text-[21px] font-[500] leading-[28px] text-default-font -tracking-[0.02em]">
+                  <span className="grow shrink-0 basis-0 text-heading-2 font-heading-2 text-default-font">
                     Upload dine policer, tager kun 2 minutter
                   </span>
                   <IconButton
@@ -158,7 +158,7 @@ export default function ModernLandingPage() {
                   alt="Vi forhandler"
                 />
                 <div className="flex w-full grow shrink-0 basis-0 items-end gap-2 bg-default-background px-8 py-6">
-                  <span className="grow shrink-0 basis-0 font-['Inter'] text-[21px] font-[500] leading-[28px] text-default-font -tracking-[0.02em]">
+                  <span className="grow shrink-0 basis-0 text-heading-2 font-heading-2 text-default-font">
                     Vi forhandler med selskaberne for dig
                   </span>
                   <IconButton
@@ -176,7 +176,7 @@ export default function ModernLandingPage() {
                   alt="Godkend og spar"
                 />
                 <div className="flex w-full grow shrink-0 basis-0 items-end gap-2 bg-default-background px-8 py-6">
-                  <span className="grow shrink-0 basis-0 font-['Inter'] text-[21px] font-[500] leading-[28px] text-default-font -tracking-[0.02em]">
+                  <span className="grow shrink-0 basis-0 text-heading-2 font-heading-2 text-default-font">
                     Du godkender og begynder at spare
                   </span>
                   <IconButton
