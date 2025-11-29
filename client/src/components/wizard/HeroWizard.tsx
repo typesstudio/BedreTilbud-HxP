@@ -179,10 +179,10 @@ export function HeroWizard({ onComplete, onStepChange }: HeroWizardProps) {
       <div className="flex min-h-[576px] w-full flex-col items-center justify-center gap-16 px-4 pt-24 pb-32 bg-gradient-to-br from-brand-50 via-white to-neutral-50">
         <div className="flex w-full max-w-[576px] flex-col items-center gap-8">
           <div className="flex items-center gap-1 rounded-md border border-solid border-brand-200 bg-brand-50 pl-3 pr-2 py-1">
-            <span className="whitespace-nowrap text-body font-body text-brand-700">
+            <span className="whitespace-nowrap font-['Inter'] text-[14px] font-[500] leading-[20px] text-brand-700">
               {stepLabels[currentStep]}
             </span>
-            <FeatherTimer className="text-body font-body text-brand-700" />
+            <FeatherTimer className="font-['Inter'] text-[14px] font-[400] leading-[20px] text-brand-700" />
           </div>
 
           {currentStep === 1 && (
@@ -253,10 +253,10 @@ function Step1Email({ email, setEmail, onSubmit, isLoading }: {
   return (
     <>
       <div className="flex w-full flex-col items-center gap-4">
-        <span className="w-full text-heading-1 font-heading-1 text-default-font text-center">
+        <span className="w-full font-['Inter'] text-[64px] font-[600] leading-[68px] text-default-font text-center -tracking-[0.04em]">
           Stop med at betale for meget
         </span>
-        <span className="w-full text-body font-body text-subtext-color text-center max-w-[480px]">
+        <span className="w-full font-['Inter'] text-[20px] font-[500] leading-[28px] text-subtext-color text-center -tracking-[0.02em] max-w-[480px]">
           Vi forhandler automatisk med forsikringsselskaber på dine vegne. Upload din police og spar uden besvær.
         </span>
       </div>
@@ -298,10 +298,10 @@ function Step2Upload({ getRootProps, getInputProps, isDragActive, onBack }: {
   return (
     <>
       <div className="flex w-full flex-col items-center gap-4">
-        <span className="w-full text-heading-1 font-heading-1 text-default-font text-center">
+        <span className="w-full font-['Inter'] text-[64px] font-[600] leading-[68px] text-default-font text-center -tracking-[0.04em]">
           Upload din forsikringspolice
         </span>
-        <span className="w-full text-body font-body text-subtext-color text-center max-w-[480px]">
+        <span className="w-full font-['Inter'] text-[20px] font-[500] leading-[28px] text-subtext-color text-center -tracking-[0.02em] max-w-[480px]">
           Vi analyserer automatisk og finder bedre tilbud fra alle forsikringsselskaber
         </span>
       </div>
@@ -408,10 +408,10 @@ function Step3Info({ name, setName, cpr, setCpr, preference, setPreference, onSu
   return (
     <>
       <div className="flex w-full flex-col items-center gap-4">
-        <span className="w-full text-heading-1 font-heading-1 text-default-font text-center">
+        <span className="w-full font-['Inter'] text-[64px] font-[600] leading-[68px] text-default-font text-center -tracking-[0.04em]">
           Dine informationer
         </span>
-        <span className="w-full text-body font-body text-subtext-color text-center max-w-[480px]">
+        <span className="w-full font-['Inter'] text-[20px] font-[500] leading-[28px] text-subtext-color text-center -tracking-[0.02em] max-w-[480px]">
           Vi har brug for lidt information for at kunne indhente de bedste tilbud til dig
         </span>
       </div>
@@ -539,10 +539,10 @@ function Step4Companies({ companies, selectedCompanies, toggleCompany, selectAll
   return (
     <>
       <div className="flex w-full flex-col items-center gap-4">
-        <span className="w-full text-heading-1 font-heading-1 text-default-font text-center">
+        <span className="w-full font-['Inter'] text-[64px] font-[600] leading-[68px] text-default-font text-center -tracking-[0.04em]">
           Vælg forsikringsselskaber
         </span>
-        <span className="w-full text-body font-body text-subtext-color text-center max-w-[480px]">
+        <span className="w-full font-['Inter'] text-[20px] font-[500] leading-[28px] text-subtext-color text-center -tracking-[0.02em] max-w-[480px]">
           Vælg hvilke forsikringsselskaber du vil have tilbud fra
         </span>
       </div>

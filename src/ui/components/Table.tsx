@@ -91,7 +91,7 @@ const HeaderCell = React.forwardRef<HTMLDivElement, HeaderCellProps>(
       <th {...otherProps}>
         <div
           className={SubframeUtils.twClassNames(
-            "flex h-8 w-full items-center gap-1 px-3",
+            "flex h-8 w-full items-center gap-1 px-3 text-left",
             className
           )}
           ref={ref}
