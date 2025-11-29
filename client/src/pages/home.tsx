@@ -39,18 +39,18 @@ export default function Home() {
         {/* Hero Section */}
         <section className="py-12 md:py-16 px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center">
-            <BlurFade delay={0} direction="up">
+            <BlurFade delay={0.1} duration={0.6} offset={24} direction="up">
               <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground mb-4 md:mb-6">
                 Find bedre forsikringstilbud
               </h2>
             </BlurFade>
-            <BlurFade delay={0.1} direction="up">
+            <BlurFade delay={0.25} duration={0.6} offset={24} direction="up">
               <p className="text-lg md:text-xl text-muted-foreground mb-6 md:mb-8 max-w-2xl mx-auto">
                 Upload dine nuværende forsikringer, og vi hjælper dig med at finde bedre tilbud 
                 fra Danmarks største forsikringsselskaber.
               </p>
             </BlurFade>
-            <BlurFade delay={0.2} direction="up">
+            <BlurFade delay={0.4} duration={0.6} offset={24} direction="up">
               <Button 
                 size="lg" 
                 onClick={() => setLocation("/onboarding")}
@@ -66,13 +66,13 @@ export default function Home() {
         {/* How it works */}
         <section className="py-16 px-4 sm:px-6 lg:px-8 bg-muted/30">
           <div className="max-w-6xl mx-auto">
-            <BlurFade delay={0} direction="up" inView>
+            <BlurFade delay={0.1} duration={0.6} offset={24} direction="up" inView>
               <h3 className="text-3xl font-bold text-center text-foreground mb-12">
                 Sådan virker det
               </h3>
             </BlurFade>
             <div className="grid md:grid-cols-4 gap-8">
-              <BlurFade delay={0.15} direction="up" inView>
+              <BlurFade delay={0.2} duration={0.5} offset={20} direction="up" inView>
                 <Card className="text-center shadow-card h-full">
                   <CardContent className="pt-6">
                     <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -86,7 +86,7 @@ export default function Home() {
                 </Card>
               </BlurFade>
 
-              <BlurFade delay={0.25} direction="up" inView>
+              <BlurFade delay={0.3} duration={0.5} offset={20} direction="up" inView>
                 <Card className="text-center shadow-card h-full">
                   <CardContent className="pt-6">
                     <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -100,7 +100,7 @@ export default function Home() {
                 </Card>
               </BlurFade>
 
-              <BlurFade delay={0.35} direction="up" inView>
+              <BlurFade delay={0.4} duration={0.5} offset={20} direction="up" inView>
                 <Card className="text-center shadow-card h-full">
                   <CardContent className="pt-6">
                     <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -114,7 +114,7 @@ export default function Home() {
                 </Card>
               </BlurFade>
 
-              <BlurFade delay={0.45} direction="up" inView>
+              <BlurFade delay={0.5} duration={0.5} offset={20} direction="up" inView>
                 <Card className="text-center shadow-card h-full">
                   <CardContent className="pt-6">
                     <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -134,17 +134,17 @@ export default function Home() {
         {/* CTA Section */}
         <section className="py-16 px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center">
-            <BlurFade delay={0} direction="up" inView>
+            <BlurFade delay={0.1} duration={0.6} offset={24} direction="up" inView>
               <h3 className="text-3xl font-bold text-foreground mb-4">
                 Klar til at spare penge?
               </h3>
             </BlurFade>
-            <BlurFade delay={0.1} direction="up" inView>
+            <BlurFade delay={0.25} duration={0.6} offset={24} direction="up" inView>
               <p className="text-lg text-muted-foreground mb-8">
                 Det tager kun få minutter at komme i gang
               </p>
             </BlurFade>
-            <BlurFade delay={0.2} direction="up" inView>
+            <BlurFade delay={0.4} duration={0.6} offset={24} direction="up" inView>
               <Button 
                 size="lg" 
                 onClick={() => setLocation("/onboarding")}
