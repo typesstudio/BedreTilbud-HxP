@@ -162,13 +162,26 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
   const coverageRows: ComparisonCoverageRowView[] = [];
   if (preferredPolicy?.coverageComparison?.rows) {
     preferredPolicy.coverageComparison.rows.forEach((row: any) => {
+      const currentValue = formatCoverageValue(row.current);
+      const offerValue = formatCoverageValue(row.offer);
+      
       coverageRows.push({
         coverageLabel: row.coverage || "Dækning",
         coverageDescription: row.description || null,
-        currentValue: formatCoverageValue(row.current),
-        offerValue: formatCoverageValue(row.offer),
-        currentVariant: getVariantFromStatus(row.current?.status),
-        offerVariant: getVariantFromStatus(row.offer?.status),
+        currentValue,
+        offerValue,
+        currentVariant: getCurrentVariantWithComparison(
+          currentValue,
+          offerValue,
+          row.current?.status,
+          row.offer?.status
+        ),
+        offerVariant: getOfferVariantWithComparison(
+          currentValue,
+          offerValue,
+          row.current?.status,
+          row.offer?.status
+        ),
         note: row.note || null,
       });
     });
@@ -370,13 +383,26 @@ function generatePolicyTab(
   const policyCoverageRows: ComparisonCoverageRowView[] = [];
   if (policyComp.coverageComparison?.rows) {
     policyComp.coverageComparison.rows.forEach((row: any) => {
+      const currentValue = formatCoverageValue(row.current);
+      const offerValue = formatCoverageValue(row.offer);
+      
       policyCoverageRows.push({
         coverageLabel: row.coverage || "Dækning",
         coverageDescription: row.description || null,
-        currentValue: formatCoverageValue(row.current),
-        offerValue: formatCoverageValue(row.offer),
-        currentVariant: getVariantFromStatus(row.current?.status),
-        offerVariant: getVariantFromStatus(row.offer?.status),
+        currentValue,
+        offerValue,
+        currentVariant: getCurrentVariantWithComparison(
+          currentValue,
+          offerValue,
+          row.current?.status,
+          row.offer?.status
+        ),
+        offerVariant: getOfferVariantWithComparison(
+          currentValue,
+          offerValue,
+          row.current?.status,
+          row.offer?.status
+        ),
         note: row.note || null,
       });
     });
@@ -500,6 +526,235 @@ function getVariantFromStatus(status: string | undefined): "success" | "error" |
     return "neutral";
   }
 
+  return "neutral";
+}
+
+/**
+ * Parse a Danish-formatted number from a string like "500.000 kr." or "1.000.000"
+ * Handles ranges like "10.000-20.000 kr." by extracting the highest value
+ * Returns null if no valid number can be extracted
+ */
+function parseNumericValue(value: string | null | undefined): number | null {
+  if (!value) return null;
+  
+  const valueLower = value.toLowerCase().trim();
+  
+  // Skip text-only values - check for common non-numeric patterns
+  if (valueLower.startsWith('inkluderet') || 
+      valueLower.startsWith('ikke inkluderet') ||
+      valueLower === 'ja' || valueLower === 'nej' ||
+      valueLower === 'yes' || valueLower === 'no' ||
+      valueLower.startsWith('som ') ||  // "Som nuværende"
+      valueLower.startsWith('afventer') ||
+      valueLower.startsWith('ukendt') ||
+      valueLower === '—' || valueLower === '-') {
+    return null;
+  }
+  
+  // Handle ranges like "10.000-20.000" or "10.000–20.000" (em dash)
+  // Extract all number-like segments and take the maximum
+  const numberSegments = value.split(/[-–—]/); // Split on various dash types
+  
+  let maxValue: number | null = null;
+  
+  for (const segment of numberSegments) {
+    // First, remove all common suffixes/text to isolate numeric part
+    let cleaned = segment.toLowerCase()
+      .replace(/kr\.?/gi, '')
+      .replace(/dkk/gi, '')
+      .replace(/pr\.?\s*(år|måned|md)/gi, '') // Remove "pr. år", "pr. måned"
+      .replace(/årligt|månedligt/gi, '')
+      .replace(/,-/g, '')
+      .trim();
+    
+    // Now extract only digits, dots, and commas
+    cleaned = cleaned.replace(/[^\d.,]/g, '');
+    
+    // Remove trailing/leading dots and commas
+    cleaned = cleaned.replace(/^[.,]+|[.,]+$/g, '');
+    
+    if (!cleaned) continue;
+    
+    // Danish format uses . as thousands separator and , as decimal
+    // Check if it has both . and , - if so, . is thousands separator
+    if (cleaned.includes('.') && cleaned.includes(',')) {
+      cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+    } else if (cleaned.includes('.')) {
+      // Only dots - check if it looks like thousands separator (e.g., 500.000)
+      const parts = cleaned.split('.');
+      if (parts.length > 1 && parts[parts.length - 1].length === 3) {
+        // Likely thousands separator
+        cleaned = cleaned.replace(/\./g, '');
+      }
+    } else if (cleaned.includes(',')) {
+      // Only comma - likely decimal separator
+      cleaned = cleaned.replace(',', '.');
+    }
+    
+    const parsed = parseFloat(cleaned);
+    // Accept zero as a valid value (e.g., "0 kr." for deductibles)
+    if (!isNaN(parsed) && parsed >= 0 && (maxValue === null || parsed > maxValue)) {
+      maxValue = parsed;
+    }
+  }
+  
+  return maxValue;
+}
+
+/**
+ * Check if a value represents "inkluderet" (included)
+ * Handles variants like "inkluderet (tilvalg)", "Ja", "Yes"
+ */
+function isIncludedValue(value: string | null | undefined, status: string | undefined): boolean {
+  if (status) {
+    const statusLower = status.toLowerCase();
+    if (statusLower === 'included' || statusLower === 'success') return true;
+    if (statusLower === 'excluded' || statusLower === 'error') return false;
+  }
+  
+  if (value) {
+    const valueLower = value.toLowerCase().trim();
+    // Match "inkluderet" at start (handles "inkluderet (tilvalg)", etc.)
+    if (valueLower.startsWith('inkluderet')) return true;
+    // Match simple yes values
+    if (valueLower === 'ja' || valueLower === 'yes') return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Check if a value represents "ikke inkluderet" (excluded)
+ * Handles variants like "ikke inkluderet – se note", "Nej", "No"
+ */
+function isExcludedValue(value: string | null | undefined, status: string | undefined): boolean {
+  if (status) {
+    const statusLower = status.toLowerCase();
+    if (statusLower === 'excluded' || statusLower === 'error') return true;
+    if (statusLower === 'included' || statusLower === 'success') return false;
+  }
+  
+  if (value) {
+    const valueLower = value.toLowerCase().trim();
+    // Match "ikke inkluderet" at start (handles "ikke inkluderet – se note", etc.)
+    if (valueLower.startsWith('ikke inkluderet')) return true;
+    // Match simple no values
+    if (valueLower === 'nej' || valueLower === 'no') return true;
+  }
+  
+  return false;
+}
+
+/**
+ * Check if a value is truly empty/missing (not just informative text)
+ */
+function isTrulyEmptyValue(value: string | null | undefined): boolean {
+  if (!value) return true;
+  const valueLower = value.toLowerCase().trim();
+  return valueLower === '' || valueLower === '—' || valueLower === '-';
+}
+
+/**
+ * Determine badge variant for offer column based on comparison with current value
+ * Rules:
+ * - "inkluderet" = green (success)
+ * - "ikke inkluderet" = red (error)  
+ * - Numeric: offer > current = green, offer < current = red
+ * - One-sided: only mark success/error when other side is truly empty or excluded
+ */
+function getOfferVariantWithComparison(
+  currentValue: string | null,
+  offerValue: string | null,
+  currentStatus: string | undefined,
+  offerStatus: string | undefined
+): "success" | "error" | "neutral" {
+  // Rule 1: Check if offer is "inkluderet" (from status OR text value)
+  if (isIncludedValue(offerValue, offerStatus)) {
+    return "success";
+  }
+  
+  // Rule 2: Check if offer is "ikke inkluderet" (from status OR text value)
+  if (isExcludedValue(offerValue, offerStatus)) {
+    return "error";
+  }
+  
+  // Rule 3: Numeric comparison - higher is better (more coverage)
+  const currentNum = parseNumericValue(currentValue);
+  const offerNum = parseNumericValue(offerValue);
+  
+  if (currentNum !== null && offerNum !== null) {
+    if (offerNum > currentNum) {
+      return "success"; // Offer is better (higher coverage)
+    } else if (offerNum < currentNum) {
+      return "error"; // Offer is worse (lower coverage)
+    }
+    // Equal values - neutral
+    return "neutral";
+  }
+  
+  // Rule 4: One-sided comparison - be conservative
+  // Only mark success if offer has a value AND current is truly excluded or empty
+  if (offerNum !== null && (isExcludedValue(currentValue, currentStatus) || isTrulyEmptyValue(currentValue))) {
+    return "success";
+  }
+  // Only mark error if current has a value AND offer is truly excluded or empty
+  if (currentNum !== null && (isExcludedValue(offerValue, offerStatus) || isTrulyEmptyValue(offerValue))) {
+    return "error";
+  }
+  
+  // If one side is numeric but other is just informative text, stay neutral
+  return "neutral";
+}
+
+/**
+ * Determine badge variant for current column based on comparison with offer value
+ * Rules:
+ * - "inkluderet" = green (success)
+ * - "ikke inkluderet" = red (error)
+ * - Numeric: current > offer = green, current < offer = red
+ * - One-sided: only mark success/error when other side is truly empty or excluded
+ */
+function getCurrentVariantWithComparison(
+  currentValue: string | null,
+  offerValue: string | null,
+  currentStatus: string | undefined,
+  offerStatus: string | undefined
+): "success" | "error" | "neutral" {
+  // Rule 1: Check if current is "inkluderet" (from status OR text value)
+  if (isIncludedValue(currentValue, currentStatus)) {
+    return "success";
+  }
+  
+  // Rule 2: Check if current is "ikke inkluderet" (from status OR text value)
+  if (isExcludedValue(currentValue, currentStatus)) {
+    return "error";
+  }
+  
+  // Rule 3: Numeric comparison - higher is better
+  const currentNum = parseNumericValue(currentValue);
+  const offerNum = parseNumericValue(offerValue);
+  
+  if (currentNum !== null && offerNum !== null) {
+    if (currentNum > offerNum) {
+      return "success"; // Current is better (higher coverage)
+    } else if (currentNum < offerNum) {
+      return "error"; // Current is worse (lower coverage)
+    }
+    // Equal values - neutral
+    return "neutral";
+  }
+  
+  // Rule 4: One-sided comparison - be conservative
+  // Only mark success if current has a value AND offer is truly excluded or empty
+  if (currentNum !== null && (isExcludedValue(offerValue, offerStatus) || isTrulyEmptyValue(offerValue))) {
+    return "success";
+  }
+  // Only mark error if offer has a value AND current is truly excluded or empty
+  if (offerNum !== null && (isExcludedValue(currentValue, currentStatus) || isTrulyEmptyValue(currentValue))) {
+    return "error";
+  }
+  
+  // If one side is numeric but other is just informative text, stay neutral
   return "neutral";
 }
 
