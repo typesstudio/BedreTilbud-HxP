@@ -1,0 +1,326 @@
+1) Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync --all -p 34bd735365b5
+```
+  
+2) Create a new page using the following TSX code. If the page already exists, use it as reference to update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+"use client";
+
+import React from "react";
+import { Badge } from "@/ui/components/Badge";
+import { Button } from "@/ui/components/Button";
+import { CheckboxCard } from "@/ui/components/CheckboxCard";
+import { LinkButton } from "@/ui/components/LinkButton";
+import { TextField } from "@/ui/components/TextField";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import { FeatherCheck } from "@subframe/core";
+import { FeatherGift } from "@subframe/core";
+import { FeatherMail } from "@subframe/core";
+import { FeatherSend } from "@subframe/core";
+import { FeatherUsers } from "@subframe/core";
+import { FeatherZap } from "@subframe/core";
+
+function InsuranceMarketplace() {
+  return (
+    <DefaultPageLayout>
+      <div className="flex h-full w-full flex-col items-start gap-6 bg-default-background px-6 py-6">
+        <div className="flex w-full flex-col items-start gap-2">
+          <span className="text-heading-1 font-heading-1 text-default-font">
+            Vælg forsikringsselskaber
+          </span>
+          <span className="text-body font-body text-subtext-color">
+            Vælg hvilke forsikringsselskaber du vil have tilbud fra, eller lad
+            os automatisk finde de bedste for dig
+          </span>
+        </div>
+        <div className="flex w-full items-center justify-end gap-2">
+          <Button
+            className="h-10 grow shrink-0 basis-0"
+            variant="variation"
+            size="large"
+            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+          >
+            Få bedre tilbud
+          </Button>
+        </div>
+        <div className="flex w-full items-start gap-4">
+          <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3 self-stretch overflow-y-auto">
+            <CheckboxCard
+              className="h-auto w-full flex-none"
+              checked={false}
+              onCheckedChange={(checked: boolean) => {}}
+            >
+              <img
+                className="h-12 w-12 flex-none rounded-md object-cover"
+                src="https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=120&h=120&fit=crop"
+              />
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                <div className="flex w-full items-center gap-2">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    Tryg Forsikring
+                  </span>
+                </div>
+                <span className="text-body font-body text-subtext-color">
+                  Danmarks største forsikringsselskab med bred dækning
+                </span>
+              </div>
+            </CheckboxCard>
+            <CheckboxCard
+              className="h-auto w-full flex-none"
+              checked={false}
+              onCheckedChange={(checked: boolean) => {}}
+            >
+              <img
+                className="h-12 w-12 flex-none rounded-md object-cover"
+                src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=120&h=120&fit=crop"
+              />
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                <div className="flex w-full items-center gap-2">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    IF Forsikring
+                  </span>
+                </div>
+                <span className="text-body font-body text-subtext-color">
+                  Nordisk forsikringsudbyder med konkurrencedygtige priser
+                </span>
+              </div>
+            </CheckboxCard>
+            <CheckboxCard
+              className="h-auto w-full flex-none"
+              checked={false}
+              onCheckedChange={(checked: boolean) => {}}
+            >
+              <img
+                className="h-12 w-12 flex-none rounded-md object-cover"
+                src="https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=120&h=120&fit=crop"
+              />
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                <div className="flex w-full items-center gap-2">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    Alm. Brand Forsikring
+                  </span>
+                </div>
+                <span className="text-body font-body text-subtext-color">
+                  Dansk traditions-selskab med stærk kundeservice
+                </span>
+              </div>
+            </CheckboxCard>
+            <CheckboxCard
+              className="h-auto w-full flex-none"
+              checked={false}
+              onCheckedChange={(checked: boolean) => {}}
+            >
+              <img
+                className="h-12 w-12 flex-none rounded-md object-cover"
+                src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=120&h=120&fit=crop"
+              />
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                <div className="flex w-full items-center gap-2">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    Privatsikring
+                  </span>
+                </div>
+                <span className="text-body font-body text-subtext-color">
+                  Specialister i privat forsikring til gode priser
+                </span>
+              </div>
+            </CheckboxCard>
+          </div>
+          <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3 self-stretch overflow-y-auto">
+            <CheckboxCard
+              className="h-auto w-full flex-none"
+              checked={false}
+              onCheckedChange={(checked: boolean) => {}}
+            >
+              <img
+                className="h-12 w-12 flex-none rounded-md object-cover"
+                src="https://images.unsplash.com/photo-1560179707-f14e90ef3623?w=120&h=120&fit=crop"
+              />
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                <div className="flex w-full items-center gap-2">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    Tryg Forsikring
+                  </span>
+                </div>
+                <span className="text-body font-body text-subtext-color">
+                  Danmarks største forsikringsselskab med bred dækning
+                </span>
+              </div>
+            </CheckboxCard>
+            <CheckboxCard
+              className="h-auto w-full flex-none"
+              checked={false}
+              onCheckedChange={(checked: boolean) => {}}
+            >
+              <img
+                className="h-12 w-12 flex-none rounded-md object-cover"
+                src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=120&h=120&fit=crop"
+              />
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                <div className="flex w-full items-center gap-2">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    IF Forsikring
+                  </span>
+                </div>
+                <span className="text-body font-body text-subtext-color">
+                  Nordisk forsikringsudbyder med konkurrencedygtige priser
+                </span>
+              </div>
+            </CheckboxCard>
+            <CheckboxCard
+              className="h-auto w-full flex-none"
+              checked={false}
+              onCheckedChange={(checked: boolean) => {}}
+            >
+              <img
+                className="h-12 w-12 flex-none rounded-md object-cover"
+                src="https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=120&h=120&fit=crop"
+              />
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                <div className="flex w-full items-center gap-2">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    Alm. Brand Forsikring
+                  </span>
+                </div>
+                <span className="text-body font-body text-subtext-color">
+                  Dansk traditions-selskab med stærk kundeservice
+                </span>
+              </div>
+            </CheckboxCard>
+            <CheckboxCard
+              className="h-auto w-full flex-none"
+              checked={false}
+              onCheckedChange={(checked: boolean) => {}}
+            >
+              <img
+                className="h-12 w-12 flex-none rounded-md object-cover"
+                src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=120&h=120&fit=crop"
+              />
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                <div className="flex w-full items-center gap-2">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    Privatsikring
+                  </span>
+                </div>
+                <span className="text-body font-body text-subtext-color">
+                  Specialister i privat forsikring til gode priser
+                </span>
+              </div>
+            </CheckboxCard>
+          </div>
+        </div>
+        <div className="flex w-full items-center gap-4">
+          <div className="flex h-px grow shrink-0 basis-0 flex-col items-center gap-2 bg-neutral-border" />
+          <LinkButton
+            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+          >
+            Få flere bedre tiilbud
+          </LinkButton>
+          <div className="flex h-px grow shrink-0 basis-0 flex-col items-center gap-2 bg-neutral-border" />
+        </div>
+        <div className="flex w-full items-start gap-6">
+          <div className="flex min-w-[320px] grow shrink-0 basis-0 flex-col items-start gap-6 self-stretch rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-8 shadow-sm">
+            <div className="flex h-12 w-12 flex-none items-center justify-center rounded-lg bg-brand-100">
+              <FeatherUsers className="text-heading-2 font-heading-2 text-brand-600" />
+            </div>
+            <div className="flex w-full flex-col items-start gap-2">
+              <span className="text-heading-2 font-heading-2 text-default-font">
+                Inviter en ven
+              </span>
+              <span className="text-body font-body text-subtext-color">
+                Få 3 ekstra tilbud når din ven uploader deres forsikring
+              </span>
+            </div>
+            <TextField
+              className="h-auto w-full flex-none"
+              label="Venens email"
+              helpText=""
+              icon={<FeatherMail />}
+            >
+              <TextField.Input
+                placeholder="navn@email.dk"
+                value=""
+                onChange={(event: React.ChangeEvent<HTMLInputElement>) => {}}
+              />
+            </TextField>
+            <div className="flex w-full items-center gap-2 rounded-md bg-success-50 px-4 py-3">
+              <FeatherGift className="text-body font-body text-success-700" />
+              <span className="grow shrink-0 basis-0 text-caption font-caption text-success-700">
+                I får begge 3 gratis tilbud ekstra
+              </span>
+            </div>
+            <Button
+              className="h-10 w-full flex-none"
+              variant="neutral-primary"
+              size="large"
+              icon={<FeatherSend />}
+              onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+            >
+              Send invitation
+            </Button>
+          </div>
+          <div className="flex min-w-[320px] grow shrink-0 basis-0 flex-col items-start gap-6 self-stretch rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-8 shadow-sm">
+            <div className="flex h-12 w-12 flex-none items-center justify-center rounded-lg bg-warning-100">
+              <FeatherZap className="text-heading-2 font-heading-2 text-warning-600" />
+            </div>
+            <div className="flex w-full flex-col items-start gap-2">
+              <div className="flex w-full items-center gap-2">
+                <span className="text-heading-2 font-heading-2 text-default-font">
+                  Premium matching
+                </span>
+                <Badge variant="warning">Bedste værdi</Badge>
+              </div>
+              <span className="text-body font-body text-subtext-color">
+                Få ubegrænsede tilbud fra alle forsikringsselskaber
+              </span>
+            </div>
+            <div className="flex w-full flex-col items-start gap-3">
+              <div className="flex items-center gap-2">
+                <FeatherCheck className="text-body font-body text-success-600" />
+                <span className="text-body font-body text-default-font">
+                  Ubegrænsede tilbud
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <FeatherCheck className="text-body font-body text-success-600" />
+                <span className="text-body font-body text-default-font">
+                  Prioriteret support
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <FeatherCheck className="text-body font-body text-success-600" />
+                <span className="text-body font-body text-default-font">
+                  Avanceret forhandling
+                </span>
+              </div>
+            </div>
+            <div className="flex w-full items-end gap-2">
+              <span className="text-heading-1 font-heading-1 text-default-font">
+                299 kr
+              </span>
+              <span className="text-body font-body text-subtext-color">
+                / engangsbetaling
+              </span>
+            </div>
+            <Button
+              className="h-10 w-full flex-none"
+              size="large"
+              icon={<FeatherZap />}
+              onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+            >
+              Opgradér nu
+            </Button>
+          </div>
+        </div>
+      </div>
+    </DefaultPageLayout>
+  );
+}
+
+export default InsuranceMarketplace;
+
+```
+  

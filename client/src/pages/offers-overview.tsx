@@ -246,7 +246,7 @@ export default function OffersOverview() {
         breadcrumbs={[{ label: "Dine bedre tilbud", path: "/offers" }]}
         onNavigate={(path) => setLocation(path)}
         onProfileClick={() => setLocation(`/profile/${userId}`)}
-        onSendInquiryClick={() => setLocation("/send-inquiry")}
+        onSendInquiryClick={() => setLocation("/selskaber")}
       >
       <div className="container max-w-none flex h-full w-full flex-col items-center gap-8 bg-default-background py-12">
         <div className="flex w-full max-w-[768px] flex-col items-start gap-2">
@@ -256,7 +256,7 @@ export default function OffersOverview() {
             </span>
             <Button
               variant="brand-secondary"
-              onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/send-inquiry")}
+              onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/selskaber")}
               data-testid="button-get-more-offers"
             >
               Få flere bedre tilbud
@@ -486,7 +486,7 @@ export default function OffersOverview() {
             </span>
             <Button
               variant="brand-primary"
-              onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/send-inquiry")}
+              onClick={(event: React.MouseEvent<HTMLButtonElement>) => setLocation("/selskaber")}
               data-testid="button-get-more-offers-cta"
             >
               Få flere bedre tilbud

@@ -98,8 +98,9 @@ export function NavigationSidebar({ userId, isCollapsed = false, onToggleCollaps
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Link href="#">
+                <Link href="/selskaber">
                   <IconButton
+                    variant={location === "/selskaber" ? "brand-tertiary" : "neutral-tertiary"}
                     icon={<FeatherRocket />}
                     data-testid="nav-get-offers-collapsed"
                   />
@@ -196,7 +197,7 @@ export function NavigationSidebar({ userId, isCollapsed = false, onToggleCollaps
               </span>
             </div>
           </div>
-          <Link href="#" className="w-full">
+          <Link href="/selskaber" className="w-full">
             <Button
               className="h-8 w-full flex-none"
               disabled={false}
@@ -233,10 +234,10 @@ export function NavigationSidebar({ userId, isCollapsed = false, onToggleCollaps
             Se alle bedre tilbud
           </SidebarWithMinimalTextSections.NavItem>
         </Link>
-        <Link href="#">
+        <Link href="/selskaber">
           <SidebarWithMinimalTextSections.NavItem
             icon={<FeatherRocket />}
-            selected={false}
+            selected={location === "/selskaber"}
             data-testid="nav-get-offers"
           >
             Få flere tilbud
