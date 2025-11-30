@@ -12,7 +12,9 @@ import {
   healthChecks, 
   documents, 
   companies,
-  users 
+  users,
+  notifications,
+  magicLinks
 } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import { computeBestMatches } from "./deterministicMatcher";
@@ -233,6 +235,12 @@ export async function generateComparisonDebugReport(
     offerSnapshots: offerSnapshotsData,
     healthCheckMap,
     comparisonJson
+  }));
+
+  // Phase 6: Email Notifications
+  sections.push(await buildPhase6EmailNotifications({
+    comparisonId: comp.id,
+    notifiedAt: comp.notifiedAt
   }));
 
   const markdown = sections.join('\n\n');
@@ -943,4 +951,97 @@ ${anomalies.length > 0 ? anomalies.join('\n\n') : 'No anomalies detected! ✅'}
 ### Suggested Next Steps (for Replit dev)
 
 ${fixes.length > 0 ? fixes.join('\n') : '- No action needed. System is healthy!'}`;
+}
+
+// ========================================
+// Phase 6: Email Notifications
+// ========================================
+
+async function buildPhase6EmailNotifications(params: {
+  comparisonId: string;
+  notifiedAt: Date | null;
+}): Promise<string> {
+  const lines: string[] = [];
+  
+  lines.push(`## Phase 6 – Email Notifications\n`);
+  
+  // Check notification status
+  const notifiedAtDisplay = params.notifiedAt 
+    ? `✅ ${params.notifiedAt.toISOString()}`
+    : '❌ Not yet notified';
+  
+  lines.push(`**Notified At:** ${notifiedAtDisplay}\n`);
+
+  // Fetch all notifications for this comparison
+  const notificationRecords = await db
+    .select()
+    .from(notifications)
+    .where(eq(notifications.comparisonId, params.comparisonId));
+
+  if (notificationRecords.length === 0) {
+    lines.push(`### Notifications\n\nNo notification records found for this comparison.\n`);
+  } else {
+    lines.push(`### Notifications (${notificationRecords.length} records)\n`);
+    lines.push(`| ID | Type | Status | Created | Sent | Error |`);
+    lines.push(`|---|---|---|---|---|---|`);
+    
+    for (const notif of notificationRecords) {
+      const statusIcon = notif.status === 'sent' ? '✅' : notif.status === 'failed' ? '❌' : '⏳';
+      const shortId = notif.id.substring(0, 8);
+      const createdAt = notif.createdAt?.toISOString().split('T')[0] || 'N/A';
+      const sentAt = notif.sentAt?.toISOString().split('T')[0] || '-';
+      const errorMsg = notif.errorMessage ? notif.errorMessage.substring(0, 40) + '...' : '-';
+      
+      lines.push(`| ${shortId} | ${notif.type} | ${statusIcon} ${notif.status} | ${createdAt} | ${sentAt} | ${errorMsg} |`);
+    }
+    lines.push('');
+  }
+
+  // Fetch all magic links for this comparison
+  const magicLinkRecords = await db
+    .select()
+    .from(magicLinks)
+    .where(eq(magicLinks.comparisonId, params.comparisonId));
+
+  if (magicLinkRecords.length === 0) {
+    lines.push(`### Magic Links\n\nNo magic links found for this comparison.\n`);
+  } else {
+    lines.push(`### Magic Links (${magicLinkRecords.length} records)\n`);
+    lines.push(`| Token (prefix) | Redirect Path | Created | Expires | Consumed |`);
+    lines.push(`|---|---|---|---|---|`);
+    
+    for (const ml of magicLinkRecords) {
+      const tokenPrefix = ml.token.substring(0, 12) + '...';
+      const createdAt = ml.createdAt?.toISOString().split('T')[0] || 'N/A';
+      const expiresAt = ml.expiresAt?.toISOString().split('T')[0] || 'N/A';
+      const consumedAt = ml.consumedAt 
+        ? `✅ ${ml.consumedAt.toISOString().split('T')[0]}`
+        : '⏳ Not used';
+      const redirectPath = ml.redirectPath || '/';
+      
+      lines.push(`| ${tokenPrefix} | ${redirectPath} | ${createdAt} | ${expiresAt} | ${consumedAt} |`);
+    }
+    lines.push('');
+  }
+
+  // Delivery summary
+  const sentNotifications = notificationRecords.filter(n => n.status === 'sent');
+  const failedNotifications = notificationRecords.filter(n => n.status === 'failed');
+  const usedMagicLinks = magicLinkRecords.filter(ml => ml.consumedAt !== null);
+
+  lines.push(`### Email Delivery Summary\n`);
+  lines.push(`- **Emails sent:** ${sentNotifications.length}`);
+  lines.push(`- **Emails failed:** ${failedNotifications.length}`);
+  lines.push(`- **Magic links created:** ${magicLinkRecords.length}`);
+  lines.push(`- **Magic links used:** ${usedMagicLinks.length}`);
+
+  if (failedNotifications.length > 0) {
+    lines.push(`\n⚠️ **Failed notifications detected!** Check the error messages above for details.`);
+  }
+
+  if (magicLinkRecords.length > 0 && usedMagicLinks.length === 0) {
+    lines.push(`\n📧 **Magic link not yet clicked by user.**`);
+  }
+
+  return lines.join('\n');
 }
