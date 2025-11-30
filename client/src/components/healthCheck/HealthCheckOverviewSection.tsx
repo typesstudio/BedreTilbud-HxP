@@ -133,14 +133,6 @@ export function HealthCheckOverviewSection({
 
       {/* Coverage Status Table */}
       <div className="flex w-full flex-col items-start gap-4" data-testid="coverage-status-section">
-        <div className="flex w-full items-center justify-between mobile:flex-col mobile:items-start mobile:gap-2">
-          <span className="text-heading-2 font-heading-2 text-default-font">
-            Din dækningsstatus
-          </span>
-          <Badge variant={data.goodCount === data.totalCount ? "success" : "warning"} icon={<FeatherCheckCircle />}>
-            {data.goodCount} af {data.totalCount} policer godkendt
-          </Badge>
-        </div>
         <div className="flex w-full flex-col items-start rounded-lg border border-solid border-neutral-border bg-default-background overflow-x-auto">
           <Table
             header={
