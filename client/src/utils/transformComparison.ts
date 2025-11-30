@@ -604,20 +604,24 @@ function parseNumericValue(value: string | null | undefined): number | null {
 /**
  * Check if a value represents "inkluderet" (included)
  * Handles variants like "inkluderet (tilvalg)", "Ja", "Yes"
+ * PRIORITY: Text value takes precedence over status metadata (status may be stale)
  */
 function isIncludedValue(value: string | null | undefined, status: string | undefined): boolean {
-  if (status) {
-    const statusLower = status.toLowerCase();
-    if (statusLower === 'included' || statusLower === 'success') return true;
-    if (statusLower === 'excluded' || statusLower === 'error') return false;
-  }
-  
+  // Check text value FIRST - it's the visible/authoritative data
   if (value) {
     const valueLower = value.toLowerCase().trim();
     // Match "inkluderet" at start (handles "inkluderet (tilvalg)", etc.)
     if (valueLower.startsWith('inkluderet')) return true;
     // Match simple yes values
     if (valueLower === 'ja' || valueLower === 'yes') return true;
+    // If value explicitly says "ikke inkluderet", it's NOT included
+    if (valueLower.startsWith('ikke inkluderet') || valueLower === 'nej' || valueLower === 'no') return false;
+  }
+  
+  // Fall back to status only if text value is ambiguous/empty
+  if (status) {
+    const statusLower = status.toLowerCase();
+    if (statusLower === 'included' || statusLower === 'success') return true;
   }
   
   return false;
@@ -626,20 +630,26 @@ function isIncludedValue(value: string | null | undefined, status: string | unde
 /**
  * Check if a value represents "ikke inkluderet" (excluded)
  * Handles variants like "ikke inkluderet – se note", "Nej", "No"
+ * PRIORITY: Text value takes precedence over status metadata (status may be stale)
  */
 function isExcludedValue(value: string | null | undefined, status: string | undefined): boolean {
-  if (status) {
-    const statusLower = status.toLowerCase();
-    if (statusLower === 'excluded' || statusLower === 'error') return true;
-    if (statusLower === 'included' || statusLower === 'success') return false;
-  }
-  
+  // Check text value FIRST - it's the visible/authoritative data
   if (value) {
     const valueLower = value.toLowerCase().trim();
     // Match "ikke inkluderet" at start (handles "ikke inkluderet – se note", etc.)
     if (valueLower.startsWith('ikke inkluderet')) return true;
     // Match simple no values
     if (valueLower === 'nej' || valueLower === 'no') return true;
+    // If value explicitly says "inkluderet", it's NOT excluded
+    if (valueLower.startsWith('inkluderet') || valueLower === 'ja' || valueLower === 'yes') return false;
+    // If value is a numeric amount, it's NOT excluded (has coverage)
+    if (parseNumericValue(value) !== null) return false;
+  }
+  
+  // Fall back to status only if text value is ambiguous/empty
+  if (status) {
+    const statusLower = status.toLowerCase();
+    if (statusLower === 'excluded' || statusLower === 'error') return true;
   }
   
   return false;
