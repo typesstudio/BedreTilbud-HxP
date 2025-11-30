@@ -48,6 +48,24 @@ export function ComparisonQuickTable({
           {policies.map((policy) => {
             const Icon = policyTypeIcons[policy.policyType] || FeatherHome;
             const hasPricing = policy.currentAnnual && policy.offerAnnual;
+            const savings = policy.savingsAnnual;
+            const isPositiveSavings = savings != null && savings > 0;
+            const isNegativeSavings = savings != null && savings < 0;
+
+            const getSavingsDisplay = () => {
+              if (!hasPricing) return "—";
+              if (savings == null) return "Afventer";
+              if (savings === 0) return "0 kr";
+              if (isPositiveSavings) return formatCurrency(savings);
+              return `-${formatCurrency(Math.abs(savings))}`;
+            };
+
+            const getSavingsColorClass = () => {
+              if (!hasPricing) return 'text-subtext-color';
+              if (isPositiveSavings) return 'text-success-600';
+              if (isNegativeSavings) return 'text-error-600';
+              return 'text-default-font';
+            };
 
             return (
               <Table.Row key={policy.policyType}>
@@ -74,8 +92,8 @@ export function ComparisonQuickTable({
                   </span>
                 </Table.Cell>
                 <Table.Cell>
-                  <span className={`whitespace-nowrap text-body-bold font-body-bold ${hasPricing ? 'text-success-600' : 'text-subtext-color'}`}>
-                    {hasPricing ? formatCurrency(policy.savingsAnnual) : "—"}
+                  <span className={`whitespace-nowrap text-body-bold font-body-bold ${getSavingsColorClass()}`}>
+                    {getSavingsDisplay()}
                   </span>
                 </Table.Cell>
                 <Table.Cell>

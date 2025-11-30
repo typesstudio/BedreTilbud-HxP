@@ -75,8 +75,8 @@ export default function OfferComparisonAll() {
     return {
       totalCurrentPremium,
       totalOfferPremium,
-      totalSavings,
-      savingsPercentage,
+      totalSavings: count > 0 ? totalSavings : null,
+      savingsPercentage: count > 0 ? savingsPercentage : null,
       count,
     };
   }, [comparisons]);
@@ -134,15 +134,25 @@ export default function OfferComparisonAll() {
 
           {/* Summary Cards */}
           <div className="flex w-full items-start gap-4 flex-wrap">
-            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-success-50 px-6 py-6">
+            <div className={`flex grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md px-6 py-6 ${overallStats.totalSavings != null && overallStats.totalSavings > 0 ? 'bg-success-50' : overallStats.totalSavings != null && overallStats.totalSavings < 0 ? 'bg-error-50' : 'bg-neutral-50'}`}>
               <span className="text-body-bold font-body-bold text-neutral-600">
                 Samlet besparelse
               </span>
-              <span className="text-heading-1 font-heading-1 text-success-600">
-                {formatCurrency(overallStats.totalSavings)}
+              <span className={`text-heading-1 font-heading-1 ${overallStats.totalSavings != null && overallStats.totalSavings > 0 ? 'text-success-600' : overallStats.totalSavings != null && overallStats.totalSavings < 0 ? 'text-error-600' : 'text-default-font'}`}>
+                {overallStats.totalSavings == null 
+                  ? 'Afventer'
+                  : overallStats.totalSavings > 0 
+                    ? formatCurrency(overallStats.totalSavings) 
+                    : overallStats.totalSavings < 0 
+                      ? `-${formatCurrency(Math.abs(overallStats.totalSavings))}`
+                      : '0 kr'}
               </span>
               <span className="text-caption font-caption text-subtext-color">
-                {overallStats.savingsPercentage.toFixed(1)}% billigere
+                {overallStats.savingsPercentage != null && overallStats.totalSavings != null && overallStats.totalSavings > 0 
+                  ? `${Math.abs(overallStats.savingsPercentage).toFixed(1)}% billigere`
+                  : overallStats.savingsPercentage != null && overallStats.totalSavings != null && overallStats.totalSavings < 0
+                    ? `${Math.abs(overallStats.savingsPercentage).toFixed(1)}% dyrere`
+                    : ''}
               </span>
             </div>
             <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6">
@@ -220,8 +230,8 @@ export default function OfferComparisonAll() {
                         </span>
                       </Table.Cell>
                       <Table.Cell>
-                        <span className={`whitespace-nowrap text-body-bold font-body-bold ${hasPricing ? 'text-success-600' : 'text-subtext-color'}`}>
-                          {hasPricing ? formatCurrency(savings) : "—"}
+                        <span className={`whitespace-nowrap text-body-bold font-body-bold ${!hasPricing ? 'text-subtext-color' : savings == null ? 'text-subtext-color' : savings > 0 ? 'text-success-600' : savings < 0 ? 'text-error-600' : 'text-default-font'}`}>
+                          {!hasPricing ? "—" : savings == null ? "Afventer" : savings > 0 ? formatCurrency(savings) : savings < 0 ? `-${formatCurrency(Math.abs(savings))}` : '0 kr'}
                         </span>
                       </Table.Cell>
                       <Table.Cell>
