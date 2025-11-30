@@ -992,6 +992,19 @@ export class ComparisonOrchestrator {
         console.warn('[ComparisonOrchestrator] Failed to generate debug report:', reportError);
       }
 
+      // Send email notification to user
+      try {
+        const { notificationService } = await import('./notificationService');
+        const result = await notificationService.sendComparisonReady(comparison.id);
+        if (result.sent) {
+          console.log(`[ComparisonOrchestrator] 📧 Email notification sent for comparison ${comparison.id}`);
+        } else {
+          console.log(`[ComparisonOrchestrator] 📧 Email notification skipped: ${result.reason}`);
+        }
+      } catch (notificationError) {
+        console.warn('[ComparisonOrchestrator] Failed to send email notification:', notificationError);
+      }
+
       return comparison.id;
 
     } catch (error) {
