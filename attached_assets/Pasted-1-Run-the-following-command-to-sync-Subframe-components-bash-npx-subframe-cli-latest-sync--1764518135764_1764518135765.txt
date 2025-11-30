@@ -1,0 +1,368 @@
+1) Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync --all -p 34bd735365b5
+```
+  
+2) Create a new page using the following TSX code. If the page already exists, use it as reference to update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+"use client";
+
+import React from "react";
+import { Button } from "@/ui/components/Button";
+import { Loader } from "@/ui/components/Loader";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import { FeatherCheckCircle } from "@subframe/core";
+
+function OfferInsightsOverview() {
+  return (
+    <DefaultPageLayout>
+      <div className="container max-w-none flex h-full w-full flex-col items-center gap-8 bg-default-background py-12">
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-2">
+          <div className="flex w-full items-start justify-between">
+            <span className="text-heading-1 font-heading-1 text-default-font">
+              Dine forsikringstilbud
+            </span>
+            <Button
+              disabled={false}
+              variant="variation"
+              size="medium"
+              icon={null}
+              iconRight={null}
+              loading={false}
+              onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+            >
+              Få flere bedre tilbud
+            </Button>
+          </div>
+          <span className="text-body font-body text-subtext-color">
+            Sammenlign dækning, priser og betingelser side om side
+          </span>
+        </div>
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-4">
+          <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-brand-200 bg-white px-6 py-6 shadow-sm">
+            <div className="flex w-full items-center justify-between">
+              <div className="flex items-center gap-4">
+                <img
+                  className="h-12 w-12 flex-none rounded-lg object-cover"
+                  src="https://images.unsplash.com/photo-1560472355-536de3962603"
+                />
+                <div className="flex flex-col items-start gap-1">
+                  <span className="text-heading-2 font-heading-2 text-default-font">
+                    Tryg Forsikring
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    Indboforsikring · Ulykke · Fritidshus
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <span className="text-caption font-caption text-subtext-color">
+                  Årlig besparelse
+                </span>
+                <span className="text-heading-1 font-heading-1 text-brand-600">
+                  7.800 kr
+                </span>
+              </div>
+            </div>
+            <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
+            <div className="flex w-full items-start gap-6">
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3">
+                <span className="text-body-bold font-body-bold text-default-font">
+                  Højdepunkter
+                </span>
+                <div className="flex flex-col items-start gap-2">
+                  <div className="flex items-center gap-2">
+                    <FeatherCheckCircle className="text-body font-body text-success-600" />
+                    <span className="text-body font-body text-default-font">
+                      Indbodækning op til 2.000.000 kr
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FeatherCheckCircle className="text-body font-body text-success-600" />
+                    <span className="text-body font-body text-default-font">
+                      Elektronik dækket til fuld værdi
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FeatherCheckCircle className="text-body font-body text-success-600" />
+                    <span className="text-body font-body text-default-font">
+                      Cykel inkluderet op til 25.000 kr
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FeatherCheckCircle className="text-body font-body text-success-600" />
+                    <span className="text-body font-body text-default-font">
+                      Ingen selvrisiko ved indbrud
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3">
+                <span className="text-body-bold font-body-bold text-default-font">
+                  Nøgleforskelle
+                </span>
+                <div className="flex w-full flex-col items-start gap-2 rounded-md">
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body font-body text-subtext-color">
+                      Nuværende præmie
+                    </span>
+                    <span className="text-body font-body text-default-font">
+                      7.800 kr/år
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body-bold font-body-bold text-default-font">
+                      Nyt tilbud
+                    </span>
+                    <span className="text-body-bold font-body-bold text-default-font">
+                      7.200 kr/år
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body font-body text-brand-600">
+                      Månedlig besparelse
+                    </span>
+                    <span className="text-body font-body text-brand-600">
+                      50 kr
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body font-body text-brand-600">
+                      Årlig besparelse
+                    </span>
+                    <span className="text-body font-body text-brand-600">
+                      600 kr
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex w-full items-center justify-end gap-2">
+              <Button
+                className="h-8 grow shrink-0 basis-0"
+                variant="brand-secondary"
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+              >
+                Se forsikringen
+              </Button>
+              <Button
+                className="h-8 grow shrink-0 basis-0"
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+              >
+                Se sammenligning
+              </Button>
+            </div>
+          </div>
+          <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-error-200 bg-default-background px-6 py-6 shadow-sm">
+            <div className="flex w-full items-center justify-between">
+              <div className="flex items-center gap-4">
+                <img
+                  className="h-12 w-12 flex-none rounded-lg object-cover"
+                  src="https://images.unsplash.com/photo-1560472355-536de3962603"
+                />
+                <div className="flex flex-col items-start gap-1">
+                  <span className="text-heading-2 font-heading-2 text-default-font">
+                    Alka Forsikring
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    Indboforsikring · Ulykke · Fritidshus
+                  </span>
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-1">
+                <span className="text-caption font-caption text-subtext-color">
+                  Årlig Prisstigning
+                </span>
+                <span className="text-heading-1 font-heading-1 text-error-600">
+                  -3.400 kr
+                </span>
+              </div>
+            </div>
+            <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-border" />
+            <div className="flex w-full items-start gap-6">
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3">
+                <span className="text-body-bold font-body-bold text-default-font">
+                  Højdepunkter
+                </span>
+                <div className="flex flex-col items-start gap-2">
+                  <div className="flex items-center gap-2">
+                    <FeatherCheckCircle className="text-body font-body text-success-600" />
+                    <span className="text-body font-body text-default-font">
+                      Indbodækning op til 2.000.000 kr
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FeatherCheckCircle className="text-body font-body text-success-600" />
+                    <span className="text-body font-body text-default-font">
+                      Elektronik dækket til fuld værdi
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FeatherCheckCircle className="text-body font-body text-success-600" />
+                    <span className="text-body font-body text-default-font">
+                      Cykel inkluderet op til 25.000 kr
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <FeatherCheckCircle className="text-body font-body text-success-600" />
+                    <span className="text-body font-body text-default-font">
+                      Ingen selvrisiko ved indbrud
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3">
+                <span className="text-body-bold font-body-bold text-default-font">
+                  Nøgleforskelle
+                </span>
+                <div className="flex w-full flex-col items-start gap-2 rounded-md">
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body font-body text-subtext-color">
+                      Nuværende præmie
+                    </span>
+                    <span className="text-body font-body text-default-font">
+                      7.800 kr/år
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body-bold font-body-bold text-default-font">
+                      Nyt tilbud
+                    </span>
+                    <span className="text-body-bold font-body-bold text-default-font">
+                      10.200 kr/år
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body font-body text-error-600">
+                      Månedlig prisstigning
+                    </span>
+                    <span className="text-body font-body text-error-600">
+                      50 kr
+                    </span>
+                  </div>
+                  <div className="flex w-full items-center justify-between">
+                    <span className="text-body font-body text-error-600">
+                      Årlig prisstigning
+                    </span>
+                    <span className="text-body font-body text-error-600">
+                      600 kr
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div className="flex w-full items-center justify-end gap-2">
+              <Button
+                className="h-8 grow shrink-0 basis-0"
+                variant="neutral-secondary"
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+              >
+                Se forsikringen
+              </Button>
+              <Button
+                className="h-8 grow shrink-0 basis-0"
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+              >
+                Se sammenligning
+              </Button>
+            </div>
+          </div>
+          <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-200 bg-neutral-50 px-6 py-6">
+            <div className="flex w-full items-center justify-between">
+              <div className="flex items-center gap-4">
+                <img
+                  className="h-12 w-12 flex-none rounded-lg object-cover"
+                  src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab"
+                />
+                <div className="flex flex-col items-start gap-1">
+                  <span className="text-heading-2 font-heading-2 text-default-font">
+                    Alm. Brand
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    Indboforsikring · Tilbud indhentes
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Loader size="small" />
+                <span className="text-body font-body text-subtext-color">
+                  Forhandler tilbud...
+                </span>
+              </div>
+            </div>
+          </div>
+          <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-200 bg-neutral-50 px-6 py-6">
+            <div className="flex w-full items-center justify-between">
+              <div className="flex items-center gap-4">
+                <img
+                  className="h-12 w-12 flex-none rounded-lg object-cover"
+                  src="https://images.unsplash.com/photo-1497366216548-37526070297c"
+                />
+                <div className="flex flex-col items-start gap-1">
+                  <span className="text-heading-2 font-heading-2 text-default-font">
+                    Privatsikring
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    Indboforsikring · Tilbud indhentes
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Loader size="small" />
+                <span className="text-body font-body text-subtext-color">
+                  Afventer svar...
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex w-full flex-col items-center gap-6 rounded-2xl border border-solid border-brand-200 px-8 py-12 shadow-lg bg-gradient-to-br from-brand-50 via-white to-brand-50">
+          <div className="flex flex-col items-center gap-2">
+            <span className="font-['Inter'] text-[40px] font-[600] leading-[44px] text-default-font text-center -tracking-[0.04em]">
+              Sammenlign flere tilbud
+            </span>
+            <span className="font-['Inter'] text-[17px] font-[500] leading-[24px] text-subtext-color text-center -tracking-[0.01em]">
+              Indhent og sammenlign flere tilbud for at sikre de bedste
+              besparelser
+            </span>
+          </div>
+          <Button
+            className="h-12 w-full max-w-[320px] flex-none"
+            variant="variation"
+            size="large"
+            onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+          >
+            Få flere bedre tilbud
+          </Button>
+          <div className="flex items-center justify-center gap-8 flex-wrap">
+            <div className="flex items-center gap-2">
+              <FeatherCheckCircle className="text-body font-body text-success-600" />
+              <span className="text-body font-body text-default-font">
+                100% gratis
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <FeatherCheckCircle className="text-body font-body text-success-600" />
+              <span className="text-body font-body text-default-font">
+                Bedre besparelser
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <FeatherCheckCircle className="text-body font-body text-success-600" />
+              <span className="text-body font-body text-default-font">
+                Ingen binding
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </DefaultPageLayout>
+  );
+}
+
+export default OfferInsightsOverview;
+
+```
+  
