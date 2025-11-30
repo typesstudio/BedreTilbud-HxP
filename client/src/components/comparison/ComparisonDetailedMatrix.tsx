@@ -90,7 +90,7 @@ export function ComparisonDetailedMatrix({
                 </div>
                 {isSingleColumn ? (
                   <div className="flex grow shrink-0 basis-0 items-center justify-center">
-                    <Badge variant={row.offerVariant || row.currentVariant}>
+                    <Badge variant="neutral">
                       {row.offerValue || row.currentValue || "—"}
                     </Badge>
                   </div>
