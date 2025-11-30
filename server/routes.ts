@@ -99,6 +99,102 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Magic link authentication endpoint
+  app.get("/magic/:token", noCache, async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { magicLinkService } = await import("./services/magicLinkService");
+      
+      const result = await magicLinkService.consume(token);
+      
+      if (!result.valid || !result.magicLink) {
+        logger.security('Invalid magic link attempt', { token: token.substring(0, 8) + '...', reason: result.error });
+        return res.status(400).send(`
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ugyldigt link - BedreTilbud</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .container { background: white; padding: 40px; border-radius: 12px; text-align: center; max-width: 400px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h1 { color: #dc2626; font-size: 24px; margin-bottom: 16px; }
+    p { color: #4a4a4a; line-height: 1.6; }
+    a { color: #2563eb; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Linket er ugyldigt</h1>
+    <p>${result.error || 'Linket er udløbet eller ugyldigt. Kontakt os venligst for at få et nyt link.'}</p>
+    <p><a href="/">Gå til forsiden</a></p>
+  </div>
+</body>
+</html>
+        `);
+      }
+
+      const { userId, redirectPath } = result.magicLink;
+      
+      logger.info('Magic link authenticated', { userId, redirectPath, token: token.substring(0, 8) + '...' });
+      
+      res.send(`
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Logger ind... - BedreTilbud</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .container { background: white; padding: 40px; border-radius: 12px; text-align: center; max-width: 400px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h1 { color: #1a1a1a; font-size: 24px; margin-bottom: 16px; }
+    p { color: #4a4a4a; }
+    .spinner { width: 40px; height: 40px; border: 4px solid #e5e5e5; border-top-color: #2563eb; border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="spinner"></div>
+    <h1>Logger ind...</h1>
+    <p>Du bliver snart videresendt til din sammenligning.</p>
+  </div>
+  <script>
+    localStorage.setItem('userId', '${userId}');
+    window.location.href = '${redirectPath}';
+  </script>
+</body>
+</html>
+      `);
+    } catch (error: any) {
+      logger.error('Magic link error', error);
+      res.status(500).send(`
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <title>Fejl - BedreTilbud</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .container { background: white; padding: 40px; border-radius: 12px; text-align: center; max-width: 400px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h1 { color: #dc2626; font-size: 24px; }
+    a { color: #2563eb; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Der opstod en fejl</h1>
+    <p>Prøv venligst igen senere.</p>
+    <p><a href="/">Gå til forsiden</a></p>
+  </div>
+</body>
+</html>
+      `);
+    }
+  });
+
   app.get("/ready", noCache, async (req, res) => {
     const checks: Record<string, { status: string; message?: string }> = {};
     let allHealthy = true;
