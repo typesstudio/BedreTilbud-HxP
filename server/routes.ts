@@ -690,41 +690,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           await Promise.all(healthCheckPromises);
 
-          // NEW: Run ComparisonOrchestrator for offer documents (Phase 3→4 pipeline)
-          // This runs AFTER health checks complete (required for Phase 2 data)
-          if (documentType === 'offer' && healthCheckResult.success && healthCheckResult.healthChecksCreated > 0) {
-            try {
-              logger.info('[Upload] Triggering new comparison pipeline for offer', {
-                documentId: document.id,
-                userId,
-                healthChecksCreated: healthCheckResult.healthChecksCreated
-              });
-
-              const { ComparisonOrchestrator } = await import('./services/comparisonOrchestrator');
-              const comparisonOrchestrator = new ComparisonOrchestrator(storage);
-              
-              const comparisonResult = await comparisonOrchestrator.runForUser({
-                userId,
-                forceRerun: false
-              });
-
-              logger.info('[Upload] Comparison pipeline completed', {
-                documentId: document.id,
-                comparisonsCreated: comparisonResult.comparisonsCreated,
-                comparisonsFailed: comparisonResult.comparisonsFailed,
-                skipped: comparisonResult.skipped,
-                skipReason: comparisonResult.skipReason
-              });
-
-            } catch (comparisonError: any) {
-              logger.error('[Upload] Comparison pipeline failed', comparisonError instanceof Error ? comparisonError : new Error(String(comparisonError)), {
-                documentId: document.id,
-                userId
-              });
-              // Don't fail the upload if comparison fails - user can manually trigger later
-            }
-          }
-
           // Update document with completed status AND ocrData for backward compatibility
           // Create ocrData from first snapshot for analyze endpoint compatibility
           const firstSnapshot = orchestratorResult.snapshots.length > 0 ? orchestratorResult.snapshots[0] : null;
@@ -770,6 +735,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
             error: error.message,
             policies: []
           });
+        }
+      }
+
+      // RACE CONDITION FIX: Run ComparisonOrchestrator AFTER all files processed
+      // This ensures batch uploads are fully processed before comparison runs
+      // Only run for offer documents that had successful health checks
+      const totalHealthChecksCreated = documentsWithPolicies.reduce(
+        (sum, doc) => sum + (doc.healthChecksCreated || 0), 
+        0
+      );
+      
+      if (documentType === 'offer' && totalHealthChecksCreated > 0) {
+        try {
+          logger.info('[Upload] Triggering comparison pipeline after batch upload completed', {
+            userId,
+            filesProcessed: files.length,
+            totalHealthChecksCreated,
+            documentsProcessed: documentsWithPolicies.filter(d => !d.error).length
+          });
+
+          const { ComparisonOrchestrator } = await import('./services/comparisonOrchestrator');
+          const comparisonOrchestrator = new ComparisonOrchestrator(storage);
+          
+          const comparisonResult = await comparisonOrchestrator.runForUser({
+            userId,
+            forceRerun: false
+          });
+
+          logger.info('[Upload] Comparison pipeline completed for batch', {
+            userId,
+            comparisonsCreated: comparisonResult.comparisonsCreated,
+            comparisonsFailed: comparisonResult.comparisonsFailed,
+            skipped: comparisonResult.skipped,
+            skipReason: comparisonResult.skipReason
+          });
+
+        } catch (comparisonError: any) {
+          logger.error('[Upload] Comparison pipeline failed for batch', comparisonError instanceof Error ? comparisonError : new Error(String(comparisonError)), {
+            userId,
+            filesProcessed: files.length
+          });
+          // Don't fail the upload if comparison fails - user can manually trigger later
         }
       }
 
