@@ -1,0 +1,144 @@
+1) Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync --all -p 34bd735365b5
+```
+  
+2) Create a new page using the following TSX code. If the page already exists, use it as reference to update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+"use client";
+
+import React from "react";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+
+function LoadingCompanies() {
+  return (
+    <DefaultPageLayout>
+      <div className="flex w-full flex-col items-center justify-center bg-neutral-50 px-8 py-8">
+        <div className="flex w-full max-w-[768px] flex-col items-start gap-8">
+          <div className="flex w-full flex-col items-start gap-2">
+            <div className="flex h-9 w-80 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+            <div className="flex h-5 w-full flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+          </div>
+          <div className="flex h-12 w-full flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+          <div className="flex w-full flex-col items-start gap-4">
+            <div className="w-full items-start gap-4 grid grid-cols-2">
+              <div className="flex grow shrink-0 basis-0 items-center gap-4 rounded-lg border border-solid border-neutral-border bg-white px-4 py-4">
+                <div className="flex h-5 w-5 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex h-12 w-12 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+                  <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                  <div className="flex h-4 w-full flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+                </div>
+              </div>
+              <div className="flex grow shrink-0 basis-0 items-center gap-4 rounded-lg border border-solid border-neutral-border bg-white px-4 py-4">
+                <div className="flex h-5 w-5 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex h-12 w-12 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+                  <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                  <div className="flex h-4 w-full flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+                </div>
+              </div>
+              <div className="flex grow shrink-0 basis-0 items-center gap-4 rounded-lg border border-solid border-neutral-border bg-white px-4 py-4">
+                <div className="flex h-5 w-5 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex h-12 w-12 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+                  <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                  <div className="flex h-4 w-full flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+                </div>
+              </div>
+              <div className="flex grow shrink-0 basis-0 items-center gap-4 rounded-lg border border-solid border-neutral-border bg-white px-4 py-4">
+                <div className="flex h-5 w-5 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex h-12 w-12 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+                  <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                  <div className="flex h-4 w-full flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+                </div>
+              </div>
+              <div className="flex grow shrink-0 basis-0 items-center gap-4 rounded-lg border border-solid border-neutral-border bg-white px-4 py-4">
+                <div className="flex h-5 w-5 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex h-12 w-12 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+                  <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                  <div className="flex h-4 w-full flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+                </div>
+              </div>
+              <div className="flex grow shrink-0 basis-0 items-center gap-4 rounded-lg border border-solid border-neutral-border bg-white px-4 py-4">
+                <div className="flex h-5 w-5 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex h-12 w-12 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+                  <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                  <div className="flex h-4 w-full flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+                </div>
+              </div>
+              <div className="flex grow shrink-0 basis-0 items-center gap-4 rounded-lg border border-solid border-neutral-border bg-white px-4 py-4">
+                <div className="flex h-5 w-5 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex h-12 w-12 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+                  <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                  <div className="flex h-4 w-full flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+                </div>
+              </div>
+              <div className="flex grow shrink-0 basis-0 items-center gap-4 rounded-lg border border-solid border-neutral-border bg-white px-4 py-4">
+                <div className="flex h-5 w-5 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex h-12 w-12 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
+                  <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                  <div className="flex h-4 w-full flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+                </div>
+              </div>
+            </div>
+            <div className="flex h-px w-full flex-none flex-col items-center gap-2 bg-neutral-200" />
+            <div className="flex h-12 w-full flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+          </div>
+          <div className="flex w-full items-start gap-8">
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-white px-6 py-6">
+              <div className="flex h-10 w-10 flex-none items-start rounded-full bg-neutral-200 @keyframes pulse animate-pulse" />
+              <div className="flex h-6 w-40 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+              <div className="flex h-5 w-full flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+              <div className="flex h-10 w-full flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+              <div className="flex w-full items-center gap-2">
+                <div className="flex h-4 w-4 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex h-4 w-48 flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+              </div>
+              <div className="flex h-10 w-full flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+            </div>
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-white px-6 py-6">
+              <div className="flex w-full items-center justify-between">
+                <div className="flex h-10 w-10 flex-none items-start rounded-full bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex h-6 w-24 flex-none items-start rounded-full bg-neutral-200 @keyframes pulse animate-pulse" />
+              </div>
+              <div className="flex h-6 w-40 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+              <div className="flex h-5 w-full flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+              <div className="flex w-full flex-col items-start gap-2">
+                <div className="flex w-full items-center gap-2">
+                  <div className="flex h-4 w-4 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                  <div className="flex h-4 w-40 flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+                </div>
+                <div className="flex w-full items-center gap-2">
+                  <div className="flex h-4 w-4 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                  <div className="flex h-4 w-40 flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+                </div>
+                <div className="flex w-full items-center gap-2">
+                  <div className="flex h-4 w-4 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                  <div className="flex h-4 w-40 flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+                </div>
+              </div>
+              <div className="flex w-full gap-2 items-baseline">
+                <div className="flex h-10 w-24 flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+                <div className="flex h-5 w-32 flex-none items-start rounded-md bg-neutral-100 @keyframes pulse animate-pulse" />
+              </div>
+              <div className="flex h-10 w-full flex-none items-start rounded-md bg-neutral-200 @keyframes pulse animate-pulse" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </DefaultPageLayout>
+  );
+}
+
+export default LoadingCompanies;
+
+```
+  
