@@ -146,12 +146,14 @@ export interface IStorage {
 
   // Magic Links
   getMagicLinkByToken(token: string): Promise<MagicLink | undefined>;
+  getMagicLinksByComparison(comparisonId: string): Promise<MagicLink[]>;
   createMagicLink(magicLink: InsertMagicLink): Promise<MagicLink>;
   updateMagicLinkConsumed(id: string): Promise<MagicLink>;
 
   // Notifications
   getNotification(id: string): Promise<Notification | undefined>;
   getNotificationByComparison(comparisonId: string, type: string): Promise<Notification | undefined>;
+  getNotificationsByComparison(comparisonId: string): Promise<Notification[]>;
   createNotification(notification: InsertNotification): Promise<Notification>;
   updateNotificationStatus(id: string, status: string, errorMessage?: string): Promise<Notification>;
 
@@ -1805,6 +1807,14 @@ export class DatabaseStorage implements IStorage {
     return magicLink || undefined;
   }
 
+  async getMagicLinksByComparison(comparisonId: string): Promise<MagicLink[]> {
+    const { db } = await import("./db");
+    const { magicLinks } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const results = await db.select().from(magicLinks).where(eq(magicLinks.comparisonId, comparisonId));
+    return results;
+  }
+
   async createMagicLink(insertMagicLink: InsertMagicLink): Promise<MagicLink> {
     const { db } = await import("./db");
     const { magicLinks } = await import("@shared/schema");
@@ -1848,6 +1858,14 @@ export class DatabaseStorage implements IStorage {
       )
     );
     return notification || undefined;
+  }
+
+  async getNotificationsByComparison(comparisonId: string): Promise<Notification[]> {
+    const { db } = await import("./db");
+    const { notifications } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const results = await db.select().from(notifications).where(eq(notifications.comparisonId, comparisonId));
+    return results;
   }
 
   async createNotification(insertNotification: InsertNotification): Promise<Notification> {
