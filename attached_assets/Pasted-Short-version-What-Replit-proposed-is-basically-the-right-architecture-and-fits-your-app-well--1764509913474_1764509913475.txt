@@ -1,0 +1,240 @@
+Short version:
+What Replit proposed is **basically the right architecture** and fits your app well. I’d keep 90% of it as-is and just tweak a few details so it matches *BedreTilbud* exactly and avoids some annoying edge cases.
+
+I’ll break it into:
+
+1. ✅ What’s good (and you should keep)
+2. ⚠️ Things I’d adjust
+3. 🧱 Concrete tweaks you can ask Replit to make
+
+---
+
+## 1. What’s good in Replit’s plan
+
+**Overall shape**
+
+* Comparison finishes → `NotificationService.sendComparisonReady()`
+* `MagicLinkService.create()` writes to `magic_links`
+* Email sent via Resend with that URL
+* `notified_at` on `company_comparisons` prevents duplicates
+* `GET /magic/:token` route handles auth + redirect
+
+This is *exactly* the right mental model for:
+
+> “As soon as there is a new comparison, email the user a magic link to that specific comparison.”
+
+**Database choices**
+
+* `magic_links` table with:
+
+  * `token`, `expires_at`, `consumed_at`, `redirect_path`
+  * `user_id` + `comparison_id` foreign keys
+* `notifications` table for logging (`status`, `error_message`)
+* `notified_at` on `company_comparisons`
+
+👍 Good separation of concerns:
+
+* `magic_links` = auth / routing glue
+* `notifications` = audit/logging
+* `company_comparisons` = business state
+
+**Services**
+
+* `MagicLinkService.create()` and `.consume()` is the right abstraction.
+* `NotificationService.sendComparisonReady()` as single entry point = good.
+* Plugging it into `ComparisonOrchestratorService.runForCompanyPair()` right after `status = 'completed'` is the right integration point.
+
+**Security**
+
+* Long, crypto-secure tokens ✔️
+* Expiry ✔️
+* Single-use with `consumed_at` ✔️
+* Session cookie setup at `/magic/:token` ✔️
+
+So conceptually, yes: this is the correct way to do it inside your Replit backend.
+
+---
+
+## 2. Things I’d adjust
+
+### 2.1. Redirect path should match *your* comparison route
+
+Replit proposes redirect to:
+
+> `/offers?comparisonId=X`
+
+But in your app the main comparison route is:
+
+> `/sammenligning/:comparisonId`
+
+So I’d **definitely** change `redirect_path` and the redirect logic to:
+
+* Store `redirect_path = '/sammenligning/<comparisonId>'`
+* In `/magic/:token` do `res.redirect(302, redirect_path)`
+
+Otherwise you’ll end up building unnecessary glue/frontend logic just to map `comparisonId` again.
+
+---
+
+### 2.2. Idempotency & duplicate sends
+
+They mention:
+
+> Checks if already notified (skip if notified_at is set)
+
+That’s good, but I’d be explicit:
+
+Inside `NotificationService.sendComparisonReady`:
+
+* First load `company_comparisons` row
+* If `notified_at IS NOT NULL` → **return early** without email or new magic link
+
+That protects you if:
+
+* The orchestrator runs twice for the same pair.
+* Someone manually re-triggers the comparison job.
+
+Optional: also check if there is already a `notifications` row of type `'comparison_ready'` for that `comparison_id` in status `'sent'`.
+
+---
+
+### 2.3. “Non-blocking” comment vs actual code
+
+They show:
+
+```ts
+// Trigger notification (non-blocking)
+try {
+  await notificationService.sendComparisonReady({ ... });
+} catch (err) {
+  console.error('[Notification] Failed to send:', err);
+}
+```
+
+This is **not** non-blocking – you still `await`.
+
+Honestly, I’d **keep the `await`**:
+
+* It runs at the *end* of the orchestrator anyway.
+* It makes error handling easier and predictable.
+* The added latency for sending an email is tiny compared to OCR / comparison.
+
+If you really want fire-and-forget, you’d do:
+
+```ts
+notificationService.sendComparisonReady({ ... })
+  .catch(err => console.error('[Notification] Failed:', err));
+```
+
+…but I don’t think you need that complexity here. Just ask them to **either**:
+
+* Remove the comment “non-blocking” **or**
+* Remove the `await`. Right now it’s contradictory.
+
+---
+
+### 2.4. Single-use tokens vs email link scanners
+
+They propose `consumed_at` → single-use token.
+
+That’s secure, but there’s one UX trap:
+
+* Many email clients (especially on iOS) **pre-click** links to scan for malware.
+* That can “consume” the magic link **before** the user clicks it.
+
+If that happens, the user gets “Link gone/expired” the first time they click.
+
+Two options:
+
+1. **Keep it simple**:
+
+   * Allow multiple uses until `expires_at`,
+   * Only log `consumed_at` but don’t reject if it’s already set.
+
+2. Or compromise:
+
+   * Allow multiple uses **within e.g. 5–10 minutes** of first consumption.
+
+Personally for BedreTilbud, the risk of someone abusing a magic link from a personal inbox is low; I’d pick option 1 for now. More important that a 65-year-old user doesn’t see a broken link on first click.
+
+So I’d tell them:
+
+> Implement `consumed_at` but **don’t** block second/third uses, just rely on `expires_at`.
+
+---
+
+### 2.5. Where the user lands
+
+They wrote:
+
+> redirect to /offers?comparisonId=X
+
+Double-check what you want UX-wise:
+
+* Do you want them on:
+
+  * A combined “offers overview” with the comparison pre-selected? (`/tilbud?comparisonId=...`)
+  * Or **directly** on the comparison page (`/sammenligning/:id`)?
+
+Given your earlier flows, the second is probably better:
+
+> “Click email → boom → right into that company’s comparison screen.”
+
+So I’d instruct them:
+**Use `/sammenligning/${comparisonId}` as `redirect_path`.**
+
+---
+
+## 3. Concrete tweaks you can send back to Replit
+
+You can basically say:
+
+> “The overall plan looks good, let’s keep it. I just want a few adjustments so it fits BedreTilbud exactly.”
+
+### A. Redirect path & route
+
+* In `magic_links`, keep `redirect_path` but:
+
+  * Set it to `/sammenligning/<comparisonId>`.
+* In `/magic/:token` route:
+
+  * `res.redirect(302, magicLink.redirect_path);`
+
+### B. Idempotent notification
+
+In `NotificationService.sendComparisonReady`:
+
+```ts
+const comparison = await storage.getCompanyComparisonById(comparisonId);
+
+if (comparison.notified_at) {
+  // already notified – no new email
+  return;
+}
+```
+
+Optionally also check `notifications` table.
+
+### C. Clarify blocking behaviour
+
+Either:
+
+* Keep `await notificationService.sendComparisonReady(...)` and remove the “non-blocking” comment, **or**
+* Remove `await` and treat it as fire-and-forget with `.catch(...)`.
+
+I’d suggest the first.
+
+### D. Magic link consumption behaviour
+
+In `MagicLinkService.consume(token)`:
+
+* Validate token exists
+* Check `expires_at > now()`
+* **Do not** reject if `consumed_at` is already set (at least initially)
+* Still set `consumed_at = now()` the first time
+
+That avoids link scanners killing the link.
+
+---
+
+If you want, you can paste their generated `NotificationService` / `MagicLinkService` code next, and I’ll mark up exact line edits so you can send back a very concrete “please change X/Y/Z” to your Replit dev.

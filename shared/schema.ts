@@ -135,6 +135,7 @@ export const companyComparisons = pgTable("company_comparisons", {
   statusReason: text("status_reason"), // Machine-readable reason: MISSING_STRUCTURED_POLICY_CURRENT, MISSING_STRUCTURED_POLICY_OFFER, etc.
   comparisonJSON: jsonb("comparison_json"), // Full ComparisonResult from Phase 4
   errorMessage: text("error_message"), // Error details if failed
+  notifiedAt: timestamp("notified_at"), // When user was notified about this comparison
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -142,6 +143,39 @@ export const companyComparisons = pgTable("company_comparisons", {
   statusIdx: index("company_comparisons_status_idx").on(table.status),
   userIdCreatedIdx: index("company_comparisons_user_id_created_idx").on(table.userId, table.createdAt),
   userIdStatusIdx: index("company_comparisons_user_id_status_idx").on(table.userId, table.status),
+}));
+
+// Magic links for passwordless authentication
+export const magicLinks = pgTable("magic_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  comparisonId: varchar("comparison_id").references(() => companyComparisons.id),
+  token: text("token").notNull().unique(),
+  redirectPath: text("redirect_path").notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+  consumedAt: timestamp("consumed_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  tokenIdx: index("magic_links_token_idx").on(table.token),
+  userIdIdx: index("magic_links_user_id_idx").on(table.userId),
+  expiresAtIdx: index("magic_links_expires_at_idx").on(table.expiresAt),
+}));
+
+// Notifications for tracking email sends
+export const notifications = pgTable("notifications", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  comparisonId: varchar("comparison_id").references(() => companyComparisons.id),
+  type: text("type").notNull(), // 'comparison_ready'
+  status: text("status").notNull().default("pending"), // 'pending', 'sent', 'failed'
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+  sentAt: timestamp("sent_at"),
+}, (table) => ({
+  userIdIdx: index("notifications_user_id_idx").on(table.userId),
+  comparisonIdIdx: index("notifications_comparison_id_idx").on(table.comparisonId),
+  statusIdx: index("notifications_status_idx").on(table.status),
+  typeIdx: index("notifications_type_idx").on(table.type),
 }));
 
 export const householdMembers = pgTable("household_members", {
@@ -384,6 +418,16 @@ export const insertCompanyComparisonSchema = createInsertSchema(companyCompariso
   updatedAt: true,
 });
 
+export const insertMagicLinkSchema = createInsertSchema(magicLinks).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertNotificationSchema = createInsertSchema(notifications).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -411,6 +455,10 @@ export type HealthCheck = typeof healthChecks.$inferSelect;
 export type InsertHealthCheck = z.infer<typeof insertHealthCheckSchema>;
 export type CompanyComparison = typeof companyComparisons.$inferSelect;
 export type InsertCompanyComparison = z.infer<typeof insertCompanyComparisonSchema>;
+export type MagicLink = typeof magicLinks.$inferSelect;
+export type InsertMagicLink = z.infer<typeof insertMagicLinkSchema>;
+export type Notification = typeof notifications.$inferSelect;
+export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 
 // ============================================================================
 // COMPARISON DATA STRUCTURES (Phase 3 + 4)

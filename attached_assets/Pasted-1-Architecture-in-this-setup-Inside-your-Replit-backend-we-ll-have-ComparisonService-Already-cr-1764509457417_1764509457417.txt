@@ -1,0 +1,402 @@
+1. Architecture in this setup
+
+Inside your Replit backend we’ll have:
+
+ComparisonService
+
+Already creates a comparison when an offer is processed.
+
+New: calls NotificationService.notifyNewOffer(...) right after saving.
+
+NotificationService
+
+Creates a magic_links row.
+
+Sends the email via EmailService.
+
+Optionally logs into a notifications table.
+
+EmailService
+
+Wraps Resend / SMTP / other provider (whatever you’re using in Replit).
+
+MagicLink route
+
+GET /magic/:token
+
+Verifies token, issues session, redirects to /sammenligning/:comparisonId.
+
+No external job runners, everything happens in the backend request flow (or via a small internal queue if you want later).
+
+2. Data model
+
+If you’re already on Postgres / Supabase, use this as a migration. If not, this is the schema you want to mirror.
+
+magic_links
+CREATE TABLE magic_links (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  comparison_id UUID NOT NULL,
+  token TEXT NOT NULL UNIQUE,
+  target_path TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  metadata JSONB
+);
+
+Optional: notifications (for logging / debugging)
+CREATE TABLE notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL,
+  comparison_id UUID NOT NULL,
+  type TEXT NOT NULL,    -- 'new_offer'
+  status TEXT NOT NULL,  -- 'pending' | 'sent' | 'failed'
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  sent_at TIMESTAMPTZ,
+  error TEXT
+);
+
+
+Your existing comparisons should have at least:
+
+-- existing / simplified
+comparisons (
+  id UUID PRIMARY KEY,
+  user_id UUID NOT NULL,
+  company_id UUID NOT NULL,
+  status TEXT NOT NULL,         -- 'processing' | 'ready'
+  annual_savings INTEGER,
+  summary JSONB,
+  notified_at TIMESTAMPTZ
+);
+
+3. Backend flow: when a new offer comparison is ready
+
+Wherever you finish a comparison (probably something like ComparisonService.createFromOffer):
+
+// ComparisonService.ts (pseudo-code)
+export async function finalizeComparison(params: {
+  userId: string;
+  companyId: string;
+  // ... other inputs
+}) {
+  // 1) Create the comparison
+  const comparison = await db.comparisons.insert({
+    user_id: params.userId,
+    company_id: params.companyId,
+    status: 'ready',
+    annual_savings: calculatedSavings,
+    summary: summaryJson,
+  });
+
+  // 2) Trigger notification
+  await NotificationService.notifyNewOffer({
+    userId: params.userId,
+    comparisonId: comparison.id,
+    annualSavings: comparison.annual_savings,
+    companyId: params.companyId,
+  });
+
+  return comparison;
+}
+
+NotificationService
+// NotificationService.ts
+import { MagicLinkService } from './MagicLinkService';
+import { EmailService } from './EmailService';
+import { db } from './db';
+
+export const NotificationService = {
+  async notifyNewOffer({
+    userId,
+    comparisonId,
+    annualSavings,
+    companyId,
+  }: {
+    userId: string;
+    comparisonId: string;
+    annualSavings: number | null;
+    companyId: string;
+  }) {
+    // 1) Load user + company info
+    const user = await db.users.findById(userId);
+    if (!user) throw new Error('User not found');
+
+    const company = await db.companies.findById(companyId);
+
+    // 2) Create magic link
+    const targetPath = `/sammenligning/${comparisonId}`;
+    const magicLink = await MagicLinkService.create({
+      userId,
+      comparisonId,
+      targetPath,
+      ttlHours: 24 * 14, // 14 dage
+    });
+
+    // 3) (Optional) insert into notifications table
+    const notification = await db.notifications.insert({
+      user_id: userId,
+      comparison_id: comparisonId,
+      type: 'new_offer',
+      status: 'pending',
+    });
+
+    // 4) Send email
+    try {
+      await EmailService.sendNewOfferEmail({
+        to: user.email,
+        userName: user.name,
+        companyName: company?.name ?? 'forsikringsselskabet',
+        annualSavings: annualSavings ?? 0,
+        link: magicLink.url,
+      });
+
+      // Mark as sent & comparisons.notified_at
+      await db.notifications.update(notification.id, {
+        status: 'sent',
+        sent_at: new Date(),
+      });
+
+      await db.comparisons.update(comparisonId, {
+        notified_at: new Date(),
+      });
+    } catch (err: any) {
+      await db.notifications.update(notification.id, {
+        status: 'failed',
+        error: String(err?.message ?? err),
+      });
+      throw err;
+    }
+  },
+};
+
+4. Magic link creation
+// MagicLinkService.ts
+import crypto from 'crypto';
+import { db } from './db';
+
+export const MagicLinkService = {
+  async create({
+    userId,
+    comparisonId,
+    targetPath,
+    ttlHours,
+  }: {
+    userId: string;
+    comparisonId: string;
+    targetPath: string;
+    ttlHours: number;
+  }) {
+    const token = crypto.randomBytes(32).toString('hex'); // 64-char
+    const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000);
+
+    const row = await db.magic_links.insert({
+      user_id: userId,
+      comparison_id: comparisonId,
+      token,
+      target_path: targetPath,
+      expires_at: expiresAt,
+    });
+
+    const baseUrl = process.env.APP_BASE_URL ?? 'https://bedretilbud.dk';
+    const url = `${baseUrl}/magic/${token}`;
+
+    return { ...row, url };
+  },
+};
+
+5. Magic link route in Replit backend
+
+Assuming an Express-style router:
+
+// routes/magic.ts
+import type { Request, Response } from 'express';
+import { db } from '../db';
+import { createSessionForUser } from '../auth/session';
+
+export async function handleMagicLink(req: Request, res: Response) {
+  const { token } = req.params;
+
+  const link = await db.magic_links.findOne({ token });
+
+  if (!link) return res.status(404).send('Linket er ugyldigt');
+
+  const now = new Date();
+  if (link.expires_at < now) {
+    return res.status(410).send('Linket er udløbet');
+  }
+
+  // Optional single-use
+  // if (link.used_at) return res.status(410).send('Linket er allerede brugt');
+
+  await db.magic_links.update(link.id, { used_at: now });
+
+  // Create session / JWT / cookie
+  const session = await createSessionForUser(link.user_id);
+
+  // Example: set cookie
+  res.cookie('bt_session', session.token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 dage
+  });
+
+  const target = link.target_path ?? '/';
+  return res.redirect(302, target);
+}
+
+
+Wire it up:
+
+// server.ts
+import express from 'express';
+import { handleMagicLink } from './routes/magic';
+
+const app = express();
+
+app.get('/magic/:token', handleMagicLink);
+
+// ... rest of routes, start server
+
+
+On the frontend, you don’t need anything special:
+The user lands on /sammenligning/:comparisonId, is already logged in via cookie, and your existing comparison page works as usual.
+
+6. Email copy (short, Danish, clear)
+
+Something like:
+
+Subject:
+Du har fået et nyt forsikringstilbud, som er klar til sammenligning
+
+Body (HTML-ish):
+
+Hej {{navn}},
+
+Du har fået et nyt forsikringstilbud fra {{selskab}}.
+Vi har allerede sammenlignet det med dine nuværende forsikringer.
+
+Kort overblik
+
+Potentiel årlig besparelse: {{årligBesparelse}} kr
+
+Klik her for at se hele sammenligningen og alle detaljer:
+{{magic_link}}
+
+Med venlig hilsen
+BedreTilbud
+
+7. Replit AI prompt (copy-paste)
+
+Here’s a prompt you can give Replit’s AI inside the project:
+
+You are working on a TypeScript/Node backend hosted on Replit for an insurance comparison app called BedreTilbud.
+I want you to implement a notification + magic link system inside this backend (no external tools like n8n).
+
+Goal
+When a new insurance offer comparison is ready for a user, the backend should:
+
+Create a magic_links row tied to that user + comparison.
+
+Send an email to the user with a magic link.
+
+When the magic link is opened, auto-login the user and redirect to /sammenligning/:comparisonId.
+
+Database
+Add migrations for:
+
+magic_links table:
+
+id uuid pk default gen_random_uuid()
+
+user_id uuid not null
+
+comparison_id uuid not null
+
+token text not null unique
+
+target_path text not null
+
+expires_at timestamptz not null
+
+used_at timestamptz
+
+created_at timestamptz default now()
+
+metadata jsonb
+
+notifications table (optional but nice):
+
+id uuid pk default gen_random_uuid()
+
+user_id uuid not null
+
+comparison_id uuid not null
+
+type text not null -- 'new_offer'
+
+status text not null -- 'pending' | 'sent' | 'failed'
+
+created_at timestamptz default now()
+
+sent_at timestamptz
+
+error text
+
+Backend logic
+
+In the place where comparisons are finalized (comparison is saved with status = 'ready'), call a NotificationService.notifyNewOffer({ userId, comparisonId, annualSavings, companyId }).
+
+Implement NotificationService that:
+
+Looks up the user and company.
+
+Calls a MagicLinkService.create({ userId, comparisonId, targetPath, ttlHours }).
+
+Writes an entry to notifications with status = 'pending'.
+
+Calls EmailService.sendNewOfferEmail(...) with the magic link URL.
+
+Updates notifications to status = 'sent' and sets comparisons.notified_at.
+
+Implement MagicLinkService that:
+
+Generates a cryptographically strong random token.
+
+Inserts into magic_links with expires_at (e.g. now + 14 days) and target_path = '/sammenligning/:comparisonId'.
+
+Returns the full URL: APP_BASE_URL + '/magic/' + token.
+
+Implement a route GET /magic/:token that:
+
+Looks up the magic_links row by token.
+
+If not found or expired, returns 404 / 410.
+
+Optionally rejects if used_at is set (single-use).
+
+Marks used_at = now().
+
+Creates an auth session / JWT for user_id using the app’s existing auth/session mechanism.
+
+Sets the auth cookie.
+
+Redirects (302) to target_path.
+
+Constraints
+
+Use the existing DB client and auth/session pattern already in this project.
+
+Keep code clean and typed (TypeScript).
+
+Do not break existing routes; only extend them.
+
+Please generate:
+
+The migration files.
+
+The NotificationService, MagicLinkService, and updates to the comparison finalization code.
+
+The /magic/:token route handler.
