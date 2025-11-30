@@ -118,6 +118,13 @@ The platform includes an email notification system that alerts users when new in
 -   Token reuse allowed until expiry (mitigates email scanner issues)
 -   MVP uses localStorage for auth (should be upgraded to httpOnly cookies in production)
 
+**Debug Report Integration:**
+-   **Phase 6 – Email Notifications** in `comparisonDebugReportService.ts` shows:
+    - `notified_at` timestamp from `company_comparisons`
+    - Notifications table: ID, type, status, created/sent dates, errors
+    - Magic Links table: token prefix, redirect path, expiry, consumption status
+    - Email Delivery Summary: counts of sent/failed emails and magic link usage
+
 The platform implements an **Enrichment Pattern** to guarantee the preservation of deterministic data (coverage rows, highlights, cost summaries) by ensuring the AI only generates narratives. This involves caching deterministic data, sending minimal input to the AI, merging AI narratives with cached data, and strict validation. For single-policy comparisons, a pure code-based deterministic builder is used, bypassing AI calls for 100% success rate and zero hallucinations in such cases.
 
 **Pricing Coverage Metadata**: Comparison results include `meta.pricingStatus` field indicating pricing data quality: 'complete' (all policies have offer pricing), 'partial' (some policies have pricing), or 'missing' (no pricing data). This metadata is surfaced in Phase 4 debug reports for operational visibility. All cost calculations exclusively use `structuredPolicy.pricing.annualPremium` from PricingAgent, treating missing premiums as `null` to ensure accurate savings calculations.
