@@ -215,6 +215,9 @@ export default function OffersOverview() {
         const overall = comparisonData.overall || {};
         const policyComparisons = comparisonData.policyComparisons || [];
         
+        // Get the first offer snapshot ID for navigating to sundhedstjek
+        const firstOfferSnapshotId = policyComparisons.find((pc: any) => pc.offerPolicyId)?.offerPolicyId || null;
+        
         return {
           id: offer.id,
           companyId: offer.company?.id,
@@ -228,6 +231,7 @@ export default function OffersOverview() {
           comparisonId: offer.comparisonId,
           comparisonStatus: offer.comparisonStatus,
           highlights: extractTop4Highlights(comparisonData),
+          firstOfferSnapshotId,
         };
       })
     : [];
@@ -315,7 +319,13 @@ export default function OffersOverview() {
                     monthlySavings={monthlySavings}
                     yearlySavings={yearlySavings}
                     highlights={companyOffer.highlights}
-                    onViewInsurance={() => setLocation(`/health-check/${companyOffer.comparisonId}`)}
+                    onViewInsurance={() => {
+                      if (companyOffer.firstOfferSnapshotId) {
+                        setLocation(`/sundhedstjek/${companyOffer.firstOfferSnapshotId}`);
+                      } else {
+                        setLocation(`/sammenligning/${companyOffer.comparisonId}`);
+                      }
+                    }}
                     onViewComparison={() => setLocation(`/sammenligning/${companyOffer.comparisonId}`)}
                   />
                 );
