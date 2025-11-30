@@ -101,6 +101,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Magic link authentication endpoint
   app.get("/magic/:token", noCache, async (req, res) => {
+    const escapeHtml = (str: string): string => {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    };
+
+    const escapeJs = (str: string): string => {
+      return str
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/"/g, '\\"')
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r')
+        .replace(/</g, '\\x3c')
+        .replace(/>/g, '\\x3e');
+    };
+
+    const validateRedirectPath = (path: string): boolean => {
+      if (!path.startsWith('/')) return false;
+      if (path.includes('://')) return false;
+      if (path.includes('javascript:')) return false;
+      if (path.includes('data:')) return false;
+      return true;
+    };
+
     try {
       const { token } = req.params;
       const { magicLinkService } = await import("./services/magicLinkService");
@@ -109,6 +137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!result.valid || !result.magicLink) {
         logger.security('Invalid magic link attempt', { token: token.substring(0, 8) + '...', reason: result.error });
+        const safeError = escapeHtml(result.error || 'Linket er udløbet eller ugyldigt. Kontakt os venligst for at få et nyt link.');
         return res.status(400).send(`
 <!DOCTYPE html>
 <html lang="da">
@@ -127,7 +156,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 <body>
   <div class="container">
     <h1>Linket er ugyldigt</h1>
-    <p>${result.error || 'Linket er udløbet eller ugyldigt. Kontakt os venligst for at få et nyt link.'}</p>
+    <p>${safeError}</p>
     <p><a href="/">Gå til forsiden</a></p>
   </div>
 </body>
@@ -136,6 +165,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { userId, redirectPath } = result.magicLink;
+      
+      if (!validateRedirectPath(redirectPath)) {
+        logger.security('Invalid redirect path in magic link', { userId, redirectPath, token: token.substring(0, 8) + '...' });
+        return res.status(400).send(`
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ugyldigt link - BedreTilbud</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; }
+    .container { background: white; padding: 40px; border-radius: 12px; text-align: center; max-width: 400px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+    h1 { color: #dc2626; font-size: 24px; margin-bottom: 16px; }
+    p { color: #4a4a4a; line-height: 1.6; }
+    a { color: #2563eb; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Linket er ugyldigt</h1>
+    <p>Der er sket en fejl med linket. Kontakt os venligst for at få et nyt link.</p>
+    <p><a href="/">Gå til forsiden</a></p>
+  </div>
+</body>
+</html>
+        `);
+      }
+      
+      const safeUserId = escapeJs(userId);
+      const safeRedirectPath = escapeJs(redirectPath);
       
       logger.info('Magic link authenticated', { userId, redirectPath, token: token.substring(0, 8) + '...' });
       
@@ -162,8 +222,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     <p>Du bliver snart videresendt til din sammenligning.</p>
   </div>
   <script>
-    localStorage.setItem('userId', '${userId}');
-    window.location.href = '${redirectPath}';
+    localStorage.setItem('userId', '${safeUserId}');
+    window.location.href = '${safeRedirectPath}';
   </script>
 </body>
 </html>

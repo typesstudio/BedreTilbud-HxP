@@ -88,8 +88,35 @@ Fast, read-only endpoints that serve cached JSON without AI computation:
 This pipeline generates comprehensive comparison analyses:
 1.  **Phase 3: Deterministic Policy Matching**: Pairs current and offer policies using scoring heuristics, with fallback logic for single-policy-per-type pairs. The matcher implements **Snapshot Quality Scoring** to select the best offer snapshots: +1000 points for snapshots with pricing data (`pricingStatus ≠ 'missing'`), +100 points for health check presence. This ensures PricingAgent-backed snapshots are prioritized over legacy snapshots without pricing data.
 2.  **Phase 4: ComparisonAgent**: An AI-powered agent (`gpt-4o` with `gpt-4o-mini` fallback) generates validated ComparisonResult JSON using matched pairs and health check data, focusing on 1:1 coverage mapping and deductible preservation.
+3.  **Phase 5: Email Notification**: After comparison completion, sends email notification to user via Resend with a magic link to view the comparison.
 
 An **Anti-Hallucination System** constructs the policy structure in code before AI calls, preventing the AI from generating non-existent policy types. **Retry Logic** automatically retries with reinforced prompts if the AI omits required policy types. The **ComparisonOrchestrator** manages this pipeline, groups policies, and stores results in `company_comparisons`, with idempotency checks enabled by `ENABLE_COMPARISON=true`.
+
+### Email Notification System (Nov 2025)
+
+The platform includes an email notification system that alerts users when new insurance offer comparisons are ready:
+
+**Architecture:**
+-   **MagicLinkService** (`server/services/magicLinkService.ts`): Creates 64-character secure tokens with 14-day expiry, allowing multiple uses until expiration (to handle email scanner pre-fetches).
+-   **NotificationService** (`server/services/notificationService.ts`): Orchestrates email sending with explicit idempotency checks via `company_comparisons.notified_at` column.
+-   **Resend Integration**: Professional HTML emails with Danish content, sent via Replit's Resend connector.
+
+**Database Tables:**
+-   `magic_links`: Stores tokens linking to users and comparisons, with expiry tracking.
+-   `notifications`: Logs all email send attempts with status ('pending', 'sent', 'failed') for debugging.
+-   `company_comparisons.notified_at`: Timestamp for idempotency - prevents duplicate notifications.
+
+**Magic Link Flow:**
+1.  Comparison completes → `NotificationService.sendComparisonReady()` called
+2.  Idempotency check: skip if `notified_at` already set
+3.  Create magic link with `redirectPath = /sammenligning/:comparisonId`
+4.  Send email via Resend with magic link URL
+5.  User clicks link → `GET /magic/:token` validates token, sets `localStorage.userId`, redirects to comparison page
+
+**Security Notes:**
+-   Tokens are cryptographically random (64 hex chars from 32 random bytes)
+-   Token reuse allowed until expiry (mitigates email scanner issues)
+-   MVP uses localStorage for auth (should be upgraded to httpOnly cookies in production)
 
 The platform implements an **Enrichment Pattern** to guarantee the preservation of deterministic data (coverage rows, highlights, cost summaries) by ensuring the AI only generates narratives. This involves caching deterministic data, sending minimal input to the AI, merging AI narratives with cached data, and strict validation. For single-policy comparisons, a pure code-based deterministic builder is used, bypassing AI calls for 100% success rate and zero hallucinations in such cases.
 
