@@ -33,9 +33,6 @@ export function ComparisonQuickTable({
 
   return (
     <div className="flex w-full flex-col items-start gap-4">
-      <span className="text-heading-2 font-heading-2 text-default-font">
-        Hurtig sammenligning
-      </span>
       <div className="flex w-full flex-col items-start rounded-lg border border-solid border-neutral-border bg-default-background overflow-x-auto">
         <Table
           header={

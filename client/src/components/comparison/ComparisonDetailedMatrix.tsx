@@ -87,11 +87,6 @@ export function ComparisonDetailedMatrix({
                       {row.coverageDescription}
                     </span>
                   )}
-                  {row.note && (
-                    <span className="text-caption font-caption text-warning-600">
-                      {row.note}
-                    </span>
-                  )}
                 </div>
                 {isSingleColumn ? (
                   <div className="flex grow shrink-0 basis-0 items-center justify-center">
