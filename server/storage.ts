@@ -22,7 +22,11 @@ import {
   type HealthCheck,
   type InsertHealthCheck,
   type OnboardingProgress,
-  type InsertOnboardingProgress
+  type InsertOnboardingProgress,
+  type MagicLink,
+  type InsertMagicLink,
+  type Notification,
+  type InsertNotification
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { withCache, apiCache } from "./utils/cache";
@@ -139,6 +143,20 @@ export interface IStorage {
   getBenchmarkPrice(policyType: string): Promise<number | null>;
   getAllBenchmarkPrices(): Promise<Array<{ policyType: string; annualPremium: number }>>;
   setBenchmarkPrice(policyType: string, annualPremium: number): Promise<void>;
+
+  // Magic Links
+  getMagicLinkByToken(token: string): Promise<MagicLink | undefined>;
+  createMagicLink(magicLink: InsertMagicLink): Promise<MagicLink>;
+  updateMagicLinkConsumed(id: string): Promise<MagicLink>;
+
+  // Notifications
+  getNotification(id: string): Promise<Notification | undefined>;
+  getNotificationByComparison(comparisonId: string, type: string): Promise<Notification | undefined>;
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  updateNotificationStatus(id: string, status: string, errorMessage?: string): Promise<Notification>;
+
+  // Company Comparison notified_at
+  updateCompanyComparisonNotifiedAt(id: string): Promise<CompanyComparison>;
 }
 
 export class MemStorage implements IStorage {
@@ -1776,6 +1794,104 @@ export class DatabaseStorage implements IStorage {
         target: benchmarkPrices.policyType, 
         set: { annualPremium, updatedAt: new Date() } 
       });
+  }
+
+  // Magic Links
+  async getMagicLinkByToken(token: string): Promise<MagicLink | undefined> {
+    const { db } = await import("./db");
+    const { magicLinks } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [magicLink] = await db.select().from(magicLinks).where(eq(magicLinks.token, token));
+    return magicLink || undefined;
+  }
+
+  async createMagicLink(insertMagicLink: InsertMagicLink): Promise<MagicLink> {
+    const { db } = await import("./db");
+    const { magicLinks } = await import("@shared/schema");
+    const [magicLink] = await db.insert(magicLinks).values(insertMagicLink).returning();
+    return magicLink;
+  }
+
+  async updateMagicLinkConsumed(id: string): Promise<MagicLink> {
+    const { db } = await import("./db");
+    const { magicLinks } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [magicLink] = await db.update(magicLinks)
+      .set({ consumedAt: new Date() })
+      .where(eq(magicLinks.id, id))
+      .returning();
+    
+    if (!magicLink) {
+      throw new Error('Magic link not found');
+    }
+    
+    return magicLink;
+  }
+
+  // Notifications
+  async getNotification(id: string): Promise<Notification | undefined> {
+    const { db } = await import("./db");
+    const { notifications } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [notification] = await db.select().from(notifications).where(eq(notifications.id, id));
+    return notification || undefined;
+  }
+
+  async getNotificationByComparison(comparisonId: string, type: string): Promise<Notification | undefined> {
+    const { db } = await import("./db");
+    const { notifications } = await import("@shared/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const [notification] = await db.select().from(notifications).where(
+      and(
+        eq(notifications.comparisonId, comparisonId),
+        eq(notifications.type, type)
+      )
+    );
+    return notification || undefined;
+  }
+
+  async createNotification(insertNotification: InsertNotification): Promise<Notification> {
+    const { db } = await import("./db");
+    const { notifications } = await import("@shared/schema");
+    const [notification] = await db.insert(notifications).values(insertNotification).returning();
+    return notification;
+  }
+
+  async updateNotificationStatus(id: string, status: string, errorMessage?: string): Promise<Notification> {
+    const { db } = await import("./db");
+    const { notifications } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [notification] = await db.update(notifications)
+      .set({ 
+        status, 
+        errorMessage: errorMessage || null,
+        sentAt: status === 'sent' ? new Date() : undefined
+      })
+      .where(eq(notifications.id, id))
+      .returning();
+    
+    if (!notification) {
+      throw new Error('Notification not found');
+    }
+    
+    return notification;
+  }
+
+  // Company Comparison notified_at
+  async updateCompanyComparisonNotifiedAt(id: string): Promise<CompanyComparison> {
+    const { db } = await import("./db");
+    const { companyComparisons } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [comparison] = await db.update(companyComparisons)
+      .set({ notifiedAt: new Date() })
+      .where(eq(companyComparisons.id, id))
+      .returning();
+    
+    if (!comparison) {
+      throw new Error('Company comparison not found');
+    }
+    
+    return comparison;
   }
 }
 
