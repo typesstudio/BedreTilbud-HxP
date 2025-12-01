@@ -92,6 +92,12 @@ export default function ProfilePage() {
           title: "Filen er allerede uploadet", 
           description: "Se dit eksisterende forsikringstjek" 
         });
+      } else if (result.documents?.[0]?.document?.documentKind === "unknown") {
+        toast({ 
+          title: "Ukendt dokumenttype", 
+          description: "Vi kunne ikke genkende dette som en forsikringspolice. Prøv at uploade selve policen.",
+          variant: "destructive"
+        });
       } else {
         toast({ 
           title: "Dokument uploadet og analyseret", 
@@ -278,12 +284,28 @@ export default function ProfilePage() {
                           icon={<FeatherFileText />}
                         />
                         <div className="flex grow shrink-0 basis-0 flex-col items-start justify-center gap-1">
-                          <span className="w-full text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold" data-testid={`text-doc-name-${doc.id}`}>
-                            {doc.fileName}
-                          </span>
+                          <div className="flex items-center gap-2 w-full">
+                            <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold" data-testid={`text-doc-name-${doc.id}`}>
+                              {doc.fileName}
+                            </span>
+                            {doc.documentKind === 'unknown' && (
+                              <span 
+                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                                data-testid={`badge-unknown-doc-${doc.id}`}
+                                title="Vi kunne ikke genkende dette dokument som en forsikringspolice. Prøv at uploade selve policen eller din forsikringsoversigt fra dit selskab."
+                              >
+                                Ukendt dokument
+                              </span>
+                            )}
+                          </div>
                           <span className="w-full text-body font-body text-subtext-color mobile:text-caption mobile:font-caption" data-testid={`text-doc-info-${doc.id}`}>
                             Uploadet {doc.createdAt ? format(new Date(doc.createdAt), "d. MMMM yyyy", { locale: da }) : "ukendt"} • PDF • {doc.fileSize ? `${(doc.fileSize / 1024 / 1024).toFixed(1)} MB` : "ukendt"}
                           </span>
+                          {doc.documentKind === 'unknown' && (
+                            <span className="w-full text-caption font-caption text-amber-600 dark:text-amber-400" data-testid={`text-unknown-hint-${doc.id}`}>
+                              Vi kunne ikke genkende dette som en forsikringspolice. Prøv at uploade selve policen.
+                            </span>
+                          )}
                         </div>
                         <Button
                           className="mobile:hidden touch-target"

@@ -88,6 +88,20 @@ export class HealthCheckOrchestrator {
         throw new Error(`Document ${documentId} not found`);
       }
 
+      // Step 1.3: Skip health check for unknown documents
+      if (document.documentKind === 'unknown') {
+        console.log(`[HealthCheckOrchestrator] Document ${documentId} is classified as UNKNOWN - skipping health check`);
+        return {
+          success: true,
+          documentId,
+          healthChecksCreated: 0,
+          healthChecksFailed: 0,
+          skipped: true,
+          skipReason: 'Document classified as unknown (not an insurance policy)',
+          errors: []
+        };
+      }
+
       // 2. Check if already processed (idempotency)
       if (!forceRerun) {
         const existingHealthChecks = await this.storage.getHealthChecksByDocument(documentId);

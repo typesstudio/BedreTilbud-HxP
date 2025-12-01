@@ -1,5 +1,6 @@
 import type { IStorage } from "../storage";
 import type { InsertOfferSnapshot, OfferSnapshot } from "@shared/schema";
+import { classifyDocumentKind, type DocumentClassificationResult } from "./documentClassifierService";
 
 interface ExtractionStage {
   name: string;
@@ -158,6 +159,44 @@ export class ExtractionOrchestratorService {
       const ocrStage = this.createStage("ocr_extraction");
       stages.push(ocrStage);
       const ocrOutput = await this.runOcrStage(document, ocrStage);
+
+      // Stage 1.5: Document Classification (Step 1.3)
+      // Classify if this is an insurance policy or unknown document type
+      const classificationStage = this.createStage("document_classification");
+      stages.push(classificationStage);
+      const classificationResult = await this.runClassificationStage(
+        ocrOutput,
+        document,
+        classificationStage
+      );
+      
+      // If document is NOT an insurance policy, stop pipeline early
+      if (classificationResult.kind === 'unknown') {
+        console.log(`[Orchestrator] Document ${documentId} classified as UNKNOWN - stopping pipeline`);
+        console.log(`[Orchestrator] Reason: ${classificationResult.reason}`);
+        
+        // Update document with classification result
+        await this.storage.updateDocument(documentId, {
+          documentKind: 'unknown',
+          documentKindConfidence: classificationResult.confidence,
+          extractionStatus: 'completed',
+          totalPoliciesExtracted: 0,
+        });
+        
+        return {
+          success: true,
+          documentId,
+          snapshots: [],
+          stages,
+          error: `Document classified as unknown: ${classificationResult.reason}`
+        };
+      }
+      
+      // Update document as insurance_policy
+      await this.storage.updateDocument(documentId, {
+        documentKind: 'insurance_policy',
+        documentKindConfidence: classificationResult.confidence,
+      });
 
       // Stage 2: Validation & Preprocessing
       const validationStage = this.createStage("validation");
@@ -331,6 +370,52 @@ export class ExtractionOrchestratorService {
       stage.completedAt = new Date();
       stage.error = error instanceof Error ? error.message : String(error);
       throw error;
+    }
+  }
+
+  /**
+   * Step 1.3: Classify if document is an insurance policy or unknown document type
+   * Uses keyword heuristics to make this determination
+   */
+  private async runClassificationStage(
+    ocrOutput: OcrOutput,
+    document: any,
+    stage: ExtractionStage
+  ): Promise<DocumentClassificationResult> {
+    stage.status = "running";
+    stage.startedAt = new Date();
+    
+    try {
+      console.log(`[Orchestrator] Stage 1.5: Document classification...`);
+      
+      const result = classifyDocumentKind(ocrOutput.markdown);
+      
+      console.log(`[Orchestrator] Classification: ${result.kind} (confidence: ${result.confidence}%)`);
+      console.log(`[Orchestrator] Matched keywords: ${result.matchedKeywords.slice(0, 5).join(', ')}${result.matchedKeywords.length > 5 ? '...' : ''}`);
+      
+      stage.status = "completed";
+      stage.completedAt = new Date();
+      stage.output = {
+        kind: result.kind,
+        confidence: result.confidence,
+        matchedKeywordsCount: result.matchedKeywords.length,
+        reason: result.reason
+      };
+      
+      return result;
+    } catch (error) {
+      stage.status = "failed";
+      stage.completedAt = new Date();
+      stage.error = error instanceof Error ? error.message : String(error);
+      
+      // Default to insurance_policy on error (fail-safe)
+      console.warn(`[Orchestrator] Classification failed, defaulting to insurance_policy:`, error);
+      return {
+        kind: 'insurance_policy',
+        confidence: 50,
+        matchedKeywords: [],
+        reason: 'Classification failed - defaulting to insurance policy'
+      };
     }
   }
 
