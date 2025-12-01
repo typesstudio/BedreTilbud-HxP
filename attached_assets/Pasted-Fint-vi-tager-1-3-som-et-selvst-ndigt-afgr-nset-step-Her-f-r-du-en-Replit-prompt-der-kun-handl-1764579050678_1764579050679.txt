@@ -1,0 +1,121 @@
+Fint, vi tager 1.3 som et selvstændigt, afgrænset step 💡
+Her får du en Replit-prompt, der kun handler om **ikke-forsikringsdokumenter** i bruger-upload flowet.
+
+---
+
+### Replit-prompt – Step 1.3: Håndtering af ikke-forsikringsdokumenter (klassificér som “ukendt”)
+
+> Vi er nu på Step 1.3 i vores upload edge-case roadmap:
+> **Når brugeren uploader et dokument, der ikke er en forsikringspolice (fx kontoudtog, lønseddel, generelle vilkår osv.), skal det klassificeres som “ukendt”, ikke bruges i health check / sammenligning, og brugeren skal have en klar besked på dansk.**
+>
+> **Overordnet mål:**
+>
+> * Efter OCR/udtræk skal vi kunne vurdere: “Er dette sandsynligvis en forsikringspolice eller ej?”.
+> * Hvis ikke, skal dokumentet markeres som “ukendt” og holdes ude af health check og sammenligninger.
+> * UI skal vise en venlig besked, så brugeren forstår, hvad der sker og hvad de skal gøre.
+>
+> ### 1. Find hvor dokumenter klassificeres til forsikringstyper
+>
+> 1. Find den del af koden, hvor et `document` (fra `documents`-tabellen) bliver til en struktureret policy med forsikringstype (indbo, hus, bil, osv.).
+>
+>    * Det kan være i en “extraction pipeline” / “Mistral/Eden AI-resultat” / “policy parsing” service.
+>    * Der vil typisk være noget i stil med `policyType`, `insuranceType` eller lignende.
+> 2. Notér:
+>
+>    * Hvilken model/struktur repræsenterer en “policy” (fx `Policy`, `ExtractedPolicy`, `policy_snapshots`, mv.).
+>    * Hvor `policyType` sættes i dag (indbo/hus/bil/ulykke/etc.).
+>
+> ### 2. Introducér en “ukendt” kategori + confidence
+>
+> Vi vil gerne have en klar måde at markere dokumenter, som **ikke** ligner policer.
+>
+> 1. Udvid det relevante schema, så vi kan repræsentere både type og sikkerhed:
+>
+>    * Hvis `policyType` er et felt på en policy-entitet, udvid så vi kan have en værdi som `'unknown'` eller lignende.
+>    * Hvis det giver mening, tilføj også et `classificationConfidence`-felt (`number` / `float`), fx 0–1 eller 0–100.
+>    * Alternativt kan du tilføje et felt på `documents`, fx:
+>
+>      * `documentKind: 'insurance_policy' | 'unknown'` + evt. `documentKindConfidence`.
+> 2. Tilføj migrations for disse nye felter (Drizzle/Supabase), med fornuftige defaults:
+>
+>    * Eksisterende rækker kan sættes til f.eks. `documentKind = 'insurance_policy'` eller ignorere `unknown`-logik, så vi ikke bryder nuværende data.
+>
+> ### 3. Implementér simpel “is this an insurance policy?”-klassificering
+>
+> Vi skal ikke bygge en kæmpe ML-model – bare en robust MEP-klassificering.
+>
+> 1. Når OCR/udtræk er færdig, og vi har tekst + evt. struktureret JSON, tilføj et trin, der vurderer dokumentet:
+>
+>    * Brug fx simple heuristikker + evt. eksisterende AI-output:
+>
+>      * Tjek for nøgleord i den udtrukne tekst (case-insensitive), fx:
+>
+>        * “Policenummer”, “Policenr”, “Forsikringsnummer”, “Forsikringspolice”
+>        * “Dækningsoversigt”, “Dækningssummer”, “Selvrisiko”
+>        * Selskabsnavne eller ord som “præmie”, “forsikringssum”, “kunde nr”.
+>      * Hvis der **ingen** af disse typiske forsikrings-ord er, og/eller AI-resultatet i forvejen er meget “tomt” → klassificér som “ukendt”.
+>    * Du må gerne lave en lille helper, fx:
+>
+>      * `classifyDocumentKind(extractedTextOrJson) => { kind: 'insurance_policy' | 'unknown', confidence: number }`
+> 2. Gem resultatet af klassificeringen i databasen:
+>
+>    * På det niveau du valgte i Step 2 (fx `documents.documentKind` + `documents.documentKindConfidence` eller `policy.policyType = 'unknown'`).
+>
+> ### 4. Stop ukendte dokumenter fra at gå ind i health check / sammenligning
+>
+> 1. Find alle steder, hvor der oprettes health check / “forsikrings tjek” baseret på brugerens policer:
+>
+>    * fx en HealthCheckOrchestrator, job queue, eller steder der kaldes efter extraction.
+> 2. Indfør et filter:
+>
+>    * Hvis `documentKind === 'unknown'` (eller `policyType === 'unknown'`):
+>
+>      * **Skip** health check for dette dokument.
+>      * Opret ikke policy-snapshots/sammenligninger for det.
+> 3. Sørg for, at alle queries til health check / oversigtssider **kun** tager policer/dokumenter med:
+>
+>    * `documentKind = 'insurance_policy'` (eller `policyType != 'unknown'`).
+> 4. Samme princip skal gælde for sammenligninger mod tilbud – “ukendte” må ikke blande sig i matching/overview.
+>
+> ### 5. UI: Klar besked til brugeren (på dansk)
+>
+> Når et upload ender med at være klassificeret som “ukendt dokument”, skal brugeren have besked.
+>
+> 1. Find det sted i frontend, hvor vi viser resultatet af upload + evt. health check status for hver fil.
+> 2. Hvis et dokument har `documentKind === 'unknown'` (eller tilsvarende signal fra backend), så:
+>
+>    * Vis en tydelig badge/tekst ved dokumentet, fx:
+>
+>      * **Label:** `Ukendt dokument`
+>    * Vis en kort forklarende tekst, fx i en tooltip eller under dokumentet:
+>
+>      * **“Vi kunne ikke genkende dette dokument som en forsikringspolice. Prøv at uploade selve policen eller din forsikringsoversigt fra dit selskab.”**
+> 3. Dokumentet må gerne stadig være synligt i brugerens liste (så de kan se, at vi *har* fået det), men:
+>
+>    * Det må ikke tælle med i “Antal policer”, besparelsesberegninger eller health check-cards.
+>
+> ### 6. Acceptance criteria
+>
+> * Hvis jeg uploader et “rigtigt” forsikringsdokument (fx en police med nummer, dækninger og præmie):
+>
+>   * Dokumentet klassificeres som `insurance_policy` (eller tilsvarende).
+>   * Health check kører som i dag.
+>   * Dokumentet bruges som baseline i oversigter/sammenligninger.
+> * Hvis jeg uploader et ikke-forsikringsdokument (fx kontoudtog, lønseddel, generelle vilkår uden policenummer):
+>
+>   * Dokumentet klassificeres som `unknown`.
+>   * Der oprettes **ikke** health check for dette dokument.
+>   * Det indgår **ikke** i nogen sammenligninger.
+>   * I UI ser jeg tydeligt, at:
+>
+>     * Dokumentet er markeret som “Ukendt dokument”.
+>     * Jeg får en besked a la:
+>
+>       * “Vi kunne ikke genkende dette dokument som en forsikringspolice. Prøv at uploade selve policen eller din forsikringsoversigt fra dit selskab.”
+> * Eksisterende policer, der allerede ligger i systemet, fungerer uændret (vi behøver ikke retro-klassificere dem nu).
+>
+> Fokus: gør klassificeringen robust nok til MEP (hellere lidt for konservativ og kræve en “rigtig” police, end at vi behandler lønsedler som policer).
+
+---
+
+Når de har implementeret denne, kan vi lave en lille manual test-checklist igen (upload lønseddel/kontooversigt og se, om det bliver “ukendt” på den rigtige måde), og så tager vi næste step i rækken.

@@ -51,6 +51,8 @@ export const documents = pgTable("documents", {
   documentType: text("document_type"), // "current" or "offer"
   companyId: varchar("company_id").references(() => companies.id),
   extractionStages: jsonb("extraction_stages"), // Debug data: { stage1_ocr, stage2_segmentation, stage3_extraction }
+  documentKind: text("document_kind").default("insurance_policy"), // "insurance_policy" or "unknown"
+  documentKindConfidence: integer("document_kind_confidence"), // 0-100 confidence score
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   userIdIdx: index("documents_user_id_idx").on(table.userId),
@@ -58,6 +60,7 @@ export const documents = pgTable("documents", {
   companyIdIdx: index("documents_company_id_idx").on(table.companyId),
   userIdTypeIdx: index("documents_user_id_type_idx").on(table.userId, table.documentType),
   userIdFileHashIdx: index("documents_user_id_file_hash_idx").on(table.userId, table.fileHash),
+  documentKindIdx: index("documents_document_kind_idx").on(table.documentKind),
 }));
 
 export const emailThreads = pgTable("email_threads", {
