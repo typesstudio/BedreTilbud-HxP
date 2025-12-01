@@ -80,15 +80,24 @@ export default function ProfilePage() {
       formData.append("documentType", "current");
       
       const response = await apiRequest("POST", "/api/documents/upload", formData);
-      return response.json();
+      const result = await response.json();
+      return result;
     },
-    onSuccess: () => {
+    onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents/user", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/policies", "user", userId] });
-      toast({ 
-        title: "Dokument uploadet og analyseret", 
-        description: "Dit forsikringstjek er klar" 
-      });
+      
+      if (result.ok === false && result.errorCode === "duplicate_file") {
+        toast({ 
+          title: "Filen er allerede uploadet", 
+          description: "Se dit eksisterende forsikringstjek" 
+        });
+      } else {
+        toast({ 
+          title: "Dokument uploadet og analyseret", 
+          description: "Dit forsikringstjek er klar" 
+        });
+      }
     },
     onError: (error: Error) => {
       toast({ 
