@@ -2072,7 +2072,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           let currentCompanyId: string | null = null;
           
           if (doc.companyId) {
-            const companyComparisons = await storage.getCompanyComparisonsByUser(req.params.userId);
+            // Step 2.4: Only use active (non-superseded) comparisons
+            const companyComparisons = await storage.getActiveCompanyComparisonsByUser(req.params.userId);
             const relevantComparison = companyComparisons.find((cc: CompanyComparison) => 
               cc.offerCompany === doc.companyId
             );
@@ -2677,9 +2678,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Get the document to find its company_id
         const document = await storage.getDocument(documentId);
         if (document && document.companyId) {
-          // Find company comparison where this company is the offer company
+          // Step 2.4: Only use active (non-superseded) comparisons
           const userId = req.headers['x-user-id'] as string;
-          const companyComparisons = await storage.getCompanyComparisonsByUser(userId);
+          const companyComparisons = await storage.getActiveCompanyComparisonsByUser(userId);
           const relevantComparison = companyComparisons.find(
             (cc: any) => cc.offerCompany === document.companyId && cc.status === 'completed'
           );
@@ -2976,11 +2977,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const goodCount = policySummaries.filter(p => p.recommendation === 'good').length;
       const totalCount = policySummaries.length;
 
-      // Find comparison ID if available
+      // Step 2.4: Only use active (non-superseded) comparisons
       let comparisonId: string | null = null;
       try {
         if (document.companyId) {
-          const comparisons = await storage.getCompanyComparisonsByUser(userId);
+          const comparisons = await storage.getActiveCompanyComparisonsByUser(userId);
           const relevantComparison = comparisons.find(
             (cc: any) => cc.offerCompany === document.companyId && cc.status === 'completed'
           );

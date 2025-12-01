@@ -142,6 +142,11 @@ export const companyComparisons = pgTable("company_comparisons", {
   comparisonJSON: jsonb("comparison_json"), // Full ComparisonResult from Phase 4
   errorMessage: text("error_message"), // Error details if failed
   notifiedAt: timestamp("notified_at"), // When user was notified about this comparison
+  
+  // Version management (Step 2.4 - Dec 2025)
+  // When a revised offer triggers new comparison, old comparisons for same company pair are superseded
+  isSuperseded: boolean("is_superseded").default(false).notNull(),
+  
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => ({
@@ -149,6 +154,7 @@ export const companyComparisons = pgTable("company_comparisons", {
   statusIdx: index("company_comparisons_status_idx").on(table.status),
   userIdCreatedIdx: index("company_comparisons_user_id_created_idx").on(table.userId, table.createdAt),
   userIdStatusIdx: index("company_comparisons_user_id_status_idx").on(table.userId, table.status),
+  isSupersededIdx: index("company_comparisons_is_superseded_idx").on(table.isSuperseded),
 }));
 
 // Magic links for passwordless authentication

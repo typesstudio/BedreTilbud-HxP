@@ -600,32 +600,51 @@ export class ComparisonOrchestrator {
     });
 
     // Check if comparison already exists (idempotency)
-    if (!forceRerun) {
-      const existing = await this.storage.getCompanyComparisonByCompanies(
-        userId,
-        currentCompany,
-        offerCompany
-      );
-      
-      if (existing && existing.status === 'completed') {
-        console.log(`[ComparisonOrchestrator] Comparison already exists (${existing.id}), generating debug report...`);
+    // Step 2.4: Allow reprocessing if new offer snapshots exist (newer than the comparison)
+    const existing = await this.storage.getCompanyComparisonByCompanies(
+      userId,
+      currentCompany,
+      offerCompany
+    );
+    
+    if (existing && !(existing as any).isSuperseded) {
+      // Check if this comparison is still valid (completed and no newer offer snapshots)
+      if (existing.status === 'completed') {
+        // Compare timestamps: if any offer policy is newer than the comparison, rerun
+        const newestOfferTimestamp = Math.max(
+          ...offerPolicies.map(p => p.createdAt ? new Date(p.createdAt).getTime() : 0)
+        );
+        const comparisonTimestamp = existing.createdAt ? new Date(existing.createdAt).getTime() : 0;
         
-        // Always generate debug report (even for existing comparisons)
-        try {
-          const { generateComparisonDebugReport } = await import('./comparisonDebugReportService');
-          const report = await generateComparisonDebugReport(existing.id, { 
-            saveToDisk: true, 
-            logToConsole: false 
-          });
-          if (report.filePath) {
-            console.log(`[ComparisonOrchestrator] 📊 Debug report saved: ${report.filePath}`);
+        if (newestOfferTimestamp <= comparisonTimestamp) {
+          console.log(`[ComparisonOrchestrator] Active comparison already exists (${existing.id}), skipping...`);
+          
+          // Generate debug report for existing comparison
+          try {
+            const { generateComparisonDebugReport } = await import('./comparisonDebugReportService');
+            const report = await generateComparisonDebugReport(existing.id, { 
+              saveToDisk: true, 
+              logToConsole: false 
+            });
+            if (report.filePath) {
+              console.log(`[ComparisonOrchestrator] 📊 Debug report saved: ${report.filePath}`);
+            }
+          } catch (reportError) {
+            console.warn('[ComparisonOrchestrator] Failed to generate debug report:', reportError);
           }
-        } catch (reportError) {
-          console.warn('[ComparisonOrchestrator] Failed to generate debug report:', reportError);
+          
+          return existing.id;
         }
         
-        return existing.id;
+        // New offer snapshots detected - supersede old comparison and create new one
+        console.log(`[ComparisonOrchestrator] Step 2.4: Newer offer snapshots detected, superseding comparison ${existing.id}`);
+        await this.storage.supersedeCompanyComparisons(userId, currentCompany, offerCompany);
+      } else if (existing.status === 'pending' || existing.status === 'processing') {
+        // Previous attempt in progress or stale - supersede and retry
+        console.log(`[ComparisonOrchestrator] Previous comparison ${existing.id} is ${existing.status}, superseding...`);
+        await this.storage.supersedeCompanyComparisons(userId, currentCompany, offerCompany);
       }
+      // If failed and not superseded, we'll create a new comparison below
     }
 
     // Create comparison record with pending status

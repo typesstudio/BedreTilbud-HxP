@@ -21,7 +21,7 @@
  */
 
 import { db } from "../../db";
-import { policySnapshots, companies } from "../../../shared/schema";
+import { policySnapshots, companies, companyComparisons } from "../../../shared/schema";
 import type { Document, InsertPolicySnapshot, PolicySnapshot } from "../../../shared/schema";
 import { eq, and, ne, sql } from "drizzle-orm";
 
@@ -94,6 +94,31 @@ export class PolicySnapshotService {
       // Deduplicate policy types to avoid redundant UPDATE statements
       const policyTypesToArchive = [...new Set(segments.map(s => this.normalizePolicyType(s.policyType)))];
       await this.archiveExistingCurrentPolicies(document.userId, policyTypesToArchive);
+    }
+
+    // Step 2.4: For "offer" policies, supersede existing offers from the same company for same policy type
+    // This ensures only the latest offer revision is active per (userId, companyName, policyType)
+    // We need to do this per-segment since different segments may have different companies
+    const offerArchiveMap = new Map<string, { companyName: string; policyType: string }[]>();
+    if (kind === 'offer' && document.userId) {
+      // Pre-calculate which (companyName, policyType) pairs will be created
+      for (const segment of segments) {
+        const policyType = this.normalizePolicyType(segment.policyType);
+        const companyName = await this.extractCompanyName(segment, document);
+        const key = `${companyName}::${policyType}`;
+        if (!offerArchiveMap.has(key)) {
+          offerArchiveMap.set(key, []);
+        }
+        offerArchiveMap.get(key)!.push({ companyName, policyType });
+      }
+      
+      // Archive old offers for each unique (companyName, policyType) pair
+      for (const [_, pairs] of offerArchiveMap) {
+        if (pairs.length > 0) {
+          const { companyName, policyType } = pairs[0];
+          await this.archiveExistingOfferPolicies(document.userId, companyName, policyType);
+        }
+      }
     }
 
     // Create one snapshot per segment
@@ -194,6 +219,59 @@ export class PolicySnapshotService {
           error
         );
       }
+    }
+  }
+
+  /**
+   * Step 2.4: Archive (supersede) existing "offer" policies from the same company for the same type.
+   * 
+   * This ensures only one active offer per (userId, companyName, policyType) at any time.
+   * When a revised offer arrives for the same insurance type, the old one becomes superseded.
+   * 
+   * NOTE: Comparison superseding is handled by ComparisonOrchestrator, which checks if
+   * offer snapshots are newer than the existing comparison before deciding to supersede.
+   * 
+   * @param userId - The user's ID
+   * @param companyName - The offering company's name
+   * @param policyType - The policy type (normalized)
+   * @returns Number of archived snapshots (0 if no revision occurred)
+   */
+  private async archiveExistingOfferPolicies(
+    userId: string,
+    companyName: string,
+    policyType: string
+  ): Promise<number> {
+    try {
+      const archivedSnapshots = await db
+        .update(policySnapshots)
+        .set({ 
+          isActive: false,
+          updatedAt: new Date()
+        })
+        .where(
+          and(
+            eq(policySnapshots.userId, userId),
+            eq(policySnapshots.kind, 'offer'),
+            eq(policySnapshots.companyName, companyName),
+            eq(policySnapshots.policyType, policyType),
+            eq(policySnapshots.isActive, true)
+          )
+        )
+        .returning({ id: policySnapshots.id });
+
+      if (archivedSnapshots.length > 0) {
+        console.log(
+          `[PolicySnapshotService] Step 2.4: Superseded ${archivedSnapshots.length} existing offer ${policyType} from ${companyName} for user ${userId}`
+        );
+      }
+      
+      return archivedSnapshots.length;
+    } catch (error) {
+      console.error(
+        `[PolicySnapshotService] Failed to supersede existing ${policyType} offers from ${companyName}:`,
+        error
+      );
+      return 0;
     }
   }
 

@@ -27,6 +27,7 @@ The backend is built with Node.js and Express.js, providing a RESTful API. Key a
     -   **ComparisonAgent**: AI-powered agent (`gpt-4o`) generates validated `ComparisonResult` JSON.
     -   **Anti-Hallucination System**: Constructs policy structure in code before AI calls and uses retry logic for robust AI interactions.
     -   **Batch Upload Race Condition Fix**: Ensures comparison orchestrator triggers only once after all files in a batch are processed.
+    -   **Offer Versioning (Step 2.4)**: When revised offers arrive for the same (userId, companyName, policyType), previous offer snapshots and comparisons are marked as `superseded` (`isActive=false` for snapshots, `isSuperseded=true` for comparisons). UI and API only show the latest active version.
 -   **Email Notification System**: Alerts users when comparisons are ready using `MagicLinkService` for secure, expiring links and `NotificationService` for email orchestration via Resend.
 -   **Enrichment Pattern**: Guarantees preservation of deterministic data by merging AI narratives with cached information.
 -   **AI Model Configuration**: Centralized management for AI models (`gpt-4o-mini`, `gpt-4o`, `mistral-large-latest`, `mistral-ocr-latest`) with configurable quality and cost settings.

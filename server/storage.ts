@@ -80,9 +80,11 @@ export interface IStorage {
   // Company Comparisons (Phase 4)
   getCompanyComparison(id: string): Promise<CompanyComparison | undefined>;
   getCompanyComparisonsByUser(userId: string): Promise<CompanyComparison[]>;
+  getActiveCompanyComparisonsByUser(userId: string): Promise<CompanyComparison[]>;
   getCompanyComparisonByCompanies(userId: string, currentCompany: string, offerCompany: string): Promise<CompanyComparison | undefined>;
   createCompanyComparison(comparison: InsertCompanyComparison): Promise<CompanyComparison>;
   updateCompanyComparisonStatus(id: string, status: string, comparisonJSON?: any, errorMessage?: string, statusReason?: string): Promise<CompanyComparison>;
+  supersedeCompanyComparisons(userId: string, currentCompany: string, offerCompany: string): Promise<number>;
 
   // Household Members
   getHouseholdMember(id: string): Promise<HouseholdMember | undefined>;
@@ -531,6 +533,26 @@ export class MemStorage implements IStorage {
 
   async getCompanyComparisonsByUser(userId: string): Promise<CompanyComparison[]> {
     return Array.from(this.companyComparisons.values()).filter(c => c.userId === userId);
+  }
+
+  async getActiveCompanyComparisonsByUser(userId: string): Promise<CompanyComparison[]> {
+    return Array.from(this.companyComparisons.values())
+      .filter(c => c.userId === userId && !(c as any).isSuperseded);
+  }
+
+  async supersedeCompanyComparisons(userId: string, currentCompany: string, offerCompany: string): Promise<number> {
+    let count = 0;
+    for (const [id, comparison] of this.companyComparisons.entries()) {
+      if (comparison.userId === userId && 
+          comparison.currentCompany === currentCompany && 
+          comparison.offerCompany === offerCompany &&
+          !(comparison as any).isSuperseded) {
+        (comparison as any).isSuperseded = true;
+        (comparison as any).updatedAt = new Date();
+        count++;
+      }
+    }
+    return count;
   }
 
   async getCompanyComparisonByCompanies(
@@ -1385,6 +1407,48 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return comparison;
+  }
+
+  async getActiveCompanyComparisonsByUser(userId: string): Promise<CompanyComparison[]> {
+    const { db } = await import("./db");
+    const { companyComparisons } = await import("@shared/schema");
+    const { eq, and, desc } = await import("drizzle-orm");
+    return await db.select()
+      .from(companyComparisons)
+      .where(
+        and(
+          eq(companyComparisons.userId, userId),
+          eq(companyComparisons.isSuperseded, false)
+        )
+      )
+      .orderBy(desc(companyComparisons.createdAt));
+  }
+
+  async supersedeCompanyComparisons(
+    userId: string,
+    currentCompany: string,
+    offerCompany: string
+  ): Promise<number> {
+    const { db } = await import("./db");
+    const { companyComparisons } = await import("@shared/schema");
+    const { eq, and, sql } = await import("drizzle-orm");
+    
+    const result = await db.update(companyComparisons)
+      .set({
+        isSuperseded: true,
+        updatedAt: sql`CURRENT_TIMESTAMP`
+      })
+      .where(
+        and(
+          eq(companyComparisons.userId, userId),
+          eq(companyComparisons.currentCompany, currentCompany),
+          eq(companyComparisons.offerCompany, offerCompany),
+          eq(companyComparisons.isSuperseded, false)
+        )
+      )
+      .returning();
+    
+    return result.length;
   }
 
   // Household Members

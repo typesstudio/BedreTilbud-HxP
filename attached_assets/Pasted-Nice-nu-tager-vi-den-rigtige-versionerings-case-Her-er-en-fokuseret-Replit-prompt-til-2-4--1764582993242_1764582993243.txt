@@ -1,0 +1,220 @@
+Nice, nu tager vi den “rigtige” versionerings-case 💼
+
+Her er en fokuseret Replit-prompt til **2.4: Flere revisioner af samme tilbud**.
+
+---
+
+### Replit-prompt – Step 2.4: Flere revisioner af samme tilbud (superseded / kun seneste aktiv)
+
+> Vi er nu i Kategori 2, Step **2.4**:
+> **Når et selskab sender et nyt, opdateret tilbud (ny PDF) for samme company_request og samme forsikringstype, skal de tidligere markeres som `superseded`, og kun den seneste må bruges i sammenligning og UI.**
+>
+> Mål:
+>
+> * Under én `company_request` kan der komme **flere revisioner** af samme policetype (fx “nyt tilbud” eller “revideret tilbud”).
+> * For hver kombination af `(company_request, policyType)` skal der kun være **én aktiv** tilbuds-version.
+> * De tidligere versioner skal markeres som `superseded` (i både tilbuds-data og deres sammenligninger), så UI og API kun arbejder med den nyeste revision.
+>
+> Vi har allerede:
+>
+> * Indgående mail-flow, der opretter tilbuds-PDF’er pr. `company_request` og kører OCR/extraction.
+> * Sammenlignings-flow, der matcher offers til brugerens current policies pr. policyType (bil, hus, indbo …).
+> * Hash/idempotens (Step 2.3), så vi ikke dublerer **samme** PDF.
+>
+> Nu handler det om **forskellige filer**, der alle er legitime revisioner af samme tilbud.
+
+---
+
+### 1. Find hvor tilbuds-policer og sammenligninger er modelleret
+
+1. Find tabellen der repræsenterer **individuelle tilbuds-policer** (ikke bare PDF’en), fx noget i stil med:
+
+   * `offer_policies`, `company_policies`, `policy_snapshots` med `role = 'offer'`, el.lign.
+   * Den skal have reference til:
+
+     * `company_request_id`
+     * `policyType` (bil/hus/indbo osv.)
+2. Find tabellen for **sammenligninger** mellem current vs offer:
+
+   * fx `comparisons`, `policy_comparisons`, `comparison_snapshots`, eller lignende.
+   * Der vil typisk være felter for:
+
+     * reference til brugerens policy
+     * reference til offer-policy
+     * `policyType`
+     * savings, highlights osv.
+3. Notér hvordan de to er koblet:
+
+   * Hvordan finder comparisons den rigtige offer-policy?
+   * Er det via `offerPolicyId`, `offerSnapshotId`, eller indirekte gennem `company_request_id + policyType`?
+
+---
+
+### 2. Tilføj status-felt til tilbuds-policer (active / superseded)
+
+Vi vil markere hvilken offer-policy der er “seneste/aktiv” og hvilke der er “superseded”.
+
+1. I schema-definitionen for tilbuds-policer (den tabel du fandt i step 1.1), tilføj et status-felt, fx:
+
+   ```ts
+   status: text("status").notNull().default("active")
+   ```
+
+   * Brug værdier:
+
+     * `'active'` – den version vi bruger i UI og sammenligning
+     * `'superseded'` – tidligere revisioner, der ikke skal bruges direkte
+2. Lav en migration der:
+
+   * Tilføjer `status`-kolonnen med default `'active'` for eksisterende rows.
+3. Overvej evt. et index på `(company_request_id, policy_type, status)` for hurtige lookups.
+
+---
+
+### 3. Logik: når en ny offer-policy oprettes for samme (company_request + policyType)
+
+Når OCR/extraction er færdig og en ny **offer-policy**-record gemmes:
+
+1. Find det sted i koden, hvor offer-policer oprettes (typisk i tilbuds-extraction-pipelinen efter OCR).
+2. Når du har:
+
+   * `company_request_id`
+   * `policyType`
+   * og er ved at skabe en ny offer-policy:
+3. Gør følgende:
+
+   * Før du opretter den nye row:
+
+     * Kør en opdatering i databasen:
+
+       ```sql
+       UPDATE offer_policies
+       SET status = 'superseded'
+       WHERE company_request_id = $company_request_id
+         AND policy_type = $policyType
+         AND status = 'active';
+       ```
+
+       (tilpas tabel- og kolonnenavn til jeres schema)
+   * Opret derefter den nye offer-policy med:
+
+     * `status = 'active'`
+4. Resultat:
+
+   * For hver `(company_request, policyType)` findes der max én row med `status = 'active'` (den nyeste).
+
+---
+
+### 4. Markér gamle sammenligninger som superseded, når en ny genereres
+
+Vi vil undgå, at der i UI/oversigter dukker flere “konkurrerende” sammenligninger op for samme selskab og policetype.
+
+1. Find koden, der opretter policy-sammenligninger (comparison-agent / ComparisonService).
+2. Identificér hvordan en comparison refererer til:
+
+   * `company_request_id`
+   * `policyType`
+   * og/eller specifik `offerPolicyId`.
+3. Udvid comparison-schemaet (fx `comparisons`-tabellen) med et status-felt:
+
+   ```ts
+   status: text("status").notNull().default("active")
+   ```
+
+   * Værdier:
+
+     * `'active'`
+     * `'superseded'`
+4. Når du skal oprette en **ny** comparison for `(company_request_id, policyType)`:
+
+   * Før insert:
+
+     * Sæt alle andre comparisons for samme `(company_request_id, policyType)` til `status = 'superseded'`.
+   * Opret den nye comparison med `status = 'active'` og reference til den nyeste offer-policy.
+5. Det gør, at:
+
+   * Der kan eksistere historik i databasen, men UI kan nøjes med at vise den `active` comparison.
+
+---
+
+### 5. Brug kun `active` offer-policer og `active` comparisons i API & UI
+
+Nu skal vi sikre, at resten af systemet automatisk kun bruger den nyeste revision.
+
+1. Find de endpoints/queries der returnerer:
+
+   * Tilbudsoversigt pr. selskab (multi-policy view).
+   * Sammenligninger for en given `company_request` / “Tilbud fra [selskab]”.
+2. Opdater queries så de:
+
+   * For offer-policer:
+
+     * Filtrerer på `status = 'active'`.
+   * For comparisons:
+
+     * Filtrerer på `status = 'active'`.
+3. Resultat:
+
+   * Når der findes flere revisioner i databasen, ser brugeren kun den seneste – både på:
+
+     * Samlet oversigt (“Samlet oversigt”-tab)
+     * Individuelle policy-tabs (Indbo/Hus/Bil osv.)
+
+---
+
+### 6. UI-adfærd (MEP)
+
+Vi behøver ikke stor historikvisning i MEP, men to små ting er nice-to-have:
+
+1. Hvis det er nemt, kan du i UI vise:
+
+   * “Opdateret tilbud modtaget [dato/tid]” (på baggrund af `created_at` på den aktive offer-policy).
+2. Hvis du allerede viser en liste af beskeder i tråden, vil det naturligt være tydeligt, at der har været flere mails – men under motorhjelmen viser vi kun **seneste** tal i sammenligningen.
+
+Ingen ekstra UI er et krav for denne opgave – det vigtigste er, at brugeren ikke ser “to forskellige tilbud fra samme selskab” for samme forsikringstype i sammenligningen.
+
+---
+
+### 7. Acceptance criteria
+
+**Case 1 – Første tilbud for Hus fra Selskab X:**
+
+* En offer-policy oprettes for `(company_request_id, policyType = 'hus')` med `status = 'active'`.
+* En comparison mellem brugerens current hus-policy og dette tilbud oprettes med `status = 'active'`.
+* UI viser hus-sammenligning baseret på denne version.
+
+**Case 2 – Revideret tilbud for Hus fra samme selskab (nyt PDF, nyt indhold):**
+
+* Ny mail kommer ind med ny PDF → ny offer-policy oprettes for samme `(company_request_id, 'hus')`.
+* Før insert sættes tidligere `offer_policies` for `(company_request_id, 'hus')` til `status = 'superseded'`.
+* Ny offer-policy oprettes med `status = 'active'`.
+* Når comparison-pipelinen kører:
+
+  * Alle tidligere comparisons for `(company_request_id, 'hus')` sættes til `status = 'superseded'`.
+  * En ny comparison oprettes med `status = 'active'` bundet til den nye offer-policy.
+* UI-API’er returnerer kun den aktive combination:
+
+  * Den nye hus-sammenligning vises.
+  * Den gamle sammenligning dukker ikke op i oversigten.
+
+**Case 3 – Flere revisioner (3., 4. gang):**
+
+* Hver gang en ny offer-policy oprettes:
+
+  * Alle andre for samme `(company_request_id, policyType)` bliver `superseded`.
+  * Der findes kun én aktiv offer-policy + én aktiv comparison per type.
+* Systemet håndterer det deterministisk – brugeren ser altid “den nyeste version”.
+
+**Generelt:**
+
+* Tidligere data (før vi introducerede `status`) får default `'active'` og fungerer som i dag.
+* Ingen ændring i logik for andre company_requests eller policyTypes – kun N+1-versioner af **samme** tilbud for samme type bliver strammet op.
+
+---
+
+Når det her er implementeret, kan du teste ved at:
+
+1. Sende et tilbuds-PDF (Hus) → se sammenligning.
+2. Sende et nyt revideret Hus-tilbud for samme tråd → se at UI opdaterer til den nye, uden at vise to Hus-tilbud.
+
+Når 2.4 er på plads, er vi klar til 2.5 (tilbud fordelt på flere mails – aka “samle alle PDF’er til samme `company_request`”), hvis du vil tage den også.
