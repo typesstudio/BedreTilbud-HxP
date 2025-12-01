@@ -1,0 +1,197 @@
+Fedt, så tager vi 2.3 som næste klods 💾
+
+Her er en fokuseret Replit-prompt til **dublet-vedhæftninger / retrys**.
+
+---
+
+### Replit-prompt – Step 2.3: Dublet-vedhæftninger / retrys på tilbuds-PDF’er
+
+> Vi er nu i Kategori 2, Step **2.3**:
+> **Når samme tilbuds-PDF kommer ind flere gange (fx fordi selskabet sender samme mail igen eller systemet retrigger), skal vi ikke oprette dubletter i databasen eller trigge OCR/comparison igen.**
+>
+> Mål:
+>
+> * Gøre indgående tilbuds-PDF’er idempotente per `company_request`.
+> * Bruge fil-hash på attachments til at spotte dubletter.
+> * Sikre unikhed pr. `(company_request_id + file_hash)` for tilbuds-PDF’er.
+> * Håndtere både:
+>
+>   * Dubletter inden for **samme mail** (to identiske PDF’er vedhæftet).
+>   * Dubletter på tværs af **flere mails** i samme tråd (retries/forward).
+>
+> Vi har allerede i Step 1.1 introduceret en `computeFileHash`-funktion for brugeruploads – genbrug den hvis muligt.
+>
+> ---
+>
+> ### 1. Find tilbuds-PDF tabellen og indgående behandlingsflow
+>
+> 1. Find den tabel/model der repræsenterer **tilbuds-PDF’er** fra selskaber – typisk noget i stil med:
+>
+>    * `insurance_offers_pdf`, `company_offer_documents`, `offer_documents` eller lignende.
+>    * Tabellen bør referere til `company_request_id` + en sti/url til PDF’en + evt. metadata.
+> 2. Find den kode, der oprettes disse rækker i forbindelse med en indgående mail:
+>
+>    * Det er den del af mail-handleren, der:
+>
+>      * Finder PDF-attachments.
+>      * Gemmer dem i storage (Supabase/S3).
+>      * Opretter rækker i tilbuds-PDF tabellen.
+>      * Starter OCR/udtræk/comparison-flow for tilbud.
+>
+> ---
+>
+> ### 2. Udvid tilbuds-PDF schema med fileHash og index/unikhed
+>
+> 1. Åbn `shared/schema.ts` og find schema-definitionen for tilbuds-PDF-tabellen (fx `insuranceOffersPdf`, `offerDocuments` eller lignende).
+> 2. Tilføj en kolonne til at gemme filens hash, fx:
+>
+>    * `fileHash: text("file_hash").notNull()`
+> 3. Opret et **kombineret index** og gerne en **unik constraint** på `(company_request_id, file_hash)`:
+>
+>    * Idé: inden for en given `company_request` må den samme fil kun eksistere én gang.
+>    * Hvis Drizzle/SQL gør det nemmere, kan du lave:
+>
+>      * `UNIQUE (company_request_id, file_hash)`
+> 4. Lav en migration (fx `000X_add_file_hash_to_offer_pdfs.sql`) der:
+>
+>    * Tilføjer `file_hash` kolonnen til tilbuds-PDF-tabellen.
+>    * Tilføjer index/unik constraint.
+>    * For eksisterende rækker kan `file_hash` midlertidigt sættes til en dummyværdi eller gøres `NULL` → hvis det gør det enklere, må du gerne starte med `nullable` og så fylde ud senere (men målet er, at nye rækker altid har et hash).
+>
+> ---
+>
+> ### 3. Genbrug eller udvid hash-hjælperen
+>
+> 1. Vi har allerede `server/utils/hash.ts` (fra Step 1.1) med en `computeFileHash`-funktion til brugeruploads.
+> 2. Genbrug denne funktion til attachments i mail-handleren:
+>
+>    * Importér `computeFileHash` i den fil, der håndterer indgående mails / tilbuds-PDF’er.
+> 3. Hvis den eksisterende helper kun tager `Buffer`, så sørg for, at attachments kan læses som `Buffer` (enten direkte fra webhooken eller efter download).
+>
+> ---
+>
+> ### 4. Tilføj storage/metode til lookup på (company_request_id + fileHash)
+>
+> 1. Åbn `server/storage.ts`.
+> 2. Tilføj en metode, fx:
+>
+>    ```ts
+>    async function getOfferDocumentByFileHash(
+>      companyRequestId: string,
+>      fileHash: string
+>    ): Promise<OfferDocument | null> { ... }
+>    ```
+>
+>    * Implementér den både for DatabaseStorage og evt. MemStorage/Mock, så tests/dev-miljø også fungerer.
+> 3. Metoden skal slå op i tilbuds-PDF-tabellen og returnere en record for samme `company_request_id` + `file_hash`, hvis den findes.
+>
+> ---
+>
+> ### 5. Idempotent logik i indgående mail-handler for PDF-attachments
+>
+> I den del af mail-handleren, hvor du behandler `pdfAttachments`:
+>
+> 1. Antag at du allerede har noget i stil med:
+>
+>    ```ts
+>    const allAttachments = email.attachments ?? [];
+>    const pdfAttachments = getPdfAttachments(allAttachments);
+>    ```
+> 2. Indfør en `Set<string>` til at spore hashværdier **inden for samme mail**, fx:
+>
+>    ```ts
+>    const seenHashesInThisEmail = new Set<string>();
+>    ```
+> 3. For hver PDF-attachment, gør følgende:
+>
+>    ```ts
+>    for (const attachment of pdfAttachments) {
+>      const buffer = ...; // hent attachmentens data som Buffer
+>      const fileHash = await computeFileHash(buffer);
+>
+>      if (seenHashesInThisEmail.has(fileHash)) {
+>        // Dublet inden for samme mail: spring over
+>        continue;
+>      }
+>      seenHashesInThisEmail.add(fileHash);
+>
+>      // Tjek mod databasen for samme company_request
+>      const existing = await storage.getOfferDocumentByFileHash(companyRequestId, fileHash);
+>      if (existing) {
+>        // Dublet på tværs af mails/retrys: spring oprettelse af ny record over
+>        // Evt. log.info("Duplicate offer PDF detected, skipping", { companyRequestId, fileHash });
+>        continue;
+>      }
+>
+>      // Hvis vi når hertil: det er en ny fil for denne company_request
+>      // 1) Upload til storage (Supabase/S3)
+>      // 2) Opret offer-PDF record med fileHash
+>      // 3) Start OCR / tilbuds-extraction som i dag
+>    }
+>    ```
+> 4. Sørg for, at når du opretter en ny tilbuds-PDF record, sætter du:
+>
+>    * `company_request_id`
+>    * `file_hash`
+>    * øvrige metadata (storage path, filename, etc.)
+>
+> ---
+>
+> ### 6. Håndtér DB-unik-constraint som ekstra sikkerhedsnet
+>
+> Selv med logik-check i koden kan der opstå race conditions.
+> Brug derfor også DB-unik-constraint’en som et fallback:
+>
+> 1. Når du forsøger at `insert` en ny tilbuds-PDF record, kan du:
+>
+>    * Enten bruge en “insert ignore conflict on (company_request_id, file_hash)” hvis Drizzle/SQL-varianten understøtter det.
+>    * Eller wrap insert i try/catch og hvis fejlen er en “unique violation” på `(company_request_id, file_hash)`, så:
+>
+>      * Treat det som idempotent retry → ingen fejl til systemet, bare log og fortsæt.
+>
+> Resultat:
+>
+> * Selv hvis to parallelle processer forsøger at oprette samme (company_request, file_hash), ender vi med kun én række i databasen.
+>
+> ---
+>
+> ### 7. Acceptance criteria
+>
+> **Case 1 – Første mail med unik tilbuds-PDF**
+>
+> * Der oprettes én tilbuds-PDF record med `file_hash` udfyldt.
+> * OCR/tilbuds-extraction/comparison-flow trigges som i dag.
+>
+> **Case 2 – Selskabet sender præcis samme PDF igen i en ny mail (samme tråd / company_request)**
+>
+> * Mailen og dens tekst bliver stadig gemt som besked i tråden (som i dag).
+> * For selve PDF’en:
+>
+>   * `getOfferDocumentByFileHash(companyRequestId, fileHash)` finder en eksisterende record.
+>   * Der oprettes **ingen ny** tilbuds-PDF record.
+>   * Der startes **ikke** et nyt OCR-/tilbuds-extraction-job.
+> * Ingen fejl bobler op – det behandles som et idempotent retry.
+>
+> **Case 3 – En mail med to identiske PDF-vedhæftninger**
+>
+> * Vi beregner hash for begge.
+> * Den første oprettes som normalt.
+> * Den anden bliver ignoreret pga. `seenHashesInThisEmail`.
+> * Resultat: kun én tilbuds-PDF record i databasen.
+>
+> **Case 4 – Mail med både en gammel (identisk) PDF og en helt ny PDF**
+>
+> * Den gamle matches på hash og bliver ignoreret (ingen ny record, intet OCR-job).
+> * Den nye får sin egen record og går i OCR/tilbuds-flowet.
+>
+> **Generelt:**
+>
+> * Unik constraint `(company_request_id, file_hash)` er på plads som sikkerhedsnet.
+> * Ingen dubletter i tilbuds-PDF-tabellen for samme `company_request`.
+> * Eksisterende tilbuds-flow for nye filer forbliver uændret.
+>
+> Fokus: Idempotens. Det skal altid være “safe” at modtage den samme PDF>1 gang for en given `company_request` uden at vi får dobbelt OCR, dobbelt sammenligninger eller mærkelige dubletter i UI.
+
+---
+
+Når den her er implementeret, kan vi bagefter lave en lille “sanity test”-liste (3 cases: unik, gentaget, to identiske i samme mail) – og så kan vi hoppe til 2.4 (revisioner af tilbud, hvor **indholdet** faktisk ændrer sig).

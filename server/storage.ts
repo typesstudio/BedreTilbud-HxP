@@ -46,6 +46,7 @@ export interface IStorage {
   // Documents
   getDocument(id: string): Promise<Document | undefined>;
   getDocumentByFileHash(userId: string, fileHash: string): Promise<Document | undefined>;
+  getOfferDocumentByUserCompanyAndHash(userId: string, companyId: string, fileHash: string): Promise<Document | undefined>;
   getUserDocuments(userId: string, documentType?: string, limit?: number, offset?: number): Promise<Document[]>;
   countUserDocuments(userId: string, documentType?: string): Promise<number>;
   createDocument(document: InsertDocument): Promise<Document>;
@@ -313,6 +314,12 @@ export class MemStorage implements IStorage {
   async getDocumentByFileHash(userId: string, fileHash: string): Promise<Document | undefined> {
     return Array.from(this.documents.values()).find(
       d => d.userId === userId && d.fileHash === fileHash
+    );
+  }
+
+  async getOfferDocumentByUserCompanyAndHash(userId: string, companyId: string, fileHash: string): Promise<Document | undefined> {
+    return Array.from(this.documents.values()).find(
+      d => d.userId === userId && d.companyId === companyId && d.fileHash === fileHash && d.documentType === 'offer'
     );
   }
 
@@ -1018,6 +1025,21 @@ export class DatabaseStorage implements IStorage {
     const { eq, and } = await import("drizzle-orm");
     const [doc] = await db.select().from(documents).where(
       and(eq(documents.userId, userId), eq(documents.fileHash, fileHash))
+    );
+    return doc || undefined;
+  }
+
+  async getOfferDocumentByUserCompanyAndHash(userId: string, companyId: string, fileHash: string): Promise<Document | undefined> {
+    const { db } = await import("./db");
+    const { documents } = await import("@shared/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const [doc] = await db.select().from(documents).where(
+      and(
+        eq(documents.userId, userId),
+        eq(documents.companyId, companyId),
+        eq(documents.fileHash, fileHash),
+        eq(documents.documentType, 'offer')
+      )
     );
     return doc || undefined;
   }

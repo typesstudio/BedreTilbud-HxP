@@ -382,8 +382,14 @@ export class EmailService {
       console.log(`[Email] Found ${allAttachments.length} attachments:`, allAttachments.map(a => a.fileName).join(', '));
 
       // Process PDF attachments (stored in attachments list)
+      // Track seen hashes within this email to avoid duplicates in same mail
+      const seenHashesInThisEmail = new Set<string>();
+      const { computeFileHash } = await import('../utils/hash');
+      
       const attachments: any[] = [];
       let documentsCreated = 0;
+      let duplicatesSkipped = 0;
+      
       if (message.data.payload?.parts) {
         for (const part of message.data.payload.parts) {
           if (part.filename && part.body?.attachmentId) {
@@ -394,18 +400,51 @@ export class EmailService {
             });
             
             if (attachment.data.data && part.filename.toLowerCase().endsWith('.pdf')) {
-              // Save PDF and process with NEW 2-step pipeline
+              const pdfBuffer = Buffer.from(attachment.data.data, 'base64');
+              const fileHash = computeFileHash(pdfBuffer);
+              
+              // Check 1: Duplicate within same email
+              if (seenHashesInThisEmail.has(fileHash)) {
+                console.log(`[Email] Skipping duplicate PDF within same email`, { 
+                  fileName: part.filename, 
+                  fileHash: fileHash.substring(0, 8) + '...'
+                });
+                duplicatesSkipped++;
+                continue;
+              }
+              seenHashesInThisEmail.add(fileHash);
+              
+              // Check 2: Duplicate across emails for same user+company (idempotent retry)
+              if (existingThread.userId && existingThread.companyId) {
+                const existingDoc = await storage.getOfferDocumentByUserCompanyAndHash(
+                  existingThread.userId,
+                  existingThread.companyId,
+                  fileHash
+                );
+                if (existingDoc) {
+                  console.log(`[Email] Skipping duplicate PDF (already processed)`, { 
+                    fileName: part.filename, 
+                    existingDocId: existingDoc.id,
+                    fileHash: fileHash.substring(0, 8) + '...'
+                  });
+                  duplicatesSkipped++;
+                  continue;
+                }
+              }
+              
+              // New unique PDF - save and process
               const fileName = `attachment_${Date.now()}_${part.filename}`;
               const filePath = path.join('uploads', fileName);
               
-              fs.writeFileSync(filePath, Buffer.from(attachment.data.data, 'base64'));
+              fs.writeFileSync(filePath, pdfBuffer);
               
-              // Create document placeholder
+              // Create document with fileHash for future duplicate detection
               const document = await storage.createDocument({
                 userId: existingThread.userId,
                 fileName,
                 filePath,
-                fileSize: Buffer.from(attachment.data.data, 'base64').length,
+                fileSize: pdfBuffer.length,
+                fileHash, // Store hash for duplicate detection
                 ocrRawResponse: null, // Will be populated by orchestrator
                 extractionStatus: 'processing',
                 documentType: 'offer',
@@ -493,6 +532,15 @@ export class EmailService {
             }
           }
         }
+      }
+      
+      // Log attachment processing summary
+      if (duplicatesSkipped > 0) {
+        console.log(`[Email] Attachment processing complete`, { 
+          documentsCreated, 
+          duplicatesSkipped,
+          totalPdfsInEmail: documentsCreated + duplicatesSkipped
+        });
       }
 
       // Check if this is a reply to missing info questions
