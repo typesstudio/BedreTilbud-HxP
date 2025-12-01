@@ -20,6 +20,7 @@ import { generateSignedUrl, validateSignedUrl } from "./utils/signedUrls";
 import { logger, auditLog } from "./utils/logging";
 import { calculateFileChecksum, validatePDFFile, scanFileForMalware } from "./utils/fileValidation";
 import { convertToPolicyRecord } from "./utils/policyExtractionParser";
+import { computeFileHash } from "./utils/hash";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -561,12 +562,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const documentsWithPolicies = [];
+      const duplicateFiles: string[] = [];
 
       for (const file of files) {
         let document;
         let matchResult = null;
         
         try {
+          // STEP 1: Compute file hash and check for duplicates
+          const fileBuffer = await fs.promises.readFile(file.path);
+          const fileHash = computeFileHash(fileBuffer);
+          
+          logger.info('[Upload] Computed file hash', { 
+            fileName: file.originalname, 
+            fileHash: fileHash.substring(0, 16) + '...',
+            userId 
+          });
+          
+          // Check if this file has already been uploaded by this user
+          const existingDocument = await storage.getDocumentByFileHash(userId, fileHash);
+          
+          if (existingDocument) {
+            logger.info('[Upload] Duplicate file detected, skipping', { 
+              fileName: file.originalname, 
+              existingDocumentId: existingDocument.id,
+              userId 
+            });
+            
+            // Clean up the uploaded file since we won't use it
+            await fs.promises.unlink(file.path).catch(() => {});
+            
+            duplicateFiles.push(file.originalname);
+            continue; // Skip to next file
+          }
+          
           // NEW 2-STEP PIPELINE (v2.1.0): Create document first, then run orchestrator
           logger.info('[Upload] Starting new 2-step extraction pipeline', { 
             fileName: file.originalname, 
@@ -579,6 +608,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             fileName: file.originalname,
             filePath: file.path,
             fileSize: file.size,
+            fileHash, // Store the file hash for duplicate detection
             ocrRawResponse: null, // Will be populated by orchestrator
             extractionStatus: 'processing',
             documentType,
@@ -780,7 +810,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      res.json(documentsWithPolicies);
+      // If ALL files were duplicates and no new documents were created
+      if (documentsWithPolicies.length === 0 && duplicateFiles.length > 0) {
+        return res.status(200).json({
+          ok: false,
+          errorCode: 'duplicate_file',
+          message: 'Du har allerede uploadet denne fil.',
+          duplicateFiles
+        });
+      }
+
+      // Return result with info about any duplicates that were skipped
+      res.json({
+        documents: documentsWithPolicies,
+        duplicateFiles: duplicateFiles.length > 0 ? duplicateFiles : undefined,
+        hasDuplicates: duplicateFiles.length > 0
+      });
     } catch (error: any) {
       logger.error('[Upload] Upload route failed', error);
       res.status(500).json({ message: error.message });
