@@ -1,0 +1,158 @@
+Vi skal implementere Step 1.1 fra vores edge case-roadmap:
+Håndtering af dublet-upload af samme PDF fra en bruger.
+
+Kontekst (fra din egen analyse):
+
+Upload-endpoint: /api/documents/upload i server/routes.ts (ca. linje 554–788).
+
+Databasetabel: documents i shared/schema.ts (har pt. ingen fileHash-kolonne).
+
+Flow i dag:
+
+Fil uploades via multer
+
+Der oprettes en documents-record
+
+Extraction/health check-pipeline kører efterfølgende
+
+Mål for denne opgave:
+Hvis den samme PDF uploades flere gange af den samme bruger, skal vi:
+
+Genkende dubletten via et fil-hash (fileHash).
+
+Undgå at oprette en ny documents-række og undgå at starte et nyt extraction/health check-flow.
+
+Returnere en struktureret respons til frontend, så UI kan vise en dansk besked.
+
+1. Udvid documents-schema med fileHash
+
+Åbn shared/schema.ts og find documents-definitionen.
+
+Tilføj en kolonne til documents, fx:
+
+fileHash: text("file_hash").nullable() eller tilsvarende, afhængigt af Drizzle/opbygning.
+
+Tilføj et passende index/unik constraint:
+
+Hvis det er kompatibelt med eksisterende data, så lav et index på (userId, fileHash), og gerne en unik constraint på (userId, fileHash) når fileHash ikke er null.
+
+Hvis unik constraint er besværlig pga. null-værdier, er det nok med et index og at vi håndterer dublet-check i koden.
+
+Lav en migrationsfil, der:
+
+Tilføjer file_hash kolonnen til documents.
+
+Tilføjer index/constraint (hvis muligt).
+
+Eksisterende rækker kan godt stå med file_hash = NULL – vi behøver ikke udfylde historisk data nu.
+
+2. Hjælpefunktion til at beregne hash
+
+Opret en lille hjælpefunktion et passende sted (fx i server/utils/hash.ts eller i nærheden af upload-routen – du må gerne vælge den løsning, der passer bedst til kodebasen):
+
+Brug Node’s crypto til at lave SHA-256:
+
+createHash("sha256").update(buffer).digest("hex").
+
+Signaturen skal være noget ala:
+
+async function computeFileHash(buffer: Buffer): Promise<string> (eller sync, hvis det passer bedre).
+
+3. Tilføj storage-metode til lookup på fileHash
+
+Åbn server/storage.ts.
+
+Tilføj en metode, fx:
+
+getDocumentByFileHash(userId: string, fileHash: string)
+
+Den skal slå op i documents-tabellen efter en række, hvor documents.userId = userId og documents.fileHash = fileHash.
+
+Returnér enten dokumentet eller null/undefined, hvis der ikke findes et match.
+
+4. Opdater /api/documents/upload til at håndtere dubletter
+
+Åbn server/routes.ts og find /api/documents/upload-ruten.
+
+Efter multer har lagt filen på req.file (eller tilsvarende):
+
+Læs filens data som Buffer.
+
+Hvis multer bruger memoryStorage, kan du tage req.file.buffer.
+
+Hvis den gemmer til disk, skal du læse filen fra req.file.path (fx via fs.promises.readFile).
+
+Kald computeFileHash og få fileHash.
+
+Før du opretter en ny documents-record:
+
+Brug getDocumentByFileHash(userId, fileHash) til at tjekke, om brugeren allerede har uploadet denne fil.
+
+Hvis der findes et dokument med samme (userId, fileHash):
+
+Opret ingen ny documents-række.
+
+Start ikke extraction/health check-flowet.
+
+Returnér en struktureret JSON-respons til frontend, fx:
+
+return res.status(200).json({
+  ok: false,
+  errorCode: "duplicate_file",
+  message: "Du har allerede uploadet denne fil.",
+});
+
+
+(Du må gerne tilpasse formen til eksisterende error-håndtering, men behold errorCode: "duplicate_file".)
+
+Hvis der ikke findes et dokument med samme (userId, fileHash):
+
+Fortsæt det nuværende flow:
+
+gem filen i storage,
+
+opret documents-række inkl. fileHash,
+
+trig extraction/health check som i dag.
+
+5. Frontend – håndtering af duplicate_file
+
+Find den frontend-kode, der kalder /api/documents/upload og håndterer responsen (upload-komponentet til policer).
+
+Når backend-responsen har errorCode === "duplicate_file" eller ok === false med den kode:
+
+Vis en toast eller error-besked til brugeren på dansk.
+
+Brug denne tekst (eller meget tæt på):
+
+Titel / hovedbesked:
+
+“Du har allerede uploadet denne fil”
+
+Undertekst / forklaring:
+
+“Vi kan se, at denne police allerede ligger i dit forsikringstjek. Vi har derfor ikke tilføjet den igen.”
+
+Upload-komponenten skal ikke vise filen to gange i listen, når det er en dublet – den skal bare vise beskeden og ellers lade UI’et være uændret.
+
+6. Acceptance criteria
+
+Første gang jeg uploader en given PDF som bruger:
+
+documents-række oprettes med fileHash sat.
+
+Extraction/health check-trigges som i dag.
+
+Anden gang jeg uploader den samme PDF som samme bruger:
+
+Ingen ny documents-række oprettes.
+
+Der startes ikke et nyt extraction-flow.
+
+Frontend viser en dansk besked:
+
+“Du har allerede uploadet denne fil. Vi har derfor ikke tilføjet den igen.”
+
+Andre PDF’er (forskelligt indhold) fungerer præcis som i dag.
+
+Eksisterende data i documents skal forblive valide, selvom file_hash-kolonnen og index/migration er tilføjet.

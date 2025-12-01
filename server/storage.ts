@@ -45,6 +45,7 @@ export interface IStorage {
 
   // Documents
   getDocument(id: string): Promise<Document | undefined>;
+  getDocumentByFileHash(userId: string, fileHash: string): Promise<Document | undefined>;
   getUserDocuments(userId: string, documentType?: string, limit?: number, offset?: number): Promise<Document[]>;
   countUserDocuments(userId: string, documentType?: string): Promise<number>;
   createDocument(document: InsertDocument): Promise<Document>;
@@ -309,6 +310,12 @@ export class MemStorage implements IStorage {
     return this.documents.get(id);
   }
 
+  async getDocumentByFileHash(userId: string, fileHash: string): Promise<Document | undefined> {
+    return Array.from(this.documents.values()).find(
+      d => d.userId === userId && d.fileHash === fileHash
+    );
+  }
+
   async getUserDocuments(userId: string, documentType?: string, limit?: number, offset?: number): Promise<Document[]> {
     const filtered = Array.from(this.documents.values()).filter(doc => 
       doc.userId === userId && 
@@ -338,6 +345,7 @@ export class MemStorage implements IStorage {
       fileName: insertDocument.fileName,
       filePath: insertDocument.filePath,
       fileSize: insertDocument.fileSize ?? null,
+      fileHash: insertDocument.fileHash ?? null,
       ocrData: insertDocument.ocrData ?? null,
       ocrRawResponse: insertDocument.ocrRawResponse ?? null,
       extractionStatus: insertDocument.extractionStatus ?? null,
@@ -1001,6 +1009,16 @@ export class DatabaseStorage implements IStorage {
     const { documents } = await import("@shared/schema");
     const { eq } = await import("drizzle-orm");
     const [doc] = await db.select().from(documents).where(eq(documents.id, id));
+    return doc || undefined;
+  }
+
+  async getDocumentByFileHash(userId: string, fileHash: string): Promise<Document | undefined> {
+    const { db } = await import("./db");
+    const { documents } = await import("@shared/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const [doc] = await db.select().from(documents).where(
+      and(eq(documents.userId, userId), eq(documents.fileHash, fileHash))
+    );
     return doc || undefined;
   }
 

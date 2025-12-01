@@ -43,6 +43,7 @@ export const documents = pgTable("documents", {
   fileName: text("file_name").notNull(),
   filePath: text("file_path").notNull(),
   fileSize: integer("file_size"),
+  fileHash: text("file_hash"), // SHA-256 hash for duplicate detection
   ocrData: json("ocr_data"),
   ocrRawResponse: json("ocr_raw_response"), // Store full Mistral OCR response for re-parsing
   extractionStatus: text("extraction_status").default("pending"), // "pending", "processing", "completed", "failed"
@@ -56,6 +57,7 @@ export const documents = pgTable("documents", {
   documentTypeIdx: index("documents_document_type_idx").on(table.documentType),
   companyIdIdx: index("documents_company_id_idx").on(table.companyId),
   userIdTypeIdx: index("documents_user_id_type_idx").on(table.userId, table.documentType),
+  userIdFileHashIdx: index("documents_user_id_file_hash_idx").on(table.userId, table.fileHash),
 }));
 
 export const emailThreads = pgTable("email_threads", {
