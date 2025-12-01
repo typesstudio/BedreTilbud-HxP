@@ -30,6 +30,23 @@ Venlig hilsen
 BedreTilbud`;
 }
 
+function generateRequestPdfHasFilesAutoResponse(companyName?: string): string {
+  const greeting = companyName ? `Hej ${companyName}` : 'Hej';
+  
+  return `${greeting}
+
+Tak for jeres svar og de vedhæftede filer.
+
+For at vi kan behandle tilbuddet i BedreTilbud, skal vi have selve forsikringstilbuddet som PDF vedhæftet denne mail.
+
+Vil I sende policen/policerne som PDF i et svar på denne mail?
+
+På forhånd tak.
+
+Venlig hilsen
+BedreTilbud`;
+}
+
 export class EmailService {
   private async getGmailClient() {
     // Try custom OAuth first, fallback to Replit connector
@@ -582,8 +599,11 @@ export class EmailService {
                 
                 // Handle 'request_pdf' mode with deterministic response (no AI)
                 if (responseMode === 'request_pdf') {
-                  console.log(`[Auto-Response] Sending deterministic PDF request to ${company.name}`);
+                  console.log(`[Auto-Response] Sending deterministic PDF request to ${company.name} (no attachments)`);
                   responseText = generateRequestPdfAutoResponse(company.name);
+                } else if (responseMode === 'request_pdf_has_files') {
+                  console.log(`[Auto-Response] Sending deterministic PDF request to ${company.name} (has non-PDF files)`);
+                  responseText = generateRequestPdfHasFilesAutoResponse(company.name);
                 } else {
                   // Generate AI response for 'normal' and 'mitid' modes
                   console.log(`[AI Auto-Response] Generating ${responseMode} response for thread ${existingThread.id}`);

@@ -1,0 +1,159 @@
+Yes, lad os bygge videre på det du lige har fået lavet i 2.1 – nu bare for mails **med vedhæftninger, men ingen PDF’er**.
+
+Her er en fokuseret Replit-prompt til **Step 2.2** 👇
+
+---
+
+### Replit-prompt – Step 2.2: Mail med kun ikke-PDF-vedhæftning (docx, jpg, zip)
+
+> Vi er videre i Kategori 2 (indgående mails fra selskaber), Step **2.2**:
+> **Når et forsikringsselskab sender en mail med vedhæftede filer, men ingen af dem er PDF, skal vi håndtere det ligesom 2.1 – men med en tekst, der nævner, at vi kun kan bruge PDF.**
+>
+> Vi antager, at Step 2.1 allerede er implementeret:
+>
+> * Vi har en indgående mail-handler, der finder PDF-attachments via noget ala `getPdfAttachments(...)`.
+> * Hvis `pdfAttachments.length === 0`, gemmes mailen i tråden, og der sendes et autosvar med tekst om, at vi skal have tilbuddet som PDF vedhæftet mailen.
+>
+> **Mål for Step 2.2:**
+>
+> * Udvide logikken, så vi skelner mellem:
+>
+>   1. Mails **uden nogen vedhæftninger overhovedet** (2.1-case).
+>   2. Mails **med kun ikke-PDF vedhæftninger** (docx, jpg, zip osv.).
+> * For (2) skal autosvaret eksplicit nævne, at filerne ikke er i PDF-format, og at vi kun kan bruge PDF.
+> * I begge tilfælde opretter vi stadig ingen tilbuds-PDF records og starter ikke OCR-flowet.
+>
+> ---
+>
+> ### 1. Genbrug eksisterende attachment-logik fra 2.1
+>
+> 1. Find igen den indgående mail-handler, hvor du implementerede Step 2.1 (ingen PDF-vedhæftning).
+>
+>    * Der er allerede en `getPdfAttachments`-funktion eller tilsvarende filtrering.
+> 2. Sørg for, at du også har adgang til den fulde attachments-liste, fx `email.attachments` eller lignende.
+>
+> ---
+>
+> ### 2. Skeln mellem “ingen attachments” og “kun ikke-PDF attachments”
+>
+> I dag har du sandsynligvis noget a la:
+>
+> ```ts
+> const pdfAttachments = getPdfAttachments(email.attachments);
+>
+> if (pdfAttachments.length === 0) {
+>   // Step 2.1 logik: gem besked, send autosvar om at vi skal have PDF
+> }
+> ```
+>
+> Vi vil nu indføre to cases:
+>
+> 1. **Case A – Ingen attachments overhovedet**
+> 2. **Case B – Attachments findes, men ingen af dem er PDF**
+>
+> Implementér fx følgende:
+>
+> ```ts
+> const allAttachments = email.attachments ?? [];
+> const pdfAttachments = getPdfAttachments(allAttachments);
+>
+> const hasAnyAttachments = allAttachments.length > 0;
+> const hasAnyPdfs = pdfAttachments.length > 0;
+>
+> if (!hasAnyPdfs) {
+>   if (!hasAnyAttachments) {
+>     // Case A: ingen vedhæftninger (Step 2.1 scenariet)
+>   } else {
+>     // Case B: der er vedhæftninger, men ingen PDF
+>   }
+> }
+>
+> if (hasAnyPdfs) {
+>   // Normal tilbuds-flow (uændret)
+> }
+> ```
+>
+> I Case B skal vi lave en variant af 2.1-logikken med en lidt anden e-mailtekst.
+>
+> ---
+>
+> ### 3. Case B: Mail med kun ikke-PDF vedhæftninger
+>
+> I Case B (`hasAnyAttachments === true` og `hasAnyPdfs === false`):
+>
+> 1. Gem mailen i tråden præcis som i 2.1:
+>
+>    * Opret en indgående besked/`message`/`besked` med:
+>
+>      * `thread_id` / `company_request_id`
+>      * `direction = 'incoming'` / `sender = 'company'`
+>      * `subject`, `bodyText` / `bodyHtml`
+>      * Evt. markér at mailen havde attachments uden PDF (hvis I har felt til det).
+> 2. Opret **ingen** `insurance_offers_pdf` records og start **ingen** OCR jobs.
+>
+> ---
+>
+> ### 4. Autosvar for “kun ikke-PDF vedhæftninger”
+>
+> I stedet for at genbruge 2.1-teksten 1:1, skal vi her gøre det tydeligt, at de har sendt filer, men i et format vi ikke kan bruge.
+>
+> 1. Brug samme Resend-/send-email-funktion som i 2.1.
+> 2. Samme logik for `to` / `from` / `subject` som i 2.1 (Re: [subject], samme tråd-adresse osv.).
+> 3. Body-tekst (på dansk), fx:
+>
+> ```text
+> Hej
+>
+> Tak for jeres svar og de vedhæftede filer.
+>
+> For at vi kan behandle tilbuddet i BedreTilbud, skal vi have selve forsikringstilbuddet som PDF vedhæftet denne mail.
+>
+> Vil I sende policen/policerne som PDF i et svar på denne mail?
+>
+> På forhånd tak.
+>
+> Venlig hilsen  
+> BedreTilbud
+> ```
+>
+> * Hvis I nemt kan se selskabsnavn/kontaktperson, må du gerne skrive “Hej [Navn]”, ellers bare “Hej”.
+>
+> 4. Send mailen.
+> 5. (Som i 2.1) – gem autosvaret som en udgående besked i tråden (`direction = 'outgoing'` / `sender = 'system'`), så hele dialogen er synlig.
+>
+> ---
+>
+> ### 5. Sørg for at normal PDF-flow forbliver uændret
+>
+> * Hvis `hasAnyPdfs === true`, skal koden **ikke** ramme 2.1/2.2-branch’en.
+> * Mails med mindst én PDF skal behandles med den eksisterende tilbuds-/OCR-logik.
+> * Andre vedhæftninger (docx, jpg osv.) kan ignoreres i tilbuds-pipelinen, eller gemmes som metadata hvis I ønsker det – men det er uden for scope for 2.2.
+>
+> ---
+>
+> ### 6. Acceptance criteria
+>
+> * **Case A (ingen vedhæftninger):**
+>
+>   * Forbliver som implementeret i Step 2.1:
+>
+>     * Mail gemmes i tråd.
+>     * Autosvar: “Vi skal bruge tilbuddet som PDF vedhæftet denne mail.” (eller tilsvarende).
+>     * Ingen `insurance_offers_pdf` oprettes.
+> * **Case B (1+ vedhæftninger, men ingen PDF):**
+>
+>   * Mail gemmes i tråden som indgående besked.
+>   * Autosvar sendes til selskabet med tekst, der nævner, at vi har modtaget filer, men at vi kun kan bruge PDF:
+>
+>     * “Tak for jeres svar og de vedhæftede filer. For at vi kan behandle tilbuddet [...] skal vi have tilbuddet som PDF vedhæftet denne mail.”
+>   * Ingen `insurance_offers_pdf` eller OCR-jobs oprettes for disse ikke-PDF vedhæftninger.
+>   * Autosvaret gemmes som udgående besked i tråden (hvis du fulgte 2.1-mønstret).
+> * **Case C (mindst én PDF vedhæftet):**
+>
+>   * Går igennem normal tilbuds-/OCR-flow uden at trigge 2.1/2.2-autosvar.
+>
+> Fokus: Denne opgave er en udvidelse af 2.1 – vi vil undgå at behandle screenshots/Word/zip som tilbud og samtidig være høfligt tydelige over for selskabet om, at vi kun kan bruge PDF.
+
+---
+
+Når den her er implementeret, kan vi senere tage 2.3 (dublet-vedhæftninger / retrys) som næste lille “klods” i mail-flowet.

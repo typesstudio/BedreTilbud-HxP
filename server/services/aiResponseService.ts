@@ -27,7 +27,7 @@ export interface AIResponseContext {
   responseMode?: AutoRespondMode;
 }
 
-export type AutoRespondMode = 'none' | 'normal' | 'mitid' | 'request_pdf';
+export type AutoRespondMode = 'none' | 'normal' | 'mitid' | 'request_pdf' | 'request_pdf_has_files';
 
 function isMitIdOnlyEmail(body: string): boolean {
   const lower = body.toLowerCase();
@@ -72,7 +72,10 @@ export function classifyIncomingEmailForAutoResponse(email: {
     const type = (a.mimeType || a.contentType || '').toLowerCase();
     const fileName = (a.fileName || '').toLowerCase();
     const isPdf = type.includes('pdf') || fileName.endsWith('.pdf');
-    return !isPdf && fileName.length > 0;
+    // Consider attachment as non-PDF if it has a filename OR a mimeType that isn't PDF
+    // This handles inline images (logos etc.) that may have empty filenames
+    const hasContent = fileName.length > 0 || type.length > 0;
+    return !isPdf && hasContent;
   });
 
   // 1) If there is a PDF offer attached, we do NOT auto-respond (offer will be processed).
@@ -81,11 +84,11 @@ export function classifyIncomingEmailForAutoResponse(email: {
     return 'none';
   }
 
-  // 2) If there are non-PDF attachments (images, documents etc), use normal AI response
-  // These might contain relevant information that shouldn't trigger "send PDF" request
+  // 2) If there are non-PDF attachments (images, documents etc), request PDF with acknowledgment
+  // This acknowledges they sent files but explains we can only process PDF format
   if (hasNonPdfAttachment) {
-    console.log('[Email Classifier] Non-PDF attachment detected -> normal mode (AI response)');
-    return 'normal';
+    console.log('[Email Classifier] Non-PDF attachment detected -> request_pdf_has_files mode');
+    return 'request_pdf_has_files';
   }
 
   // 3) Filter out spam/system mails - no auto-response
