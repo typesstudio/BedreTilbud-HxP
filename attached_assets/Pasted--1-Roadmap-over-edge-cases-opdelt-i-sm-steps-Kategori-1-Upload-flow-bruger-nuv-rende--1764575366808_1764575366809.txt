@@ -1,0 +1,95 @@
+## 1. Roadmap over edge cases (opdelt i små steps)
+
+### Kategori 1: Upload-flow (bruger → nuværende policer)
+
+1.1 **Dublet-upload af samme PDF fra bruger**
+
+→ Fil-hash pr. upload, blokér/ignorer dubletter, dansk fejlbesked i UI.
+
+1.2 **Ny version af samme forsikringstype** (indbo, hus, bil …)
+
+→ Når bruger uploader ny “indbo”, skal den gamle “indbo” sættes til `archived`, den nye til `current`.
+
+1.3 **Ikke-forsikringsdokumenter** (fx kontoudtog, lønseddel)
+
+→ Klassificér som “ukendt” efter OCR, brug ikke i health check / sammenligning, vis klar besked til brugeren.
+
+1.4 **Defekte/password-beskyttede/for store PDF’er**
+
+→ Fang fejl, sæt `status = 'failed'` + `error_reason`, vis menneskelig fejltekst i UI.
+
+---
+
+### Kategori 2: Indgående mails fra selskaber (tilbud)
+
+2.1 **Mail uden PDF-vedhæftning**
+
+→ Gem besked i tråd, send AI-svar tilbage: “Vi skal bruge tilbuddet som PDF vedhæftet denne mail.”
+
+2.2 **Mail med kun ikke-PDF-vedhæftning** (docx, jpg, zip)
+
+→ Samme som 2.1, men nævn at det skal være PDF.
+
+2.3 **Dublet-vedhæftninger / retrys**
+
+→ Hash på attachments, unikhed per `company_request_id + file_hash`.
+
+2.4 **Flere revisioner af samme tilbud** (nyt PDF senere)
+
+→ Marker tidligere som `superseded`, brug kun seneste i sammenligning.
+
+2.5 **Tilbud fordelt på flere mails**
+
+→ Saml alle PDF’er på samme tråd under samme `company_request_id`.
+
+---
+
+### Kategori 3: OCR, policy-split & health check
+
+3.1 **Fejl og status i OCR-flowet**
+
+→ Konsistent `status` + `error_reason` på PDF/JSON-niveau, så UI aldrig crasher.
+
+3.2 **Manglende / tvetydig præmie**
+
+→ `premium_amount = null` hvis parsing fejler, ingen %-beregninger eller NaN.
+
+3.3 **Multi-policy PDF hvor ikke alle bliver genkendt**
+
+→ Ukendte dele må ikke vælte resten; bare skip dem i matching.
+
+---
+
+### Kategori 4: Matching & sammenligning
+
+4.1 **Tilbud, der ikke dækker alle brugerens policer**
+
+→ Vis kun besparelse for policy-typer med 1:1 match; markér manglende policer tydeligt.
+
+4.2 **Tilbud med ekstra policer brugeren ikke har**
+
+→ Ignorér i MEP eller vis dem separat uden at kræve 1:1.
+
+4.3 **Flere varianter af samme forsikring (Basis / Udvidet)**
+
+→ Vælg én “standard”-variant pr. policy-type i MEP.
+
+4.4 **Besparelse = 0 eller negativ**
+
+→ Ingen grøn “besparelse”-badge, tekst om at tilbuddet ikke er billigere men kan have andre fordele.
+
+---
+
+### Kategori 5: Notifikationer & frontend-state
+
+5.1 **Sammenligning klar, men notifikationsmail fejler**
+
+→ Bruger kan stadig se resultater i UI, `notification_status = 'failed'`.
+
+5.2 **Delvis succes på tværs af selskaber**
+
+→ Nogle selskaber: “klar”, andre “afventer” / “fejlet” med kort forklaring.
+
+5.3 **Snapshots af “current policer” pr. forespørgsel**
+
+→ Ændringer efterfølgende påvirker ikke gamle forespørgsler.

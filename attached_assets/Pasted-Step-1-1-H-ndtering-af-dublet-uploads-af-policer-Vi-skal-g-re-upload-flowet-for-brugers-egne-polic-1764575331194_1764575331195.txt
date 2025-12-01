@@ -1,0 +1,100 @@
+Step 1.1: Håndtering af dublet-uploads af policer
+
+Vi skal gøre upload-flowet for brugers egne policer mere robust ved at håndtere dublet-uploads af den samme PDF.
+
+Kontekst (kort):
+
+Brugeren uploader sine nuværende forsikringsdokumenter (policer) via frontend.
+
+PDF’erne gemmes i Supabase Storage (eller lignende) og der oprettes en række i databasen pr. upload (fx i en tabel a la insurance_policies, policy_files eller tilsvarende).
+
+Efter upload trigges OCR / health check m.m.
+
+Mål:
+Hvis den samme PDF uploades flere gange af den samme bruger, skal vi:
+
+Genkende dubletten via et fil-hash.
+
+Undgå at oprette en ny “policy PDF”-record / et nyt OCR-job.
+
+Returnere en pæn fejl/infobesked til brugeren i UI på dansk.
+
+1. Find det relevante upload-flow
+
+Find den kode, der håndterer upload af brugerens policer fra frontend til backend.
+
+Det kan være en route som fx /api/policies/upload, /api/insurance/upload, et tRPC-endpoint, Remix action, osv.
+
+Find også den tabel/model, hvor der gemmes metadata om den uploadede fil (fx insurance_policies, insurance_policy_files eller lignende).
+
+2. Tilføj fil-hash til metadata
+
+Når en fil uploades (inden den gemmes i databasen), skal vi beregne et stabilt hash af dens rå indhold (fx SHA-256).
+
+Implementér en hjælpefunktion på backend, fx:
+
+computeFileHash(buffer: Buffer) => string
+
+Tilføj en kolonne i den relevante tabel, fx:
+
+file_hash TEXT (eller tilsvarende string-type)
+
+Sørg for, at kolonnen kan bruges til at slå op på kombinationen (user_id, file_hash)
+
+Hvis det giver mening i jeres setup, må du gerne tilføje en unik constraint på (user_id, file_hash) – men kun hvis det ikke konflikter med eksisterende data. Alternativt kan du lave en manuel check, før du inserter.
+
+3. Dublet-check ved upload
+
+Når en ny fil uploades:
+
+Læs filens indhold i backend (buffer/stream).
+
+Beregn file_hash.
+
+Slå i databasen op efter en eksisterende række med samme user_id og file_hash.
+
+Hvis der allerede findes en match:
+
+Opret ingen ny policy-fil-række.
+
+Start ikke et nyt OCR-job.
+
+Returnér en struktureret fejl/infobesked til frontend, fx en HTTP 200/400 med en klar kode ("duplicate_file").
+
+Hvis der ikke findes et match:
+
+Fortsæt som i dag: gem metadata + file path + start OCR-flow osv.
+
+4. UI-adfærd (tekst på dansk)
+
+Frontend skal vise en pæn besked, hvis backend returnerer “duplicate_file”-scenariet.
+
+Teksten skal være på dansk og kort. Brug fx:
+
+Titel / toast-besked:
+
+“Du har allerede uploadet denne fil”
+
+Undertekst / forklaring (hvis der er plads):
+
+“Vi kan se, at denne police allerede ligger i dit forsikringstjek. Vi har derfor ikke tilføjet den igen.”
+
+Implementér dette dér, hvor upload-fejl håndteres i dag (typisk et place hvor vi viser toast eller error state ved upload-fejl).
+
+5. Acceptance criteria
+
+Når jeg uploader en PDF første gang:
+
+Filen bliver gemt, der oprettes en række i databasen, og OCR/health check kører som i dag.
+
+Når jeg uploader den samme PDF igen som samme bruger:
+
+Der oprettes ikke en ekstra række i databasen for den fil.
+
+Der startes ikke et nyt OCR-job.
+
+Jeg ser en dansk besked i UI: “Du har allerede uploadet denne fil. Vi har derfor ikke tilføjet den igen.”
+
+Alt eksisterende upload-flow for andre filer (andre PDF’er) virker uændret.
+
+Hvis der er migrations-filer eller Drizzle/Supabase-schema, så opdater også schemaet med file_hash-kolonnen, så det er konsistent.
