@@ -98,6 +98,32 @@ export default function ProfilePage() {
           description: "Vi kunne ikke genkende dette som en forsikringspolice. Prøv at uploade selve policen.",
           variant: "destructive"
         });
+      } else if (result.documents?.[0]?.error) {
+        const errorReason = result.documents[0].error;
+        const errorMessages: Record<string, { title: string; description: string }> = {
+          'file_too_large': {
+            title: "Filen er for stor",
+            description: "Upload en PDF på maks 20 MB."
+          },
+          'pdf_password_protected': {
+            title: "PDF beskyttet med adgangskode",
+            description: "Gem en version uden kode, eller tag en kopi og upload som en almindelig PDF."
+          },
+          'pdf_corrupt': {
+            title: "PDF kunne ikke læses",
+            description: "Prøv at downloade den igen fra dit forsikringsselskab og upload en ny version."
+          },
+          'ocr_failed': {
+            title: "Teknisk fejl",
+            description: "Der skete en fejl, da vi forsøgte at læse filen. Prøv igen eller upload en anden version."
+          }
+        };
+        const errorInfo = errorMessages[errorReason] || errorMessages['ocr_failed'];
+        toast({ 
+          title: errorInfo.title, 
+          description: errorInfo.description,
+          variant: "destructive"
+        });
       } else {
         toast({ 
           title: "Dokument uploadet og analyseret", 
@@ -284,7 +310,7 @@ export default function ProfilePage() {
                           icon={<FeatherFileText />}
                         />
                         <div className="flex grow shrink-0 basis-0 flex-col items-start justify-center gap-1">
-                          <div className="flex items-center gap-2 w-full">
+                          <div className="flex items-center gap-2 w-full flex-wrap">
                             <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold" data-testid={`text-doc-name-${doc.id}`}>
                               {doc.fileName}
                             </span>
@@ -297,6 +323,14 @@ export default function ProfilePage() {
                                 Ukendt dokument
                               </span>
                             )}
+                            {doc.extractionStatus === 'failed' && (
+                              <span 
+                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+                                data-testid={`badge-failed-doc-${doc.id}`}
+                              >
+                                Fejl ved filen
+                              </span>
+                            )}
                           </div>
                           <span className="w-full text-body font-body text-subtext-color mobile:text-caption mobile:font-caption" data-testid={`text-doc-info-${doc.id}`}>
                             Uploadet {doc.createdAt ? format(new Date(doc.createdAt), "d. MMMM yyyy", { locale: da }) : "ukendt"} • PDF • {doc.fileSize ? `${(doc.fileSize / 1024 / 1024).toFixed(1)} MB` : "ukendt"}
@@ -304,6 +338,26 @@ export default function ProfilePage() {
                           {doc.documentKind === 'unknown' && (
                             <span className="w-full text-caption font-caption text-amber-600 dark:text-amber-400" data-testid={`text-unknown-hint-${doc.id}`}>
                               Vi kunne ikke genkende dette som en forsikringspolice. Prøv at uploade selve policen.
+                            </span>
+                          )}
+                          {doc.extractionStatus === 'failed' && doc.errorReason === 'file_too_large' && (
+                            <span className="w-full text-caption font-caption text-red-600 dark:text-red-400" data-testid={`text-error-hint-${doc.id}`}>
+                              Filen er for stor. Upload en PDF på maks 20 MB.
+                            </span>
+                          )}
+                          {doc.extractionStatus === 'failed' && doc.errorReason === 'pdf_password_protected' && (
+                            <span className="w-full text-caption font-caption text-red-600 dark:text-red-400" data-testid={`text-error-hint-${doc.id}`}>
+                              PDF'en er beskyttet med adgangskode. Gem en version uden kode, eller tag en kopi/screenshot og upload som en almindelig PDF.
+                            </span>
+                          )}
+                          {doc.extractionStatus === 'failed' && doc.errorReason === 'pdf_corrupt' && (
+                            <span className="w-full text-caption font-caption text-red-600 dark:text-red-400" data-testid={`text-error-hint-${doc.id}`}>
+                              Vi kunne ikke læse denne PDF-fil. Prøv at downloade den igen fra dit forsikringsselskab og upload en ny version.
+                            </span>
+                          )}
+                          {doc.extractionStatus === 'failed' && (!doc.errorReason || doc.errorReason === 'ocr_failed') && (
+                            <span className="w-full text-caption font-caption text-red-600 dark:text-red-400" data-testid={`text-error-hint-${doc.id}`}>
+                              Der skete en teknisk fejl, da vi forsøgte at læse filen. Prøv igen eller upload en anden version.
                             </span>
                           )}
                         </div>

@@ -1,0 +1,198 @@
+Nice, vi cruiser igennem upload-kategorien nu 🚗
+
+Her er en fokuseret Replit-prompt til **Step 1.4: Defekte/password-beskyttede/for store PDF’er**.
+
+---
+
+### Replit-prompt – Step 1.4: Defekte / password-beskyttede / for store PDF’er
+
+> Vi er nu på Step 1.4 i upload edge case-roadmap’en:
+> **Defekte, password-beskyttede eller for store PDF’er må ikke crashe flowet. Vi skal fange fejl, sætte `status = 'failed'` + `error_reason`, og vise en menneskelig fejltekst i UI.**
+>
+> **Mål:**
+>
+> * Hvis en PDF er teknisk problematisk (for stor, password-beskyttet, korrupt, eller OCR-processen fejler hårdt), skal vi:
+>
+>   1. Registrere fejlen i databasen på dokumentet.
+>   2. Markere dokumentet som “failed” i en status-kolonne.
+>   3. Sørge for, at dokumentet **ikke** bruges i health check / sammenligning.
+>   4. Vise en klar, dansk fejlbesked i UI.
+>
+> ---
+>
+> ### 1. Find de relevante steder i koden
+>
+> 1. Find igen upload-endpointet:
+>
+>    * `/api/documents/upload` i `server/routes.ts` (samme som vi brugte til fileHash/dublet).
+> 2. Find den del af koden, der laver OCR/udtræk / parsing af PDF’en:
+>
+>    * Det kan være en service/worker/job, der kører efter upload – fx noget i stil med “extraction”, “ocr”, “processDocument”, “extractPoliciesFromDocument” eller lignende.
+> 3. Notér:
+>
+>    * Hvor i koden vi allerede opdaterer dokumentets status (hvis det findes).
+>    * Hvilke exceptions/fejltyper vi typisk ser fra PDF-biblioteket / OCR-API’et (fx password-beskyttet, korrupt, timeout).
+>
+> ---
+>
+> ### 2. Udvid documents-schema med status og error_reason (hvis det ikke allerede findes)
+>
+> 1. Åbn `shared/schema.ts` og find `documents`-tabel-definitionen.
+> 2. Hvis der **allerede** findes felter til status og fejl, så genbrug dem og spring schema-tilføjelse over – men sørg for at de bruges konsekvent.
+> 3. Hvis der **ikke** findes felter, så tilføj fx:
+>
+>    * `processingStatus: text("processing_status").notNull().default("pending")`
+>    * `errorReason: text("error_reason").nullable()`
+> 4. Opret en migration (fx `000X_add_document_status_error_reason.sql`), der:
+>
+>    * Tilføjer kolonnerne `processing_status` og `error_reason` til `documents`.
+>    * Sætter default `processing_status = 'pending'` for eksisterende rækker.
+>
+> Vi kommer til at bruge værdier som:
+>
+> * `processing_status`: `'pending' | 'processing' | 'completed' | 'failed'`
+> * `error_reason`: maskinvenlige slugs, fx `'file_too_large'`, `'pdf_password_protected'`, `'pdf_corrupt'`, `'ocr_failed'`.
+>
+> ---
+>
+> ### 3. Håndtér “for store PDF’er” allerede i upload-ruten
+>
+> 1. Definér en max-størrelse-konstant et centralt sted (eller i upload-ruten), fx:
+>
+>    * `const MAX_PDF_SIZE_BYTES = 20 * 1024 * 1024; // 20 MB`
+>    * Justér størrelsen hvis der allerede findes en app-konfiguration for det.
+> 2. I `/api/documents/upload` i `server/routes.ts`:
+>
+>    * Efter at du har adgang til `req.file` (eller fil-listen), tjek størrelsen:
+>
+>      * Hvis `file.size > MAX_PDF_SIZE_BYTES`:
+>
+>        * Opret stadig en `documents`-record, men med:
+>
+>          * `processing_status = 'failed'`
+>          * `error_reason = 'file_too_large'`
+>        * **Kald ikke** OCR/extraction-pipelinen for dette dokument.
+>        * Returnér en struktureret JSON-respons, fx:
+>
+>          ```ts
+>          return res.status(200).json({
+>            ok: false,
+>            errorCode: "file_too_large",
+>            message: "Filen er for stor. Upload en PDF på maks 20 MB.",
+>          });
+>          ```
+>        * Tilpas formatet så det matcher eksisterende error-håndtering, men behold `errorCode: "file_too_large"`.
+>
+> ---
+>
+> ### 4. Håndtér password-beskyttede / korrupte PDF’er i extraction/OCR-pipelinen
+>
+> Her skal vi fange fejl, når vi forsøger at læse eller OCR-scanne PDF’en.
+>
+> 1. Find den funktion, der faktisk læser PDF’en / kalder OCR-API’et.
+>
+>    * Wrap det relevante kald i en `try/catch`.
+> 2. I `catch`-blokken:
+>
+>    * Detekter **password-beskyttede** PDF’er ved at tjekke fejlbeskeden eller error-koden:
+>
+>      * Fx hvis `err.message` eller `err.code` indeholder noget som `"password"`, `"encrypted"`, `"needs password"`, etc.
+>      * Hvis ja:
+>
+>        * Opdater den relevante `documents`-record til:
+>
+>          * `processing_status = 'failed'`
+>          * `error_reason = 'pdf_password_protected'`
+>        * Afslut med at lade pipelinen fejle “blødt” (ingen videre steps for dette dokument).
+>    * Hvis fejlen ligner **korrupt / invalid PDF**:
+>
+>      * Tjek `err.message` for ting som `"Invalid PDF"`, `"parse error"`, etc.
+>      * Sæt:
+>
+>        * `processing_status = 'failed'`
+>        * `error_reason = 'pdf_corrupt'`
+>    * For alle andre ukendte fejl i OCR/extraction:
+>
+>      * Sæt:
+>
+>        * `processing_status = 'failed'`
+>        * `error_reason = 'ocr_failed'` (eller lignende generisk slug).
+> 3. Sørg for, at når `processing_status = 'failed'`, så bliver der **ikke** oprettet health check / policy-snapshots / sammenligninger for det dokument.
+>
+> ---
+>
+> ### 5. Sørg for at health check / sammenligning ignorerer failed dokumenter
+>
+> 1. Find alle queries, der henter dokumenter/policer til:
+>
+>    * Health check (“forsikrings tjek”)
+>    * Baseline for sammenligninger mod selskabstilbud
+> 2. Tilføj et filter:
+>
+>    * Kun inkluder dokumenter/policer hvor `processing_status != 'failed'` (eller specifikt `= 'completed'`, alt efter hvordan du vil definere det).
+> 3. Det betyder:
+>
+>    * “Failed” dokumenter kan stadig eksistere i databasen (så vi kan vise fejl i UI), men de påvirker **ikke** beregninger eller matching.
+>
+> ---
+>
+> ### 6. UI: Menneskelige fejltekster på dansk
+>
+> Vi skal vise brugeren en klar forklaring på, *hvorfor* et dokument fejlede.
+>
+> 1. Find de steder i frontend, hvor dokumenter og deres status vises – fx:
+>
+>    * Upload step (SubframeStep2, onboarding upload-komponenter).
+>    * Health check-oversigt, hvis dokumenterne vises dér.
+> 2. Når backend-returnerede data for et dokument indeholder `processing_status = 'failed'` og en `error_reason`, skal UI vise:
+>
+>    * En tydelig label, fx:
+>
+>      * **“Fejl ved filen”**
+>    * En forklarende tekst afhængigt af `error_reason`:
+>
+>      * Hvis `error_reason === 'file_too_large'`:
+>
+>        * **“Filen er for stor. Upload en PDF på maks 20 MB.”**
+>      * Hvis `error_reason === 'pdf_password_protected'`:
+>
+>        * **“PDF’en er beskyttet med adgangskode. Gem en version uden kode, eller tag en kopi/screenshot og upload som en almindelig PDF.”**
+>      * Hvis `error_reason === 'pdf_corrupt'`:
+>
+>        * **“Vi kunne ikke læse denne PDF-fil. Prøv at downloade den igen fra dit forsikringsselskab og upload en ny version.”**
+>      * Hvis `error_reason === 'ocr_failed'` eller anden generisk fejl:
+>
+>        * **“Der skete en teknisk fejl, da vi forsøgte at læse filen. Prøv igen eller upload en anden version.”**
+> 3. Dokumentet må stadig gerne være synligt i listen (så brugeren kan se, at vi *har* modtaget noget), men det skal være tydeligt, at det ikke kunne behandles.
+>
+> ---
+>
+> ### 7. Acceptance criteria
+>
+> * Hvis jeg uploader en PDF, der er større end max-grænsen (fx > 20 MB):
+>
+>   * Der oprettes en documents-record med `processing_status = 'failed'` og `error_reason = 'file_too_large'`.
+>   * OCR/extraction kaldes ikke.
+>   * Frontend viser beskeden:
+>
+>     * “Filen er for stor. Upload en PDF på maks 20 MB.”
+> * Hvis jeg uploader en password-beskyttet PDF:
+>
+>   * Extraction/OCR fejlen bliver fanget.
+>   * Dokumentet ender med `processing_status = 'failed'` og `error_reason = 'pdf_password_protected'`.
+>   * Det bruges ikke i health check eller sammenligninger.
+>   * Frontend viser en klar besked om, at PDF’en er beskyttet med adgangskode.
+> * Hvis jeg uploader en korrupt / invalid PDF:
+>
+>   * Dokumentet ender som `failed` med `error_reason = 'pdf_corrupt'` (eller lignende).
+>   * UI viser en tekst om, at filen ikke kunne læses.
+> * Hvis OCR bare fejler generelt:
+>
+>   * Dokumentet ender som `failed` med en generisk `error_reason`, og UI viser en teknisk fejlbesked med opfordring til at prøve igen.
+> * Ingen af disse fejl-scenarier crasher applikationen, og de fejlede dokumenter indgår **ikke** i health check eller besparelsesberegninger.
+
+---
+
+Når de har implementeret det, kan vi lave en lille test-checklist igen (fx prøve en for stor fil, en korrupt PDF, og en “normal” for at se, at det ikke er gået ud over happy path).
+
+Når 1.1–1.4 er “OK”, hopper vi over i **Kategori 2: indgående mails fra selskaber** 💌

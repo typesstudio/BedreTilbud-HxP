@@ -4,7 +4,7 @@ import path from 'path';
 
 // Configuration
 const MAX_FILES_PER_USER = 50; // Maximum number of documents a user can have
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB (Step 1.4: increased for consistent handling)
 const ALLOWED_EXTENSIONS = ['.pdf'];
 
 /**

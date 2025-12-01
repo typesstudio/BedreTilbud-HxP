@@ -44,7 +44,7 @@ const upload = multer({
     }
   },
   limits: {
-    fileSize: 10 * 1024 * 1024 // 10MB limit
+    fileSize: 20 * 1024 * 1024 // 20MB limit (Step 1.4: increased to allow file validation to handle oversized files)
   }
 });
 
@@ -564,11 +564,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const documentsWithPolicies = [];
       const duplicateFiles: string[] = [];
 
+      // Define max file size constant (20 MB)
+      const MAX_PDF_SIZE_BYTES = 20 * 1024 * 1024;
+
       for (const file of files) {
         let document;
         let matchResult = null;
         
         try {
+          // STEP 0: Check file size BEFORE processing
+          if (file.size > MAX_PDF_SIZE_BYTES) {
+            logger.warn('[Upload] File too large, rejecting', { 
+              fileName: file.originalname, 
+              fileSize: file.size,
+              maxSize: MAX_PDF_SIZE_BYTES,
+              userId 
+            });
+            
+            // Create failed document record for tracking
+            const failedDocument = await storage.createDocument({
+              userId,
+              fileName: file.originalname,
+              filePath: file.path,
+              fileSize: file.size,
+              extractionStatus: 'failed',
+              errorReason: 'file_too_large',
+              documentType
+            });
+            
+            // Clean up the uploaded file
+            await fs.promises.unlink(file.path).catch(() => {});
+            
+            documentsWithPolicies.push({
+              document: failedDocument,
+              error: 'file_too_large',
+              errorMessage: 'Filen er for stor. Upload en PDF på maks 20 MB.',
+              policies: []
+            });
+            continue; // Skip to next file
+          }
+
           // STEP 1: Compute file hash and check for duplicates
           const fileBuffer = await fs.promises.readFile(file.path);
           const fileHash = computeFileHash(fileBuffer);
@@ -752,17 +787,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } catch (error: any) {
           logger.error('[Upload] OCR extraction failed', error, { fileName: file.originalname });
           
-          // If document was created, mark as failed
+          // Determine specific error reason from error message
+          let errorReason = 'ocr_failed';
+          let errorMessage = 'Der skete en teknisk fejl, da vi forsøgte at læse filen. Prøv igen eller upload en anden version.';
+          
+          const errorMessageLower = (error.message || '').toLowerCase();
+          
+          if (errorMessageLower.includes('password') || errorMessageLower.includes('encrypted') || errorMessageLower.includes('needs password')) {
+            errorReason = 'pdf_password_protected';
+            errorMessage = 'PDF\'en er beskyttet med adgangskode. Gem en version uden kode, eller tag en kopi/screenshot og upload som en almindelig PDF.';
+          } else if (errorMessageLower.includes('invalid pdf') || errorMessageLower.includes('parse error') || errorMessageLower.includes('corrupt') || errorMessageLower.includes('truncated')) {
+            errorReason = 'pdf_corrupt';
+            errorMessage = 'Vi kunne ikke læse denne PDF-fil. Prøv at downloade den igen fra dit forsikringsselskab og upload en ny version.';
+          }
+          
+          // If document was created, mark as failed with specific error reason
           if (document) {
             await storage.updateDocument(document.id, {
-              extractionStatus: 'failed'
+              extractionStatus: 'failed',
+              errorReason
             });
           }
 
           // Continue to next file instead of failing entire upload
           documentsWithPolicies.push({
             document: document || null,
-            error: error.message,
+            error: errorReason,
+            errorMessage,
             policies: []
           });
         }

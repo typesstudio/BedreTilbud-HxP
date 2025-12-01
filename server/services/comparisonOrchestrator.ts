@@ -324,6 +324,12 @@ export class ComparisonOrchestrator {
     const allPolicies: any[] = [];
     
     for (const doc of documents) {
+      // Step 1.4: Skip failed documents (defective/password-protected/too-large PDFs)
+      if (doc.extractionStatus === 'failed') {
+        console.log(`[ComparisonOrchestrator] Skipping failed document ${doc.id} (reason: ${(doc as any).errorReason || 'unknown'})`);
+        continue;
+      }
+      
       // Fetch snapshots and health checks once per document
       const snapshots = await this.storage.getOfferSnapshotsByDocument(doc.id);
       const healthChecks = await this.storage.getHealthChecksByDocument(doc.id);
@@ -375,6 +381,12 @@ export class ComparisonOrchestrator {
     const allPolicies: any[] = [];
     
     for (const doc of documents) {
+      // Step 1.4: Skip failed documents (defective/password-protected/too-large PDFs)
+      if (doc.extractionStatus === 'failed') {
+        console.log(`[ComparisonOrchestrator] Skipping failed document ${doc.id} (reason: ${(doc as any).errorReason || 'unknown'})`);
+        continue;
+      }
+      
       // Fetch snapshots and health checks once per document
       const snapshots = await this.storage.getOfferSnapshotsByDocument(doc.id);
       const healthChecks = await this.storage.getHealthChecksByDocument(doc.id);

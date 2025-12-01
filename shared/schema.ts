@@ -47,6 +47,7 @@ export const documents = pgTable("documents", {
   ocrData: json("ocr_data"),
   ocrRawResponse: json("ocr_raw_response"), // Store full Mistral OCR response for re-parsing
   extractionStatus: text("extraction_status").default("pending"), // "pending", "processing", "completed", "failed"
+  errorReason: text("error_reason"), // Machine-readable error: "file_too_large", "pdf_password_protected", "pdf_corrupt", "ocr_failed"
   totalPoliciesExtracted: integer("total_policies_extracted").default(0),
   documentType: text("document_type"), // "current" or "offer"
   companyId: varchar("company_id").references(() => companies.id),

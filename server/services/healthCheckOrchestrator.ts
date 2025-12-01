@@ -101,6 +101,22 @@ export class HealthCheckOrchestrator {
           errors: []
         };
       }
+      
+      // Step 1.4: Skip health check for failed documents (defective/password-protected/too-large PDFs)
+      if (document.extractionStatus === 'failed') {
+        console.log(`[HealthCheckOrchestrator] Document ${documentId} has FAILED extraction - skipping health check`, {
+          errorReason: (document as any).errorReason
+        });
+        return {
+          success: true,
+          documentId,
+          healthChecksCreated: 0,
+          healthChecksFailed: 0,
+          skipped: true,
+          skipReason: `Document extraction failed: ${(document as any).errorReason || 'unknown error'}`,
+          errors: []
+        };
+      }
 
       // 2. Check if already processed (idempotency)
       if (!forceRerun) {

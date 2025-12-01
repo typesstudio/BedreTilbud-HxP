@@ -48,10 +48,10 @@ export async function validatePDFFile(filePath: string): Promise<{ valid: boolea
       return { valid: false, reason: 'File too small to be a valid PDF' };
     }
     
-    // Check maximum size (10MB limit)
-    const MAX_SIZE = 10 * 1024 * 1024;
+    // Check maximum size (20MB limit)
+    const MAX_SIZE = 20 * 1024 * 1024;
     if (fileBuffer.length > MAX_SIZE) {
-      return { valid: false, reason: 'File exceeds maximum size limit (10MB)' };
+      return { valid: false, reason: 'File exceeds maximum size limit (20MB)' };
     }
     
     // Check magic bytes
