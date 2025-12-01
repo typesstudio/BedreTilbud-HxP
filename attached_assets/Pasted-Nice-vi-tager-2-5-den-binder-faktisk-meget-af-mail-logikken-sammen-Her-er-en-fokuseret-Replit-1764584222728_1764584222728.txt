@@ -1,0 +1,179 @@
+Nice, vi tager 2.5 – den binder faktisk meget af mail-logikken sammen 🔗
+
+Her er en fokuseret Replit-prompt til:
+
+> **2.5 Tilbud fordelt på flere mails**
+> → Saml alle PDF’er på samme tråd under samme `company_request_id`.
+
+---
+
+### Replit-prompt – Step 2.5: Tilbud fordelt på flere mails (samme `company_request_id`)
+
+> Vi er i Kategori 2, Step **2.5**:
+> **Et selskab kan sende deres tilbud fordelt på flere mails i samme tråd (fx først bil, senere hus+indbo). Alle disse PDF’er skal samles under samme `company_request_id` og behandles som ét samlet tilbud – ikke som flere separate requests.**
+>
+> Tidligere steps (2.1–2.4) har allerede:
+>
+> * Filtreret PDF vs. ikke-PDF.
+> * Håndteret mails uden PDF / kun ikke-PDF med autosvar.
+> * Indført hash + idempotens for tilbuds-PDF’er per `company_request`.
+> * Håndteret revisioner (nye versioner for samme policyType) med `status = 'active' | 'superseded'`.
+>
+> **Mål for 2.5:**
+>
+> * Alle mails i samme tråd (samme reply-adresse / thread-id) skal mappes til **det samme** `company_request_id`.
+> * Når der kommer flere PDF’er over tid for samme tråd, skal de bare “føjes til” samme `company_request` og samme pipeline – ikke oprette nye.
+> * API/UI skal altid læse alle aktive offer-policer for ét `company_request` på tværs af alle mails.
+
+---
+
+### 1. Bekræft og stram mapping: Indgående mail → thread → company_request
+
+1. Find den indgående mail-handler (samme som i 2.1–2.3), hvor vi:
+
+   * Læser `to` / `from` / `subject`.
+   * Finder `thread_id` ud fra modtager-adressen (fx `thread_id@bedretilbud.com`) eller anden metadata.
+   * Finder eller opretter en tråd/`thread`/`traad`-record.
+2. Find, hvordan `company_request` er koblet på tråden i dag:
+
+   * Der bør være noget i retning af:
+
+     * `threads`-tabel med `company_request_id`, eller
+     * direkte lookup `company_request` via email-adresse / thread-id.
+3. Sikr følgende adfærd (stram det op hvis nødvendigt):
+
+   * En given reply-adresse / thread-id er **altid** linket til **én** specifik `company_request`.
+   * Indgående mails skal aldrig oprette nye `company_requests` – de skal kun slå op på en eksisterende baseret på thread-id.
+
+Hvis der findes steder i koden, hvor der **oprettes** en `company_request` på baggrund af en indgående mail, så sørg for, at det kun sker for det allerførste outbound-scenarie (initielt send), ikke for replies.
+
+---
+
+### 2. Saml alle PDF’er i samme tråd under samme `company_request_id`
+
+Når en indgående mail indeholder PDF-attachments (det er allerede filtreret i 2.1/2.2):
+
+1. Sørg for, at du tidligt i handleren har:
+
+   * `companyRequestId` (fundet via thread / email-adresse).
+   * `pdfAttachments`-listen (som i 2.1–2.3).
+2. For hver PDF-attachment kører du allerede (fra 2.3):
+
+   * `computeFileHash(buffer)`
+   * Tjekker for dublet med `(companyRequestId, fileHash)`
+   * Opretter en tilbuds-PDF-record (fx i `insurance_offers_pdf`) kun hvis den **ikke** er dublet.
+3. **Vigtigt:**
+
+   * Du må **aldrig** oprette et nyt `company_request` i denne del baseret på mailens indhold.
+   * Alle nye tilbuds-PDF’er fra samme tråd skal gemmes med **samme** `company_request_id`.
+
+Resultat: hvis et selskab sender bil-tilbud i mail #1 og senere hus+indbo i mail #2 og #3 i samme tråd, vil systemet ende med:
+
+* Flere rækker i tilbuds-PDF-tabellen med samme `company_request_id`.
+* Flere offer-policer / comparisons, men alle bundet til samme `company_request`.
+
+---
+
+### 3. Sørg for, at comparisons tager alle aktive offers for `company_request`
+
+Nu skal vi sikre, at sammenligninger og oversigtssider ser på **alle** PDF’er, der er kommet ind over tid for samme `company_request`.
+
+1. Find det sted, hvor comparison-flowet samler offers for en given `company_request`:
+
+   * Det kan være en ComparisonOrchestrator, job, eller API-endpoint, der henter data fra:
+
+     * Tilbuds-PDF-tabellen
+     * Offer-policer-tabellen
+     * Comparisons-tabellen
+2. Sørg for, at alle queries, der skal vise tilbuddet fra et selskab, bruger:
+
+   * Filtrering på `company_request_id = X`.
+   * *Ikke* antager, at der kun eksisterer én mail eller én PDF per request.
+3. Kombinér dette med de tidligere felter:
+
+   * For offer-policer:
+
+     * Filtrér på `status = 'active'` (fra Step 2.4)
+     * Saml alle aktive policer pr. `policyType` for `company_request_id`.
+   * For comparisons:
+
+     * Filtrér på `status = 'active'`.
+     * F.eks. én aktiv comparison per `(company_request_id, policyType)`.
+4. Resultat:
+
+   * Når den anden mail med hus+indbo kommer ind, oprettes nye offer-policer og comparisons (eller opdaterer eksisterende) – men **stadig under samme company_request**.
+   * “Samlet oversigt” for selskabet viser nu flere policy-typer for samme `company_request`.
+
+---
+
+### 4. (Valgfrit) status på `company_requests` – delvis / fuldt tilbud
+
+Hvis I allerede har statuser på `company_requests`, kan du udnytte, at PDF’er nu kan komme drypvis.
+
+Det er ikke et must i denne opgave, men hvis det er nemt:
+
+1. Når der oprettes første tilbuds-PDF for en `company_request`:
+
+   * Sæt status fx til `'offers_in_progress'` eller `'partial_offer'`.
+2. Når alle forventede policy-typer er kommet ind (kan evt. bestemmes senere via matching-logik), kan I sætte:
+
+   * `'offers_completed'` eller lignende.
+3. Det vigtigste: **ingen antagelse om, at alt kommer i én mail**.
+
+Hvis det er for komplekst nu, så spring status-opdatering over – bare sørg for at flere mails ikke splitter tingene.
+
+---
+
+### 5. Acceptance criteria
+
+**Case 1 – Tilbud fordelt på 2 mails:**
+
+* Bruger har oprettet en request til Selskab A → `company_request_id = CR1` og tilhørende thread/email.
+* Mail #1 fra Selskab A (samme tråd):
+
+  * Indeholder **bil-forsikring** som PDF.
+  * Systemet:
+
+    * Mapper mailen til `CR1` via thread-id.
+    * Opretter tilbuds-PDF record(s) med `company_request_id = CR1`.
+    * Opretter offer-policy for `policyType = 'bil'` (status `active`).
+    * Opretter/fornyer comparison for `CR1 + bil`.
+* Mail #2 fra Selskab A (samme tråd):
+
+  * Indeholder **hus + indbo** som PDF’er.
+  * Systemet:
+
+    * Mapper mailen til **samme** `CR1`.
+    * Opretter nye tilbuds-PDF records for hus/indbo med `company_request_id = CR1`.
+    * Opretter offer-policer for `hus` og `indbo` (status `active`).
+    * Opretter/fornyer comparisons for `CR1 + hus` og `CR1 + indbo`.
+
+**Resultat i UI:**
+
+* Når brugeren åbner tilbuddet fra Selskab A:
+
+  * De ser **ét** samlet tilbud for Selskab A (én `company_request`), med 2–3 policy-typer (bil, hus, indbo).
+  * Ikke tre separate “tilbud” for samme selskab.
+
+**Case 2 – Mail uden PDF (Step 2.1) + senere mails med PDF:**
+
+* Mail #1: ingen vedhæftninger → behandles via 2.1 (gemt som besked, autosvar om PDF).
+* Mail #2: indeholder PDF’er → mappes til samme `company_request_id` og går gennem PDF-flowet.
+* Resultat: ingen nye `company_requests`, alt samles under samme tråd.
+
+**Case 3 – Flere mails, idempotente PDF’er (Step 2.3) + nye offers:**
+
+* Mail #1: bil.pdf (ny) → oprettes.
+* Mail #2: bil.pdf (samme fil) + hus.pdf (ny):
+
+  * bil.pdf → genkendes via `(company_request_id, file_hash)` og ignoreres.
+  * hus.pdf → oprettes som ny offered policy for `hus`.
+* Alt knyttet til samme `company_request_id`.
+
+---
+
+Fokus:
+
+* **Ingen nye `company_requests`** oprettes på baggrund af replies.
+* Alle PDF’er i samme tråd → samme `company_request_id`.
+* UI/API læser alle aktive offers for et `company_request`, uanset om de kom i 1 eller 5 mails.
