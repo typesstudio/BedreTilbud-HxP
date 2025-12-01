@@ -27,7 +27,7 @@ export interface AIResponseContext {
   responseMode?: AutoRespondMode;
 }
 
-export type AutoRespondMode = 'none' | 'normal' | 'mitid';
+export type AutoRespondMode = 'none' | 'normal' | 'mitid' | 'request_pdf';
 
 function isMitIdOnlyEmail(body: string): boolean {
   const lower = body.toLowerCase();
@@ -68,19 +68,27 @@ export function classifyIncomingEmailForAutoResponse(email: {
     return type.includes('pdf') || fileName.endsWith('.pdf');
   });
 
-  // 1) MitID / self-service mail without PDF => always auto-respond in "mitid" mode
-  if (isMitIdOnlyEmail(body) && !hasPdfAttachment) {
-    console.log('[Email Classifier] Detected MitID/selvbetjening without PDF -> mitid mode');
-    return 'mitid';
-  }
+  const hasNonPdfAttachment = attachments.some((a) => {
+    const type = (a.mimeType || a.contentType || '').toLowerCase();
+    const fileName = (a.fileName || '').toLowerCase();
+    const isPdf = type.includes('pdf') || fileName.endsWith('.pdf');
+    return !isPdf && fileName.length > 0;
+  });
 
-  // 2) If there is a PDF offer attached, we generally do NOT auto-respond by default.
+  // 1) If there is a PDF offer attached, we do NOT auto-respond (offer will be processed).
   if (hasPdfAttachment) {
     console.log('[Email Classifier] PDF attachment detected -> none mode (no auto-response)');
     return 'none';
   }
 
-  // 3) Filter out spam/system mails
+  // 2) If there are non-PDF attachments (images, documents etc), use normal AI response
+  // These might contain relevant information that shouldn't trigger "send PDF" request
+  if (hasNonPdfAttachment) {
+    console.log('[Email Classifier] Non-PDF attachment detected -> normal mode (AI response)');
+    return 'normal';
+  }
+
+  // 3) Filter out spam/system mails - no auto-response
   if (/noreply|no-reply|do not reply|unsubscribe|denne mail er sendt automatisk/i.test(body)) {
     console.log('[Email Classifier] Spam/system mail detected -> none mode');
     return 'none';
@@ -92,9 +100,15 @@ export function classifyIncomingEmailForAutoResponse(email: {
     return 'none';
   }
 
-  // 5) Default -> normal auto-response mode for "ordinary" emails
-  console.log('[Email Classifier] Normal email -> normal mode');
-  return 'normal';
+  // 5) MitID / self-service mail without PDF => special MitID response mode
+  if (isMitIdOnlyEmail(body)) {
+    console.log('[Email Classifier] Detected MitID/selvbetjening without PDF -> mitid mode');
+    return 'mitid';
+  }
+
+  // 6) Default for emails without attachments -> request PDF attachment
+  console.log('[Email Classifier] Email without attachments -> request_pdf mode');
+  return 'request_pdf';
 }
 
 export class AIResponseService {

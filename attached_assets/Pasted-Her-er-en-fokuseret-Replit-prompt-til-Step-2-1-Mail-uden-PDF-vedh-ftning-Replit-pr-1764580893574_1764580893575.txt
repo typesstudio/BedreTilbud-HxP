@@ -1,0 +1,171 @@
+Her er en fokuseret Replit-prompt til **Step 2.1: Mail uden PDF-vedhæftning** 👇
+
+---
+
+### Replit-prompt – Step 2.1: Indgående mail uden PDF-vedhæftning
+
+> Vi er nu i Kategori 2 (indgående mails fra selskaber), Step **2.1**:
+> **Hvis et forsikringsselskab sender en mail uden PDF-vedhæftning, skal vi gemme beskeden i tråden, men ikke starte tilbuds-flowet, og automatisk svare tilbage, at vi skal bruge tilbuddet som PDF vedhæftet denne mail.**
+>
+> **Mål:**
+>
+> * Når en indgående mail fra et selskab **ikke indeholder nogen PDF-attachments**, skal systemet:
+>
+>   1. Gemme mailen som en almindelig besked i den relevante tråd / `company_request`.
+>   2. **Ikke** oprette `insurance_offers_pdf` eller trigge OCR/comparison-flow for tilbud.
+>   3. Sende et kort, tydeligt autosvar tilbage til selskabet (på dansk) med besked om, at vi skal have tilbuddet som PDF vedhæftet denne mail.
+>   4. (Valgfrit) gemme vores autosvar som en besked i tråden også.
+>
+> ---
+>
+> ### 1. Find den indgående e-mail handler
+>
+> 1. Find den route / handler der modtager indgående mails fra selskaber.
+>
+>    * Det kan være en webhook fra Resend, IMAP-poller, eller lignende – fx noget i stil med:
+>
+>      * `/api/email/incoming`, `/api/webhooks/email`, `handleIncomingEmail`, etc.
+> 2. Identificér hvor vi:
+>
+>    * Parser `from` / `to` / `subject` / `text` / `html`.
+>    * Mapper til vores interne modeller (`thread_id`, `company_request_id`, `messages`/`beskeder` osv.).
+>    * Håndterer attachments (liste over filer med filtype / MIME type).
+> 3. Notér den struktur, vi bruger til attachments (fx `email.attachments[]` med `contentType`, `filename`, `data` osv.).
+>
+> ---
+>
+> ### 2. Detekter “ingen PDF-vedhæftning”
+>
+> 1. I indgående email-handleren:
+>
+>    * Identificér alle attachments med PDF-type.
+>
+>      * Fx `attachment.contentType === 'application/pdf'` eller filnavn slutter på `.pdf` (case-insensitive).
+>      * Lav en lille helper, fx:
+>
+>        ```ts
+>        function getPdfAttachments(attachments: Attachment[]): Attachment[] {
+>          return attachments.filter(a => 
+>            a.contentType?.toLowerCase() === "application/pdf" ||
+>            a.filename?.toLowerCase().endsWith(".pdf")
+>          );
+>        }
+>        ```
+> 2. Kald denne helper tidligt i flowet og gem resultatet, fx `const pdfAttachments = getPdfAttachments(email.attachments)`.
+> 3. **Hvis `pdfAttachments.length > 0`**:
+>
+>    * Gør som i dag (den eksisterende logik for at oprette `insurance_offers_pdf`, starte OCR osv.).
+> 4. **Hvis `pdfAttachments.length === 0`**:
+>
+>    * Det er præcis Step 2.1-scenariet → vi laver en særlig gren (se næste punkt).
+>
+> ---
+>
+> ### 3. Gem mailen i tråden, men lav ikke tilbuds-PDF-records
+>
+> I grenen hvor `pdfAttachments.length === 0`:
+>
+> 1. Gem mailen som en besked i den relevante tråd, som I allerede gør for indgående mails:
+>
+>    * Brug eksisterende model/tabel for beskeder, fx `messages` / `beskeder`.
+>    * Feltværdier (eksempel, tilpas til jeres schema):
+>
+>      * `thread_id` / `company_request_id` (udledt som i dag via modtager-adresse eller metadata).
+>      * `direction = 'incoming'` eller `sender = 'company'`.
+>      * `subject`, `bodyText` / `bodyHtml`.
+>      * Evt. `has_attachments = false` eller lign.
+> 2. Opret **ingen** rækker i `insurance_offers_pdf` (eller hvad jeres tilbuds-PDF-tabel hedder) i dette case.
+> 3. Kald **ikke** OCR/offer-extract-pipelinen i denne gren.
+>
+> Resultat: tråden viser, at selskabet har svaret, men ingen tilbuds-PDF’er er registreret endnu.
+>
+> ---
+>
+> ### 4. Send autosvar til selskabet (klar dansk tekst)
+>
+> I samme gren (ingen PDF-attachments) skal vi sende et automatisk, kort svar tilbage til selskabet.
+>
+> 1. Find den eksisterende Resend-integration / mail-sendefunktion, der bruges til at besvare selskaber.
+>
+>    * Fx en helper som `sendEmail`, `EmailService.send`, `sendCompanyReply`, eller lignende.
+> 2. Vi vil **ikke** bruge en generisk AI-prompt her – brug et fast, deterministisk svar (MEP-simpelt).
+> 3. Sammenbyg en mail med:
+>
+>    * **Til:** afsenderens e-mail fra den indgående mail (`from`-adressen).
+>    * **Fra:** den relevante BedreTilbud-reply-adresse (samme som tråden bruger i dag, fx `threadId@bedretilbud.com` eller lign).
+>    * **Subject:**
+>
+>      * Genbrug eksisterende subject med “Re: ” foran, fx:
+>
+>        * `subject: email.subject?.startsWith("Re:") ? email.subject : "Re: " + email.subject`
+>    * **Body (på dansk, kort og venligt):**
+>      Brug fx denne tekst som HTML/tekst:
+>
+>      ```text
+>      Hej
+>
+>      Tak for jeres svar.
+>
+>      For at vi kan behandle tilbuddet i BedreTilbud, skal vi have selve forsikringstilbuddet som PDF vedhæftet denne mail.
+>
+>      Vil I sende policen/policerne som PDF i et svar på denne mail?
+>
+>      På forhånd tak.
+>
+>      Venlig hilsen  
+>      BedreTilbud
+>      ```
+>
+>      * Hvis I nemt kan udlede selskabsnavn (fx fra `fromName`), må du gerne starte med “Hej [Navn]”, ellers bare “Hej”.
+> 4. Send mailen via Resend-klienten som en del af denne gren.
+>
+> ---
+>
+> ### 5. (Valgfrit men godt) Gem autosvaret i tråden
+>
+> 1. Efter mailen er sendt, opret en `message`/`besked`-record i databasen for autosvaret:
+>
+>    * `direction = 'outgoing'` eller `sender = 'system'`.
+>    * `bodyText` / `bodyHtml` svarer til den mail, vi sendte.
+>    * Knyt til samme `thread_id` / `company_request_id`.
+> 2. Så kan både bruger og admin se hele dialogen i UI.
+>
+> ---
+>
+> ### 6. UI-effekt (MEP)
+>
+> Selve UI-ændringer kan være små i denne opgave, men sørg gerne for:
+>
+> 1. At trådens beskedliste viser:
+>
+>    * Selskabets mail (uden vedhæftninger).
+>    * Vores autosvar, så det er gennemsigtigt hvad der er sendt.
+> 2. Hvis der allerede findes et statusfelt på `company_requests` / tråden (fx `status = 'awaiting_offer'`), kan du overveje at:
+>
+>    * Beholde status som “Afventer tilbud” / “Afventer PDF”, indtil en mail **med** PDF kommer ind.
+>    * Det her er ikke et must for denne opgave, men brug en eksisterende status, hvis det er nemt.
+>
+> Tekster i UI til brugeren kan være meget simple (kan evt. laves i en separat UI-opgave):
+>
+> * Fx badge ved selskabet: **“Afventer PDF-tilbud”**.
+>
+> ---
+>
+> ### 7. Acceptance criteria
+>
+> * **Case: Selskabet svarer uden vedhæftninger (ingen PDF, ingen andre filer)**
+>
+>   * Mailen bliver gemt som en indgående besked i den korrekte tråd.
+>   * Der oprettes ingen tilbuds-PDF-records / OCR-jobs.
+>   * Systemet sender automatisk et kort svar til selskabet med teksten om, at vi skal have tilbuddet som PDF vedhæftet denne mail.
+>   * Autosvaret gemmes også som en udgående besked i tråden (hvis du implementerer trin 5).
+> * **Eksisterende flow (mail med PDF-vedhæftning)**
+>
+>   * Forbliver uændret: mails med mindst én PDF skal stadig gå igennem den normale tilbuds-/OCR-logik.
+> * Ingen nye races eller loops:
+>
+>   * Hvis selskabet derefter svarer med en mail **med** PDF-vedhæftning, skal denne **ikke** trigge endnu et “send os en PDF”-svar, men gå gennem normal tilbudsbehandling.
+
+---
+
+Når det her er implementeret, kan vi bagefter lave en micro-testplan (fx sende en testmail uden vedhæftninger til en tråd-adresse og se autosvaret), og så kan vi tage **2.2 (mail med ikke-PDF-vedhæftninger)** som næste lille step – som i praksis bliver en lille udvidelse af den samme logik.
