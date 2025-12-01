@@ -1738,13 +1738,15 @@ export class DatabaseStorage implements IStorage {
     }));
 
     // Get first current insurance policy snapshot for navigation link
+    // Step 1.2: Only get ACTIVE current policies (non-archived)
     const [currentSnapshot] = await db
       .select({ id: policySnapshots.id })
       .from(policySnapshots)
       .where(
         and(
           eq(policySnapshots.userId, userId),
-          eq(policySnapshots.kind, 'current')
+          eq(policySnapshots.kind, 'current'),
+          eq(policySnapshots.isActive, true)
         )
       )
       .orderBy(desc(policySnapshots.createdAt))

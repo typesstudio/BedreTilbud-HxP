@@ -23,7 +23,7 @@
 import { db } from "../../db";
 import { policySnapshots, companies } from "../../../shared/schema";
 import type { Document, InsertPolicySnapshot, PolicySnapshot } from "../../../shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ne, sql } from "drizzle-orm";
 
 interface SegmentedPolicy {
   policyType: string; // "Fritidshus", "Indbo", "Ulykke", etc.
@@ -88,6 +88,14 @@ export class PolicySnapshotService {
       return [];
     }
 
+    // Step 1.2: For "current" policies, archive existing policies of the same type
+    // This ensures only one active policy per (userId, policyType) at any time
+    if (kind === 'current' && document.userId) {
+      // Deduplicate policy types to avoid redundant UPDATE statements
+      const policyTypesToArchive = [...new Set(segments.map(s => this.normalizePolicyType(s.policyType)))];
+      await this.archiveExistingCurrentPolicies(document.userId, policyTypesToArchive);
+    }
+
     // Create one snapshot per segment
     const snapshots: PolicySnapshot[] = [];
     
@@ -143,6 +151,50 @@ export class PolicySnapshotService {
 
     console.log(`[PolicySnapshotService] Created ${snapshots.length}/${segments.length} snapshots successfully`);
     return snapshots;
+  }
+
+  /**
+   * Step 1.2: Archive existing "current" policies of the same type(s) before creating new ones.
+   * 
+   * This ensures only one active policy per (userId, policyType) at any time.
+   * When a user uploads a new version of their indbo policy, the old one becomes archived.
+   * 
+   * @param userId - The user's ID
+   * @param policyTypes - Array of policy types that will be replaced (normalized)
+   */
+  private async archiveExistingCurrentPolicies(
+    userId: string,
+    policyTypes: string[]
+  ): Promise<void> {
+    if (policyTypes.length === 0) return;
+
+    for (const policyType of policyTypes) {
+      try {
+        const result = await db
+          .update(policySnapshots)
+          .set({ 
+            isActive: false,
+            updatedAt: new Date()
+          })
+          .where(
+            and(
+              eq(policySnapshots.userId, userId),
+              eq(policySnapshots.kind, 'current'),
+              eq(policySnapshots.policyType, policyType),
+              eq(policySnapshots.isActive, true)
+            )
+          );
+
+        console.log(
+          `[PolicySnapshotService] Archived existing current ${policyType} policies for user ${userId}`
+        );
+      } catch (error) {
+        console.error(
+          `[PolicySnapshotService] Failed to archive existing ${policyType} policies:`,
+          error
+        );
+      }
+    }
   }
 
   /**
@@ -236,7 +288,9 @@ export class PolicySnapshotService {
   }
 
   /**
-   * Get all snapshots for a user by kind
+   * Get all ACTIVE snapshots for a user by kind.
+   * For "current" policies, only returns the active (non-archived) ones.
+   * For "offer" policies, returns all (offers don't have versioning).
    */
   async getSnapshotsByUserAndKind(
     userId: string,
@@ -245,18 +299,44 @@ export class PolicySnapshotService {
     return await db
       .select()
       .from(policySnapshots)
-      .where(and(eq(policySnapshots.userId, userId), eq(policySnapshots.kind, kind)));
+      .where(
+        and(
+          eq(policySnapshots.userId, userId),
+          eq(policySnapshots.kind, kind),
+          eq(policySnapshots.isActive, true)
+        )
+      );
   }
 
   /**
-   * Get ALL snapshots for a user (both current and offer)
+   * Get ALL ACTIVE snapshots for a user (both current and offer)
    * Ticket B: Used for read-only overview endpoint
+   * Only returns active policies (Step 1.2 - archived ones are hidden)
    */
   async getSnapshotsForUser(userId: string): Promise<PolicySnapshot[]> {
     return await db
       .select()
       .from(policySnapshots)
-      .where(eq(policySnapshots.userId, userId));
+      .where(
+        and(
+          eq(policySnapshots.userId, userId),
+          eq(policySnapshots.isActive, true)
+        )
+      );
+  }
+
+  /**
+   * Get ALL snapshots for a user including archived ones
+   * Used for admin/debugging purposes
+   */
+  async getAllSnapshotsForUser(userId: string, includeArchived = false): Promise<PolicySnapshot[]> {
+    if (includeArchived) {
+      return await db
+        .select()
+        .from(policySnapshots)
+        .where(eq(policySnapshots.userId, userId));
+    }
+    return this.getSnapshotsForUser(userId);
   }
 
   /**
