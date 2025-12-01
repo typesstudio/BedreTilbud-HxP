@@ -43,16 +43,37 @@ export function SubframeStep2({ onComplete, onBack, isLoading }: SubframeStep2Pr
     try {
       const response = await apiRequest('POST', '/api/documents/upload', formData);
       const result = await response.json();
-      const documents = Array.isArray(result) ? result : [result];
+      
+      // Check for duplicate file response
+      if (result.errorCode === 'duplicate_file' || result.ok === false) {
+        setUploadStatus('idle');
+        toast({
+          title: "Du har allerede uploadet denne fil",
+          description: "Vi kan se, at denne police allerede ligger i dit forsikringstjek. Vi har derfor ikke tilføjet den igen.",
+        });
+        return;
+      }
+      
+      // Handle new response structure with documents array
+      const documents = result.documents || (Array.isArray(result) ? result : [result]);
+      
+      // Check if there were any duplicates in a batch upload
+      if (result.hasDuplicates && result.duplicateFiles?.length > 0) {
+        toast({
+          title: "Nogle filer var allerede uploadet",
+          description: `Følgende filer blev sprunget over: ${result.duplicateFiles.join(', ')}`,
+        });
+      }
+      
       setUploadStatus('success');
       
       toast({
         title: "Succes!",
-        description: "Police uploaded successfully",
+        description: "Police uploadet",
       });
 
       setTimeout(() => {
-        onComplete(documents[0]?.id || null, false);
+        onComplete(documents[0]?.document?.id || documents[0]?.id || null, false);
       }, 500);
     } catch (error: any) {
       setUploadStatus('error');

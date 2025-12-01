@@ -131,8 +131,26 @@ export default function Onboarding() {
               formData.append("documentType", "current");
               
               const uploadResponse = await apiRequest("POST", "/api/documents/upload", formData);
-              const documents = await uploadResponse.json();
-              setUploadedFiles(documents);
+              const result = await uploadResponse.json();
+              
+              // Check for duplicate file response
+              if (result.errorCode === 'duplicate_file') {
+                toast({
+                  title: "Du har allerede uploadet denne fil",
+                  description: "Vi kan se, at denne police allerede ligger i dit forsikringstjek. Vi har derfor ikke tilføjet den igen.",
+                });
+              } else {
+                // Handle new response structure
+                const documents = result.documents || (Array.isArray(result) ? result : [result]);
+                setUploadedFiles(documents);
+                
+                if (result.hasDuplicates && result.duplicateFiles?.length > 0) {
+                  toast({
+                    title: "Nogle filer var allerede uploadet",
+                    description: `Følgende filer blev sprunget over: ${result.duplicateFiles.join(', ')}`,
+                  });
+                }
+              }
               setPendingFiles([]);
             }
             
@@ -172,14 +190,33 @@ export default function Onboarding() {
           formData.append("documentType", "current");
           
           const uploadResponse = await apiRequest("POST", "/api/documents/upload", formData);
-          const documents = await uploadResponse.json();
-          setUploadedFiles(documents);
-          setPendingFiles([]);
+          const result = await uploadResponse.json();
           
-          toast({
-            title: "Bruger oprettet",
-            description: `Dine oplysninger og ${documents.length} dokumenter er gemt`,
-          });
+          // Check for duplicate file response
+          if (result.errorCode === 'duplicate_file') {
+            toast({
+              title: "Du har allerede uploadet denne fil",
+              description: "Vi kan se, at denne police allerede ligger i dit forsikringstjek. Vi har derfor ikke tilføjet den igen.",
+            });
+            setPendingFiles([]);
+          } else {
+            // Handle new response structure
+            const documents = result.documents || (Array.isArray(result) ? result : [result]);
+            setUploadedFiles(documents);
+            setPendingFiles([]);
+            
+            if (result.hasDuplicates && result.duplicateFiles?.length > 0) {
+              toast({
+                title: "Nogle filer var allerede uploadet",
+                description: `Følgende filer blev sprunget over: ${result.duplicateFiles.join(', ')}`,
+              });
+            } else {
+              toast({
+                title: "Bruger oprettet",
+                description: `Dine oplysninger og ${documents.length} dokumenter er gemt`,
+              });
+            }
+          }
         } else {
           toast({
             title: "Bruger oprettet",
