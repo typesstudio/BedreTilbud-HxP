@@ -1,0 +1,169 @@
+Godt spørgsmål – og nice at Replit-dev’en faktisk har fået Step 1.1 helt igennem ✅
+
+### Skal du teste først?
+
+Ja.
+Ikke med en uge lang testplan, men med 5–10 minutters **hurtig sanity-test**, ellers bygger vi videre på noget, der måske ikke helt virker.
+
+Her er en ultra-kort test-checklist for **Step 1.1 (dublet-upload)**:
+
+1. **Første upload af PDF A**
+
+   * Upload én PDF.
+   * Forvent:
+
+     * Den dukker op i dit forsikringstjek.
+     * Health check starter / data ser normal ud.
+2. **Anden upload af samme PDF A**
+
+   * Upload præcis samme fil igen.
+   * Forvent:
+
+     * **Ingen ekstra post** i UI (ingen dublet).
+     * Du får beskeden:
+
+       * “Du har allerede uploadet denne fil. Vi har derfor ikke tilføjet den igen.”
+         (eller meget tæt på det).
+3. **Batch-upload hvor én er dublet**
+
+   * Upload 2 filer, hvor den ene er ny, og den anden er en dublet af A.
+   * Forvent:
+
+     * Den nye kommer ind.
+     * Dubletten kommer ikke ind.
+     * Du får en besked i stil med:
+
+       * “Nogle filer var allerede uploadet”.
+4. **Check i databasen (hvis du gider)**
+
+   * Bekræft at der kun findes **én** `documents`-række med samme `file_hash` pr. bruger.
+
+Hvis det nogenlunde holder, går vi videre til næste step.
+
+---
+
+## Næste skridt i roadmap: Step 1.2
+
+Lad os tage **Step 1.2: Ny version af samme forsikringstype (current vs archived)**.
+
+Målet:
+
+* Hvis en bruger allerede har fx en **indboforsikring** liggende som “nuværende”, og de uploader en **ny indbo**, så skal systemet:
+
+  * Markere den gamle som noget á la `archived`.
+  * Markere den nye som `current`.
+  * Alle health checks / sammenligninger skal bruge **den nyeste** som baseline.
+
+Vi holder det MEP-agtigt: ingen UI-historik endnu, bare sikre at vi **ikke** pludselig har 3 “aktive indbo” for samme bruger.
+
+Her er Replit-prompten til Step 1.2 👇
+
+---
+
+### Replit-prompt – Step 1.2: Nyeste police pr. forsikringstype (`current` vs `archived`)
+
+> Vi er videre til næste edge case i upload-flowet:
+> **Når brugeren uploader en ny version af samme forsikringstype (fx ny indboforsikring), skal den gamle markeres som “arkiveret”, og den nye være den aktive/nuværende.**
+>
+> **Kontekst:**
+>
+> * Brugeren kan uploade flere policer over tid.
+> * Vi vil dog kun have **én “nuværende”** police pr. forsikringstype pr. bruger, når vi laver health check og sammenligning.
+> * Vi har allerede `documents`-tabellen (fra Step 1.1 med `fileHash`), og et sted i systemet bliver dokumenterne klassificeret til forsikringstype (indbo, hus, bil, osv.) og kilde (bruger vs. selskab).
+>
+> **Mål for denne opgave:**
+>
+> * Indføre en simpel status/model for brugerens policer: fx `kind = 'current' | 'archived'`.
+> * Sørge for, at der til enhver tid kun er **én** “current” pr. `(userId, policyType, source='user')`.
+> * Health check / oversigter og sammenligninger skal bruge `current`–policen for hver type som baseline.
+>
+> ### 1. Find hvor brugerens policer og deres type gemmes
+>
+> 1. Find de relevante tabeller:
+>
+>    * `documents` i `shared/schema.ts` (allerede kendt).
+>    * Evt. en tabel der repræsenterer “policer” mere eksplicit (hvis det findes), fx noget med extracted data, policyType osv.
+> 2. Find det felt, der bruges til at angive forsikringstype, fx:
+>
+>    * `policyType`, `insuranceType`, `kind`, `category` eller lignende.
+>    * Hvis forsikringstype ikke er et direkte felt i `documents`, men gemmes i en anden tabel (fx `extracted_policies`), så brug den tabel som referencepunkt.
+> 3. Find også hvordan vi skelner mellem **brugerens policer** og **selskabernes tilbud** (typisk et felt som `source: 'user' | 'company'` eller lignende).
+>
+> ### 2. Udvid schema med `kind` eller `isCurrent`
+>
+> 1. Vælg det niveau, hvor det giver mest mening at markere current vs archived.
+>
+>    * Hvis `documents` er den centrale entitet for en policy, kan vi tilføje feltet dér.
+>    * Alternativt, hvis der findes en dedikeret `policies`-tabel, er det måske bedre at markere det dér.
+> 2. Tilføj et felt, fx:
+>
+>    * `kind: text("kind").notNull().default("current")`
+>    * hvor værdierne skal være `'current'` eller `'archived'` (for brugerens policer).
+> 3. Lav migration, der:
+>
+>    * Tilføjer `kind`-kolonnen med default `'current'` for eksisterende rækker.
+>
+> ### 3. Logik: når en ny “current” af samme type oprettes
+>
+> 1. Find det sted i koden, hvor en bruger-upload bliver til en “aktiv” policy med en bestemt `policyType`.
+>
+>    * Det kan være i extraction-pipelinen, hvor vi gemmer structured data og sætter forsikringstype.
+>    * Det kan også være i et step, hvor health check-records oprettes.
+> 2. Når en ny policy (eller document) bliver klassificeret som:
+>
+>    * `source = 'user'` (eller hvad der bruges)
+>    * med en bestemt `policyType` (indbo, hus, bil, …)
+>    * og når den er klar til at blive brugt som “nuværende” (dvs. ikke fejl/ukendt)
+>      så skal vi:
+>    * Køre en opdatering i databasen, der sætter **alle andre** policies for samme `(userId, policyType, source='user')` til `kind = 'archived'`.
+>    * Sætte den nye til `kind = 'current'`.
+> 3. Det er vigtigt, at det her sker **efter** vi kender `policyType`, ikke kun ved rå upload.
+>
+> ### 4. Sørg for at health check & oversigter kun bruger `current`
+>
+> 1. Find alle steder, hvor vi henter brugerens policer til:
+>
+>    * Health check / “forsikrings tjek” side
+>    * Sammenligninger mod tilbud (baseline)
+> 2. Opdater queries til kun at bruge policies/documents hvor:
+>
+>    * `kind = 'current'`
+>    * `source = 'user'` (eller tilsvarende felt)
+>    * og den relevante `policyType`.
+> 3. Ældre policer (`kind = 'archived'`) skal **ikke** dukke op i disse primære visninger.
+>
+>    * Vi behøver ikke lave et UI til dem nu – de må godt være “skjult” i MEP.
+>
+> ### 5. UI-tekst (MEP)
+>
+> * Vi behøver ikke et stort historik-interface lige nu, men der er én tekst, der kan være nyttig:
+>
+>   * Hvis du i UI’et et sted viser info om policen (fx i health check-kortet), kan du vise:
+>
+>     * “Sidst opdateret: [dato]” (valgfrit).
+> * Det vigtigste i denne opgave er dog **logikken**, ikke ny UI.
+>
+> ### 6. Acceptance criteria
+>
+> * Når en bruger har én indboforsikring (current) og uploader en **ny** indboforsikring:
+>
+>   * Den gamle indboforsikring sættes til `kind = 'archived'`.
+>   * Den nye sættes til `kind = 'current'`.
+>   * Health check og sammenligning bruger kun den nye som baseline.
+> * Hvis brugeren bagefter uploader en tredje indboforsikring:
+>
+>   * Den anden (tidligere current) bliver `archived`.
+>   * Den tredje bliver den eneste `current`.
+> * For andre typer (hus, bil osv.) gælder samme regel:
+>
+>   * Max én `current` pr. `(userId, policyType, source='user')`.
+> * Eksisterende data sættes til `kind = 'current'` i migrationen, så systemet fungerer som før, indtil nye uploads kommer ind.
+
+---
+
+Hvis du vil være helt stringent, kan du:
+
+1. Lige lave den korte test af dubletter ✅
+2. Smide denne Step 1.2–prompt ind i en ny Replit-chat (fx “Upload edge cases – current vs archived”)
+
+Når Replit siger “implementeringen er færdig”, kan vi lave endnu en lille test-checklist for det – og så videre til 1.3 (ikke-forsikringsdokumenter).

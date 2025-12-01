@@ -240,6 +240,12 @@ export const policySnapshots = pgTable("policy_snapshots", {
   policyType: text("policy_type").notNull(), // "hus", "fritidshus", "indbo", "ulykke", etc.
   coverageAddress: text("coverage_address"), // For hus/fritidshus - used for matching
   
+  // Version management (Step 1.2 - Dec 2025)
+  // For "current" policies: is_active=true means this is THE active policy for this (userId, policyType)
+  // When a new policy of same type is uploaded, old ones are set to is_active=false (archived)
+  // For "offer" policies: is_active is always true (offers don't have versioning)
+  isActive: boolean("is_active").default(true).notNull(),
+  
   // RAW segmented policy text from stage2_segmentation
   rawText: text("raw_text").notNull(), // The markdown segment for this specific policy
   
@@ -267,6 +273,9 @@ export const policySnapshots = pgTable("policy_snapshots", {
   userIdKindIdx: index("policy_snapshots_user_id_kind_idx").on(table.userId, table.kind),
   userIdKindTypeIdx: index("policy_snapshots_user_id_kind_type_idx").on(table.userId, table.kind, table.policyType),
   userIdKindCompanyIdx: index("policy_snapshots_user_id_kind_company_idx").on(table.userId, table.kind, table.companyName),
+  // Index for finding active current policies (Step 1.2)
+  userIdKindActiveIdx: index("policy_snapshots_user_id_kind_active_idx").on(table.userId, table.kind, table.isActive),
+  userIdKindTypeActiveIdx: index("policy_snapshots_user_id_kind_type_active_idx").on(table.userId, table.kind, table.policyType, table.isActive),
 }));
 
 // LEGACY TABLE: Keep for backward compatibility during migration
