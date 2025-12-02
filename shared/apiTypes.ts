@@ -139,7 +139,18 @@ export type MissingPolicyInfo = {
 };
 
 /**
- * Step 4.1: Extended combined overview with partial coverage info
+ * Step 4.2: Extra policy in offer that user doesn't have
+ */
+export type ExtraOfferPolicy = {
+  policyType: string;
+  label: string;
+  offerPolicyId: string;
+  companyName: string;
+  premiumAmount: number | null;
+};
+
+/**
+ * Step 4.1/4.2: Extended combined overview with partial coverage info
  */
 export type CombinedOverviewWithCoverage = {
   totalSavings: number | null;
@@ -167,5 +178,6 @@ export type CombinedOverviewWithCoverage = {
   comparisonIds: string[];
   policyMatches: PolicyMatchRow[];
   missingPolicyTypes: MissingPolicyInfo[];
+  extraOfferPolicies: ExtraOfferPolicy[];
   coversAllCurrentPolicies: boolean;
 };

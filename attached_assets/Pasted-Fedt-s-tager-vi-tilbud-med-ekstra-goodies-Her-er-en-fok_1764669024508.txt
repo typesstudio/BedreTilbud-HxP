@@ -1,0 +1,277 @@
+Fedt, så tager vi “tilbud med ekstra goodies” 💼
+
+Her er en fokuseret Replit-prompt til:
+
+> **4.2 Tilbud med ekstra policer brugeren ikke har**
+> → Ignorér i MEP eller vis dem separat uden at kræve 1:1.
+
+---
+
+### Replit-prompt – Step 4.2: Tilbud med ekstra policer, som brugeren ikke har
+
+> Vi er i Kategori 4, Step **4.2**:
+> **Når et selskab sender tilbud på flere policer end brugeren har i dag (fx tilbud indeholder Rejse, men brugeren kun har Indbo+Hus), skal vi ikke kræve 1:1 match.**
+>
+> Mål:
+>
+> * Matching & savings-beregninger skal stadig kun bygges på de policy-typer, hvor der er 1:1 match (fra 4.1).
+> * Ekstra policer i tilbuddet skal **ikke** få sammenligningen til at fejle, og **ikke** indgå i besparelsesberegninger.
+> * I MEP kan vi:
+>
+>   * Enten ignorere dem helt i UI, eller
+>   * vise dem i en separat sektion “Ekstra dækninger” – men uden at kræve current-policy.
+> * API’et skal kunne fortælle frontend, at der er ekstra policer i tilbuddet, hvis vi vil vise dem.
+
+---
+
+### 1. Byg videre på match-strukturen fra 4.1
+
+Vi antager, at Step 4.1 er implementeret med noget a la:
+
+```ts
+type PolicyMatchStatus = "matched" | "missing_in_offer" | "missing_in_user";
+
+type PolicyMatchRow = {
+  policyType: string;
+  currentPolicy: PolicySnapshot | null;
+  offerPolicy: PolicySnapshot | null;
+  matchStatus: PolicyMatchStatus;
+};
+```
+
+> Hvis `missing_in_user` ikke er tilføjet endnu, så gør det nu – vi skal bruge det til at markere extra-offer policer.
+
+---
+
+### 2. Udvid match-logikken til også at lave `missing_in_user` rows
+
+I 4.1 byggede vi kun “fra user til offer” (focus på `missing_in_offer`).
+Nu skal vi også huske “fra offer til user”.
+
+1. Når du laver matching, har du typisk:
+
+   ```ts
+   const currentPolicies = /* current policies for user (kind=current, status=active) */;
+   const offerPolicies = /* offer policies for company_request (status=active) */;
+   ```
+
+2. Fra Step 4.1 har du sikkert noget i stil med:
+
+   ```ts
+   const matches: PolicyMatchRow[] = [];
+
+   for (const type of supportedTypes) {
+     const current = currentPolicies.find(p => p.policyType === type) ?? null;
+     const offer = offerPolicies.find(p => p.policyType === type) ?? null;
+
+     if (current && offer) {
+       matches.push({ policyType: type, currentPolicy: current, offerPolicy: offer, matchStatus: "matched" });
+     } else if (current && !offer) {
+       matches.push({ policyType: type, currentPolicy: current, offerPolicy: null, matchStatus: "missing_in_offer" });
+     }
+     // tidligere ignorerede vi "offer only"
+   }
+   ```
+
+3. Nu skal vi også finde policy-typer, der **kun** findes i tilbuddet (offer):
+
+   ```ts
+   // 1) Lav som før for user -> offer (matched + missing_in_offer)
+   // 2) Find ekstra offer-typer
+
+   const matchedAndMissingTypes = new Set(matches.map(m => m.policyType));
+
+   for (const offerPolicy of offerPolicies) {
+     if (!matchedAndMissingTypes.has(offerPolicy.policyType)) {
+       matches.push({
+         policyType: offerPolicy.policyType,
+         currentPolicy: null,
+         offerPolicy,
+         matchStatus: "missing_in_user", // tilbud har noget, som bruger ikke har nu
+       });
+     }
+   }
+   ```
+
+4. Resultat:
+
+   * `matchStatus = "matched"` → begge sider findes
+   * `matchStatus = "missing_in_offer"` → bruger har policy, tilbuddet mangler den
+   * `matchStatus = "missing_in_user"` → tilbuddet har policy, som brugeren ikke har (ekstra policer)
+
+---
+
+### 3. Besparelsesberegninger: stadig KUN `matched` med pris
+
+Her skal vi ikke ændre ret meget – bare sikre:
+
+1. Aggregated savings (fra 4.1) bruger kun:
+
+   ```ts
+   policyMatches.filter(row => 
+     row.matchStatus === "matched" &&
+     row.currentPolicy?.premiumAmount != null &&
+     row.currentPolicy.premiumAmount > 0 &&
+     row.offerPolicy?.premiumAmount != null &&
+     row.offerPolicy.premiumAmount >= 0
+   );
+   ```
+
+2. **Ingen** savings-beregninger baseret på `missing_in_user`-rækker.
+
+   * Ekstra policer er bare “nice to know”, ikke en del af besparelsesgrundlaget.
+
+---
+
+### 4. API: eksponér ekstra policer i tilbuddet
+
+Nu vil vi gerne sende info til frontend om, at der er ekstra policer i tilbuddet.
+
+1. I DTO’en for company-offer comparison (samme som i 4.1), udvid med fx:
+
+```ts
+{
+  // eksisterende fields...
+  policyMatches: PolicyMatchRow[];
+
+  missingPolicyTypes: string[];     // fra 4.1: current-only
+  coversAllCurrentPolicies: boolean;
+
+  extraOfferPolicies: {
+    policyType: string;
+    label: string;
+    offerPolicyId: string;
+    premiumAmount: number | null;
+  }[];
+}
+```
+
+2. Når responsen bygges:
+
+```ts
+const policyTypeLabels = {
+  indbo: "Indboforsikring",
+  hus: "Husforsikring",
+  bil: "Bilforsikring",
+  ulykke: "Ulykkesforsikring",
+  rejse: "Rejseforsikring",
+  // evt. flere
+};
+
+const extraOfferPolicies = policyMatches
+  .filter(row => row.matchStatus === "missing_in_user")
+  .map(row => ({
+    policyType: row.policyType,
+    label: policyTypeLabels[row.policyType] ?? row.policyType,
+    offerPolicyId: row.offerPolicy!.id,
+    premiumAmount: row.offerPolicy!.premiumAmount ?? null,
+  }));
+```
+
+3. `coversAllCurrentPolicies` skal **fortsat** kun være baseret på `missing_in_offer` (dvs. om selskabet dækker alt, brugeren har i forvejen).
+
+   * Ekstra policer gør **ikke** dette flag false.
+
+---
+
+### 5. UI-adfærd i MEP
+
+For MEP vil vi gøre det enkelt:
+
+1. **Samlet oversigt:**
+
+   * `totalSavingsAmount` og `%` er uændret (kun `matched` med pris).
+   * Hvis `extraOfferPolicies.length > 0`, kan vi (MEP):
+
+     * Enten ignorere det visuelt, dvs. fokusere på “core”-besparelsen.
+     * Eller vise en lille note/sektion, fx nederst:
+
+       **“Ekstra dækninger i dette tilbud”**
+
+       Og liste:
+
+       * “Rejseforsikring (X kr/år)”
+       * “Ulykkesforsikring (pris kunne ikke aflæses)”
+
+2. **Tabs for individuelle policer:**
+
+   * For policy-typer, som kun findes i tilbuddet (`missing_in_user`), kan vi vælge MEP-løsning:
+
+     * Enten: slet ikke vise en tab for dem (ren MVP)
+     * Eller: vise en slags “ekstra forsikring”-tab som read-only, uden 1:1-sammenligning.
+
+   For MEP vil jeg anbefale:
+
+   * **Samlet oversigt**: vis en lille “Ekstra dækninger”-sektion.
+   * **Ingen ekstra tabs** endnu (kan komme senere).
+
+---
+
+### 6. Acceptance criteria
+
+**Case 1 – Bruger har Indbo + Hus, tilbuddet har Indbo + Hus + Rejse**
+
+* Matching:
+
+  * Indbo: `matchStatus = "matched"`
+  * Hus: `matchStatus = "matched"`
+  * Rejse: `matchStatus = "missing_in_user"`
+
+* Aggregated savings:
+
+  * Beregnes kun ud fra Indbo + Hus.
+  * Intet forsøg på at inkludere Rejse i besparelse.
+
+* API:
+
+  * `missingPolicyTypes = []`
+  * `coversAllCurrentPolicies = true` (tilbuddet dækker alt, brugeren har)
+  * `extraOfferPolicies = [{ policyType: "rejse", ... }]`
+
+* UI (MEP):
+
+  * Samlet oversigt viser normal besparelse.
+  * Evt. en lille sektion “Ekstra dækninger i dette tilbud: Rejseforsikring”.
+
+**Case 2 – Bruger har kun Bil, tilbuddet har Bil + Ulykke**
+
+* `matchStatus`:
+
+  * Bil: `matched`
+  * Ulykke: `missing_in_user`
+
+* Bruger ser:
+
+  * Besparelse på Bil.
+  * Evt. en note om, at selskabet også tilbyder en Ulykkesforsikring, men uden at systemet “forventer”, at brugeren har den i forvejen.
+
+**Case 3 – Tilbud har KUN policer, som brugeren ikke har (rent cross-sell)**
+
+* Bruger har fx kun Hus via et andet selskab (ikke i systemet endnu), men her kigger vi kun på det, du gemmer som current.
+
+* Hvis `currentPolicies`-listen reelt er tom for jeres system:
+
+  * Alle offerPolicies ender som `missing_in_user`.
+  * `matched`-listen er tom → totalSavings = null, hasPrice = false.
+  * `missingPolicyTypes = []`, `coversAllCurrentPolicies = true` (teknisk set)
+  * `extraOfferPolicies` indeholder alle offers.
+
+* UI:
+
+  * Viser, at der ikke er beregnet besparelse (mangler current-data).
+  * Kan stadig liste “Ekstra dækninger i dette tilbud” hvis I vil.
+
+**Generelt:**
+
+* Ekstra policer i tilbuddet **bryder ikke** noget.
+* De må ikke få matching/sammenligning til at crashe.
+* De indgår ikke stjult i besparelsesberegningen.
+* De kan vises som et “plus” i UI, men uden at vi kræver 1:1-match.
+
+---
+
+Når det her er implementeret, er Kategori 4 ret godt dækket:
+4.1 = “tilbud mangler noget user har”
+4.2 = “tilbud har ekstra ting user ikke har”.
+
+Næste naturlige skridt er 4.3 / 4.4 (fx edge cases omkring flere selskaber eller meget små forskelle), når du er klar.
