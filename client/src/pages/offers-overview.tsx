@@ -232,9 +232,16 @@ export default function OffersOverview() {
           comparisonStatus: offer.comparisonStatus,
           highlights: extractTop4Highlights(comparisonData),
           firstOfferSnapshotId,
+          notificationStatus: offer.notificationStatus,
+          notificationError: offer.notificationError,
         };
       })
     : [];
+  
+  // Step 5.1: Check if any comparisons had failed notifications
+  const offersWithFailedNotification = companiesWithOffers.filter(
+    (o: any) => o.notificationStatus === 'failed'
+  );
 
   const pendingThreads = (threads as any[]).filter((t: any) => t.status !== 'received' && !getComparisonForThread(t.id));
   const hasOffers = companiesWithOffers.length > 0 || failedOffers.length > 0 || pendingOffers.length > 0;
@@ -278,6 +285,24 @@ export default function OffersOverview() {
                 </span>
                 <span className="text-body font-body text-brand-700">
                   Vores AI forhandler med {pendingThreads.length} forsikringsselskaber. Vi giver dig besked når nye tilbud er tilgængelige.
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Step 5.1: Notification Failure Banner */}
+          {offersWithFailedNotification.length > 0 && (
+            <div 
+              className="flex w-full items-start gap-4 rounded-md bg-warning-50 border border-warning-200 px-6 py-4"
+              data-testid="notification-failure-banner"
+            >
+              <IconWithBackground size="small" icon={<FeatherCheckCircle />} />
+              <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                <span className="text-body-bold font-body-bold text-warning-700">
+                  Dine resultater er klar her i BedreTilbud
+                </span>
+                <span className="text-body font-body text-warning-600">
+                  Vi kunne desværre ikke sende dig en email om det, men du kan se alle sammenligninger nedenfor.
                 </span>
               </div>
             </div>

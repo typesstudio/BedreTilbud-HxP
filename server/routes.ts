@@ -2134,6 +2134,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           let comparisonData: any = null;
           let comparisonId: string | null = null;
           let currentCompanyId: string | null = null;
+          let notificationStatus: string | null = null;
+          let notificationError: string | null = null;
           
           if (doc.companyId) {
             // Step 2.4: Only use active (non-superseded) comparisons
@@ -2143,6 +2145,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
             );
             
             if (relevantComparison) {
+              // Step 5.1: Include notification status
+              notificationStatus = relevantComparison.notificationStatus || 'pending';
+              notificationError = relevantComparison.notificationError || null;
+              
               if (relevantComparison.status === 'completed' && relevantComparison.comparisonJSON) {
                 comparisonStatus = 'ok';
                 comparisonData = relevantComparison.comparisonJSON;
@@ -2167,7 +2173,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             statusReason,
             comparisonData,
             comparisonId,
-            currentCompanyId
+            currentCompanyId,
+            notificationStatus,
+            notificationError
           };
         })
       );
