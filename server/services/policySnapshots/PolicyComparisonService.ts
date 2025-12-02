@@ -182,9 +182,11 @@ export class PolicyComparisonService {
         };
       });
 
-      // Calculate aggregated savings for matched policies with valid prices
-      if (matchStatus === 'matched' && offers.length > 0) {
-        const currentPrem = current?.pricing?.annualPremium;
+      // Step 4.1: Calculate aggregated savings ONLY for matched policies with valid prices
+      // This ensures missing/unmatched policies do NOT contribute to totals
+      if (matchStatus === 'matched' && current && offers.length > 0) {
+        const currentPrem = current.pricing?.annualPremium;
+        
         // Use cheapest offer for aggregated savings
         const cheapestOffer = offerWithDeltas.reduce((min, offer) => {
           const offerPrem = offer.pricing?.annualPremium;
@@ -196,11 +198,22 @@ export class PolicyComparisonService {
 
         const offerPrem = cheapestOffer?.pricing?.annualPremium;
 
-        if (currentPrem != null && offerPrem != null && currentPrem > 0) {
+        // Only accumulate if BOTH premiums are valid positive numbers
+        if (
+          typeof currentPrem === 'number' && 
+          Number.isFinite(currentPrem) && 
+          currentPrem > 0 &&
+          typeof offerPrem === 'number' && 
+          Number.isFinite(offerPrem) && 
+          offerPrem >= 0
+        ) {
           hasPriceData = true;
           totalCurrentPremium += currentPrem;
           totalOfferPremium += offerPrem;
           totalSavings += (currentPrem - offerPrem);
+          console.log(`[PolicyComparisonService] Aggregating ${policyType}: current=${currentPrem}, offer=${offerPrem}, savings=${currentPrem - offerPrem}`);
+        } else {
+          console.log(`[PolicyComparisonService] Skipping aggregation for ${policyType}: invalid prices (current=${currentPrem}, offer=${offerPrem})`);
         }
       }
 
