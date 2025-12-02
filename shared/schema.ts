@@ -32,8 +32,11 @@ export const companies = pgTable("companies", {
   name: text("name").notNull(),
   email: text("email").notNull(),
   description: text("description"),
-  logoUrl: text("logo_url"), // Company logo URL
-  popular: boolean("popular").default(false), // Mark popular companies
+  logoUrl: text("logo_url"),
+  insuranceTypes: text("insurance_types").array(),
+  membershipRequired: text("membership_required"),
+  region: text("region"),
+  popular: boolean("popular").default(false),
   active: boolean("active").default(true),
 });
 
