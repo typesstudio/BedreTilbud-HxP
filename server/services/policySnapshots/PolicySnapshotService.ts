@@ -25,6 +25,21 @@ import { policySnapshots, companies, companyComparisons } from "../../../shared/
 import type { Document, InsertPolicySnapshot, PolicySnapshot } from "../../../shared/schema";
 import { eq, and, ne, sql } from "drizzle-orm";
 
+/**
+ * Step 3.3: Supported policy types for matching and health checks.
+ * Policies with types NOT in this list are marked as "unknown_type" and skipped.
+ */
+export const SUPPORTED_POLICY_TYPES = [
+  'indbo',
+  'hus',
+  'fritidshus',
+  'ulykke',
+  'bil',
+  'rejse',
+] as const;
+
+export type SupportedPolicyType = typeof SUPPORTED_POLICY_TYPES[number];
+
 interface SegmentedPolicy {
   policyType: string; // "Fritidshus", "Indbo", "Ulykke", etc.
   rawContent: string; // The markdown text for this policy segment
@@ -128,8 +143,11 @@ export class PolicySnapshotService {
       const segment = segments[i];
       
       try {
-        // Normalize policy type (e.g., "Fritidshus" → "fritidshus")
+        // Normalize policy type (e.g., "Fritidshus" → "fritidshus", unknown → "unknown")
         const policyType = this.normalizePolicyType(segment.policyType);
+        
+        // Step 3.3: Determine status based on policy type
+        const status = this.determineStatus(policyType);
         
         // Extract company name from segment metadata or fall back to document company
         const companyName = await this.extractCompanyName(segment, document);
@@ -145,6 +163,7 @@ export class PolicySnapshotService {
           companyName,
           policyType,
           coverageAddress,
+          status, // Step 3.3: Mark unknown types so they're skipped in matching
           rawText: segment.rawContent,
           structuredPolicy: null, // Will be enriched later
           pricing: null, // Will be enriched later
@@ -161,10 +180,18 @@ export class PolicySnapshotService {
         const [snapshot] = await db.insert(policySnapshots).values(snapshotData).returning();
         snapshots.push(snapshot);
 
-        console.log(
-          `[PolicySnapshotService] ✓ Created snapshot ${snapshot.id}: ` +
-          `${kind}/${policyType} from ${companyName} (segment ${i})`
-        );
+        // Step 3.3: Log differently for unknown types
+        if (status === 'unknown_type') {
+          console.log(
+            `[PolicySnapshotService] ⚠ Created snapshot ${snapshot.id}: ` +
+            `${kind}/${policyType} from ${companyName} (segment ${i}) - UNKNOWN TYPE, will be skipped in matching`
+          );
+        } else {
+          console.log(
+            `[PolicySnapshotService] ✓ Created snapshot ${snapshot.id}: ` +
+            `${kind}/${policyType} from ${companyName} (segment ${i})`
+          );
+        }
       } catch (error) {
         console.error(
           `[PolicySnapshotService] ✗ Failed to create snapshot for segment ${i} (${segment.policyType}):`,
@@ -276,8 +303,11 @@ export class PolicySnapshotService {
   }
 
   /**
-   * Normalize policy type from various formats to canonical lowercase
+   * Normalize policy type from various formats to canonical lowercase.
+   * Step 3.3: Returns 'unknown' for types we don't recognize/support.
+   * 
    * Examples: "Fritidshus" → "fritidshus", "Indbo" → "indbo", "Ulykke" → "ulykke"
+   * Unknown: "Landbrug" → "unknown", "Special" → "unknown"
    */
   private normalizePolicyType(rawType: string): string {
     const normalized = rawType.toLowerCase().trim();
@@ -290,6 +320,7 @@ export class PolicySnapshotService {
       'hus': 'hus',
       'husforsikring': 'hus',
       'villa': 'hus',
+      'villaejerforsikring': 'hus',
       'indbo': 'indbo',
       'indboforsikring': 'indbo',
       'ulykke': 'ulykke',
@@ -298,11 +329,42 @@ export class PolicySnapshotService {
       'bilforsikring': 'bil',
       'rejse': 'rejse',
       'rejseforsikring': 'rejse',
-      'andet': 'andet',
-      'other': 'andet',
     };
 
-    return typeMap[normalized] || normalized;
+    const mappedType = typeMap[normalized];
+    
+    // If we found a mapping, return the canonical type
+    if (mappedType) {
+      return mappedType;
+    }
+    
+    // Step 3.3: Check if the raw normalized value is a supported type
+    if (SUPPORTED_POLICY_TYPES.includes(normalized as SupportedPolicyType)) {
+      return normalized;
+    }
+    
+    // Step 3.3: Return 'unknown' for unsupported types
+    // This prevents the entire document from failing when one policy is unrecognized
+    console.log(`[PolicySnapshotService] Unknown policy type detected: "${rawType}" → marking as "unknown"`);
+    return 'unknown';
+  }
+
+  /**
+   * Step 3.3: Determine the status field based on policy type.
+   * Returns "active" for supported types, "unknown_type" for unsupported.
+   */
+  private determineStatus(policyType: string): "active" | "unknown_type" {
+    if (policyType === 'unknown' || !SUPPORTED_POLICY_TYPES.includes(policyType as SupportedPolicyType)) {
+      return 'unknown_type';
+    }
+    return 'active';
+  }
+
+  /**
+   * Step 3.3: Check if a policy type is supported (eligible for matching/health checks)
+   */
+  static isSupportedPolicyType(policyType: string): boolean {
+    return SUPPORTED_POLICY_TYPES.includes(policyType as SupportedPolicyType);
   }
 
   /**
@@ -369,38 +431,55 @@ export class PolicySnapshotService {
    * Get all ACTIVE snapshots for a user by kind.
    * For "current" policies, only returns the active (non-archived) ones.
    * For "offer" policies, returns all (offers don't have versioning).
+   * 
+   * Step 3.3: By default, excludes unknown_type policies (they can't be matched/compared).
+   * Use includeUnknown=true for debugging/admin purposes.
    */
   async getSnapshotsByUserAndKind(
     userId: string,
-    kind: 'current' | 'offer'
+    kind: 'current' | 'offer',
+    includeUnknown = false
   ): Promise<PolicySnapshot[]> {
+    const conditions = [
+      eq(policySnapshots.userId, userId),
+      eq(policySnapshots.kind, kind),
+      eq(policySnapshots.isActive, true),
+    ];
+    
+    // Step 3.3: Filter out unknown_type policies by default
+    if (!includeUnknown) {
+      conditions.push(eq(policySnapshots.status, 'active'));
+    }
+    
     return await db
       .select()
       .from(policySnapshots)
-      .where(
-        and(
-          eq(policySnapshots.userId, userId),
-          eq(policySnapshots.kind, kind),
-          eq(policySnapshots.isActive, true)
-        )
-      );
+      .where(and(...conditions));
   }
 
   /**
    * Get ALL ACTIVE snapshots for a user (both current and offer)
    * Ticket B: Used for read-only overview endpoint
    * Only returns active policies (Step 1.2 - archived ones are hidden)
+   * 
+   * Step 3.3: By default, excludes unknown_type policies.
+   * Use includeUnknown=true for debugging/admin purposes.
    */
-  async getSnapshotsForUser(userId: string): Promise<PolicySnapshot[]> {
+  async getSnapshotsForUser(userId: string, includeUnknown = false): Promise<PolicySnapshot[]> {
+    const conditions = [
+      eq(policySnapshots.userId, userId),
+      eq(policySnapshots.isActive, true),
+    ];
+    
+    // Step 3.3: Filter out unknown_type policies by default
+    if (!includeUnknown) {
+      conditions.push(eq(policySnapshots.status, 'active'));
+    }
+    
     return await db
       .select()
       .from(policySnapshots)
-      .where(
-        and(
-          eq(policySnapshots.userId, userId),
-          eq(policySnapshots.isActive, true)
-        )
-      );
+      .where(and(...conditions));
   }
 
   /**
