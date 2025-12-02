@@ -36,6 +36,7 @@ export const SUPPORTED_POLICY_TYPES = [
   'ulykke',
   'bil',
   'rejse',
+  'andet',
 ] as const;
 
 export type SupportedPolicyType = typeof SUPPORTED_POLICY_TYPES[number];
