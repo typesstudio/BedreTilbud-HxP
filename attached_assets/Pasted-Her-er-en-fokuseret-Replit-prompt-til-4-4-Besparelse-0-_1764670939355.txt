@@ -1,0 +1,394 @@
+Her er en fokuseret Replit-prompt til:
+
+> **4.4 Besparelse = 0 eller negativ**
+> → Ingen grøn “besparelse”-badge, tekst om at tilbuddet ikke er billigere men kan have andre fordele.
+
+---
+
+### Replit-prompt – Step 4.4: Tilbud der er lige så dyrt eller dyrere (0 / negativ “besparelse”)
+
+> Vi er i Kategori 4, Step **4.4**:
+> **Hvis et tilbud ikke er billigere end brugerens nuværende forsikring (besparelse = 0 eller negativ), må vi ikke vise grøn “besparelse”-badge. I stedet skal vi vise neutral/ærlig tekst om, at tilbuddet ikke er billigere – men stadig kan have andre fordele i dækning.**
+>
+> Forudsætninger:
+>
+> * Step 3.2 er implementeret:
+>
+>   * `premiumAmount` er `number | null`.
+>   * Ingen NaN/Infinity.
+>   * Vi har en `computeSavings`-lignende helper, der returnerer `hasPrice`, `savingsAmount`, `savingsPercentage`, `monthlySavings`.
+> * Step 4.1/4.2/4.3 er implementeret:
+>
+>   * `matched` pr. policyType.
+>   * Aggregated savings på selskabsniveau kun for matched med pris.
+
+**Mål for 4.4:**
+
+* Backend:
+
+  * Klassificér savings som **“billigere / samme pris / dyrere”** både pr. policy og samlet.
+  * Eksponér dette i API’et som felter, der er nemme at bruge i UI.
+* Frontend:
+
+  * Vis **kun** grøn “besparelse”-badge, hvis besparelsen er **positiv**.
+  * Hvis besparelse ≈ 0 → vis neutral tekst om at prisen er nogenlunde den samme.
+  * Hvis besparelse er negativ (tilbud dyrere) → vis ærlig tekst om at tilbuddet er dyrere, uden grøn styling.
+  * 10-års grafer og “store grønne savings”-elementer skal **kun** vises, når besparelsen er positiv.
+
+---
+
+### 1. Udvid savings-helperen med “retning” (cheaper / same / more_expensive)
+
+1. Find den helper-funktion, du lavede i 3.2 (eller tilsvarende), fx:
+
+   ```ts
+   function computeSavings(currentPremium: number | null, offerPremium: number | null) {
+     // returnerer hasPrice, savingsAmount, savingsPercentage, monthlySavings
+   }
+   ```
+
+2. Udvid returtypen med en “direction”-klassifikation, fx:
+
+   ```ts
+   type SavingsDirection = "cheaper" | "same_price" | "more_expensive" | null;
+   ```
+
+3. Tilføj feltet til retur-objektet:
+
+   ```ts
+   function computeSavings(
+     currentPremium: number | null,
+     offerPremium: number | null
+   ): {
+     hasPrice: boolean;
+     savingsAmount: number | null;
+     savingsPercentage: number | null;
+     monthlySavings: number | null;
+     direction: SavingsDirection;
+   } {
+     if (currentPremium == null || currentPremium <= 0) {
+       return {
+         hasPrice: false,
+         savingsAmount: null,
+         savingsPercentage: null,
+         monthlySavings: null,
+         direction: null,
+       };
+     }
+     if (offerPremium == null || offerPremium < 0) {
+       return {
+         hasPrice: false,
+         savingsAmount: null,
+         savingsPercentage: null,
+         monthlySavings: null,
+         direction: null,
+       };
+     }
+
+     const savingsAmount = currentPremium - offerPremium;
+     const monthlySavings = savingsAmount / 12;
+     const savingsPercentage =
+       currentPremium > 0 ? savingsAmount / currentPremium : null;
+
+     // Klassificér retning (MEP: simpelt)
+     let direction: SavingsDirection = null;
+     if (savingsAmount > 0) {
+       direction = "cheaper";
+     } else if (savingsAmount === 0) {
+       direction = "same_price";
+     } else if (savingsAmount < 0) {
+       direction = "more_expensive";
+     }
+
+     return {
+       hasPrice: true,
+       savingsAmount,
+       savingsPercentage,
+       monthlySavings,
+       direction,
+     };
+   }
+   ```
+
+4. Brug denne helper konsekvent:
+
+   * Pr. policy-sammenligning.
+   * I aggregated savings på selskabsniveau (se næste punkt).
+
+---
+
+### 2. Aggregated savings: tilføj samlet “direction” på selskabsniveau
+
+Vi skal også vide, om **totalt** tilbud er billigere / lige så dyrt / dyrere, på tværs af alle matched policies.
+
+1. Find det sted, hvor totalSavings og totalSavingsPercentage beregnes (fra 4.1):
+
+   * Du har noget i stil med:
+
+   ```ts
+   let totalSavingsAmount = 0;
+   let totalCurrentPremium = 0;
+
+   for (const row of matchedWithPrice) {
+     const current = row.currentPolicy!.premiumAmount!;
+     const offer = row.offerPolicy!.premiumAmount!;
+     totalSavingsAmount += current - offer;
+     totalCurrentPremium += current;
+   }
+
+   const totalSavingsPercentage =
+     totalCurrentPremium > 0 ? totalSavingsAmount / totalCurrentPremium : null;
+   ```
+
+2. Byg et aggregated resultat-objekt:
+
+   ```ts
+   type AggregateSavingsDirection = "cheaper" | "same_price" | "more_expensive" | null;
+
+   function computeAggregateSavings(policyMatches: PolicyMatchRow[]) {
+     // her forudsætter vi at hver row allerede har savings-data fra computeSavings
+   }
+   ```
+
+3. Gem pr-policy savings i `PolicyMatchRow` (backend-side), fx:
+
+   ```ts
+   type PolicyMatchRow = {
+     policyType: string;
+     currentPolicy: PolicySnapshot | null;
+     offerPolicy: PolicySnapshot | null;
+     matchStatus: PolicyMatchStatus;
+     savings?: {
+       hasPrice: boolean;
+       savingsAmount: number | null;
+       savingsPercentage: number | null;
+       monthlySavings: number | null;
+       direction: SavingsDirection;
+     };
+   };
+   ```
+
+   * Når du bygger `PolicyMatchRow` for `matchStatus = "matched"`, kald `computeSavings` og læg resultatet i `row.savings`.
+
+4. For aggregated niveau:
+
+   * Filtrér til `matched` rækker med `savings.hasPrice = true`, og summer `savingsAmount` og `currentPremium` som før.
+   * Klassificér `totalSavingsAmount` med samme logik:
+
+   ```ts
+   let aggregateDirection: AggregateSavingsDirection = null;
+   if (totalSavingsAmount > 0) {
+     aggregateDirection = "cheaper";
+   } else if (totalSavingsAmount === 0) {
+     aggregateDirection = "same_price";
+   } else if (totalSavingsAmount < 0) {
+     aggregateDirection = "more_expensive";
+   }
+   ```
+
+5. Eksponér dette i company-offer comparison DTO’en, fx:
+
+   ```ts
+   {
+     // eksisterende fields...
+     totalSavingsAmount: number | null;
+     totalSavingsPercentage: number | null;
+     hasPrice: boolean; // true hvis mindst én matched policy med pris
+     savingsDirection: "cheaper" | "same_price" | "more_expensive" | null;
+   }
+   ```
+
+---
+
+### 3. API-ændringer: pr-policy og samlet
+
+1. Sørg for, at hver policy-tab i API-data får savings-feltet med `direction`, fx:
+
+   ```ts
+   policyMatches: PolicyMatchRow[]; // inkl. savings.direction
+   ```
+
+2. På selskabsniveau (samlet oversigt) skal DTO’en have:
+
+   ```ts
+   {
+     totalSavingsAmount: number | null;
+     totalSavingsPercentage: number | null;
+     hasPrice: boolean;
+     savingsDirection: "cheaper" | "same_price" | "more_expensive" | null;
+   }
+   ```
+
+3. Alle felter skal være konsistente:
+
+   * Hvis `hasPrice = false` → `totalSavingsAmount = null`, `totalSavingsPercentage = null`, `savingsDirection = null`.
+
+---
+
+### 4. UI: regler for badges, farver og tekster (MEP)
+
+Nu skal frontend bruge `direction` til at styre, hvad der vises.
+
+#### 4.1. På selskabets “Samlet oversigt”
+
+1. Hvis `hasPrice === true` og `savingsDirection === "cheaper"`:
+
+   * Vis som i dag:
+
+     * Grøn “besparelse”-badge, fx:
+
+       * **“Spar 1.200 kr/år”**
+     * Evt. procentbadge og 10-års graf.
+
+2. Hvis `hasPrice === true` og `savingsDirection === "same_price"`:
+
+   * **Ingen grøn besparelses-badge.**
+
+   * I stedet en neutral tekst, fx:
+
+     * **“Ca. samme pris som din nuværende forsikring.”**
+     * Undertekst:
+
+       * **“Fokusér på forskelle i dækning, selvrisiko og vilkår.”**
+
+   * 10-års graf:
+
+     * Kan helt skjules i MEP, eller evt. vises som neutral (flad linje).
+     * Simpelt MEP: skjul den.
+
+3. Hvis `hasPrice === true` og `savingsDirection === "more_expensive"`:
+
+   * Ingen grøn badge.
+
+   * Vis ærlig tekst, fx:
+
+     * **“Tilbuddet er dyrere end din nuværende forsikring.”**
+     * Undertekst:
+
+       * **“Det kan stadig give mening, hvis dækningen er markant bedre.”**
+
+   * Skjul 10-års besparelsesgraf.
+
+4. Hvis `hasPrice === false`:
+
+   * Som i 3.2:
+
+     * **“Pris kunne ikke aflæses automatisk.”**
+     * Ingen badges/grafer.
+
+#### 4.2. På policy-niveau (Indbo/Hus/Bil-tabs)
+
+1. Brug `row.savings.direction` til at styre visningen i hvert policys “header-kort”:
+
+   * `direction === "cheaper"`:
+
+     * Vis grøn badge:
+
+       * **“Spar X kr/år på [Indboforsikring]”**
+
+   * `direction === "same_price"`:
+
+     * Ingen grøn badge.
+     * Tekst:
+
+       * **“Ca. samme pris som din nuværende [Indboforsikring].”**
+
+   * `direction === "more_expensive"`:
+
+     * Ingen grøn badge.
+     * Tekst:
+
+       * **“Tilbuddet er dyrere end din nuværende [Indboforsikring].”**
+       * Evt. en lille note:
+
+         * **“Se om dækningen er bedre, før du tager stilling.”**
+
+   * `hasPrice === false`:
+
+     * Tekst:
+
+       * **“Pris kunne ikke aflæses automatisk for denne forsikring.”**
+
+2. Vigtigt:
+
+   * Lad være med at bruge farvekoder der antyder “bedre pris”, når `direction` ikke er `"cheaper"`.
+   * MEP: bare ingen badge og neutral tekst er fint.
+
+---
+
+### 5. Acceptance criteria
+
+**Case 1 – Tilbud er billigere (positiv besparelse)**
+
+* Eksempel:
+
+  * Current: 10.000 kr/år
+  * Offer: 8.000 kr/år
+  * `savingsAmount = 2.000`, `direction = "cheaper"`.
+* Backend:
+
+  * policy-sammenligninger og aggregated summary har:
+
+    * `hasPrice = true`, `savingsDirection = "cheaper"`.
+* UI:
+
+  * Grøn “Spar X kr/år”-badge vises.
+  * 10-års graf vises.
+  * Ingen ændring ift. nuværende happy path.
+
+**Case 2 – Tilbud er samme pris (0-difference)**
+
+* Eksempel:
+
+  * Current: 10.000 kr/år
+  * Offer: 10.000 kr/år
+  * `savingsAmount = 0`, `direction = "same_price"`.
+* Backend:
+
+  * `hasPrice = true`, `savingsDirection = "same_price"`.
+* UI:
+
+  * **Ingen** grøn “besparelse”-badge.
+  * Tekst på samlet oversigt:
+
+    * “Ca. samme pris som din nuværende forsikring.”
+  * Tekst på policyniveau:
+
+    * “Ca. samme pris som din nuværende [forsikring].”
+  * 10-års graf skjules.
+
+**Case 3 – Tilbud er dyrere (negativ “besparelse”)**
+
+* Eksempel:
+
+  * Current: 10.000 kr/år
+  * Offer: 11.500 kr/år
+  * `savingsAmount = -1.500`, `direction = "more_expensive"`.
+* Backend:
+
+  * `hasPrice = true`, `savingsDirection = "more_expensive"`.
+* UI:
+
+  * Ingen grøn badge.
+  * På samlet oversigt:
+
+    * “Tilbuddet er dyrere end din nuværende forsikring.”
+  * På policyniveau:
+
+    * “Tilbuddet er dyrere end din nuværende [forsikring].”
+  * Ingen 10-års besparelsesgraf.
+
+**Case 4 – Manglende pris (fra 3.2)**
+
+* `hasPrice = false`, `direction = null`.
+* UI viser kun “Pris kunne ikke aflæses automatisk.”
+* Ingen badges, ingen grafer, ingen NaN.
+
+**Generelt:**
+
+* Systemet må aldrig kalde noget “besparelse” eller vise grøn badge, hvis `direction !== "cheaper"`.
+* Brugeren får et ærligt billede: nogle tilbud er billigere, nogle er samme pris, nogle er dyrere – men alle kan stadig være interessante pga. dækning.
+
+---
+
+Når det her er implementeret, er hele matching & prisdelen meget mere robust og ærlig – klar MEP-adfærd uden misvisende “besparelse”-signaler.

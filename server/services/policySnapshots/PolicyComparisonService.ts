@@ -30,7 +30,9 @@ import type {
   PolicyComparisonsWithCoverage,
   ExtraOfferPolicy,
   PolicyMatchStatus,
+  SavingsDirection,
 } from "../../types/policyComparison";
+import { computeSavings } from "../../types/policyComparison";
 import { getPolicyTypeLabel } from "../../../shared/apiTypes";
 
 export class PolicyComparisonService {
@@ -215,10 +217,13 @@ export class PolicyComparisonService {
         }
       }
 
-      // Compute deltas for each offer
+      // Step 4.4: Compute deltas and savings for each offer using computeSavings helper
       const offerWithDeltas: PolicyOfferWithDelta[] = offers.map(offer => {
         const currentPrem = current?.pricing?.annualPremium ?? null;
         const offerPrem = offer.pricing?.annualPremium ?? null;
+
+        // Use the helper for full savings calculation with direction
+        const savings = computeSavings(currentPrem, offerPrem);
 
         let deltaAnnual: number | null = null;
         let savingsAnnual: number | null = null;
@@ -235,6 +240,7 @@ export class PolicyComparisonService {
           deltaAnnual,
           savingsAnnual,
           cheaperThanCurrent,
+          savings,
         };
       });
 
@@ -293,9 +299,27 @@ export class PolicyComparisonService {
     // Extra policies (missing_in_user) do NOT affect this flag
     const coversAllCurrentPolicies = missingInOffers.length === 0;
 
+    // Step 4.4: Calculate aggregate savings direction
+    let savingsDirection: SavingsDirection = null;
+    let totalSavingsPercentage: number | null = null;
+    let totalMonthlySavings: number | null = null;
+    
+    if (hasPriceData) {
+      totalMonthlySavings = totalSavings / 12;
+      totalSavingsPercentage = totalCurrentPremium > 0 ? totalSavings / totalCurrentPremium : null;
+      
+      if (totalSavings > 0) {
+        savingsDirection = "cheaper";
+      } else if (totalSavings === 0) {
+        savingsDirection = "same_price";
+      } else if (totalSavings < 0) {
+        savingsDirection = "more_expensive";
+      }
+    }
+
     console.log(`[PolicyComparisonService] Returning ${comparisons.length} rows: ` +
       `${matchedCount} matched, ${missingInOffers.length} missing_in_offer, ${extraOfferPolicies.length} extra_in_offer, ` +
-      `coversAll=${coversAllCurrentPolicies}`);
+      `coversAll=${coversAllCurrentPolicies}, savingsDirection=${savingsDirection}`);
     
     return {
       comparisons,
@@ -307,8 +331,11 @@ export class PolicyComparisonService {
       aggregatedSavings: {
         hasPrice: hasPriceData,
         totalSavings: hasPriceData ? totalSavings : null,
+        totalSavingsPercentage,
+        totalMonthlySavings,
         totalCurrentPremium: hasPriceData ? totalCurrentPremium : null,
         totalOfferPremium: hasPriceData ? totalOfferPremium : null,
+        savingsDirection,
       },
     };
   }
