@@ -163,6 +163,13 @@ export interface IStorage {
 
   // Company Comparison notified_at
   updateCompanyComparisonNotifiedAt(id: string): Promise<CompanyComparison>;
+  
+  // Step 5.1: Company Comparison notification status
+  updateCompanyComparisonNotificationState(
+    id: string, 
+    status: "pending" | "sent" | "failed" | "not_required",
+    error?: string | null
+  ): Promise<CompanyComparison>;
 }
 
 export class MemStorage implements IStorage {
@@ -2008,6 +2015,39 @@ export class DatabaseStorage implements IStorage {
     const { eq } = await import("drizzle-orm");
     const [comparison] = await db.update(companyComparisons)
       .set({ notifiedAt: new Date() })
+      .where(eq(companyComparisons.id, id))
+      .returning();
+    
+    if (!comparison) {
+      throw new Error('Company comparison not found');
+    }
+    
+    return comparison;
+  }
+
+  // Step 5.1: Company Comparison notification status
+  async updateCompanyComparisonNotificationState(
+    id: string, 
+    status: "pending" | "sent" | "failed" | "not_required",
+    error?: string | null
+  ): Promise<CompanyComparison> {
+    const { db } = await import("./db");
+    const { companyComparisons } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    
+    const updateData: Record<string, any> = {
+      notificationStatus: status,
+      notificationError: error || null,
+      updatedAt: new Date()
+    };
+    
+    // Also set notifiedAt when status is 'sent'
+    if (status === 'sent') {
+      updateData.notifiedAt = new Date();
+    }
+    
+    const [comparison] = await db.update(companyComparisons)
+      .set(updateData)
       .where(eq(companyComparisons.id, id))
       .returning();
     

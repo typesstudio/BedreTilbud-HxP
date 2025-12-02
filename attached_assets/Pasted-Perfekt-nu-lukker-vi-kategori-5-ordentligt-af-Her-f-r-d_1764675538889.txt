@@ -1,0 +1,514 @@
+Perfekt, nu lukker vi kategori 5 ordentligt af.
+Her får du **3 separate Replit-prompts** til 5.1, 5.2 og 5.3 – samme stil som de andre steps.
+
+---
+
+## Replit-prompt – Step 5.1
+
+**Sammenligning klar, men notifikationsmail fejler**
+→ Bruger kan stadig se resultater i UI, `notification_status = 'failed'`.
+
+> Vi er i Kategori 5, Step **5.1**:
+> **Når en sammenligning er blevet kørt færdig (status = 'completed'), men notifikationsmailen fejler (Resend-fejl etc.), skal:**
+>
+> * Sammenligningen stadig være tilgængelig i UI.
+> * Kun notifikationsdelen markeres som fejl: `notification_status = 'failed'`.
+> * Fejlen må ikke rulle selve comparison tilbage.
+>
+> Mål:
+>
+> * Introducere et separat “notification-state” på `company_request` eller evt. `comparison`.
+> * Sikre at `NotificationService` aldrig kan vælte den færdige sammenligning.
+> * Eksponere `notification_status` til UI, så vi kan vise fx:
+>
+>   * “Dine resultater er klar, men vi kunne ikke sende dig en e-mail.”
+
+### 1. Tilføj felter til schema for company_requests / comparisons
+
+1. Åbn `shared/schema.ts` og find tabellen for “et tilbud fra et selskab til en bruger”, typisk:
+
+   * `company_requests` (det mest oplagte sted at have notif-status), eller
+   * alternativt `comparisons` hvis det er dér, I samler status.
+2. Tilføj felter til notifikation, fx:
+
+```ts
+notificationStatus: text("notification_status")
+  .notNull()
+  .default("pending"), // "pending" | "sent" | "failed" | "not_required"
+notificationError: text("notification_error").nullable(),
+```
+
+3. Lav en migration, fx `000X_add_notification_status.sql`, der:
+
+   * Tilføjer disse kolonner.
+   * Sætter `notification_status = 'pending'` for eksisterende rows.
+   * `notification_error = NULL`.
+
+Vi bruger værdier:
+
+* `pending` – comparison er ikke færdig endnu / notifikation endnu ikke forsøgt.
+* `sent` – mail er sendt OK (kan evt. suppleres med `notified_at`, som du allerede har fra tidligere plan).
+* `failed` – mail fejlede, men comparison er stadig `completed`.
+* `not_required` – (optionel) hvis du senere har flows uden e-mail.
+
+---
+
+### 2. Gør NotificationService robust (ingen “hard fail”)
+
+1. Find din `NotificationService` / funktion hvor du i dag sender mail, fx:
+
+   * `NotificationService.sendComparisonReady(companyRequestId)`
+   * Den bruger `MagicLinkService.create()` + Resend.
+
+2. Wrap Resend-kaldet i `try/catch` og opdater `notification_status` dér:
+
+```ts
+async function sendComparisonReady(companyRequestId: string) {
+  // 1) hent company_request + brugerinfo
+  // 2) generér magic link
+
+  try {
+    await resend.emails.send({ /* ... */ });
+
+    await storage.updateCompanyRequestNotificationStatus(
+      companyRequestId,
+      "sent",
+      null
+    );
+  } catch (err) {
+    // log fejlen
+    console.error("Failed to send notification email", { err, companyRequestId });
+
+    await storage.updateCompanyRequestNotificationStatus(
+      companyRequestId,
+      "failed",
+      (err as any)?.message ?? "unknown_error"
+    );
+
+    // VIGTIGT: kast IKKE fejlen videre
+    // bare returner pænt, så comparison-flowet kan afsluttes
+  }
+}
+```
+
+3. Tilføj helper i `server/storage.ts`:
+
+```ts
+async function updateCompanyRequestNotificationStatus(
+  companyRequestId: string,
+  status: "pending" | "sent" | "failed" | "not_required",
+  error: string | null
+) { /* SQL update */ }
+```
+
+---
+
+### 3. Sørg for, at ComparisonOrchestrator altid færdiggør comparison
+
+1. Find `ComparisonOrchestrator` / det sted hvor du:
+
+   * Markerer comparison / company_request som `completed`.
+   * Kalder `NotificationService.sendComparisonReady(...)`.
+2. Sørg for at rækkefølgen er:
+
+```ts
+await markComparisonCompleted(companyRequestId); // status = 'completed'
+
+await NotificationService.sendComparisonReady(companyRequestId);
+// fejl i sendComparisonReady må IKKE påvirke completed-status
+```
+
+3. Dvs.:
+
+   * Comparison-status er det primære.
+   * Notifikation er “best effort”.
+
+---
+
+### 4. API & UI: eksponer notification_status
+
+1. Find det endpoint, der returnerer oversigten over alle selskaber for en bruger, fx:
+
+   * Tilbuds-oversigt-siden (“Tilbud oversigt”).
+2. Udvid DTO’en pr. `company_request` med:
+
+```ts
+{
+  // ...
+  comparisonStatus: "pending" | "processing" | "completed" | "failed";
+  notificationStatus: "pending" | "sent" | "failed" | "not_required";
+}
+```
+
+3. I frontend:
+
+   * Hvis `comparisonStatus === 'completed'` og `notificationStatus === 'failed'`:
+
+     * Vis fx en lille tekst under selskabet eller i toppen af siden:
+
+       **“Dine resultater er klar her i BedreTilbud, men vi kunne ikke sende dig en e-mail om det.”**
+
+   * Vigtigt: UI skal **ikke** blokere brugeren – alt data fra comparison skal vises som normalt.
+
+---
+
+### 5. Acceptance criteria
+
+* Hvis sammenligningen kører færdig og e-mail sendes OK:
+
+  * `comparisonStatus = 'completed'`
+  * `notification_status = 'sent'`
+  * UI viser data + “normal” tilstand.
+* Hvis sammenligningen kører færdig, men Resend fejler:
+
+  * `comparisonStatus = 'completed'`
+  * `notification_status = 'failed'` + `notification_error` sat.
+  * UI viser alle resultater helt normalt.
+  * Der vises en lille besked om, at mailen ikke kunne sendes, men alt er klart i appen.
+* Ingen tilfælde hvor en notifikationsfejl får `comparisonStatus` til at forblive “pending” eller skifte til “failed”, selv om alt data er klar.
+
+---
+
+## Replit-prompt – Step 5.2
+
+**Delvis succes på tværs af selskaber**
+→ Nogle selskaber: “klar”, andre “afventer” / “fejlet” med kort forklaring.
+
+> Vi er i Kategori 5, Step **5.2**:
+> **Når en bruger har sendt forespørgsel til flere selskaber, vil nogle være færdige, andre stadig mangle PDF’er, og enkelte kan være fejlet. Oversigten skal vise status pr. selskab, så brugeren kan se: “Klar” / “Afventer” / “Fejlet” med kort forklaring.**
+>
+> Mål:
+>
+> * Standardisere status for hver `company_request`.
+> * API-endpoint til “Tilbud oversigt” skal returnere en klar status pr. selskab.
+> * UI skal vise status-badges og kort beskrivende tekst pr. selskab.
+
+### 1. Standardiser status på company_request-niveau
+
+1. Åbn `shared/schema.ts` og find `company_requests`-schemaet.
+2. Sørg for, at der findes et status-felt for selve requesten, fx:
+
+```ts
+status: text("status")
+  .notNull()
+  .default("pending"),
+errorReason: text("error_reason").nullable(),
+```
+
+3. Hvis det ikke findes, tilføj det + migration:
+
+   * Mulige værdier:
+
+     * `'pending'` – sendt til selskabet, men ingen/lidt respons endnu.
+     * `'offers_in_progress'` – vi har modtaget noget (fx første PDF), men mangler mere.
+     * `'completed'` – sammenligning klar.
+     * `'failed'` – vi giver op på denne request (f.eks. gentagne fejl, ugyldige dokumenter).
+
+---
+
+### 2. Sæt company_request.status i de centrale flows
+
+1. I flowet, hvor du sender første mail til selskaber:
+
+   * Når en `company_request` oprettes:
+
+     * `status = 'pending'`.
+
+2. Når første gyldige tilbuds-PDF (med succesfuld OCR) modtages:
+
+   * Sæt `status = 'offers_in_progress'` (hvis du vil skelne), ellers behold `'pending'` indtil du er klar til `'completed'`.
+
+3. Når comparison-flowet for det selskab er lykkedes og alt relevant data er på plads:
+
+   * `status = 'completed'`.
+
+4. Hvis du har en hård fejl (f.eks. korrupte PDF’er, eller at du efter x forsøg/opgaver giver op):
+
+   * `status = 'failed'`
+   * `error_reason = 'ocr_failed' | 'invalid_offer_document' | 'timeout' | ...`
+
+**Vigtigt:** samme `status` skal **ikke** blandes sammen med `notification_status` fra 5.1 – de er to adskilte ting.
+
+---
+
+### 3. API: Tilbuds-oversigt pr. bruger
+
+1. Find det endpoint, der giver dig oversigten over alle selskaber for en bruger, fx:
+
+   * `GET /api/offers/overview` eller lignende.
+
+2. Sørg for, at hver selskabs-entry ser nogenlunde sådan ud:
+
+```ts
+type CompanyOfferOverviewItem = {
+  companyRequestId: string;
+  companyName: string;
+  logoUrl: string | null;
+
+  status: "pending" | "offers_in_progress" | "completed" | "failed";
+  statusLabel: string; // genereret backend på dansk
+  statusDescription: string; // kort forklaring på dansk
+
+  notificationStatus: "pending" | "sent" | "failed" | "not_required";
+  // evt. savingsSummary, etc.
+};
+```
+
+3. Sæt `statusLabel` + `statusDescription` backend-side, fx:
+
+```ts
+function mapCompanyRequestStatusToLabel(
+  status: string,
+  errorReason: string | null
+) {
+  switch (status) {
+    case "pending":
+      return {
+        label: "Afventer svar",
+        description: "Vi har sendt din forespørgsel til selskabet.",
+      };
+    case "offers_in_progress":
+      return {
+        label: "Tilbud på vej",
+        description:
+          "Vi har modtaget noget fra selskabet og er i gang med at læse dokumenterne.",
+      };
+    case "completed":
+      return {
+        label: "Klar til gennemgang",
+        description: "Dine resultater er klar – klik for at se sammenligningen.",
+      };
+    case "failed":
+      return {
+        label: "Der opstod en fejl",
+        description:
+          "Vi kunne ikke færdiggøre denne forespørgsel. Kontakt os, hvis du vil have hjælp.",
+      };
+    default:
+      return {
+        label: "Ukendt status",
+        description: "",
+      };
+  }
+}
+```
+
+---
+
+### 4. UI: vis status pr. selskab i oversigten
+
+1. I “Tilbud oversigt”-siden, hvor du i dag viser en liste over selskaber (kort el.lign.), tilføj:
+
+   * En badge med `statusLabel` (farve afhænger af status):
+
+     * `pending` / `offers_in_progress`: gul/orange.
+     * `completed`: grøn.
+     * `failed`: rød/grå.
+   * En kort tekst under firmanavn eller i kortet:
+
+     * `statusDescription`.
+
+2. Eksempler (tekster kommer fra backend):
+
+   * **Tryg – “Klar til gennemgang”**
+     “Dine resultater er klar – klik for at se sammenligningen.”
+
+   * **Topdanmark – “Afventer svar”**
+     “Vi har sendt din forespørgsel til selskabet.”
+
+   * **If – “Der opstod en fejl”**
+     “Vi kunne ikke færdiggøre denne forespørgsel. Kontakt os, hvis du vil have hjælp.”
+
+3. `notificationStatus` kan bruges til additional små ikoner/tooltip senere, men behøver ikke UI i MEP.
+
+---
+
+### 5. Acceptance criteria
+
+* Hvis 1 ud af 3 selskaber er færdig, 1 er i gang, 1 har fejlet, skal oversigten vise:
+
+  * Selskab A: badge “Klar til gennemgang”, bruger kan klikke ind og se sammenligning.
+  * Selskab B: badge “Tilbud på vej” eller “Afventer svar”, ingen crash, ingen tom-side.
+  * Selskab C: badge “Der opstod en fejl”, men resten af siden virker.
+
+* Bruger kan tydeligt se, at nogle selskaber er klar, selv om andre ikke er.
+
+* Ingen global loading-spinner der blokerer, til alt er færdigt – alt er per-selskab.
+
+---
+
+## Replit-prompt – Step 5.3
+
+**Snapshots af “current policer” pr. forespørgsel**
+→ Ændringer efterfølgende påvirker ikke gamle forespørgsler.
+
+> Vi er i Kategori 5, Step **5.3**:
+> **Når en bruger sender en forespørgsel til selskaber, skal sammenligningen altid være baseret på “current policer, som de så ud på det tidspunkt”. Hvis brugeren senere ændrer eller uploader nye policer, må det ikke ændre gamle sammenligninger.**
+>
+> Mål:
+>
+> * Indføre snapshots af brugerens current policer pr. `company_request`.
+> * Comparisons og UI skal bruge disse snapshots – ikke “live” policer.
+> * Gamle forespørgsler er 100% historiske og stabile.
+
+---
+
+### 1. Definér snapshot-model i schema
+
+1. Åbn `shared/schema.ts` og find modellen for “policer” / “policy snapshots”:
+
+   * Du har sandsynligvis allerede en tabel for noget a la `policy_snapshots` eller `user_policies`.
+
+2. Hvis I allerede har snapshots, udvid dem med en reference til `company_request_id`, ellers lav en ny tabel:
+
+**Option A – genbrug eksisterende snapshot-tabel:**
+
+Tilføj:
+
+```ts
+companyRequestId: uuid("company_request_id").nullable().references(() => companyRequests.id),
+snapshotKind: text("snapshot_kind")
+  .notNull()
+  .default("current_live"), // "current_live" | "current_at_request"
+```
+
+**Option B – ny tabel kun til request-snapshots (MEP):**
+
+```ts
+export const currentPolicySnapshots = pgTable("current_policy_snapshots", {
+  id: uuid("id").primaryKey().defaultRandom(),
+
+  userId: uuid("user_id").notNull().references(() => users.id),
+  companyRequestId: uuid("company_request_id").notNull().references(() => companyRequests.id),
+
+  policyType: text("policy_type").notNull(),
+  // alle felter der beskriver policen på tidspunktet:
+  premiumAmount: numeric("premium_amount", { precision: 14, scale: 2 }).nullable(),
+  coverageJson: jsonb("coverage_json").notNull(), // kopi af coverage-struct'en
+  // evt. selskabsnavn, policenummer, osv.
+  createdAt: timestamp("created_at").defaultNow(),
+});
+```
+
+3. Lav migration for den valgte løsning.
+
+---
+
+### 2. Tag snapshots når en company_request oprettes
+
+1. Find det sted, hvor en `company_request` bliver oprettet, fx:
+
+   * `CompanyRequestService.createForUser(userId, selectedCompanies, selectedPolicies)`
+   * eller route `/api/requests/create`.
+
+2. Når du har oprettet `company_request`-row, gør følgende:
+
+   * Hent brugerens aktuelle “current policer”, som skal bruges til denne request.
+
+     * Typisk policies fra `user_policies` / `policy_snapshots` med `kind = 'current'` og `status = 'active'`.
+     * Evt. filtreret på de policy-typer, du faktisk sender i forespørgslen.
+
+   * For hver af disse current policer:
+
+     * Opret en snapshot-row i `current_policySnapshots` (eller `policy_snapshots` med `snapshot_kind = 'current_at_request'`):
+
+       ```ts
+       await storage.createCurrentPolicySnapshot({
+         userId,
+         companyRequestId,
+         policyType: policy.policyType,
+         premiumAmount: policy.premiumAmount,
+         coverageJson: policy.coverageJson, // hele coverage-strukturen
+         // andre relevante felter
+       });
+       ```
+
+3. Resultat: For hver `company_request` har du nu frosne kopier af de current policer, som lå til grund for forespørgslen.
+
+---
+
+### 3. Brug snapshots i comparison i stedet for “live” current
+
+1. Find `ComparisonOrchestrator` / matching-logik, hvor du henter **current** policies til at matche mod offers:
+
+   * I dag bruger du sandsynligvis noget i stil med:
+
+     ```ts
+     const currentPolicies = await storage.getUserCurrentPolicies(userId);
+     ```
+
+2. Ændre det til:
+
+   * Når du kører comparison for en specifik `companyRequestId`, skal du hente **snapshots**:
+
+     ```ts
+     const currentSnapshots =
+       await storage.getCurrentPolicySnapshotsForCompanyRequest(companyRequestId);
+     ```
+
+   * Brug `currentSnapshots` som `currentPolicies` i hele matching/comparison:
+
+     * Dvs. policyType, premiumAmount, coverage osv. kommer fra snapshot, ikke fra live tabellen.
+
+3. Gem gerne i comparison-data (f.eks. `comparison`-row), at den er baseret på snapshots (men det er implicit, hvis du altid går via snapshots for MEP).
+
+---
+
+### 4. Sørg for, at UI også kun bruger snapshot-baserede data
+
+1. API’et til sammenlignings-siden (`/sammenligning/:id`) skal basere alle “current”-felter på snapshot-data:
+
+   * Dvs.:
+
+     * current-priser
+     * current-dækningssummer
+     * tekster i health check for current side
+
+2. Live ændringer i brugerens nuværende policer (fx bruger uploader nye policer eller sletter noget) skal **ikke** slå igennem til allerede eksisterende `comparisonId`’er.
+
+3. Hvis brugeren laver en ny forespørgsel efter at have ændret sine policer:
+
+   * Der oprettes en **ny** `company_request` med nye snapshots.
+   * Dermed bliver den nyeste sammenligning bygget på den nye tilstand – men gamle sammenligninger er urørte.
+
+---
+
+### 5. Acceptance criteria
+
+**Case 1 – Bruger sender forespørgsel, så ændrer sine policer**
+
+* Tidspunkt T1:
+
+  * Bruger har Indbo + Hus på bestemte vilkår.
+  * Opretter `company_request` til 3 selskaber.
+  * Systemet laver snapshots af Indbo + Hus for `companyRequestId = CR1`.
+* Tidspunkt T2:
+
+  * Bruger uploader ny version af Hus-policy eller skifter selskab.
+  * De live current-policer ændrer sig.
+* Resultat:
+
+  * Når brugeren åbner sammenligningen for CR1:
+
+    * Data baseres stadig på snapshots fra T1.
+    * Besparelser og dækning er uændret.
+  * En ny request (CR2) efter T2 vil bruge de nye current policer – og dermed give en ny sammenligning.
+
+**Case 2 – Bruger sletter en current policy efterfølgende**
+
+* Live `user_policies` viser måske nu kun Indbo.
+* Snapshot for `companyRequestId = CR1` indeholder stadig Indbo + Hus.
+* Sammenligning for CR1 fortsætter med at vise både Indbo- og Hus-sammenligning, fordi de var en del af requesten dengang.
+
+**Case 3 – Flere samtidige forespørgsler**
+
+* CR1 og CR2 kan have forskellige snapshots, hvis brugeren har ændret noget imellem dem.
+* UI og API kan vise begge sammenligninger side om side uden at blande tilstande sammen.
+
+---
+
+Når 5.1–5.3 er implementeret, har du:
+
+* Et robust notifikationslag der ikke kan vælte data.
+* En oversigt, der viser real-time status per selskab.
+* Historisk stabile sammenligninger, der ikke ændrer sig, når brugeren laver nye uploads.

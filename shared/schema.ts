@@ -143,6 +143,12 @@ export const companyComparisons = pgTable("company_comparisons", {
   errorMessage: text("error_message"), // Error details if failed
   notifiedAt: timestamp("notified_at"), // When user was notified about this comparison
   
+  // Step 5.1: Notification status tracking (Dec 2025)
+  // Tracks email notification separately from comparison status
+  // Comparison can be "completed" even if notification "failed"
+  notificationStatus: text("notification_status").default("pending"), // "pending" | "sent" | "failed" | "not_required"
+  notificationError: text("notification_error"), // Error message if notification failed
+  
   // Version management (Step 2.4 - Dec 2025)
   // When a revised offer triggers new comparison, old comparisons for same company pair are superseded
   isSuperseded: boolean("is_superseded").default(false).notNull(),
@@ -155,6 +161,7 @@ export const companyComparisons = pgTable("company_comparisons", {
   userIdCreatedIdx: index("company_comparisons_user_id_created_idx").on(table.userId, table.createdAt),
   userIdStatusIdx: index("company_comparisons_user_id_status_idx").on(table.userId, table.status),
   isSupersededIdx: index("company_comparisons_is_superseded_idx").on(table.isSuperseded),
+  notificationStatusIdx: index("company_comparisons_notification_status_idx").on(table.notificationStatus),
 }));
 
 // Magic links for passwordless authentication

@@ -16,7 +16,8 @@ export class NotificationService {
       return { sent: false, reason: "Sammenligning ikke fundet" };
     }
 
-    if (comparison.notifiedAt) {
+    // Step 5.1: Check notificationStatus instead of notifiedAt for idempotency
+    if (comparison.notificationStatus === 'sent') {
       console.log(`[NotificationService] Already notified for comparison ${comparisonId}, skipping`);
       return { sent: false, reason: "Allerede notificeret" };
     }
@@ -27,6 +28,7 @@ export class NotificationService {
       return { sent: false, reason: "Bruger ikke fundet" };
     }
 
+    // Create notification record for audit trail
     const notification = await storage.createNotification({
       userId: comparison.userId,
       comparisonId: comparisonId,
@@ -48,8 +50,9 @@ export class NotificationService {
 
       await this.sendEmail(user.email, user.name || "Kunde", offerCompanyName, magicLinkUrl);
 
+      // Step 5.1: Update both notification record and comparison notification status
       await storage.updateNotificationStatus(notification.id, "sent");
-      await storage.updateCompanyComparisonNotifiedAt(comparisonId);
+      await storage.updateCompanyComparisonNotificationState(comparisonId, "sent", null);
 
       console.log(`[NotificationService] Successfully sent comparison notification for ${comparisonId} to ${user.email}`);
       return { sent: true };
@@ -57,7 +60,13 @@ export class NotificationService {
       const errorMessage = error instanceof Error ? error.message : "Unknown error";
       console.error(`[NotificationService] Failed to send notification for ${comparisonId}:`, errorMessage);
       
+      // Step 5.1: Mark notification as failed but DON'T throw
+      // This ensures comparison remains "completed" even if notification fails
       await storage.updateNotificationStatus(notification.id, "failed", errorMessage);
+      await storage.updateCompanyComparisonNotificationState(comparisonId, "failed", errorMessage);
+      
+      // IMPORTANT: Return gracefully, don't throw error
+      // The comparison is still valid and accessible in UI
       return { sent: false, reason: errorMessage };
     }
   }
