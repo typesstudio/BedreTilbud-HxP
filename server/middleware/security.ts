@@ -39,10 +39,10 @@ export const securityHeaders = helmet({
     directives: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"], // Needed for Vite dev
-      styleSrc: ["'self'", "'unsafe-inline'"], // Needed for inline styles
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'], // Allow Google Fonts stylesheets
       imgSrc: ["'self'", 'data:', 'https:', 'blob:'],
-      fontSrc: ["'self'", 'data:'],
-      connectSrc: ["'self'", 'https://api.mistral.ai', 'https://api.openai.com'],
+      fontSrc: ["'self'", 'data:', 'https://fonts.gstatic.com'], // Allow Google Fonts files
+      connectSrc: ["'self'", 'https://api.mistral.ai', 'https://api.openai.com', 'wss:'], // Allow WebSocket for Vite HMR
       frameSrc: ["'none'"],
       objectSrc: ["'none'"],
       upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
