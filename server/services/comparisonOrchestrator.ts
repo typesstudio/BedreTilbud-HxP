@@ -680,6 +680,14 @@ export class ComparisonOrchestrator {
     
     const comparison = await this.storage.createCompanyComparison(comparisonRecord);
     console.log(`[ComparisonOrchestrator] Created comparison record ${comparison.id}`);
+    
+    // Step 5.3: Freeze current policy snapshots for historical stability
+    try {
+      const frozenSnapshots = await this.storage.freezeCurrentSnapshotsForComparison(comparison.id, userId);
+      console.log(`[ComparisonOrchestrator] Froze ${frozenSnapshots.length} current policy snapshots for comparison ${comparison.id}`);
+    } catch (freezeError) {
+      console.warn(`[ComparisonOrchestrator] Failed to freeze snapshots (non-fatal):`, freezeError);
+    }
 
     try {
       // Phase 3: Match policies using deterministic matcher
