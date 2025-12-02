@@ -102,18 +102,21 @@ export class HealthCheckOrchestrator {
         };
       }
       
-      // Step 1.4: Skip health check for failed documents (defective/password-protected/too-large PDFs)
-      if (document.extractionStatus === 'failed') {
-        console.log(`[HealthCheckOrchestrator] Document ${documentId} has FAILED extraction - skipping health check`, {
-          errorReason: (document as any).errorReason
-        });
+      // Step 3.1: Only process documents with completed extraction
+      // Skip pending, processing, or failed documents
+      if (document.extractionStatus !== 'completed') {
+        const status = document.extractionStatus || 'unknown';
+        const reason = (document as any).errorReason || 'still processing';
+        console.log(`[HealthCheckOrchestrator] Document ${documentId} is not ready (status: ${status}, reason: ${reason}) - skipping health check`);
         return {
           success: true,
           documentId,
           healthChecksCreated: 0,
           healthChecksFailed: 0,
           skipped: true,
-          skipReason: `Document extraction failed: ${(document as any).errorReason || 'unknown error'}`,
+          skipReason: status === 'failed' 
+            ? `Document extraction failed: ${reason}`
+            : `Document extraction not complete (status: ${status})`,
           errors: []
         };
       }

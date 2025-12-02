@@ -1,0 +1,268 @@
+Godt, så hopper vi over i **Kategori 3** og tager 3.1 ordentligt.
+
+Her får du en Replit-prompt, der kun handler om:
+
+> **3.1 Fejl og status i OCR-flowet**
+> → Konsistent `status` + `error_reason` på PDF/JSON-niveau, så UI aldrig crasher.
+
+---
+
+### Replit-prompt – Step 3.1: Konsistent status & error_reason i OCR-/extract-flow
+
+> Vi er nu i Kategori 3, Step **3.1**:
+> **Vi skal have et stabilt status- og fejl-system omkring OCR-/extraction-flowet, så UI aldrig crasher, selv hvis OCR fejler eller structured JSON mangler.**
+>
+> Målet er:
+>
+> * At alle dokumenter, der sendes gennem OCR/extraction, har en **konsistent status**: `pending`, `processing`, `completed`, `failed`.
+> * At fejl under OCR/extraction altid bliver gemt som en `error_reason` (`ocr_timeout`, `ocr_provider_error`, `json_parse_error`, …).
+> * At alle API-endpoints og health-check/comparison-flowet ved, hvordan de skal håndtere `pending` / `failed` uden at antage, at der altid findes gyldigt JSON.
+> * At frontend kan læne sig op ad disse felter og aldrig eksploderer på `undefined`/`null`.
+
+> **NB:** Hvis du allerede har felter som `processing_status` og `error_reason` (fx fra Step 1.4), så genbrug dem og gør dem til den fælles sandhed for OCR/extraction-status. Hvis ikke – så opret dem nu.
+
+---
+
+### 1. Kortlæg OCR-/extraction-pipelinen
+
+1. Find de centrale steder i backenden, hvor PDF → tekst/JSON sker.
+   Typisk:
+
+   * En service eller funktioner med navne som `extractDocument`, `runOcr`, `processDocument`, `extractPoliciesFromDocument`, `OcrService`, `ExtractionService`, `Mistral/Eden/OCR`.
+   * Det kan være kaldt fra en job-queue, en webhook-handler eller direkte fra upload-flowet.
+2. Identificér:
+
+   * Hvor i koden vi **starter** OCR/extraction for et dokument (`documentId` / `offerDocumentId`).
+   * Hvor resultatet (structured JSON) gemmes – fx:
+
+     * En tabel til ekstraheret data (snapshots, policy_data osv.).
+     * Eller en JSON-kolonne direkte på `documents` / `offer_documents`.
+
+Notér filerne/funktionerne – vi skal bruge dem til at sætte status de rigtige steder.
+
+---
+
+### 2. Standardiser status-/fejl-felter i schema (PDF-niveau)
+
+1. Åbn `shared/schema.ts` og find de relevante tabeller:
+
+   * For **brugerens policer** (nu hvor upload er implementeret): `documents` eller lign.
+   * For **selskabets tilbuds-PDF’er**: fx `insurance_offers_pdf` / `offer_documents`.
+2. Tjek om der allerede findes felter som:
+
+   * `processing_status`, `status`, `ocrStatus`
+   * `error_reason`, `ocrError`, o.l.
+3. Hvis der **allerede** findes noget à la:
+
+   ```ts
+   processingStatus: text("processing_status").notNull().default("pending")
+   errorReason: text("error_reason").nullable()
+   ```
+
+   * Så **genbrug dem** som vores standard.
+4. Hvis ikke, tilføj felter til begge tabeller, fx:
+
+   ```ts
+   processingStatus: text("processing_status").notNull().default("pending"),
+   errorReason: text("error_reason").nullable(),
+   ```
+5. Lav migrations der:
+
+   * Tilføjer disse felter.
+   * Sætter default til `'pending'` for eksisterende rækker.
+   * Evt. backfiller åbenlyst “færdige” dokumenter til `processing_status = 'completed'` hvis du kan detektere det nemt (kan også gøres senere).
+
+Vi bruger statusværdierne:
+
+* `pending` – oprettet, men OCR ikke startet
+* `processing` – OCR/extraction kører lige nu
+* `completed` – OCR/extraction er fuldført, og JSON er gemt
+* `failed` – OCR/extraction fejlede (se `error_reason` for detaljer)
+
+---
+
+### 3. Sæt status korrekt gennem hele OCR-flowet
+
+Vi vil have en klar “state machine”.
+
+1. Når et dokument bliver klar til OCR (dvs. lige inden du starter extraction-jobbet):
+
+   * Sæt `processing_status = 'processing'` for den relevante record:
+
+     * For bruger-PDF: `documents`
+     * For tilbuds-PDF: `offer_documents` / `insurance_offers_pdf`
+2. Wrap det faktiske OCR-/extraction-kald i en `try/catch`, fx:
+
+   ```ts
+   try {
+   ```
+
+> // 1) kald OCR/AI provider
+> // 2) parse svar til structured JSON
+> // 3) gem JSON/resultat i DB
+>
+> await markDocumentProcessingStatus(documentId, "completed", null);
+> } catch (err) {
+> const { status, reason } = mapOcrErrorToStatusAndReason(err);
+> await markDocumentProcessingStatus(documentId, "failed", reason);
+> // evt. log fejl
+> }
+
+````
+
+3. Implementér en helper til at opdatere status, fx:
+```ts
+async function markDocumentProcessingStatus(
+  documentId: string,
+  status: "pending" | "processing" | "completed" | "failed",
+  errorReason: string | null
+) { ... }
+````
+
+* Sørg for at `errorReason` nulstilles til `null`, når status sættes til `processing` eller `completed`.
+
+4. Implementér en lille mapper til fejl → `error_reason`, fx:
+
+   ```ts
+   function mapOcrErrorToStatusAndReason(err: unknown): {
+     status: "failed";
+     reason: string;
+   } {
+     const message = (err as any)?.message ?? "";
+     // du kan differentiere lidt:
+     if (message.toLowerCase().includes("timeout")) {
+       return { status: "failed", reason: "ocr_timeout" };
+     }
+     if (message.toLowerCase().includes("rate limit")) {
+       return { status: "failed", reason: "ocr_rate_limited" };
+     }
+     if (message.toLowerCase().includes("invalid json")) {
+       return { status: "failed", reason: "json_parse_error" };
+     }
+     return { status: "failed", reason: "ocr_failed" };
+   }
+   ```
+
+Pointen: **ingen uncaught exceptions** må efterlade dokumentet i “limbo” – vi ender altid på `completed` eller `failed`.
+
+---
+
+### 4. Structured JSON-niveau: status + error
+
+Hvis I har en separat tabel / model til extracted JSON (fx `document_extractions`, `policy_snapshots`):
+
+1. Tjek om der er felter til status/error dér også. Hvis ikke, tilføj:
+
+   ```ts
+   extractionStatus: text("extraction_status").notNull().default("pending"),
+   extractionError: text("extraction_error").nullable(),
+   ```
+2. Når OCR/AI svarer med JSON:
+
+   * I succes-path:
+
+     * Gem JSON’et.
+     * Sæt `extraction_status = 'completed'`, `extraction_error = NULL`.
+   * I fejl-path (fx JSON ikke kan parses, eller schema-validering fejler selvom selve OCR-kaldet gik igennem):
+
+     * Sæt `extraction_status = 'failed'`, `extraction_error = 'json_parse_error'` eller lignende.
+     * Overvej også at sætte PDF’ens `processing_status = 'failed'` og `error_reason = 'json_parse_error'`, så alt er alignet.
+
+Hvis I ikke har en separat tabel, men blot en JSON-kolonne på dokumentet, så kan du springe dette trin over – PDF-status er vigtigst.
+
+---
+
+### 5. Sikr at health check & sammenligning kun arbejder med `completed`
+
+Nu skal vi gøre resten af systemet robust mod “halvfærdige” dokumenter.
+
+1. Find alle queries der:
+
+   * Henter dokumenter til health check (“forsikrings tjek”).
+   * Henter dokumenter/tilbud til sammenligninger.
+
+2. Tilføj eller stram filtrene:
+
+   * Kun dokumenter hvor `processing_status = 'completed'` må behandles som “fuldt klar” input.
+   * Hvis du har extraction/status på JSON-niveau, så evt. `extraction_status = 'completed'` også.
+
+3. I health check- og comparison-orchestrators:
+
+   * Indbyg et check:
+
+     * Hvis et dokument ikke er `completed`:
+
+       * Spring det over / markér det som “ikke klar endnu” i output.
+       * Smid ikke en exception, der får hele flowet til at fejle.
+   * Hvis du allerede har aggregatorer (fx samlet oversigt over alle policer), så sørg for, at de kan tåle, at nogle policer ikke har data endnu.
+
+---
+
+### 6. UI-sikkerhed: antag aldrig at JSON findes
+
+Frontend skal ikke nødvendigvis ændres meget i denne opgave, men vi vil sikre, at den aldrig crasher på `undefined`.
+
+1. Find de komponenter, der viser:
+
+   * Health check for en policy.
+   * Sammenligningstabeller.
+   * Dækningsoversigt, highlights osv.
+
+2. I deres props / data mapping skal du altid have noget i stil med:
+
+   * Hvis `processing_status === 'pending' || 'processing'`:
+
+     * Vis en “Vi er i gang med at læse din PDF …”-state.
+   * Hvis `processing_status === 'failed'`:
+
+     * Vis en simpel fejltekst i stedet for at prøve at rendere felter fra JSON.
+
+   Tekstforslag på dansk (kan bruges som basis):
+
+   * Pending/processing:
+
+     * **“Vi er i gang med at læse din forsikring. Prøv at genindlæse siden om lidt.”**
+   * Failed generelt:
+
+     * **“Vi kunne desværre ikke læse denne PDF automatisk. Prøv at uploade en ny version eller kontakt os, hvis problemet fortsætter.”**
+
+3. Sørg for, at komponenterne **tjekker for null/undefined** før de forsøger at tilgå felter fra structured JSON.
+
+   * Fx `if (!policyData || processingStatus !== "completed") return <Fejl/Loading>`.
+
+---
+
+### 7. Acceptance criteria
+
+**Teknisk:**
+
+* For enhver PDF der går gennem OCR/extraction, ender `processing_status` altid i én af fire værdier:
+
+  * `pending`, `processing`, `completed`, `failed`.
+* Hvis en fejl opstår i OCR-kaldet eller parsing, bliver:
+
+  * `processing_status = 'failed'`
+  * `error_reason` sat til en meningsfuld slug (`ocr_timeout`, `ocr_failed`, `json_parse_error`, …).
+* Health check- og comparison-flowet behandler **kun** dokumenter med `processing_status = 'completed'`.
+* Der kastets ingen uncaught exceptions i OCR-flowet, der får hele job’et til at dø uden at opdatere status.
+
+**Fra et produktperspektiv:**
+
+* Hvis OCR/extraction fejler for en PDF:
+
+  * UI crasher ikke.
+  * Brugerens andre policer / tilbud vises stadig normalt.
+  * Den konkrete policy/dokument vises med en kort fejlbesked fremfor et defekt kort.
+* Hvis et dokument endnu ikke er færdigbehandlet:
+
+  * UI viser en “vi er i gang” state, ikke tomme felter eller en runtime-fejl.
+
+---
+
+Når de har implementeret det her, giver det mening at lave en lille test:
+
+1. Simulér en OCR-fejl (kast en exception i provider-kaldet).
+2. Se at `processing_status` bliver `failed + error_reason`.
+3. Åbn UI og verificér, at siden stadig loader og viser de andre ting – og at den specifikke policy ikke får hele appen til at vælte.
+
+Når 3.1 føles stabil, kan vi tage **3.2: manglende / tvetydig præmie** som næste step.

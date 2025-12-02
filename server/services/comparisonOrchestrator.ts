@@ -324,9 +324,12 @@ export class ComparisonOrchestrator {
     const allPolicies: any[] = [];
     
     for (const doc of documents) {
-      // Step 1.4: Skip failed documents (defective/password-protected/too-large PDFs)
-      if (doc.extractionStatus === 'failed') {
-        console.log(`[ComparisonOrchestrator] Skipping failed document ${doc.id} (reason: ${(doc as any).errorReason || 'unknown'})`);
+      // Step 3.1: Only process documents with completed extraction
+      // Skip pending, processing, or failed documents
+      if (doc.extractionStatus !== 'completed') {
+        const status = doc.extractionStatus || 'unknown';
+        const reason = (doc as any).errorReason || 'still processing';
+        console.log(`[ComparisonOrchestrator] Skipping current document ${doc.id} (status: ${status}, reason: ${reason})`);
         continue;
       }
       
@@ -381,9 +384,12 @@ export class ComparisonOrchestrator {
     const allPolicies: any[] = [];
     
     for (const doc of documents) {
-      // Step 1.4: Skip failed documents (defective/password-protected/too-large PDFs)
-      if (doc.extractionStatus === 'failed') {
-        console.log(`[ComparisonOrchestrator] Skipping failed document ${doc.id} (reason: ${(doc as any).errorReason || 'unknown'})`);
+      // Step 3.1: Only process documents with completed extraction
+      // Skip pending, processing, or failed documents
+      if (doc.extractionStatus !== 'completed') {
+        const status = doc.extractionStatus || 'unknown';
+        const reason = (doc as any).errorReason || 'still processing';
+        console.log(`[ComparisonOrchestrator] Skipping offer document ${doc.id} (status: ${status}, reason: ${reason})`);
         continue;
       }
       

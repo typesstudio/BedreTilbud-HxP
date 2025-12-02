@@ -323,6 +323,14 @@ export default function ProfilePage() {
                                 Ukendt dokument
                               </span>
                             )}
+                            {(doc.extractionStatus === 'pending' || doc.extractionStatus === 'processing') && (
+                              <span 
+                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                                data-testid={`badge-processing-doc-${doc.id}`}
+                              >
+                                Behandler...
+                              </span>
+                            )}
                             {doc.extractionStatus === 'failed' && (
                               <span 
                                 className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
@@ -338,6 +346,11 @@ export default function ProfilePage() {
                           {doc.documentKind === 'unknown' && (
                             <span className="w-full text-caption font-caption text-amber-600 dark:text-amber-400" data-testid={`text-unknown-hint-${doc.id}`}>
                               Vi kunne ikke genkende dette som en forsikringspolice. Prøv at uploade selve policen.
+                            </span>
+                          )}
+                          {(doc.extractionStatus === 'pending' || doc.extractionStatus === 'processing') && (
+                            <span className="w-full text-caption font-caption text-blue-600 dark:text-blue-400" data-testid={`text-processing-hint-${doc.id}`}>
+                              Vi er i gang med at læse din forsikring. Prøv at genindlæse siden om lidt.
                             </span>
                           )}
                           {doc.extractionStatus === 'failed' && doc.errorReason === 'file_too_large' && (

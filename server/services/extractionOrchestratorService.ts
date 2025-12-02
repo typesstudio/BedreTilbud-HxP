@@ -77,6 +77,54 @@ interface ExtractionStagesData {
   };
 }
 
+type ExtractionStatus = "pending" | "processing" | "completed" | "failed";
+type ErrorReason = 
+  | "ocr_timeout" 
+  | "ocr_rate_limited" 
+  | "ocr_provider_error" 
+  | "ocr_failed"
+  | "json_parse_error" 
+  | "segmentation_failed"
+  | "extraction_failed"
+  | "validation_failed"
+  | "file_not_found"
+  | "file_too_large"
+  | "pdf_password_protected"
+  | "pdf_corrupt"
+  | "unknown_error";
+
+function mapErrorToReason(error: unknown): ErrorReason {
+  // Handle string errors, error.message, error.code, and error.toString()
+  let message = "";
+  
+  if (typeof error === "string") {
+    message = error.toLowerCase();
+  } else if (error instanceof Error) {
+    message = error.message.toLowerCase();
+  } else if (error && typeof error === "object") {
+    // Check for error.message, error.code, or try toString()
+    const errorObj = error as any;
+    if (errorObj.message) message = String(errorObj.message).toLowerCase();
+    if (errorObj.code) message += " " + String(errorObj.code).toLowerCase();
+    if (!message && errorObj.toString) message = String(errorObj.toString()).toLowerCase();
+  }
+  
+  if (message.includes("timeout")) return "ocr_timeout";
+  if (message.includes("rate limit") || message.includes("429")) return "ocr_rate_limited";
+  if (message.includes("provider") || message.includes("api")) return "ocr_provider_error";
+  if (message.includes("json") || message.includes("parse")) return "json_parse_error";
+  if (message.includes("segment")) return "segmentation_failed";
+  if (message.includes("extract")) return "extraction_failed";
+  if (message.includes("valid")) return "validation_failed";
+  if (message.includes("not found")) return "file_not_found";
+  if (message.includes("too large") || message.includes("size")) return "file_too_large";
+  if (message.includes("password") || message.includes("encrypted")) return "pdf_password_protected";
+  if (message.includes("corrupt") || message.includes("invalid pdf")) return "pdf_corrupt";
+  if (message.includes("ocr")) return "ocr_failed";
+  
+  return "unknown_error";
+}
+
 export class ExtractionOrchestratorService {
   private storage: IStorage;
   private version = "2.1.0"; // Updated for two-step pipeline
@@ -86,12 +134,28 @@ export class ExtractionOrchestratorService {
 
   constructor(storage: IStorage) {
     this.storage = storage;
-    // Default to NEW two-step pipeline (better quality). Set ENABLE_TWO_STEP_EXTRACTION=false to use legacy.
     this.useTwoStepPipeline = process.env.ENABLE_TWO_STEP_EXTRACTION !== 'false';
-    // Enable two-phase health check architecture (Phase 1: PolicyExtractor, Phase 2: HealthCheckAnalyst)
     this.useTwoPhaseHealthCheck = process.env.ENABLE_TWO_PHASE_HEALTHCHECK === 'true';
     console.log(`[Orchestrator] Two-step pipeline: ${this.useTwoStepPipeline ? 'ENABLED (v2.1.0)' : 'DISABLED (legacy v2.0.0)'}`);
     console.log(`[Orchestrator] Two-phase health check: ${this.useTwoPhaseHealthCheck ? 'ENABLED' : 'DISABLED'}`);
+  }
+
+  private async markDocumentStatus(
+    documentId: string,
+    status: ExtractionStatus,
+    errorReason: ErrorReason | null = null,
+    additionalUpdates: Record<string, any> = {}
+  ): Promise<void> {
+    try {
+      await this.storage.updateDocument(documentId, {
+        extractionStatus: status,
+        errorReason: status === "failed" ? errorReason : null,
+        ...additionalUpdates
+      });
+      console.log(`[Orchestrator] Document ${documentId} status updated to: ${status}${errorReason ? ` (reason: ${errorReason})` : ''}`);
+    } catch (updateError) {
+      console.error(`[Orchestrator] Failed to update document status:`, updateError);
+    }
   }
 
   private async persistStageData(documentId: string): Promise<void> {
@@ -130,11 +194,10 @@ export class ExtractionOrchestratorService {
       if (options.forceReprocess) {
         const existingSnapshots = await this.storage.getOfferSnapshotsByDocument(documentId);
         if (existingSnapshots.length > 0) {
-          console.log(`[Orchestrator] Force reprocess: deleting ${existingSnapshots.length} existing snapshots`);
-          // Note: We don't have a bulk delete method, but we can document this for future optimization
-          // For now, log that we're superseding old data
-          console.log(`[Orchestrator] Old snapshots will be superseded by new extraction (version ${this.version})`);
+          console.log(`[Orchestrator] Force reprocess: superseding ${existingSnapshots.length} existing snapshots`);
         }
+        // Step 3.1: Reset status to pending for forceReprocess
+        await this.markDocumentStatus(documentId, "pending", null, { totalPoliciesExtracted: null });
       } else {
         // Check if already processed
         const existingSnapshots = await this.storage.getOfferSnapshotsByDocument(documentId);
@@ -154,6 +217,9 @@ export class ExtractionOrchestratorService {
           };
         }
       }
+
+      // Step 3.1: Mark document as 'processing' before OCR work begins
+      await this.markDocumentStatus(documentId, "processing");
 
       // Stage 1: OCR Extraction
       const ocrStage = this.createStage("ocr_extraction");
@@ -175,11 +241,10 @@ export class ExtractionOrchestratorService {
         console.log(`[Orchestrator] Document ${documentId} classified as UNKNOWN - stopping pipeline`);
         console.log(`[Orchestrator] Reason: ${classificationResult.reason}`);
         
-        // Update document with classification result
-        await this.storage.updateDocument(documentId, {
+        // Step 3.1: Mark as completed (not failed) - it's valid to have non-insurance documents
+        await this.markDocumentStatus(documentId, "completed", null, {
           documentKind: 'unknown',
           documentKindConfidence: classificationResult.confidence,
-          extractionStatus: 'completed',
           totalPoliciesExtracted: 0,
         });
         
@@ -271,6 +336,11 @@ export class ExtractionOrchestratorService {
         policyExtractorStage
       );
 
+      // Step 3.1: Mark document as completed with policy count
+      await this.markDocumentStatus(documentId, "completed", null, {
+        totalPoliciesExtracted: snapshots.length
+      });
+
       return {
         success: true,
         documentId,
@@ -280,6 +350,11 @@ export class ExtractionOrchestratorService {
 
     } catch (error) {
       console.error(`[Orchestrator] Pipeline failed for document ${documentId}:`, error);
+      
+      // Step 3.1: Mark document as failed with error reason
+      const errorReason = mapErrorToReason(error);
+      await this.markDocumentStatus(documentId, "failed", errorReason);
+      
       return {
         success: false,
         documentId,

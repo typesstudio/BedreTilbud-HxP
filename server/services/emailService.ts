@@ -439,6 +439,7 @@ export class EmailService {
               fs.writeFileSync(filePath, pdfBuffer);
               
               // Create document with fileHash for future duplicate detection
+              // Step 3.1: Create with 'pending' status - orchestrator will set to 'processing'
               const document = await storage.createDocument({
                 userId: existingThread.userId,
                 fileName,
@@ -446,7 +447,7 @@ export class EmailService {
                 fileSize: pdfBuffer.length,
                 fileHash, // Store hash for duplicate detection
                 ocrRawResponse: null, // Will be populated by orchestrator
-                extractionStatus: 'processing',
+                extractionStatus: 'pending',
                 documentType: 'offer',
                 companyId: existingThread.companyId
               });

@@ -638,6 +638,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
           
           // Create document placeholder (orchestrator will populate OCR data)
+          // Step 3.1: Create with 'pending' status - orchestrator will set to 'processing'
           document = await storage.createDocument({
             userId,
             fileName: file.originalname,
@@ -645,7 +646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             fileSize: file.size,
             fileHash, // Store the file hash for duplicate detection
             ocrRawResponse: null, // Will be populated by orchestrator
-            extractionStatus: 'processing',
+            extractionStatus: 'pending',
             documentType,
             companyId: documentType === 'offer' ? req.body.companyId : undefined
           });
@@ -1160,6 +1161,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         try {
           console.log(`[Reprocess] Processing document with new 2-step pipeline: ${doc.fileName}`);
           
+          // Step 3.1: Reset status to 'pending' before reprocessing
+          await db
+            .update(documentsTable)
+            .set({ extractionStatus: 'pending', errorReason: null })
+            .where(eq(documentsTable.id, doc.id));
+          
           // Run NEW extraction pipeline (OCR → Segmentation → Per-segment Extraction)
           const { ExtractionOrchestratorService } = await import('./services/extractionOrchestratorService');
           const orchestrator = new ExtractionOrchestratorService(storage);
@@ -1169,16 +1176,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             throw new Error(orchestratorResult.error || 'Extraction pipeline failed');
           }
           
+          // Step 3.1: Orchestrator already updated status to 'completed' with totalPoliciesExtracted
           console.log(`[Reprocess] Extraction completed: ${orchestratorResult.snapshots.length} policies found`);
-          
-          // Update document with completed status
-          await db
-            .update(documentsTable)
-            .set({ 
-              extractionStatus: 'completed',
-              totalPoliciesExtracted: orchestratorResult.snapshots.length
-            })
-            .where(eq(documentsTable.id, doc.id));
 
           // Create legacy policies from OfferSnapshots
           const createdPolicies = [];
