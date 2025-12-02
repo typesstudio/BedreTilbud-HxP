@@ -1,0 +1,251 @@
+Nice, så tager vi den sidste i kategori 3 – den er vigtig for at undgå “alt eller intet”-fejl på multi-PDF’er 💾
+
+Her er en fokuseret Replit-prompt til:
+
+> **3.3 Multi-policy PDF hvor ikke alle bliver genkendt**
+> → Ukendte dele må ikke vælte resten; bare skip dem i matching.
+
+---
+
+### Replit-prompt – Step 3.3: Multi-policy PDF hvor ikke alle bliver genkendt (skip ukendte i matching)
+
+> Vi er nu i Kategori 3, Step **3.3**:
+> **Når en PDF indeholder flere policer (multi-policy PDF), men kun nogle af dem bliver korrekt klassificeret (fx Hus + Bil, men et ekstra “ukendt modul” eller en type vi ikke understøtter), må det ikke få hele dokumentet eller hele flowet til at fejle.**
+>
+> Mål:
+>
+> * En multi-policy PDF kan give 1..N “policy units” tilbage fra extraction.
+> * Nogle af disse kan være **ukendte** / unsupported (`policyType = 'unknown'` eller fx “landbrug”, som vi ikke understøtter endnu).
+> * Disse ukendte skal:
+>
+>   * gemmes, men markeres som “ignorerede/unknown type”
+>   * **ikke** indgå i matching, health check eller sammenligninger
+>   * **ikke** få dokumentet til at få `processing_status = 'failed'`
+> * De kendte policer (Bil/Hus/Indbo/Ulykke/Rejse) skal fortsat køre health check + matching helt normalt.
+
+---
+
+### 1. Kortlæg, hvordan multi-policy PDF’er repræsenteres i dag
+
+1. Find den del af extraction/output, hvor en PDF splittes op i flere policer, fx:
+
+   * En struktur som `ExtractedPolicy[]`, `policies: Policy[]`, `policySnapshots`, etc.
+   * Det vil typisk være dér, hvor AI/ocr-output mappes til:
+
+     * `policyType` (indbo/hus/bil/ulykke/rejse/…)
+     * `coverageItems`, `premium_amount`, osv.
+2. Find det schema i `shared/schema.ts`, der repræsenterer **en enkelt policy** efter extraction:
+
+   * fx `extracted_policies`, `policy_snapshots`, `user_policies`, `offer_policies` eller lignende.
+   * Det skal have noget i stil med:
+
+     * `policyType` / `insuranceType`
+     * reference til source-dokument (`document_id` / `offer_document_id`).
+
+Vi skal lave ændringer på *policy-niveau*, ikke PDF-niveau.
+
+---
+
+### 2. Introducér en status / type-markering på policy-niveau
+
+Vi vil eksplicit markere, hvilke policer der er:
+
+* “normale” / usable
+* “unknown type” / skal ignoreres i matching
+
+1. I schema-definitionen for den tabel, der repræsenterer en **ekstraheret policy** (for både bruger og tilbud), tilføj et felt, fx:
+
+```ts
+status: text("status").notNull().default("active"),
+policyType: text("policy_type").notNull(), // eksisterer sandsynligvis allerede
+```
+
+Hvis `status` allerede findes, så genbrug det. Ellers:
+
+* Brug værdier som:
+
+  * `'active'` – normal, understøttet policy
+  * `'unknown_type'` – policy i PDF’en, men ikke én vi forstår/understøtter
+  * (Evt. `'ignored'` senere, hvis I vil have flere varianter)
+
+2. Lav migration, der:
+
+   * Tilføjer `status`-kolonnen med default `'active'` for eksisterende rækker.
+
+---
+
+### 3. Klassificering: sæt `policyType = 'unknown'` + `status = 'unknown_type'` i stedet for at fejle
+
+I extraction-mappingen fra OCR/AI-JSON → policies:
+
+1. Find den kode, der bestemmer `policyType` for hver policy – typisk noget a la:
+
+```ts
+const policyType = classifyPolicyType(aiOutputSegment); // returns "indbo" | "hus" | "bil" | ...
+```
+
+2. Udvid `classifyPolicyType` (eller efterfølgende logik), så den:
+
+   * Returnerer kun de typer, I understøtter, fx:
+
+     * `'indbo' | 'hus' | 'bil' | 'ulykke' | 'rejse'`
+   * OG håndterer lav confidence / ukendte typer ved at returnere fx `'unknown'`.
+
+3. Når du mapper til DB-model:
+
+   ```ts
+   const supportedTypes = ["indbo", "hus", "bil", "ulykke", "rejse"] as const;
+
+   const rawType = classifyPolicyType(segment); // kan være "indbo", "hus", "landbrug", "unknown", etc.
+
+   let policyType: string;
+   let status: "active" | "unknown_type";
+
+   if (!rawType || !supportedTypes.includes(rawType as any)) {
+     policyType = "unknown";
+     status = "unknown_type";
+   } else {
+     policyType = rawType;
+     status = "active";
+   }
+
+   // Gem policy med policyType + status
+   ```
+
+4. Det vigtigste:
+
+   * **Kast ikke en exception**, hvis én policy i arrayet er ukendt.
+   * Fortsæt gennem alle policies i PDF’en; kun de understøttede bliver `active`.
+
+PDF’en som helhed skal stadig kunne få `processing_status = 'completed'`, selv hvis nogle policies er `unknown_type`.
+
+---
+
+### 4. Matching & health check: filtrér ukendte policies fra
+
+Nu skal vi sikre, at disse `unknown_type` policies ikke bruges til noget, der kræver en kendt type.
+
+1. Find `PolicyMatchingService` / matching-logikken, hvor policies parres:
+
+   * Brugerens current policer vs. offers
+   * Typisk noget a la:
+
+     ```ts
+     const currentPolicies = getUserPolicies(userId);
+     const offerPolicies = getOfferPolicies(companyRequestId);
+     ```
+
+2. Tilføj filter dér, hvor listerne bygges:
+
+   ```ts
+   const supportedTypes = ["indbo", "hus", "bil", "ulykke", "rejse"];
+
+   const eligibleCurrentPolicies = currentPolicies.filter(
+     p =>
+       supportedTypes.includes(p.policyType) &&
+       p.status === "active"
+   );
+
+   const eligibleOfferPolicies = offerPolicies.filter(
+     p =>
+       supportedTypes.includes(p.policyType) &&
+       p.status === "active"
+   );
+   ```
+
+3. Brug kun `eligibleCurrentPolicies` og `eligibleOfferPolicies` i matching-logic.
+
+4. For health check / “forsikringstjek” (brugerens egne policer):
+
+   * Der hvor du bygger health check-lister, skal du også kun bruge policies hvor:
+
+     * `status = 'active'`
+     * `policyType` i den understøttede liste.
+
+---
+
+### 5. Aggregation & UI: håndtér delvise matches
+
+Vi vil undgå at hele selskabstilbuddet ser “tomt” ud, hvis bare én del er ukendt.
+
+1. I de endpoints, der bygger:
+
+   * “Samlet oversigt”-tab for et selskab
+   * Individuelle policy-tabs (Indbo/Hus/Bil/…)
+
+   skal du:
+
+   * Basere dig på de `active` policies og comparisons.
+   * Ikke antage, at “alle policer i PDF’en” blev successfully mappet.
+
+2. Hvis en multi-policy PDF kun resulterer i 1–2 kendte policies:
+
+   * Vis blot 1–2 policy-tabs.
+   * Lad være med at fejle fordi “rejse” ikke blev fundet/mappet.
+   * Evt. (ikke krav for denne opgave) kan du senere tilføje en lille note:
+
+     * “Vi kunne ikke genkende alle dele af tilbuddet automatisk.”
+
+3. Vigtig detalje: PDF-niveau `processing_status` må forblive `'completed'`, selv om én policy i den er `unknown_type`.
+
+   * `failed` på dokumentet bør kun bruges, når **hele** OCR/extraction fejler.
+
+---
+
+### 6. Acceptance criteria
+
+**Case 1 – Multi-policy bruger-PDF med både kendte og ukendte typer**
+
+* PDF indeholder fx: Indbo, Hus + et “specialprodukt” vi ikke understøtter.
+* Extraction output: 3 policies.
+
+  * Indbo → `policyType = 'indbo'`, `status = 'active'`
+  * Hus → `policyType = 'hus'`, `status = 'active'`
+  * Special → `policyType = 'unknown'`, `status = 'unknown_type'`
+* `processing_status` for dokumentet = `'completed'`.
+* Health check:
+
+  * Viser kun Indbo og Hus.
+  * Ignorerer special-produktet uden crash.
+
+**Case 2 – Multi-policy tilbuds-PDF med både kendte og ukendte typer**
+
+* Offer-PDF indeholder fx: Bil, Hus + en “tilvalgsdækning” vi ikke forstår.
+* Extraction output:
+
+  * Bil + Hus → `status = 'active'`, kendte types.
+  * Tilvalg → `policyType = 'unknown'`, `status = 'unknown_type'`.
+* Matching & comparisons:
+
+  * Brugerens Bil/Hus matches til offer Bil/Hus.
+  * Ingen attempt på at matche “tilvalg”, ingen crash.
+* UI:
+
+  * Viser Bil- og Hus-sammenligninger.
+  * Ingen 500-fejl, selv om der var en ekstra ukendt bid i PDF’en.
+
+**Case 3 – PDF hvor *alle* policies er ukendte**
+
+* Alle extracted policer for både user eller offer får `policyType = 'unknown'` + `status = 'unknown_type'`.
+* `processing_status` på PDF’en kan stadig være `'completed'` (vi læste filen, men intet relevant).
+* Health check / comparisons:
+
+  * Ser, at der ingen `active` policies med kendte typer er → returnerer tomt/ingen sammenligninger.
+  * UI viser fx:
+
+    * “Vi kunne ikke genkende nogen relevante forsikringer i dette dokument.” (kan laves i separat UI-opgave)
+  * Ingen crash.
+
+**Generelt:**
+
+* Ukendte policer (types vi ikke støtter eller meget tvivlsom klassifikation) må aldrig få hele dokumentet eller hele requestens sammenligning til at fejle.
+* Kendte policer fra samme PDF behandles normalt.
+
+---
+
+Når dev’en har implementeret det her, er en god mini-test:
+
+1. Fake en extraction-respons med fx 3 policies, hvor én har en type, I ikke understøtter.
+2. Se at health check og sammenligning kun viser de 2 kendte – og at intet fejler på den ukendte.
+
+Når kategori 3 (3.1–3.3) er på plads, er vi klar til at gå videre til **Kategori 4: Matching & sammenligning** – f.eks. 4.1 “Tilbud, der ikke dækker alle brugerens policer”.

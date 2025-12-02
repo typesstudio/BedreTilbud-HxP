@@ -247,8 +247,13 @@ export const policySnapshots = pgTable("policy_snapshots", {
   // Core classification
   kind: text("kind").notNull(), // "current" or "offer" - where this policy came from
   companyName: text("company_name").notNull(), // e.g., "Lærerstandens Brandforsikring", "Privatsikring"
-  policyType: text("policy_type").notNull(), // "hus", "fritidshus", "indbo", "ulykke", etc.
+  policyType: text("policy_type").notNull(), // "hus", "fritidshus", "indbo", "ulykke", etc. OR "unknown" for unsupported types
   coverageAddress: text("coverage_address"), // For hus/fritidshus - used for matching
+  
+  // Step 3.3: Status for handling unknown/unsupported policy types in multi-policy PDFs
+  // "active" - normal, supported policy type (eligible for matching/health check)
+  // "unknown_type" - policy exists in PDF but type is not supported (skip in matching)
+  status: text("status").notNull().default("active"),
   
   // Version management (Step 1.2 - Dec 2025)
   // For "current" policies: is_active=true means this is THE active policy for this (userId, policyType)
@@ -286,6 +291,9 @@ export const policySnapshots = pgTable("policy_snapshots", {
   // Index for finding active current policies (Step 1.2)
   userIdKindActiveIdx: index("policy_snapshots_user_id_kind_active_idx").on(table.userId, table.kind, table.isActive),
   userIdKindTypeActiveIdx: index("policy_snapshots_user_id_kind_type_active_idx").on(table.userId, table.kind, table.policyType, table.isActive),
+  // Step 3.3: Index for filtering by status
+  statusIdx: index("policy_snapshots_status_idx").on(table.status),
+  userIdKindStatusIdx: index("policy_snapshots_user_id_kind_status_idx").on(table.userId, table.kind, table.status),
 }));
 
 // LEGACY TABLE: Keep for backward compatibility during migration
