@@ -2161,6 +2161,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
             }
           }
 
+          // Step 5.2: Map status to Danish labels
+          const { getOverallStatusLabel } = await import('./utils/companyStatusLabels');
+          const statusLabels = getOverallStatusLabel(
+            comparisonStatus === 'ok' ? 'completed' : comparisonStatus === 'failed' ? 'failed' : 'pending',
+            statusReason,
+            notificationStatus as any,
+            notificationError
+          );
+
           return {
             id: doc.id,
             fileName: doc.fileName,
@@ -2175,7 +2184,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             comparisonId,
             currentCompanyId,
             notificationStatus,
-            notificationError
+            notificationError,
+            statusLabel: statusLabels.comparison.label,
+            statusDescription: statusLabels.comparison.description,
+            statusVariant: statusLabels.comparison.variant,
+            notificationLabel: statusLabels.notification?.label || null,
+            notificationDescription: statusLabels.notification?.description || null
           };
         })
       );
