@@ -10,7 +10,7 @@ import { ComparisonHeader } from "@/components/comparison/ComparisonHeader";
 import { ComparisonTabs, policyTypeIcons } from "@/components/comparison/ComparisonTabs";
 import { ComparisonHighlights, Highlight } from "@/components/comparison/ComparisonHighlights";
 import { ComparisonDetailedMatrix, CoverageRow } from "@/components/comparison/ComparisonDetailedMatrix";
-import { usePolicyComparisons, type PolicyComparisonRow, type ExtraOfferPolicy } from "@/hooks/usePolicyComparisons";
+import { usePolicyComparisons, type PolicyComparisonRow, type ExtraOfferPolicy, type SavingsDirection } from "@/hooks/usePolicyComparisons";
 import { AlertTriangle, Info } from "lucide-react";
 import {
   FeatherHome,
@@ -48,15 +48,14 @@ export default function OfferComparisonAll() {
     }).format(amount) + " kr";
   };
 
-  // Use aggregated savings from API (Step 4.1)
+  // Use aggregated savings from API (Step 4.1 + 4.4)
   const overallStats = {
     totalCurrentPremium: aggregatedSavings?.totalCurrentPremium ?? 0,
     totalOfferPremium: aggregatedSavings?.totalOfferPremium ?? 0,
     totalSavings: aggregatedSavings?.totalSavings ?? null,
-    savingsPercentage: aggregatedSavings?.hasPrice && aggregatedSavings?.totalCurrentPremium && aggregatedSavings?.totalSavings !== null
-      ? (aggregatedSavings.totalSavings / aggregatedSavings.totalCurrentPremium) * 100 
-      : null,
+    savingsPercentage: aggregatedSavings?.totalSavingsPercentage ?? null,
     hasPrice: aggregatedSavings?.hasPrice ?? false,
+    savingsDirection: aggregatedSavings?.savingsDirection ?? null,
   };
 
   // TODO: Replace with real highlights data from API when available
@@ -110,27 +109,44 @@ export default function OfferComparisonAll() {
             }}
           />
 
-          {/* Summary Cards */}
+          {/* Summary Cards - Step 4.4: Use savingsDirection for styling */}
           <div className="flex w-full items-start gap-4 flex-wrap">
-            <div className={`flex grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md px-6 py-6 ${overallStats.totalSavings != null && overallStats.totalSavings > 0 ? 'bg-success-50' : overallStats.totalSavings != null && overallStats.totalSavings < 0 ? 'bg-error-50' : 'bg-neutral-50'}`}>
+            <div className={`flex grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md px-6 py-6 ${
+              overallStats.savingsDirection === 'cheaper' ? 'bg-success-50' : 
+              overallStats.savingsDirection === 'more_expensive' ? 'bg-error-50' : 
+              'bg-neutral-50'
+            }`}>
               <span className="text-body-bold font-body-bold text-neutral-600">
-                Samlet besparelse
+                {overallStats.savingsDirection === 'cheaper' ? 'Samlet besparelse' :
+                 overallStats.savingsDirection === 'same_price' ? 'Prisforskel' :
+                 overallStats.savingsDirection === 'more_expensive' ? 'Merudgift' :
+                 'Prissammenligning'}
               </span>
-              <span className={`text-heading-1 font-heading-1 ${overallStats.totalSavings != null && overallStats.totalSavings > 0 ? 'text-success-600' : overallStats.totalSavings != null && overallStats.totalSavings < 0 ? 'text-error-600' : 'text-default-font'}`}>
-                {overallStats.totalSavings == null 
-                  ? 'Afventer'
-                  : overallStats.totalSavings > 0 
+              <span className={`text-heading-1 font-heading-1 ${
+                overallStats.savingsDirection === 'cheaper' ? 'text-success-600' : 
+                overallStats.savingsDirection === 'more_expensive' ? 'text-error-600' : 
+                'text-default-font'
+              }`}>
+                {!overallStats.hasPrice 
+                  ? 'Pris ukendt'
+                  : overallStats.savingsDirection === 'cheaper'
                     ? formatCurrency(overallStats.totalSavings) 
-                    : overallStats.totalSavings < 0 
-                      ? `-${formatCurrency(Math.abs(overallStats.totalSavings))}`
-                      : '0 kr'}
+                    : overallStats.savingsDirection === 'more_expensive' && overallStats.totalSavings != null
+                      ? `+${formatCurrency(Math.abs(overallStats.totalSavings))}`
+                      : overallStats.savingsDirection === 'same_price'
+                        ? 'Ca. samme pris'
+                        : 'Afventer'}
               </span>
               <span className="text-caption font-caption text-subtext-color">
-                {overallStats.savingsPercentage != null && overallStats.totalSavings != null && overallStats.totalSavings > 0 
-                  ? `${Math.abs(overallStats.savingsPercentage).toFixed(1)}% billigere`
-                  : overallStats.savingsPercentage != null && overallStats.totalSavings != null && overallStats.totalSavings < 0
-                    ? `${Math.abs(overallStats.savingsPercentage).toFixed(1)}% dyrere`
-                    : ''}
+                {overallStats.savingsDirection === 'cheaper' && overallStats.savingsPercentage != null
+                  ? `${Math.abs(overallStats.savingsPercentage).toFixed(1)}% billigere end nuværende`
+                  : overallStats.savingsDirection === 'more_expensive' && overallStats.savingsPercentage != null
+                    ? `${Math.abs(overallStats.savingsPercentage).toFixed(1)}% dyrere end nuværende`
+                    : overallStats.savingsDirection === 'same_price'
+                      ? 'Fokusér på forskelle i dækning og vilkår'
+                      : !overallStats.hasPrice
+                        ? 'Pris kunne ikke aflæses automatisk'
+                        : ''}
               </span>
             </div>
             <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6">
@@ -232,8 +248,10 @@ export default function OfferComparisonAll() {
                   const offers = comp.offers || [];
                   const cheapestOffer = offers[0];
                   const offerPremium = cheapestOffer?.pricing?.annualPremium;
-                  const savings = cheapestOffer?.savingsAnnual;
-                  const hasPricing = currentPremium && offerPremium;
+                  const savingsData = cheapestOffer?.savings;
+                  const direction = savingsData?.direction;
+                  const savings = savingsData?.savingsAmount ?? cheapestOffer?.savingsAnnual;
+                  const hasPricing = savingsData?.hasPrice ?? (currentPremium != null && offerPremium != null);
                   const isMissing = comp.matchStatus === 'missing_in_offer';
                   const isExtraOffer = comp.matchStatus === 'missing_in_user';
                   const policyLabel = comp.policyType.charAt(0).toUpperCase() + comp.policyType.slice(1);
@@ -273,23 +291,57 @@ export default function OfferComparisonAll() {
                         </span>
                       </Table.Cell>
                       <Table.Cell>
-                        <span className={`whitespace-nowrap text-body-bold font-body-bold ${isMissing ? 'text-subtext-color' : !hasPricing ? 'text-subtext-color' : savings == null ? 'text-subtext-color' : savings > 0 ? 'text-success-600' : savings < 0 ? 'text-error-600' : 'text-default-font'}`}>
-                          {isMissing ? "—" : !hasPricing ? "—" : savings == null ? "Afventer" : savings > 0 ? formatCurrency(savings) : savings < 0 ? `-${formatCurrency(Math.abs(savings))}` : '0 kr'}
+                        {/* Step 4.4: Use direction for styling */}
+                        <span className={`whitespace-nowrap text-body-bold font-body-bold ${
+                          isMissing ? 'text-subtext-color' : 
+                          !hasPricing ? 'text-subtext-color' : 
+                          direction === 'cheaper' ? 'text-success-600' : 
+                          direction === 'more_expensive' ? 'text-error-600' : 
+                          'text-default-font'
+                        }`}>
+                          {isMissing 
+                            ? "—" 
+                            : !hasPricing 
+                              ? "Pris ukendt" 
+                              : direction === 'cheaper' && savings != null
+                                ? formatCurrency(savings) 
+                                : direction === 'more_expensive' && savings != null
+                                  ? `+${formatCurrency(Math.abs(savings))}`
+                                  : direction === 'same_price'
+                                    ? 'Samme pris'
+                                    : '—'}
                         </span>
                       </Table.Cell>
                       <Table.Cell>
+                        {/* Step 4.4: Status badge/button based on direction */}
                         {isMissing ? (
                           <Badge variant="warning" data-testid={`badge-missing-${comp.policyType}`}>
                             Ikke dækket
                           </Badge>
+                        ) : !hasPricing ? (
+                          <Badge variant="neutral" data-testid={`badge-no-price-${comp.policyType}`}>
+                            Pris ukendt
+                          </Badge>
+                        ) : direction === 'cheaper' ? (
+                          <Badge variant="success" data-testid={`badge-cheaper-${comp.policyType}`}>
+                            Billigere
+                          </Badge>
+                        ) : direction === 'more_expensive' ? (
+                          <Badge variant="error" data-testid={`badge-more-expensive-${comp.policyType}`}>
+                            Dyrere
+                          </Badge>
+                        ) : direction === 'same_price' ? (
+                          <Badge variant="neutral" data-testid={`badge-same-price-${comp.policyType}`}>
+                            Samme pris
+                          </Badge>
                         ) : (
                           <Button
-                            variant={hasPricing ? "brand-tertiary" : "neutral-tertiary"}
+                            variant="neutral-tertiary"
                             size="small"
                             onClick={() => setLocation(`/sammenligning/tilbud/${comp.policyType}`)}
                             data-testid={`button-details-${comp.policyType}`}
                           >
-                            {hasPricing ? "Se detaljer" : "Afventer"}
+                            Se detaljer
                           </Button>
                         )}
                       </Table.Cell>

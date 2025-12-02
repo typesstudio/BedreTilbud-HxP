@@ -85,8 +85,11 @@ export class PolicyComparisonService {
         aggregatedSavings: {
           hasPrice: false,
           totalSavings: null,
+          totalSavingsPercentage: null,
+          totalMonthlySavings: null,
           totalCurrentPremium: null,
           totalOfferPremium: null,
+          savingsDirection: null,
         },
       };
     }

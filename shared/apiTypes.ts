@@ -116,6 +116,26 @@ export function getPolicyTypeLabel(policyType: string): string {
 export type PolicyMatchStatus = 'matched' | 'missing_in_offer' | 'missing_in_user';
 
 /**
+ * Step 4.4: Savings direction classification
+ * - cheaper: Offer is cheaper than current (positive savings)
+ * - same_price: Offer is roughly the same price (zero savings)
+ * - more_expensive: Offer is more expensive (negative savings)
+ * - null: Price data not available
+ */
+export type SavingsDirection = "cheaper" | "same_price" | "more_expensive" | null;
+
+/**
+ * Step 4.4: Per-policy savings with direction
+ */
+export type PolicySavings = {
+  hasPrice: boolean;
+  savingsAmount: number | null;
+  savingsPercentage: number | null;
+  monthlySavings: number | null;
+  direction: SavingsDirection;
+};
+
+/**
  * Step 4.1: Policy match row with status
  * Used to track which policies are matched vs missing in comparisons
  */
@@ -150,12 +170,14 @@ export type ExtraOfferPolicy = {
 };
 
 /**
- * Step 4.1/4.2: Extended combined overview with partial coverage info
+ * Step 4.1/4.2/4.4: Extended combined overview with partial coverage info and savings direction
  */
 export type CombinedOverviewWithCoverage = {
   totalSavings: number | null;
   totalSavingsPercentage: number | null;
+  totalMonthlySavings: number | null;
   hasPrice: boolean;
+  savingsDirection: SavingsDirection;
   policyCount: number;
   matchedPolicyCount: number;
   verdict: 'recommended' | 'consider' | 'not_recommended';
@@ -174,6 +196,7 @@ export type CombinedOverviewWithCoverage = {
     hasPrice: boolean;
     verdict: string;
     matchStatus: PolicyMatchStatus;
+    savingsDirection: SavingsDirection;
   }>;
   comparisonIds: string[];
   policyMatches: PolicyMatchRow[];

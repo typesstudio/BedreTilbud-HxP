@@ -32,12 +32,6 @@ export type PolicySnapshotSummary = {
   pricing: SnapshotPricing | null;
 };
 
-export type PolicyOfferWithDelta = PolicySnapshotSummary & {
-  deltaAnnual: number | null;
-  savingsAnnual: number | null;
-  cheaperThanCurrent: boolean | null;
-};
-
 /**
  * Step 4.1/4.2: Match status for policy comparison
  * - matched: Policy exists in both current and offer
@@ -45,6 +39,33 @@ export type PolicyOfferWithDelta = PolicySnapshotSummary & {
  * - missing_in_user: Offer has policy but user doesn't have it (extra policy)
  */
 export type PolicyMatchStatus = 'matched' | 'missing_in_offer' | 'missing_in_user';
+
+/**
+ * Step 4.4: Savings direction classification
+ * - cheaper: Offer is cheaper than current (positive savings)
+ * - same_price: Offer is roughly the same price (zero savings)
+ * - more_expensive: Offer is more expensive (negative savings)
+ * - null: Price data not available
+ */
+export type SavingsDirection = "cheaper" | "same_price" | "more_expensive" | null;
+
+/**
+ * Step 4.4: Per-policy savings with direction
+ */
+export type PolicySavings = {
+  hasPrice: boolean;
+  savingsAmount: number | null;
+  savingsPercentage: number | null;
+  monthlySavings: number | null;
+  direction: SavingsDirection;
+};
+
+export type PolicyOfferWithDelta = PolicySnapshotSummary & {
+  deltaAnnual: number | null;
+  savingsAnnual: number | null;
+  cheaperThanCurrent: boolean | null;
+  savings: PolicySavings;
+};
 
 export type PolicyComparisonRow = {
   policyType: string;
@@ -74,8 +95,11 @@ export type ExtraOfferPolicy = {
 export type AggregatedSavings = {
   hasPrice: boolean;
   totalSavings: number | null;
+  totalSavingsPercentage: number | null;
+  totalMonthlySavings: number | null;
   totalCurrentPremium: number | null;
   totalOfferPremium: number | null;
+  savingsDirection: SavingsDirection;
 };
 
 /**

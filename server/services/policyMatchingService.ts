@@ -8,7 +8,8 @@ import {
   type PolicyMatchStatus, 
   type PolicyMatchRow, 
   type MissingPolicyInfo,
-  type CombinedOverviewWithCoverage 
+  type CombinedOverviewWithCoverage,
+  type SavingsDirection
 } from '../../shared/apiTypes';
 
 interface MatchedPair {
@@ -348,7 +349,7 @@ export class PolicyMatchingService {
     }
 
     // Add missing policies (current exists but no offer)
-    for (const [policyType, policy] of currentPolicyTypes) {
+    for (const [policyType, policy] of Array.from(currentPolicyTypes.entries())) {
       if (!matchedPolicyTypes.has(policyType)) {
         const label = getPolicyTypeLabel(policyType);
         const currentPremium = this.extractPremium(policy);
@@ -392,6 +393,22 @@ export class PolicyMatchingService {
     const totalSavingsPercentage = hasAnyPrice && totalCurrentPremium > 0 
       ? Math.round((totalSavingsAmount! / totalCurrentPremium) * 1000) / 10
       : null;
+    
+    // Step 4.4: Calculate total monthly savings and savings direction
+    const totalMonthlySavings = hasAnyPrice && totalSavingsAmount != null
+      ? Math.round((totalSavingsAmount / 12) * 100) / 100
+      : null;
+    
+    let savingsDirection: SavingsDirection = null;
+    if (hasAnyPrice && totalSavingsAmount != null) {
+      if (totalSavingsAmount > 0) {
+        savingsDirection = "cheaper";
+      } else if (totalSavingsAmount === 0) {
+        savingsDirection = "same_price";
+      } else {
+        savingsDirection = "more_expensive";
+      }
+    }
 
     // 5. Build quick comparison with match status
     const quickComparison: CombinedOverviewWithCoverage['quickComparison'] = [];
@@ -411,7 +428,7 @@ export class PolicyMatchingService {
       const matchRow = policyMatches.find(m => m.policyType === policyType && m.matchStatus === 'matched');
       const savingsResult = matchRow 
         ? computeSavings(matchRow.currentPremium, matchRow.offerPremium)
-        : { hasPrice: false, savingsAmount: null };
+        : { hasPrice: false, savingsAmount: null, direction: null as SavingsDirection };
 
       if (data?.verdict === 'recommended') recommendedCount++;
       else if (data?.verdict === 'consider') considerCount++;
@@ -425,7 +442,8 @@ export class PolicyMatchingService {
         savings: savingsResult.savingsAmount,
         hasPrice: savingsResult.hasPrice,
         verdict: data?.verdict || 'consider',
-        matchStatus: 'matched'
+        matchStatus: 'matched',
+        savingsDirection: savingsResult.direction
       });
 
       if (data?.highlights && Array.isArray(data.highlights)) {
@@ -445,7 +463,8 @@ export class PolicyMatchingService {
         savings: null,
         hasPrice: false,
         verdict: 'missing',
-        matchStatus: 'missing_in_offer'
+        matchStatus: 'missing_in_offer',
+        savingsDirection: null
       });
     }
 
@@ -462,12 +481,14 @@ export class PolicyMatchingService {
     const coversAllCurrentPolicies = missingPolicyTypes.length === 0;
     const matchedCount = policyMatches.filter(m => m.matchStatus === 'matched').length;
 
-    console.log(`[Policy Matching] Combined overview: ${matchedCount} matched, ${missingPolicyTypes.length} missing, coversAll=${coversAllCurrentPolicies}`);
+    console.log(`[Policy Matching] Combined overview: ${matchedCount} matched, ${missingPolicyTypes.length} missing, coversAll=${coversAllCurrentPolicies}, direction=${savingsDirection}`);
 
     return {
       totalSavings: totalSavingsAmount,
       totalSavingsPercentage,
+      totalMonthlySavings,
       hasPrice: hasAnyPrice,
+      savingsDirection,
       policyCount: currentPolicyTypes.size,
       matchedPolicyCount: matchedCount,
       verdict: overallVerdict,
@@ -484,7 +505,7 @@ export class PolicyMatchingService {
   /**
    * Helper to extract premium from policy with fallbacks
    */
-  private extractPremium(policy: Policy | null): number | null {
+  private extractPremium(policy: Policy | null | undefined): number | null {
     if (!policy) return null;
     
     // Try direct premium field first

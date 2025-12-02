@@ -1,11 +1,21 @@
 /**
- * Step 3.2: Null-safe savings calculator
+ * Step 3.2 + 4.4: Null-safe savings calculator with direction classification
  * 
  * Provides robust savings calculations that never produce NaN, Infinity, or unexpected results.
  * All calculations return explicit null when data is missing or invalid.
+ * Step 4.4: Adds direction classification (cheaper/same_price/more_expensive).
  * 
  * @module savingsCalculator
  */
+
+/**
+ * Step 4.4: Savings direction classification
+ * - cheaper: Offer is cheaper than current (positive savings)
+ * - same_price: Offer is roughly the same price (zero savings)
+ * - more_expensive: Offer is more expensive (negative savings)
+ * - null: Price data not available
+ */
+export type SavingsDirection = "cheaper" | "same_price" | "more_expensive" | null;
 
 export interface SavingsResult {
   hasPrice: boolean;
@@ -14,6 +24,7 @@ export interface SavingsResult {
   monthlySavings: number | null;
   currentPremium: number | null;
   offerPremium: number | null;
+  direction: SavingsDirection;
 }
 
 export interface TenYearProjection {
@@ -115,7 +126,8 @@ export function computeSavings(
       savingsPercentage: null,
       monthlySavings: null,
       currentPremium: validCurrent,
-      offerPremium: validOffer
+      offerPremium: validOffer,
+      direction: null
     };
   }
   
@@ -125,13 +137,24 @@ export function computeSavings(
     : null;
   const monthlySavings = Math.round((savingsAmount / 12) * 100) / 100;
   
+  // Step 4.4: Classify savings direction
+  let direction: SavingsDirection = null;
+  if (savingsAmount > 0) {
+    direction = "cheaper";
+  } else if (savingsAmount === 0) {
+    direction = "same_price";
+  } else if (savingsAmount < 0) {
+    direction = "more_expensive";
+  }
+  
   return {
     hasPrice: true,
     savingsAmount,
     savingsPercentage,
     monthlySavings,
     currentPremium: validCurrent,
-    offerPremium: validOffer
+    offerPremium: validOffer,
+    direction
   };
 }
 
