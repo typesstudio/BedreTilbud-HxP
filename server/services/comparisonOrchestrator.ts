@@ -4,6 +4,7 @@ import { computeBestMatches } from "./deterministicMatcher";
 import { comparisonAgentService } from "./comparisonAgentService";
 import { matchCoverages } from "./coverageMatcher";
 import { generateHighlights } from "./highlightsGenerator";
+import { SUPPORTED_POLICY_TYPES } from "./policySnapshots/PolicySnapshotService";
 
 interface ComparisonOptions {
   userId: string;
@@ -339,6 +340,13 @@ export class ComparisonOrchestrator {
       
       // Phase 2: Match snapshots to health checks by ID (via snapshot_id FK)
       for (const snapshot of snapshots) {
+        // Step 3.3: Skip unknown/unsupported policy types - they cannot be matched
+        const policyType = snapshot.policyType?.toLowerCase();
+        if (!policyType || !SUPPORTED_POLICY_TYPES.includes(policyType as any)) {
+          console.log(`[ComparisonOrchestrator] Skipping unknown policy type "${snapshot.policyType}" from current snapshot ${snapshot.id?.substring(0, 8)}`);
+          continue;
+        }
+        
         // Find health check using snapshot_id FK (deterministic, not index-based)
         const healthCheck = healthChecks.find(hc => hc.snapshotId === snapshot.id);
         
@@ -399,6 +407,13 @@ export class ComparisonOrchestrator {
       
       // Phase 2: Match snapshots to health checks by ID (via snapshot_id FK)
       for (const snapshot of snapshots) {
+        // Step 3.3: Skip unknown/unsupported policy types - they cannot be matched
+        const policyType = snapshot.policyType?.toLowerCase();
+        if (!policyType || !SUPPORTED_POLICY_TYPES.includes(policyType as any)) {
+          console.log(`[ComparisonOrchestrator] Skipping unknown policy type "${snapshot.policyType}" from offer snapshot ${snapshot.id?.substring(0, 8)}`);
+          continue;
+        }
+        
         // Find health check using snapshot_id FK (deterministic, not index-based)
         const healthCheck = healthChecks.find(hc => hc.snapshotId === snapshot.id);
         
