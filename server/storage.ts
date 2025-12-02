@@ -15,6 +15,8 @@ import {
   type InsertCompanyComparison,
   type HouseholdMember,
   type InsertHouseholdMember,
+  type ComparisonCurrentSnapshot,
+  type InsertComparisonCurrentSnapshot,
   type Policy,
   type InsertPolicy,
   type OfferSnapshot,
@@ -92,6 +94,11 @@ export interface IStorage {
   createHouseholdMember(member: InsertHouseholdMember): Promise<HouseholdMember>;
   updateHouseholdMember(id: string, updates: Partial<InsertHouseholdMember>): Promise<HouseholdMember>;
   deleteHouseholdMember(id: string): Promise<void>;
+  
+  // Comparison Current Snapshots (Step 5.3)
+  getComparisonCurrentSnapshots(comparisonId: string): Promise<ComparisonCurrentSnapshot[]>;
+  createComparisonCurrentSnapshot(snapshot: InsertComparisonCurrentSnapshot): Promise<ComparisonCurrentSnapshot>;
+  freezeCurrentSnapshotsForComparison(comparisonId: string, userId: string): Promise<ComparisonCurrentSnapshot[]>;
 
   // Policies
   getPolicy(id: string): Promise<Policy | undefined>;
@@ -654,6 +661,44 @@ export class MemStorage implements IStorage {
 
   async deleteHouseholdMember(id: string): Promise<void> {
     this.householdMembers.delete(id);
+  }
+
+  // Comparison Current Snapshots (Step 5.3)
+  private comparisonCurrentSnapshots: Map<string, ComparisonCurrentSnapshot> = new Map();
+
+  async getComparisonCurrentSnapshots(comparisonId: string): Promise<ComparisonCurrentSnapshot[]> {
+    return Array.from(this.comparisonCurrentSnapshots.values()).filter(s => s.comparisonId === comparisonId);
+  }
+
+  async createComparisonCurrentSnapshot(snapshot: InsertComparisonCurrentSnapshot): Promise<ComparisonCurrentSnapshot> {
+    const id = randomUUID();
+    const newSnapshot: ComparisonCurrentSnapshot = {
+      id,
+      comparisonId: snapshot.comparisonId,
+      policySnapshotId: snapshot.policySnapshotId,
+      policyType: snapshot.policyType,
+      companyName: snapshot.companyName,
+      createdAt: new Date()
+    };
+    this.comparisonCurrentSnapshots.set(id, newSnapshot);
+    return newSnapshot;
+  }
+
+  async freezeCurrentSnapshotsForComparison(comparisonId: string, userId: string): Promise<ComparisonCurrentSnapshot[]> {
+    const currentSnapshots = Array.from(this.policySnapshots.values()).filter(
+      s => s.userId === userId && s.kind === 'current' && s.isActive && s.status === 'active'
+    );
+    const frozenSnapshots: ComparisonCurrentSnapshot[] = [];
+    for (const snapshot of currentSnapshots) {
+      const frozen = await this.createComparisonCurrentSnapshot({
+        comparisonId,
+        policySnapshotId: snapshot.id,
+        policyType: snapshot.policyType,
+        companyName: snapshot.companyName
+      });
+      frozenSnapshots.push(frozen);
+    }
+    return frozenSnapshots;
   }
 
   // Policies
@@ -1494,6 +1539,49 @@ export class DatabaseStorage implements IStorage {
     const { householdMembers } = await import("@shared/schema");
     const { eq } = await import("drizzle-orm");
     await db.delete(householdMembers).where(eq(householdMembers.id, id));
+  }
+
+  // Comparison Current Snapshots (Step 5.3)
+  async getComparisonCurrentSnapshots(comparisonId: string): Promise<ComparisonCurrentSnapshot[]> {
+    const { db } = await import("./db");
+    const { comparisonCurrentSnapshots } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    return await db.select().from(comparisonCurrentSnapshots).where(eq(comparisonCurrentSnapshots.comparisonId, comparisonId));
+  }
+
+  async createComparisonCurrentSnapshot(snapshot: InsertComparisonCurrentSnapshot): Promise<ComparisonCurrentSnapshot> {
+    const { db } = await import("./db");
+    const { comparisonCurrentSnapshots } = await import("@shared/schema");
+    const [result] = await db.insert(comparisonCurrentSnapshots).values(snapshot).returning();
+    return result;
+  }
+
+  async freezeCurrentSnapshotsForComparison(comparisonId: string, userId: string): Promise<ComparisonCurrentSnapshot[]> {
+    const { db } = await import("./db");
+    const { policySnapshots, comparisonCurrentSnapshots } = await import("@shared/schema");
+    const { eq, and } = await import("drizzle-orm");
+    
+    const currentSnapshots = await db.select().from(policySnapshots).where(
+      and(
+        eq(policySnapshots.userId, userId),
+        eq(policySnapshots.kind, 'current'),
+        eq(policySnapshots.isActive, true),
+        eq(policySnapshots.status, 'active')
+      )
+    );
+    
+    const frozenSnapshots: ComparisonCurrentSnapshot[] = [];
+    for (const snapshot of currentSnapshots) {
+      const [frozen] = await db.insert(comparisonCurrentSnapshots).values({
+        comparisonId,
+        policySnapshotId: snapshot.id,
+        policyType: snapshot.policyType,
+        companyName: snapshot.companyName
+      }).returning();
+      frozenSnapshots.push(frozen);
+    }
+    
+    return frozenSnapshots;
   }
 
   // Policies

@@ -209,6 +209,25 @@ export const householdMembers = pgTable("household_members", {
   userIdIdx: index("household_members_user_id_idx").on(table.userId),
 }));
 
+// Step 5.3: Frozen Current Policy Snapshots per Comparison (Dec 2025)
+// When a comparison is requested, we freeze the user's current policies at that moment
+// This ensures historical stability - even if user updates policies later, comparison still references originals
+export const comparisonCurrentSnapshots = pgTable("comparison_current_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  comparisonId: varchar("comparison_id").references(() => companyComparisons.id).notNull(),
+  policySnapshotId: varchar("policy_snapshot_id").references(() => policySnapshots.id).notNull(),
+  
+  // Denormalized fields for fast access without JOINs during comparison
+  policyType: text("policy_type").notNull(), // "hus", "indbo", "ulykke", etc.
+  companyName: text("company_name").notNull(), // e.g., "Lærerstandens Brandforsikring"
+  
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  comparisonIdIdx: index("comparison_current_snapshots_comparison_id_idx").on(table.comparisonId),
+  policySnapshotIdIdx: index("comparison_current_snapshots_policy_snapshot_id_idx").on(table.policySnapshotId),
+  comparisonIdTypeIdx: index("comparison_current_snapshots_comparison_type_idx").on(table.comparisonId, table.policyType),
+}));
+
 export const policies = pgTable("policies", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   documentId: varchar("document_id").references(() => documents.id).notNull(),
@@ -419,6 +438,11 @@ export const insertHouseholdMemberSchema = createInsertSchema(householdMembers).
   createdAt: true,
 });
 
+export const insertComparisonCurrentSnapshotSchema = createInsertSchema(comparisonCurrentSnapshots).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertOnboardingProgressSchema = createInsertSchema(onboardingProgress).omit({
   id: true,
   createdAt: true,
@@ -479,6 +503,8 @@ export type Comparison = typeof comparisons.$inferSelect;
 export type InsertComparison = z.infer<typeof insertComparisonSchema>;
 export type HouseholdMember = typeof householdMembers.$inferSelect;
 export type InsertHouseholdMember = z.infer<typeof insertHouseholdMemberSchema>;
+export type ComparisonCurrentSnapshot = typeof comparisonCurrentSnapshots.$inferSelect;
+export type InsertComparisonCurrentSnapshot = z.infer<typeof insertComparisonCurrentSnapshotSchema>;
 export type Policy = typeof policies.$inferSelect;
 export type InsertPolicy = z.infer<typeof insertPolicySchema>;
 export type PolicySnapshot = typeof policySnapshots.$inferSelect;
