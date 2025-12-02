@@ -10,7 +10,7 @@ import { ComparisonHeader } from "@/components/comparison/ComparisonHeader";
 import { ComparisonTabs, policyTypeIcons } from "@/components/comparison/ComparisonTabs";
 import { ComparisonHighlights, Highlight } from "@/components/comparison/ComparisonHighlights";
 import { ComparisonDetailedMatrix, CoverageRow } from "@/components/comparison/ComparisonDetailedMatrix";
-import { usePolicyComparisons, type PolicyComparisonRow } from "@/hooks/usePolicyComparisons";
+import { usePolicyComparisons, type PolicyComparisonRow, type ExtraOfferPolicy } from "@/hooks/usePolicyComparisons";
 import { AlertTriangle, Info } from "lucide-react";
 import {
   FeatherHome,
@@ -28,6 +28,7 @@ export default function OfferComparisonAll() {
 
   const comparisons = data?.comparisons || [];
   const missingInOffers = data?.missingInOffers || [];
+  const extraOfferPolicies = data?.extraOfferPolicies || [];
   const coversAllCurrentPolicies = data?.coversAllCurrentPolicies ?? true;
   const aggregatedSavings = data?.aggregatedSavings;
   
@@ -182,6 +183,32 @@ export default function OfferComparisonAll() {
             </div>
           )}
 
+          {/* Step 4.2: Extra Policies in Offer */}
+          {extraOfferPolicies.length > 0 && (
+            <div 
+              className="flex w-full items-start gap-3 rounded-lg border border-brand-200 bg-brand-50 px-4 py-3"
+              data-testid="extra-offer-policies-info"
+            >
+              <Info className="h-5 w-5 text-brand-600 flex-shrink-0 mt-0.5" />
+              <div className="flex flex-col gap-1">
+                <span className="text-body-bold font-body-bold text-brand-800">
+                  Ekstra dækninger i dette tilbud
+                </span>
+                <span className="text-body font-body text-brand-700">
+                  {offerCompanyName} tilbyder {extraOfferPolicies.length} ekstra forsikring{extraOfferPolicies.length > 1 ? 'er' : ''} du ikke har i dag:{' '}
+                  {extraOfferPolicies.map((p, i) => (
+                    <span key={p.offerPolicyId}>
+                      {p.label}{p.premiumAmount != null ? ` (${formatCurrency(p.premiumAmount)}/år)` : ''}{i < extraOfferPolicies.length - 1 ? ', ' : ''}
+                    </span>
+                  ))}
+                </span>
+                <span className="text-caption font-caption text-brand-600">
+                  Disse indgår ikke i besparelsesberegningen da du ikke har dem i forvejen
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Quick Comparison Table */}
           <div className="flex w-full flex-col items-start gap-4">
             <span className="text-heading-2 font-heading-2 text-default-font">
@@ -207,7 +234,8 @@ export default function OfferComparisonAll() {
                   const offerPremium = cheapestOffer?.pricing?.annualPremium;
                   const savings = cheapestOffer?.savingsAnnual;
                   const hasPricing = currentPremium && offerPremium;
-                  const isMissing = comp.matchStatus === 'current_only';
+                  const isMissing = comp.matchStatus === 'missing_in_offer';
+                  const isExtraOffer = comp.matchStatus === 'missing_in_user';
                   const policyLabel = comp.policyType.charAt(0).toUpperCase() + comp.policyType.slice(1);
 
                   return (

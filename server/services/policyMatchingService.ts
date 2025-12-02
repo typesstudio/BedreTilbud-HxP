@@ -476,6 +476,7 @@ export class PolicyMatchingService {
       comparisonIds,
       policyMatches,
       missingPolicyTypes,
+      extraOfferPolicies: [], // Step 4.2: Currently empty in legacy matching service
       coversAllCurrentPolicies
     };
   }

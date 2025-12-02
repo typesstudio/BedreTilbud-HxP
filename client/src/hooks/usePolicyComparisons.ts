@@ -38,7 +38,13 @@ export type PolicyOfferWithDelta = PolicySnapshotSummary & {
   cheaperThanCurrent: boolean | null;
 };
 
-export type PolicyMatchStatus = 'matched' | 'missing_in_offer' | 'current_only';
+/**
+ * Step 4.1/4.2: Match status for policy comparison
+ * - matched: Policy exists in both current and offer
+ * - missing_in_offer: User has policy but offer doesn't include it
+ * - missing_in_user: Offer has policy but user doesn't have it (extra policy)
+ */
+export type PolicyMatchStatus = 'matched' | 'missing_in_offer' | 'missing_in_user';
 
 export type PolicyComparisonRow = {
   policyType: string;
@@ -54,6 +60,17 @@ export type MissingPolicyInfo = {
   currentPremium: number | null;
 };
 
+/**
+ * Step 4.2: Extra policy in offer that user doesn't have
+ */
+export type ExtraOfferPolicy = {
+  policyType: string;
+  label: string;
+  offerPolicyId: string;
+  companyName: string;
+  premiumAmount: number | null;
+};
+
 export type AggregatedSavings = {
   hasPrice: boolean;
   totalSavings: number | null;
@@ -62,11 +79,12 @@ export type AggregatedSavings = {
 };
 
 /**
- * Step 4.1: Extended response with partial coverage info
+ * Step 4.1/4.2: Extended response with partial coverage info
  */
 export type PolicyComparisonsResponse = {
   comparisons: PolicyComparisonRow[];
   missingInOffers: MissingPolicyInfo[];
+  extraOfferPolicies: ExtraOfferPolicy[];
   coversAllCurrentPolicies: boolean;
   matchedCount: number;
   totalCurrentCount: number;

@@ -28,6 +28,8 @@ import type {
   PolicyComparisonRow,
   SnapshotPricing,
   PolicyComparisonsWithCoverage,
+  ExtraOfferPolicy,
+  PolicyMatchStatus,
 } from "../../types/policyComparison";
 import { getPolicyTypeLabel } from "../../../shared/apiTypes";
 
@@ -74,6 +76,7 @@ export class PolicyComparisonService {
       return {
         comparisons: [],
         missingInOffers: [],
+        extraOfferPolicies: [],
         coversAllCurrentPolicies: true,
         matchedCount: 0,
         totalCurrentCount: 0,
@@ -110,9 +113,27 @@ export class PolicyComparisonService {
 
     console.log(`[PolicyComparisonService] Grouped into ${groups.size} policy groups`);
 
+    // Step 4.2 Fix: First, collect all policyTypes that the user has (any address)
+    // This prevents duplicate warnings when offers have different addresses
+    const userPolicyTypes = new Set<string>();
+    const offerPolicyTypes = new Set<string>();
+    
+    for (const [key, summaries] of Array.from(groups.entries())) {
+      const [policyType] = key.split("::");
+      for (const s of summaries) {
+        if (s.kind === "current") userPolicyTypes.add(policyType);
+        if (s.kind === "offer") offerPolicyTypes.add(policyType);
+      }
+    }
+
     // 3) Build comparison rows with matchStatus
     const comparisons: PolicyComparisonRow[] = [];
     const missingInOffers: PolicyComparisonsWithCoverage['missingInOffers'] = [];
+    const extraOfferPolicies: ExtraOfferPolicy[] = [];
+    
+    // Track which policyTypes we've already added to missingInOffers/extraOfferPolicies
+    const processedMissingTypes = new Set<string>();
+    const processedExtraTypes = new Set<string>();
 
     // Track for aggregated savings
     let totalSavings = 0;
@@ -120,14 +141,14 @@ export class PolicyComparisonService {
     let totalOfferPremium = 0;
     let hasPriceData = false;
 
-    for (const [key, summaries] of groups.entries()) {
+    for (const [key, summaries] of Array.from(groups.entries())) {
       if (summaries.length === 0) continue;
 
       const [policyType, addressPart] = key.split("::");
       const coverageAddress = addressPart || null;
 
       // Find current policy (should be max 1)
-      const currentCandidates = summaries.filter(s => s.kind === "current");
+      const currentCandidates = summaries.filter((s: PolicySnapshotSummary) => s.kind === "current");
       let current: PolicySnapshotSummary | null = null;
       
       if (currentCandidates.length > 1) {
@@ -141,22 +162,57 @@ export class PolicyComparisonService {
       }
 
       // Find offer policies
-      const offers = summaries.filter(s => s.kind === "offer");
+      const offers = summaries.filter((s: PolicySnapshotSummary) => s.kind === "offer");
 
-      // Determine match status
-      let matchStatus: PolicyComparisonRow['matchStatus'];
+      // Step 4.1/4.2: Determine match status
+      // - matched: Both current and offer exist in this group
+      // - missing_in_offer: User has policy but offer doesn't include it (no offer for this policyType AT ALL)
+      // - missing_in_user: Offer has policy but user doesn't have ANY policy of this type
+      let matchStatus: PolicyMatchStatus;
+      
       if (current && offers.length > 0) {
+        // Direct match in same group
         matchStatus = 'matched';
       } else if (current && offers.length === 0) {
-        matchStatus = 'current_only';
-        // Add to missing list
-        missingInOffers.push({
-          policyType,
-          label: getPolicyTypeLabel(policyType),
-          currentPremium: current.pricing?.annualPremium ?? null,
-        });
+        // User has policy, but check if there's any offer for this policyType (maybe different address)
+        if (offerPolicyTypes.has(policyType)) {
+          // There is an offer for this policyType, just different address - still counts as matched at type level
+          matchStatus = 'matched';
+        } else {
+          // No offer exists for this policyType at all
+          matchStatus = 'missing_in_offer';
+          // Only add to missing list once per policyType
+          if (!processedMissingTypes.has(policyType)) {
+            processedMissingTypes.add(policyType);
+            missingInOffers.push({
+              policyType,
+              label: getPolicyTypeLabel(policyType),
+              currentPremium: current.pricing?.annualPremium ?? null,
+            });
+          }
+        }
       } else {
-        matchStatus = 'missing_in_offer';
+        // No current policy in this group - check if user has ANY current policy of this type
+        if (userPolicyTypes.has(policyType)) {
+          // User has this policyType somewhere else - this is just an offer with different address
+          // Don't mark as missing_in_user, and don't add to extraOfferPolicies
+          matchStatus = 'matched';
+        } else {
+          // Step 4.2: User truly doesn't have this policyType at all
+          matchStatus = 'missing_in_user';
+          // Only add to extra list once per policyType (use first offer as representative)
+          if (!processedExtraTypes.has(policyType) && offers.length > 0) {
+            processedExtraTypes.add(policyType);
+            const offer = offers[0];
+            extraOfferPolicies.push({
+              policyType,
+              label: getPolicyTypeLabel(policyType),
+              offerPolicyId: offer.snapshotId,
+              companyName: offer.companyName,
+              premiumAmount: offer.pricing?.annualPremium ?? null,
+            });
+          }
+        }
       }
 
       // Compute deltas for each offer
@@ -229,17 +285,22 @@ export class PolicyComparisonService {
     // Sort comparisons by policy type for consistent ordering
     comparisons.sort((a, b) => a.policyType.localeCompare(b.policyType));
     missingInOffers.sort((a, b) => a.policyType.localeCompare(b.policyType));
+    extraOfferPolicies.sort((a, b) => a.policyType.localeCompare(b.policyType));
 
     const totalCurrentCount = comparisons.filter(c => c.current != null).length;
     const matchedCount = comparisons.filter(c => c.matchStatus === 'matched').length;
+    // Step 4.1/4.2: coversAllCurrentPolicies only considers missing_in_offer
+    // Extra policies (missing_in_user) do NOT affect this flag
     const coversAllCurrentPolicies = missingInOffers.length === 0;
 
     console.log(`[PolicyComparisonService] Returning ${comparisons.length} rows: ` +
-      `${matchedCount} matched, ${missingInOffers.length} missing, coversAll=${coversAllCurrentPolicies}`);
+      `${matchedCount} matched, ${missingInOffers.length} missing_in_offer, ${extraOfferPolicies.length} extra_in_offer, ` +
+      `coversAll=${coversAllCurrentPolicies}`);
     
     return {
       comparisons,
       missingInOffers,
+      extraOfferPolicies,
       coversAllCurrentPolicies,
       matchedCount,
       totalCurrentCount,
