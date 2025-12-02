@@ -207,6 +207,7 @@ export default function PolicyHealthCheckPage() {
                   savingsOverTime={data.savingsOverTime}
                   policyType={data.policyType}
                   policyTypeLabel={data.policyTypeLabel}
+                  hasPrice={data.savingsOverTime.hasPrice ?? data.hasPrice}
                 />
               )}
 

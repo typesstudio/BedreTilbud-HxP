@@ -3,8 +3,9 @@ import { AreaChart } from "@/ui/components/AreaChart";
 import { Badge } from "@/ui/components/Badge";
 import * as SubframeCore from "@subframe/core";
 import { Tooltip } from "recharts";
-import { FeatherArrowUp, FeatherPiggyBank } from "@subframe/core";
+import { FeatherArrowUp, FeatherPiggyBank, FeatherAlertCircle } from "@subframe/core";
 import { FormattedChartTooltip } from "@/components/ui/FormattedChartTooltip";
+import { formatCurrencySafe, hasChartData, PRICE_UNKNOWN_MESSAGE, PRICE_UNKNOWN_HINT } from "@/utils/formatSavings";
 
 interface HealthCheckSavingsSectionProps {
   savingsOverTime: {
@@ -15,6 +16,7 @@ interface HealthCheckSavingsSectionProps {
   };
   policyType?: string;
   policyTypeLabel?: string;
+  hasPrice?: boolean;
 }
 
 const POLICY_COLORS: Record<string, string> = {
@@ -44,9 +46,29 @@ function tooltipFormatter(value: number): string {
 export function HealthCheckSavingsSection({ 
   savingsOverTime, 
   policyType = "indbo",
-  policyTypeLabel = "Indbo"
+  policyTypeLabel = "Indbo",
+  hasPrice = true
 }: HealthCheckSavingsSectionProps) {
   const [isVisible, setIsVisible] = useState(true);
+
+  // Step 3.2: If hasPrice is false or no valid chart data, show "price unknown" message
+  if (hasPrice === false || !hasChartData(savingsOverTime?.chartData)) {
+    return (
+      <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:px-4 mobile:py-4">
+        <div className="flex items-center gap-3">
+          <FeatherAlertCircle className="text-warning-600 w-6 h-6" />
+          <div className="flex flex-col gap-1">
+            <span className="text-heading-3 font-heading-3 text-default-font">
+              {PRICE_UNKNOWN_MESSAGE}
+            </span>
+            <span className="text-body font-body text-subtext-color">
+              {PRICE_UNKNOWN_HINT}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const monthlySavings = savingsOverTime.totalAfter12Months / 12;
   const monthlyRangeStart = Math.floor(monthlySavings * 0.9);

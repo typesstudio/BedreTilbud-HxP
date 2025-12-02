@@ -1,15 +1,17 @@
 import { useState, useMemo } from "react";
 import { AreaChart } from "@/ui/components/AreaChart";
 import { Badge } from "@/ui/components/Badge";
-import { FeatherArrowUp } from "@subframe/core";
+import { FeatherArrowUp, FeatherAlertCircle } from "@subframe/core";
 import * as SubframeCore from "@subframe/core";
 import { Tooltip } from "recharts";
 import { SavingsOverTimeView } from "@/utils/transformComparison";
 import { FormattedChartTooltip } from "@/components/ui/FormattedChartTooltip";
+import { formatCurrencySafe, hasSavingsData, hasChartData, PRICE_UNKNOWN_MESSAGE, PRICE_UNKNOWN_HINT } from "@/utils/formatSavings";
 
 interface ComparisonSavingsSectionProps {
   savings: SavingsOverTimeView;
   activePolicyKey: string | "all";
+  hasPrice?: boolean;
 }
 
 // Policy type color mapping
@@ -32,7 +34,26 @@ function monthToYearLabel(monthIndex: number): string {
   return `${year}. år`;
 }
 
-export function ComparisonSavingsSection({ savings, activePolicyKey }: ComparisonSavingsSectionProps) {
+export function ComparisonSavingsSection({ savings, activePolicyKey, hasPrice = true }: ComparisonSavingsSectionProps) {
+  // Step 3.2: If hasPrice is false, show "price unknown" message instead of chart
+  if (hasPrice === false || !hasSavingsData(hasPrice, savings.series[0]?.annualSavings)) {
+    return (
+      <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6 mobile:px-4 mobile:py-4">
+        <div className="flex items-center gap-3">
+          <FeatherAlertCircle className="text-warning-600 w-6 h-6" />
+          <div className="flex flex-col gap-1">
+            <span className="text-heading-3 font-heading-3 text-default-font">
+              {PRICE_UNKNOWN_MESSAGE}
+            </span>
+            <span className="text-body font-body text-subtext-color">
+              {PRICE_UNKNOWN_HINT}
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // Determine initial visible series based on activePolicyKey
   const initialVisibleKeys = useMemo(() => {
     if (activePolicyKey === "all") {

@@ -9,6 +9,7 @@ import { ComparisonQuickTable } from "@/components/comparison/ComparisonQuickTab
 import { ComparisonAnnualCost } from "@/components/comparison/ComparisonAnnualCost";
 import { ComparisonHighlights } from "@/components/comparison/ComparisonHighlights";
 import { ComparisonDetailedMatrix } from "@/components/comparison/ComparisonDetailedMatrix";
+import { ComparisonSavingsSection } from "@/components/comparison/ComparisonSavingsSection";
 import { transformCompanyComparisonToViewModel, type ComparisonTabKey } from "@/utils/transformComparison";
 import LoadingComparison from "@/components/loading/LoadingComparison";
 
@@ -149,6 +150,15 @@ export default function Comparison() {
               currentCompanyName={viewModel.currentCompanyName}
               offerCompanyName={viewModel.offerCompanyName}
               coverageRows={activeView.coverageRows}
+            />
+          )}
+
+          {/* Savings Over Time Chart */}
+          {activeView.savingsOverTime && (
+            <ComparisonSavingsSection
+              savings={activeView.savingsOverTime}
+              activePolicyKey={activeTab === "samlet" ? "all" : activeTab}
+              hasPrice={activeView.savingsOverTime.hasPrice}
             />
           )}
 

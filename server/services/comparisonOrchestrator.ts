@@ -739,16 +739,12 @@ export class ComparisonOrchestrator {
         const currentAnnualPremium = this.getAnnualPremiumFromSnapshot(currentPolicy);
         const offerAnnualPremium = this.getAnnualPremiumFromSnapshot(offerPolicy);
         
-        // Compute savings only when both premiums are available
-        let annualSavings: number | null = null;
-        let annualSavingsPercent: number | null = null;
+        // Step 3.2: Use null-safe savings calculator (never produces NaN/Infinity)
+        const { computeSavings } = await import('../utils/savingsCalculator');
+        const savingsResult = computeSavings(currentAnnualPremium, offerAnnualPremium);
         
-        if (currentAnnualPremium != null && offerAnnualPremium != null) {
-          annualSavings = currentAnnualPremium - offerAnnualPremium;
-          annualSavingsPercent = currentAnnualPremium > 0 
-            ? (annualSavings / currentAnnualPremium) * 100 
-            : null;
-        }
+        const annualSavings = savingsResult.savingsAmount;
+        const annualSavingsPercent = savingsResult.savingsPercentage;
         
         // DETERMINISTIC COVERAGE MATCHING
         const currentCoverages = currentPolicy.healthCheck?.whatsIncluded || [];
@@ -778,10 +774,12 @@ export class ComparisonOrchestrator {
           currentPolicyId: pair.currentPolicyId, // Snapshot ID for current policy
           offerPolicyId: pair.offerPolicyId, // Snapshot ID for offer policy
           costSummary: {
+            hasPrice: savingsResult.hasPrice,
             currentAnnualPremium,
             offerAnnualPremium,
             annualSavings,
-            annualSavingsPercent: annualSavingsPercent != null ? Math.round(annualSavingsPercent * 10) / 10 : null
+            annualSavingsPercent: annualSavingsPercent,
+            monthlySavings: savingsResult.monthlySavings
           },
           coverageComparison: { rows: coverageRows }, // CACHED - NOT sent to AI
           highlights, // CACHED - NOT sent to AI

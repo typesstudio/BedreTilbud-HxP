@@ -52,6 +52,7 @@ export interface SavingsOverTimeView {
   totalAnnualSavings: number;
   totalTenYearSavings: number;
   series: SavingsSeriesView[];
+  hasPrice?: boolean;
 }
 
 export type ComparisonTabKey = "samlet" | "indbo" | "hus" | "ulykke" | "bil" | "rejse";
@@ -189,6 +190,9 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
 
   // Transform savings over time - generate series per policy type
   let savingsOverTime: SavingsOverTimeView | null = null;
+  
+  // Step 3.2: Track whether any policy has valid pricing data
+  let hasValidPricing = false;
 
   if (policyComparisons && policyComparisons.length > 0) {
     const series: SavingsSeriesView[] = policyComparisons
@@ -196,6 +200,10 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
         // Extract savings from costSummary or calculate from premiums
         const currentAnnual = p.costSummary?.currentAnnual ?? p.currentAnnual ?? null;
         const offerAnnual = p.costSummary?.offerAnnual ?? p.offerAnnual ?? null;
+        
+        // Step 3.2: Check hasPrice flag from backend
+        const costSummaryHasPrice = p.costSummary?.hasPrice;
+        
         const annualSavings = 
           p.costSummary?.annualSavings ??
           (currentAnnual != null && offerAnnual != null
@@ -205,6 +213,11 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
         // Skip policies with no savings data
         if (annualSavings === 0 && currentAnnual === null && offerAnnual === null) {
           return null;
+        }
+        
+        // Track if we have valid pricing data
+        if (costSummaryHasPrice === true || (currentAnnual != null && offerAnnual != null && currentAnnual > 0)) {
+          hasValidPricing = true;
         }
 
         const monthlySavings = annualSavings / 12;
@@ -235,6 +248,7 @@ export function transformCompanyComparisonToViewModel(raw: any): ComparisonViewM
         totalAnnualSavings,
         totalTenYearSavings,
         series,
+        hasPrice: hasValidPricing,
       };
     }
   }
@@ -426,10 +440,15 @@ function generatePolicyTab(
     points,
   };
 
+  // Step 3.2: Check hasPrice flag from costSummary or infer from valid pricing
+  const costSummaryHasPrice = policyComp.costSummary?.hasPrice;
+  const hasPricingData = costSummaryHasPrice === true || (currentAnnual > 0 && offerAnnual > 0);
+
   const policySavingsOverTime: SavingsOverTimeView = {
     totalAnnualSavings: annualSavings,
     totalTenYearSavings: tenYearSavings,
     series: [seriesView],
+    hasPrice: hasPricingData,
   };
 
   // Extract snapshot IDs from policy comparison data

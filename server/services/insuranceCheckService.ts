@@ -25,6 +25,7 @@ function logAIUsage(provider: string, operation: string, success: boolean) {
 export interface HealthCheckResult {
   overallScore: number;
   scoreExplanation: string;
+  hasPrice?: boolean;
   annualSavings: {
     amount: number;
     percentageLower: number;
@@ -281,19 +282,27 @@ class InsuranceCheckService {
       logAIUsage('OpenAI-gpt-4o', 'insurance-health-check', true);
       const aiOutput = JSON.parse(response.choices[0].message.content || "{}");
       
+      // Step 3.2: Use null-safe premium parsing (never produces NaN)
+      const { parsePremiumToNumber } = await import('../utils/savingsCalculator');
+      const premiumNumber = parsePremiumToNumber(premium);
+      
       // Extract realistic savings from AI output (fallback to conservative estimate)
-      const premiumNumber = Number(premium) || 0;
+      // Only calculate fallback if premium is valid
       const realisticSavings = aiOutput.potentialSavings?.realistic || 
                                 aiOutput.annualSavings?.amount ||
-                                Math.round(premiumNumber * 0.15);
+                                (premiumNumber != null ? Math.round(premiumNumber * 0.15) : 0);
       
       // Validate and normalize cumulativeSavings to guarantee 120 chart data points
       const normalizedCumulativeSavings = normalizeCumulativeSavings(aiOutput, realisticSavings);
       
       // Merge AI output with normalized cumulativeSavings
+      // Step 3.2: Add hasPrice flag to indicate if pricing data is available
+      const hasPriceData = premiumNumber != null && realisticSavings > 0;
+      
       const result: HealthCheckResult = {
         ...aiOutput,
-        cumulativeSavings: normalizedCumulativeSavings
+        cumulativeSavings: normalizedCumulativeSavings,
+        hasPrice: hasPriceData
       };
       
       // Log validation results for debugging

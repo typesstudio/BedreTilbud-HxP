@@ -1,0 +1,271 @@
+Nice, så tager vi fat i penge-delen 💰
+
+Her er en fokuseret Replit-prompt til:
+
+> **3.2 Manglende / tvetydig præmie**
+> → `premium_amount = null` hvis parsing fejler, ingen %-beregninger eller NaN.
+
+---
+
+### Replit-prompt – Step 3.2: Robust håndtering af præmie (`premium_amount`) + ingen NaN
+
+> Vi er nu i Kategori 3, Step **3.2**:
+> **Når præmien ikke kan læses sikkert fra PDF’en, skal vi sætte `premium_amount = null`, og hele systemet (health check + sammenligning + UI) må ALDRIG lave NaN/∞-beregninger eller crashe.**
+>
+> Mål:
+>
+> * Standardisere, hvordan vi gemmer og bruger præmier (beløb) for både brugerens policer og selskabernes tilbud.
+> * Hvis beløbet ikke kan parses eller vi er usikre → gem `null` og behandl det eksplcilt som “pris ukendt” i alle beregninger og i UI.
+> * Ingen division med 0, ingen `NaN` eller `Infinity` i savings/percentage.
+
+---
+
+### 1. Find præmie-felter og beregninger i dag
+
+1. Find de tabeller / modeller, hvor præmier gemmes for:
+
+   * Brugerens nuværende policer (current).
+   * Selskabernes tilbuds-policer (offer).
+2. Typiske felter kunne være:
+
+   * `premium`, `annualPremium`, `yearlyPremium`, `price`, `premium_amount`, osv.
+3. Find de steder, hvor savings/percentage beregnes, fx:
+
+   * Health check-summary pr. policy.
+   * Comparisons (current vs offer) – årlig besparelse, procentbesparelse, månedlig besparelse, 10-års graf osv.
+4. Notér:
+
+   * Hvilke felter bruges i beregningen?
+   * Er de strings eller numbers i koden?
+   * Er der allerede et “parsed” felt i JSON fra OCR (fx `parsedPremium`)?
+
+---
+
+### 2. Standardiser premium-felter og typer
+
+Vi vil have ét konsistent felt, der bruges i beregninger:
+
+1. I schema (`shared/schema.ts`) for de relevante entiteter (policy-snapshots / ekstrakterede policer):
+
+   * Sørg for, at der findes et numerisk felt, fx:
+
+     ```ts
+     premiumAmount: numeric("premium_amount", { precision: 14, scale: 2 }).nullable()
+     ```
+
+     eller type der svarer til jeres setup.
+2. Hvis I i dag kun har præmien som tekst (fx `premiumRaw: text`), skal vi:
+
+   * Beholde det rå felt (til debugging), men introducere `premium_amount` (number / decimal, nullable) som **det eneste felt**, der bruges i logik.
+
+Hvis feltet allerede findes, så spring schema-tilføjelse over og fokuser på parsing + brug.
+
+---
+
+### 3. Robust parsing: tekst → `premium_amount` eller `null`
+
+1. Find den funktion / det step i extraction-flowet, hvor præmien udtrækkes fra OCR/AI-output:
+
+   * Det kan være en parser-funktion som `parsePremium`, `mapJsonToPolicy`, osv.
+
+2. Implementér/stram en helper, fx:
+
+   ```ts
+   function parsePremiumToNumber(raw: string | null | undefined): number | null {
+     if (!raw) return null;
+
+     // 1) Fjern mellemrum og typiske currency-ting
+     let cleaned = raw
+       .replace(/[^\d.,]/g, "") // behold kun tal, . og ,
+       .trim();
+
+     if (!cleaned) return null;
+
+     // 2) Håndtér dansk format (fx "12.345,67") → "12345.67"
+     // Heuristik:
+     // - Hvis både . og , findes, antag at , er decimal og . er tusindtalsseparator.
+     // - Hvis kun , findes, og der er 1-2 cifre efter, antag at , er decimal.
+     // - Ellers, brug . som decimal og fjern evt. , som tusindtalsseparator.
+     // (Du må implementere konkrete regler, der passer til jeres data.)
+     // Hvis parsing fejler → returner null.
+
+     // TODO: implementer konkrete parsing-regler
+   }
+   ```
+
+3. Essensen:
+
+   * Hvis vi **ikke** trygt kan ende med et parse’bart tal → returner `null`.
+   * **Ingen** exceptions her – hellere `null` end crash.
+
+4. Når du mapper OCR/JSON til policy-model:
+
+   * Gem både:
+
+     * `premium_raw` (evt.)
+     * `premium_amount = parsePremiumToNumber(premium_raw)`
+   * Hvis parse-funktionen returnerer `null`, accepter det – det er præcis det, vi vil have.
+
+---
+
+### 4. Ingen beregninger hvis `premium_amount` mangler eller er 0
+
+Nu skal vi sikre, at savings/percentage-logik er defensiv.
+
+1. Find alle steder, hvor savings beregnes (backend). Typisk:
+
+   ```ts
+   const savings = currentPremium - offerPremium;
+   const percentage = savings / currentPremium;
+   ```
+
+2. Refaktor til noget i stil med:
+
+   ```ts
+   function computeSavings(currentPremium: number | null, offerPremium: number | null) {
+     if (currentPremium == null || currentPremium <= 0) {
+       return {
+         hasPrice: false,
+         savingsAmount: null,
+         savingsPercentage: null,
+         monthlySavings: null,
+       };
+     }
+     if (offerPremium == null || offerPremium < 0) {
+       return {
+         hasPrice: false,
+         savingsAmount: null,
+         savingsPercentage: null,
+         monthlySavings: null,
+       };
+     }
+
+     const savingsAmount = currentPremium - offerPremium;
+     const savingsPercentage =
+       currentPremium > 0 ? savingsAmount / currentPremium : null;
+     const monthlySavings = savingsAmount / 12;
+
+     return {
+       hasPrice: true,
+       savingsAmount,
+       savingsPercentage,
+       monthlySavings,
+     };
+   }
+   ```
+
+3. Brug denne helper i alle relevante steder, hvor du i dag laver savings/percentage direkte.
+
+   * Sørg for, at du **aldrig** laver `x / currentPremium` uden at tjekke `> 0` først.
+
+4. For 10-års grafer:
+
+   * Hvis `hasPrice === false`, skal grafen enten:
+
+     * Slet ikke vises, eller
+     * Vises som tom/neutral (“Pris kunne ikke aflæses automatisk”).
+
+---
+
+### 5. API/DTO: markér tydeligt når pris mangler
+
+1. I de responses der sendes til frontend (health check, sammenligning), tilføj tydelige felter, fx:
+
+   ```ts
+   {
+     hasPrice: boolean; // true hvis både current og offer premium kan bruges
+     currentPremium: number | null;
+     offerPremium: number | null;
+     savingsAmount: number | null;
+     savingsPercentage: number | null;
+     monthlySavings: number | null;
+   }
+   ```
+
+2. Hvis parsing fejlede for enten current eller offer:
+
+   * `hasPrice = false`
+   * Alle beregnede felter er `null`.
+
+Frontend kan så nemt vise det korrekt uden gæt eller egen logik.
+
+---
+
+### 6. UI-tekster når prisen mangler
+
+Opdater frontend-komponenterne, så de ikke forsøger at formatere `null` som et tal.
+
+1. Find de komponenter, der viser:
+
+   * Årlig pris/“Før/efter”-kort.
+   * Besparelsesbadge (%).
+   * 10-års besparelsesgraf.
+
+2. Brug `hasPrice` / null-checks:
+
+   * Hvis `hasPrice === true`:
+
+     * Vis som i dag (pris, besparelse, procent, graf).
+   * Hvis `hasPrice === false`:
+
+     * Skjul procentbadge og 10-års graf.
+     * Vis simpel tekst i stedet, fx:
+
+       * **“Pris kunne ikke aflæses automatisk.”**
+       * Evt. en kort forklaring:
+
+         > “Du kan stadig sammenligne dækning, men vi kan ikke beregne den præcise besparelse.”
+
+3. Sørg for, at alle steder der formatterer tal (fx `formatCurrency(savingsAmount)`) først checker for `null`.
+
+---
+
+### 7. Acceptance criteria
+
+**Case 1 – God præmie på begge sider (current og offer)**
+
+* Parsing lykkes → `premium_amount` sat for både current & offer.
+* `computeSavings` returnerer tal for:
+
+  * `savingsAmount`
+  * `savingsPercentage`
+  * `monthlySavings`
+* UI viser:
+
+  * Årlig besparelse (kr.).
+  * %-badge.
+  * 10-års graf.
+* Ingen NaN/Infinity nogen steder.
+
+**Case 2 – Præmie kan ikke læses på current eller offer**
+
+* Parsing-funktion returnerer `null` → `premium_amount = null`.
+* `computeSavings` returnerer:
+
+  * `hasPrice = false`
+  * Alle beregnede felter = `null`.
+* UI:
+
+  * Viser **ingen** tal på besparelse/%.
+  * Viser i stedet tekst: “Pris kunne ikke aflæses automatisk.”
+  * Health check/sammenligning virker stadig (viser dækninger osv.), og siden crasher ikke.
+
+**Case 3 – Edge (currentPremium = 0 eller negativ)**
+
+* Savings-funktion behandles som `hasPrice = false` (ingen mening at lave procenter).
+* Ingen divisioner, ingen NaN, ingen crash.
+
+**Generelt:**
+
+* Ingen NaN/Infinity i API-responses.
+* Ingen runtime errors i UI pga. `undefined`/`null` i premium-felter.
+* Bruger kan stadig få værdi ud af dækning-sammenligningen, selv når pris mangler.
+
+---
+
+Når dev’en har implementeret det, er en hurtig test:
+
+1. Force en dårlig præmie i OCR-output (fx “N/A” eller “xxkr”).
+2. Se at `premium_amount = null`, at UI viser “Pris kunne ikke aflæses automatisk”, og at resten af kortet stadig fungerer.
+
+Så kan vi tage **3.3 (multi-policy PDF hvor ikke alle bliver genkendt)** bagefter.

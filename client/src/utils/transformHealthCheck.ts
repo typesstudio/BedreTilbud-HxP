@@ -106,8 +106,10 @@ export interface HealthCheckViewModel {
     monthlyRangeText?: string;
     totalAfter12Months: number;
     totalAfter10Years: number;
+    hasPrice?: boolean;
   };
   siblingTabs: PolicyTab[];
+  hasPrice?: boolean;
 }
 
 const policyTypeLabels: { [key: string]: string } = {
@@ -238,6 +240,11 @@ export function transformPolicyHealthCheckToView(
 
   // Transform cumulative savings for ComparisonSavingsChart
   let savingsOverTime: HealthCheckViewModel["savingsOverTime"] | undefined;
+  
+  // Step 3.2: Extract hasPrice flag from API response
+  const apiHasPrice = result.hasPrice ?? healthCheck?.hasPrice;
+  let hasPrice = apiHasPrice !== false; // Default to true unless explicitly false
+  
   if (cumulativeSavingsData.chartData && cumulativeSavingsData.chartData.length > 0) {
     const chartData = cumulativeSavingsData.chartData.map((item: any) => ({
       label: item.month || item.label || "",
@@ -261,6 +268,7 @@ export function transformPolicyHealthCheckToView(
       monthlyRangeText,
       totalAfter12Months: after12Months,
       totalAfter10Years: after10Years,
+      hasPrice,
     };
   } else if (potentialSavings.realistic) {
     // If we have annual savings but no chart data, generate a simple projection
@@ -279,7 +287,13 @@ export function transformPolicyHealthCheckToView(
       chartData,
       totalAfter12Months: annualSavings,
       totalAfter10Years: annualSavings * 10,
+      hasPrice,
     };
+  } else {
+    // No savings data - check if we should mark hasPrice as false
+    if (apiHasPrice === undefined && !potentialSavings.realistic) {
+      hasPrice = false;
+    }
   }
 
   // Get annual savings - try multiple sources for compatibility
@@ -324,6 +338,7 @@ export function transformPolicyHealthCheckToView(
     weaknesses,
     savingsOverTime,
     siblingTabs,
+    hasPrice,
   };
 }
 
