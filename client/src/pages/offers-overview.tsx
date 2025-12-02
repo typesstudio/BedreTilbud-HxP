@@ -234,6 +234,11 @@ export default function OffersOverview() {
           firstOfferSnapshotId,
           notificationStatus: offer.notificationStatus,
           notificationError: offer.notificationError,
+          statusLabel: offer.statusLabel,
+          statusDescription: offer.statusDescription,
+          statusVariant: offer.statusVariant,
+          notificationLabel: offer.notificationLabel,
+          notificationDescription: offer.notificationDescription,
         };
       })
     : [];
@@ -389,14 +394,14 @@ export default function OffersOverview() {
                           {offer.company?.name || 'Ukendt selskab'}
                         </span>
                         <div className="flex items-center gap-2 flex-wrap">
-                          {offer.comparisonStatus === 'failed' && (
-                            <Badge variant="warning" data-testid={`badge-failed-${offer.id}`}>
-                              Kan ikke sammenlignes
-                            </Badge>
-                          )}
-                          {offer.comparisonStatus === 'pending' && (
-                            <Badge variant="neutral" data-testid={`badge-pending-${offer.id}`}>
-                              Afventer sammenligning
+                          {/* Step 5.2: Use status labels from API */}
+                          {offer.statusLabel && (
+                            <Badge 
+                              variant={offer.statusVariant === 'error' ? 'warning' : 
+                                      offer.statusVariant === 'success' ? 'success' : 'neutral'} 
+                              data-testid={`badge-status-${offer.id}`}
+                            >
+                              {offer.statusLabel}
                             </Badge>
                           )}
                           <Badge variant="neutral">
