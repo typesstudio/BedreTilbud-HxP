@@ -1,6 +1,7 @@
 import type { IStorage } from "../storage";
 import type { OfferSnapshot, InsertHealthCheck } from "@shared/schema";
 import { insuranceCheckService } from "./insuranceCheckService";
+import { SUPPORTED_POLICY_TYPES } from "./policySnapshots/PolicySnapshotService";
 
 interface HealthCheckOptions {
   source: 'current_upload' | 'offer_upload' | 'email_offer' | 'onboarding';
@@ -139,9 +140,9 @@ export class HealthCheckOrchestrator {
       }
 
       // 3. Load OfferSnapshots from document
-      const snapshots = await this.storage.getOfferSnapshotsByDocument(documentId);
+      const allSnapshots = await this.storage.getOfferSnapshotsByDocument(documentId);
       
-      if (snapshots.length === 0) {
+      if (allSnapshots.length === 0) {
         console.log(`[HealthCheckOrchestrator] No snapshots found for document ${documentId}`);
         return {
           success: true,
@@ -154,7 +155,30 @@ export class HealthCheckOrchestrator {
         };
       }
 
-      console.log(`[HealthCheckOrchestrator] Found ${snapshots.length} snapshots, running health checks...`);
+      // Step 3.3: Filter out unknown/unsupported policy types - they cannot have health checks
+      const snapshots = allSnapshots.filter(s => {
+        const policyType = s.policyType?.toLowerCase();
+        if (!policyType || !SUPPORTED_POLICY_TYPES.includes(policyType as any)) {
+          console.log(`[HealthCheckOrchestrator] Skipping unknown policy type "${s.policyType}" from snapshot ${s.id?.substring(0, 8)}`);
+          return false;
+        }
+        return true;
+      });
+
+      if (snapshots.length === 0) {
+        console.log(`[HealthCheckOrchestrator] All ${allSnapshots.length} snapshots have unknown types - skipping health checks`);
+        return {
+          success: true,
+          documentId,
+          healthChecksCreated: 0,
+          healthChecksFailed: 0,
+          skipped: true,
+          skipReason: `All ${allSnapshots.length} policies in document have unknown/unsupported types`,
+          errors: []
+        };
+      }
+
+      console.log(`[HealthCheckOrchestrator] Found ${snapshots.length} supported snapshots (${allSnapshots.length - snapshots.length} unknown skipped), running health checks...`);
 
       // 4. Run health checks for each snapshot in parallel
       const results = await Promise.allSettled(
