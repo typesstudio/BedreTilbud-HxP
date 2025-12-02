@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Badge } from "@/ui/components/Badge";
@@ -10,7 +10,8 @@ import { ComparisonHeader } from "@/components/comparison/ComparisonHeader";
 import { ComparisonTabs, policyTypeIcons } from "@/components/comparison/ComparisonTabs";
 import { ComparisonHighlights, Highlight } from "@/components/comparison/ComparisonHighlights";
 import { ComparisonDetailedMatrix, CoverageRow } from "@/components/comparison/ComparisonDetailedMatrix";
-import { usePolicyComparisons } from "@/hooks/usePolicyComparisons";
+import { usePolicyComparisons, type PolicyComparisonRow } from "@/hooks/usePolicyComparisons";
+import { AlertTriangle, Info } from "lucide-react";
 import {
   FeatherHome,
   FeatherShield,
@@ -26,6 +27,9 @@ export default function OfferComparisonAll() {
   const userId = localStorage.getItem("userId");
 
   const comparisons = data?.comparisons || [];
+  const missingInOffers = data?.missingInOffers || [];
+  const coversAllCurrentPolicies = data?.coversAllCurrentPolicies ?? true;
+  const aggregatedSavings = data?.aggregatedSavings;
   
   // Fetch email threads to enable messaging
   const { data: threadsResponse } = useQuery<{ data: any[]; pagination: any }>({
@@ -43,43 +47,16 @@ export default function OfferComparisonAll() {
     }).format(amount) + " kr";
   };
 
-  // Calculate overall savings
-  const overallStats = useMemo(() => {
-    let totalCurrentPremium = 0;
-    let totalOfferPremium = 0;
-    let count = 0;
-
-    comparisons.forEach((comp: any) => {
-      const currentPremium = comp.current?.pricing?.annualPremium;
-      const offers = comp.offers || [];
-      const cheapestOffer = offers.reduce((min: any, offer: any) => {
-        const offerPremium = offer.pricing?.annualPremium;
-        const minPremium = min?.pricing?.annualPremium;
-        if (!offerPremium) return min;
-        if (!minPremium) return offer;
-        return offerPremium < minPremium ? offer : min;
-      }, null);
-
-      if (currentPremium && cheapestOffer?.pricing?.annualPremium) {
-        totalCurrentPremium += currentPremium;
-        totalOfferPremium += cheapestOffer.pricing.annualPremium;
-        count++;
-      }
-    });
-
-    const totalSavings = totalCurrentPremium - totalOfferPremium;
-    const savingsPercentage = totalCurrentPremium > 0 
-      ? (totalSavings / totalCurrentPremium) * 100 
-      : 0;
-
-    return {
-      totalCurrentPremium,
-      totalOfferPremium,
-      totalSavings: count > 0 ? totalSavings : null,
-      savingsPercentage: count > 0 ? savingsPercentage : null,
-      count,
-    };
-  }, [comparisons]);
+  // Use aggregated savings from API (Step 4.1)
+  const overallStats = {
+    totalCurrentPremium: aggregatedSavings?.totalCurrentPremium ?? 0,
+    totalOfferPremium: aggregatedSavings?.totalOfferPremium ?? 0,
+    totalSavings: aggregatedSavings?.totalSavings ?? null,
+    savingsPercentage: aggregatedSavings?.hasPrice && aggregatedSavings?.totalCurrentPremium && aggregatedSavings?.totalSavings !== null
+      ? (aggregatedSavings.totalSavings / aggregatedSavings.totalCurrentPremium) * 100 
+      : null,
+    hasPrice: aggregatedSavings?.hasPrice ?? false,
+  };
 
   // TODO: Replace with real highlights data from API when available
   const highlights: Highlight[] = [];
@@ -179,6 +156,32 @@ export default function OfferComparisonAll() {
             </div>
           </div>
 
+          {/* Step 4.1: Partial Coverage Warning */}
+          {!coversAllCurrentPolicies && missingInOffers.length > 0 && (
+            <div 
+              className="flex w-full items-start gap-3 rounded-lg border border-warning-200 bg-warning-50 px-4 py-3"
+              data-testid="partial-coverage-warning"
+            >
+              <AlertTriangle className="h-5 w-5 text-warning-600 flex-shrink-0 mt-0.5" />
+              <div className="flex flex-col gap-1">
+                <span className="text-body-bold font-body-bold text-warning-800">
+                  Tilbuddet dækker ikke alle dine forsikringer
+                </span>
+                <span className="text-body font-body text-warning-700">
+                  Du har {missingInOffers.length} forsikring{missingInOffers.length > 1 ? 'er' : ''} som ikke er inkluderet i tilbuddet:{' '}
+                  {missingInOffers.map((m, i) => (
+                    <span key={m.policyType}>
+                      {m.label}{i < missingInOffers.length - 1 ? ', ' : ''}
+                    </span>
+                  ))}
+                </span>
+                <span className="text-caption font-caption text-warning-600">
+                  Besparelsesberegningen inkluderer kun de forsikringer der er med i tilbuddet
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Quick Comparison Table */}
           <div className="flex w-full flex-col items-start gap-4">
             <span className="text-heading-2 font-heading-2 text-default-font">
@@ -196,53 +199,71 @@ export default function OfferComparisonAll() {
                   </Table.HeaderRow>
                 }
               >
-                {comparisons.map((comp: any) => {
+                {comparisons.map((comp: PolicyComparisonRow) => {
                   const Icon = policyTypeIcons[comp.policyType] || FeatherHome;
                   const currentPremium = comp.current?.pricing?.annualPremium;
                   const offers = comp.offers || [];
-                  const cheapestOffer = offers[0]; // Already sorted by backend
+                  const cheapestOffer = offers[0];
                   const offerPremium = cheapestOffer?.pricing?.annualPremium;
                   const savings = cheapestOffer?.savingsAnnual;
                   const hasPricing = currentPremium && offerPremium;
+                  const isMissing = comp.matchStatus === 'current_only';
+                  const policyLabel = comp.policyType.charAt(0).toUpperCase() + comp.policyType.slice(1);
 
                   return (
-                    <Table.Row key={comp.policyType}>
+                    <Table.Row 
+                      key={comp.policyType}
+                      data-testid={`row-comparison-${comp.policyType}`}
+                    >
                       <Table.Cell>
                         <div className="flex items-center gap-2">
                           <IconWithBackground 
                             size="small" 
                             icon={<Icon />}
-                            variant={hasPricing ? "neutral" : "warning"}
+                            variant={isMissing ? "error" : hasPricing ? "neutral" : "warning"}
                           />
-                          <span className={`whitespace-nowrap text-body-bold font-body-bold ${hasPricing ? 'text-default-font' : 'text-subtext-color'}`}>
-                            {comp.policyType.charAt(0).toUpperCase() + comp.policyType.slice(1)}
-                          </span>
+                          <div className="flex flex-col">
+                            <span className={`whitespace-nowrap text-body-bold font-body-bold ${isMissing ? 'text-subtext-color' : hasPricing ? 'text-default-font' : 'text-subtext-color'}`}>
+                              {policyLabel}
+                            </span>
+                            {isMissing && (
+                              <span className="text-caption font-caption text-warning-600">
+                                Ikke i tilbud
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </Table.Cell>
                       <Table.Cell>
-                        <span className={`whitespace-nowrap text-body font-body ${hasPricing ? 'text-default-font' : 'text-subtext-color'}`}>
+                        <span className={`whitespace-nowrap text-body font-body ${isMissing || !hasPricing ? 'text-subtext-color' : 'text-default-font'}`}>
                           {formatCurrency(currentPremium)}
                         </span>
                       </Table.Cell>
                       <Table.Cell>
-                        <span className={`whitespace-nowrap text-body font-body ${hasPricing ? 'text-default-font' : 'text-subtext-color'}`}>
-                          {formatCurrency(offerPremium)}
+                        <span className={`whitespace-nowrap text-body font-body ${isMissing ? 'text-warning-600' : hasPricing ? 'text-default-font' : 'text-subtext-color'}`}>
+                          {isMissing ? "Mangler" : formatCurrency(offerPremium)}
                         </span>
                       </Table.Cell>
                       <Table.Cell>
-                        <span className={`whitespace-nowrap text-body-bold font-body-bold ${!hasPricing ? 'text-subtext-color' : savings == null ? 'text-subtext-color' : savings > 0 ? 'text-success-600' : savings < 0 ? 'text-error-600' : 'text-default-font'}`}>
-                          {!hasPricing ? "—" : savings == null ? "Afventer" : savings > 0 ? formatCurrency(savings) : savings < 0 ? `-${formatCurrency(Math.abs(savings))}` : '0 kr'}
+                        <span className={`whitespace-nowrap text-body-bold font-body-bold ${isMissing ? 'text-subtext-color' : !hasPricing ? 'text-subtext-color' : savings == null ? 'text-subtext-color' : savings > 0 ? 'text-success-600' : savings < 0 ? 'text-error-600' : 'text-default-font'}`}>
+                          {isMissing ? "—" : !hasPricing ? "—" : savings == null ? "Afventer" : savings > 0 ? formatCurrency(savings) : savings < 0 ? `-${formatCurrency(Math.abs(savings))}` : '0 kr'}
                         </span>
                       </Table.Cell>
                       <Table.Cell>
-                        <Button
-                          variant={hasPricing ? "brand-tertiary" : "neutral-tertiary"}
-                          size="small"
-                          onClick={() => setLocation(`/sammenligning/tilbud/${comp.policyType}`)}
-                          data-testid={`button-details-${comp.policyType}`}
-                        >
-                          {hasPricing ? "Se detaljer" : "Afventer"}
-                        </Button>
+                        {isMissing ? (
+                          <Badge variant="warning" data-testid={`badge-missing-${comp.policyType}`}>
+                            Ikke dækket
+                          </Badge>
+                        ) : (
+                          <Button
+                            variant={hasPricing ? "brand-tertiary" : "neutral-tertiary"}
+                            size="small"
+                            onClick={() => setLocation(`/sammenligning/tilbud/${comp.policyType}`)}
+                            data-testid={`button-details-${comp.policyType}`}
+                          >
+                            {hasPricing ? "Se detaljer" : "Afventer"}
+                          </Button>
+                        )}
                       </Table.Cell>
                     </Table.Row>
                   );

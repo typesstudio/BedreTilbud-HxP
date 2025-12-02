@@ -1298,6 +1298,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Policy Comparisons (new simplified architecture based on policy_snapshots)
+  // Step 4.1: Extended to include partial coverage info
   app.get("/api/policies/comparisons", requireAuth, async (req, res) => {
     try {
       // Get authenticated user ID from headers (set by requireAuth middleware)
@@ -1309,18 +1310,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "User not authenticated" });
       }
 
-      logger.info('[PolicyComparisons] Fetching comparisons', { userId });
+      logger.info('[PolicyComparisons] Fetching comparisons with coverage', { userId });
 
-      // Get comparisons from PolicyComparisonService
-      const comparisons = await policyComparisonService.getComparisonsForUser(userId);
+      // Get comparisons with partial coverage info from PolicyComparisonService
+      const result = await policyComparisonService.getComparisonsWithCoverage(userId);
 
       logger.info('[PolicyComparisons] Comparisons retrieved', { 
         userId, 
-        comparisonCount: comparisons.length,
-        policyTypes: comparisons.map(c => c.policyType)
+        comparisonCount: result.comparisons.length,
+        matchedCount: result.matchedCount,
+        missingCount: result.missingInOffers.length,
+        coversAll: result.coversAllCurrentPolicies,
+        policyTypes: result.comparisons.map(c => c.policyType)
       });
 
-      res.json({ comparisons });
+      res.json(result);
     } catch (error: any) {
       logger.error('[PolicyComparisons] Failed to fetch comparisons', error, { 
         userId: req.headers['x-user-id'] as string | undefined

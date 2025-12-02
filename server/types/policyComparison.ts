@@ -39,4 +39,26 @@ export type PolicyComparisonRow = {
   coverageAddress: string | null;
   current: PolicySnapshotSummary | null;
   offers: PolicyOfferWithDelta[];
+  matchStatus: 'matched' | 'missing_in_offer' | 'current_only';
+};
+
+/**
+ * Step 4.1: Extended response with partial coverage info
+ */
+export type PolicyComparisonsWithCoverage = {
+  comparisons: PolicyComparisonRow[];
+  missingInOffers: Array<{
+    policyType: string;
+    label: string;
+    currentPremium: number | null;
+  }>;
+  coversAllCurrentPolicies: boolean;
+  matchedCount: number;
+  totalCurrentCount: number;
+  aggregatedSavings: {
+    hasPrice: boolean;
+    totalSavings: number | null;
+    totalCurrentPremium: number | null;
+    totalOfferPremium: number | null;
+  };
 };
