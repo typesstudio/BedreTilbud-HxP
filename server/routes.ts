@@ -1690,6 +1690,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Debug endpoint for document extraction status (Step 3.1)
+  app.get("/api/debug/document-status", async (req, res) => {
+    try {
+      const userId = req.query.userId as string;
+      if (!userId) {
+        return res.status(400).json({ message: "userId required" });
+      }
+
+      const { db } = await import("./db");
+      const { documents: documentsTable } = await import("@shared/schema");
+      const { eq, desc } = await import("drizzle-orm");
+
+      const docs = await db
+        .select({
+          id: documentsTable.id,
+          fileName: documentsTable.fileName,
+          documentType: documentsTable.documentType,
+          extractionStatus: documentsTable.extractionStatus,
+          errorReason: documentsTable.errorReason,
+          totalPoliciesExtracted: documentsTable.totalPoliciesExtracted,
+          documentKind: documentsTable.documentKind,
+          createdAt: documentsTable.createdAt,
+        })
+        .from(documentsTable)
+        .where(eq(documentsTable.userId, userId))
+        .orderBy(desc(documentsTable.createdAt))
+        .limit(50);
+
+      const statusCounts = {
+        pending: docs.filter(d => d.extractionStatus === 'pending').length,
+        processing: docs.filter(d => d.extractionStatus === 'processing').length,
+        completed: docs.filter(d => d.extractionStatus === 'completed').length,
+        failed: docs.filter(d => d.extractionStatus === 'failed').length,
+      };
+
+      const errorReasonCounts: Record<string, number> = {};
+      docs.filter(d => d.errorReason).forEach(d => {
+        const reason = d.errorReason || 'unknown';
+        errorReasonCounts[reason] = (errorReasonCounts[reason] || 0) + 1;
+      });
+
+      res.json({
+        totalDocuments: docs.length,
+        statusCounts,
+        errorReasonCounts,
+        documents: docs.map(d => ({
+          id: d.id,
+          fileName: d.fileName,
+          documentType: d.documentType,
+          extractionStatus: d.extractionStatus,
+          errorReason: d.errorReason,
+          totalPoliciesExtracted: d.totalPoliciesExtracted,
+          documentKind: d.documentKind,
+          createdAt: d.createdAt,
+        }))
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Debug endpoint for email tracking
   app.get("/api/debug/email-tracking", async (req, res) => {
     try {

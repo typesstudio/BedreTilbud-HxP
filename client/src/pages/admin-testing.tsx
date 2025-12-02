@@ -13,7 +13,9 @@ import {
   FeatherAlertCircle,
   FeatherUser,
   FeatherHash,
-  FeatherClock
+  FeatherClock,
+  FeatherFile,
+  FeatherLoader
 } from "@subframe/core";
 
 export default function AdminTesting() {
@@ -38,6 +40,16 @@ export default function AdminTesting() {
     enabled: !!selectedUserId,
     queryFn: async () => {
       const response = await apiRequest("GET", `/api/debug/email-tracking?userId=${selectedUserId}`);
+      return response.json();
+    },
+  });
+
+  // Get document status for selected user (Step 3.1)
+  const { data: documentStatus, refetch: refetchDocStatus } = useQuery({
+    queryKey: ["/api/debug/document-status", selectedUserId],
+    enabled: !!selectedUserId,
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/debug/document-status?userId=${selectedUserId}`);
       return response.json();
     },
   });
@@ -252,6 +264,99 @@ export default function AdminTesting() {
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* Document Status Debug - Step 3.1 */}
+              {documentStatus && (
+                <div className="flex flex-col gap-4 mt-4 p-4 rounded-lg border border-solid border-neutral-200 bg-neutral-50">
+                  <div className="flex items-center gap-2">
+                    <FeatherFile className="text-brand-600 w-5 h-5" />
+                    <span className="text-body-bold font-body-bold text-default-font">
+                      Dokument Status (Step 3.1)
+                    </span>
+                  </div>
+
+                  {/* Status Counts */}
+                  <div className="grid grid-cols-4 gap-3">
+                    <div className="rounded-md bg-neutral-100 px-3 py-2 text-center">
+                      <span className="text-heading-3 font-heading-3 text-neutral-600">
+                        {documentStatus.statusCounts?.pending || 0}
+                      </span>
+                      <br />
+                      <span className="text-caption font-caption text-subtext-color">Afventer</span>
+                    </div>
+                    <div className="rounded-md bg-brand-50 px-3 py-2 text-center">
+                      <span className="text-heading-3 font-heading-3 text-brand-600">
+                        {documentStatus.statusCounts?.processing || 0}
+                      </span>
+                      <br />
+                      <span className="text-caption font-caption text-brand-700">Behandler</span>
+                    </div>
+                    <div className="rounded-md bg-success-50 px-3 py-2 text-center">
+                      <span className="text-heading-3 font-heading-3 text-success-600">
+                        {documentStatus.statusCounts?.completed || 0}
+                      </span>
+                      <br />
+                      <span className="text-caption font-caption text-success-700">Færdig</span>
+                    </div>
+                    <div className="rounded-md bg-error-50 px-3 py-2 text-center">
+                      <span className="text-heading-3 font-heading-3 text-error-600">
+                        {documentStatus.statusCounts?.failed || 0}
+                      </span>
+                      <br />
+                      <span className="text-caption font-caption text-error-700">Fejlet</span>
+                    </div>
+                  </div>
+
+                  {/* Error Reasons */}
+                  {Object.keys(documentStatus.errorReasonCounts || {}).length > 0 && (
+                    <div className="flex flex-col gap-2">
+                      <span className="text-caption font-caption text-subtext-color">Fejlårsager:</span>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(documentStatus.errorReasonCounts || {}).map(([reason, count]) => (
+                          <div key={reason} className="rounded-md bg-error-100 px-2 py-1">
+                            <span className="text-caption font-caption text-error-700">
+                              {reason}: {count as number}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recent Documents */}
+                  <div className="flex flex-col gap-2 max-h-60 overflow-y-auto">
+                    <span className="text-caption font-caption text-subtext-color">Seneste dokumenter:</span>
+                    {documentStatus.documents?.slice(0, 10).map((doc: any) => (
+                      <div 
+                        key={doc.id}
+                        className="flex items-center justify-between rounded-md bg-white px-3 py-2 border border-neutral-100"
+                      >
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          {doc.extractionStatus === 'pending' && <FeatherClock className="text-neutral-400 w-4 h-4 flex-shrink-0" />}
+                          {doc.extractionStatus === 'processing' && <FeatherLoader className="text-brand-600 w-4 h-4 animate-spin flex-shrink-0" />}
+                          {doc.extractionStatus === 'completed' && <FeatherCheckCircle className="text-success-600 w-4 h-4 flex-shrink-0" />}
+                          {doc.extractionStatus === 'failed' && <FeatherAlertCircle className="text-error-600 w-4 h-4 flex-shrink-0" />}
+                          <span className="text-caption font-caption text-default-font truncate">
+                            {doc.fileName}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          {doc.totalPoliciesExtracted !== null && (
+                            <span className="text-caption font-caption text-subtext-color">
+                              {doc.totalPoliciesExtracted} policer
+                            </span>
+                          )}
+                          {doc.errorReason && (
+                            <span className="text-caption font-caption text-error-600 bg-error-50 px-2 py-0.5 rounded">
+                              {doc.errorReason}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {emailTracking && (
                 <div className="flex flex-col gap-4">
