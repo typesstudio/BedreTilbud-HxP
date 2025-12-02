@@ -34,6 +34,7 @@ The backend is built with Node.js and Express.js, providing a RESTful API. Key a
 -   **Data Persistence**: Drizzle ORM with Neon Serverless PostgreSQL.
 -   **Security**: Input validation, RBAC, rate limiting, PII-redacting logging.
 -   **Reliability**: AI retry logic, distributed locking, Zod for structured validation, null-safe pricing logic, and enhanced pricing extraction prompts.
+-   **Extraction Status State Machine (Step 3.1)**: Documents follow strict status progression: `pending` → `processing` → `completed`/`failed`. All entry points (upload, email, reprocess) create documents with `pending` status. `ExtractionOrchestratorService` manages transitions with centralized `markDocumentStatus` helper. Failed extractions include machine-readable `errorReason` codes (ocr_timeout, pdf_password_protected, json_parse_error, etc.). Downstream orchestrators (Health Check, Comparison) only process documents with `completed` status.
 
 ## External Dependencies
 -   **Google APIs client library**: For Gmail integration.
