@@ -2,6 +2,14 @@ import type { IStorage } from '../storage';
 import type { Policy, Comparison } from '@shared/schema';
 import { ComparisonService } from './comparisonService';
 import { insuranceCheckService } from './insuranceCheckService';
+import { computeSavings } from '../utils/savingsCalculator';
+import { 
+  getPolicyTypeLabel, 
+  type PolicyMatchStatus, 
+  type PolicyMatchRow, 
+  type MissingPolicyInfo,
+  type CombinedOverviewWithCoverage 
+} from '../../shared/apiTypes';
 
 interface MatchedPair {
   currentPolicy: Policy;
@@ -267,39 +275,127 @@ export class PolicyMatchingService {
     console.log(`[Policy Matching] ✅ Health check completed for ${offerPolicy.policyType}`);
   }
 
-  async getCombinedOverview(userId: string, companyId: string): Promise<{
-    totalSavings: number;
-    totalSavingsPercentage: number;
-    policyCount: number;
-    verdict: 'recommended' | 'consider' | 'not_recommended';
-    highlights: Array<{
-      title: string;
-      description: string;
-      icon: string;
-      variant: 'success' | 'warning' | 'error';
-    }>;
-    quickComparison: Array<{
-      policyType: string;
-      currentPremium: number;
-      offerPremium: number;
-      savings: number;
-      verdict: string;
-    }>;
-    comparisonIds: string[];
-  }> {
+  /**
+   * Step 4.1: Get combined overview with partial coverage detection
+   * 
+   * This function:
+   * 1. Loads all user's current policies
+   * 2. Loads comparisons for the specified company
+   * 3. Determines which policies are matched vs missing in the offer
+   * 4. Calculates aggregated savings ONLY for matched policies with valid prices
+   * 5. Returns coverage flags for UI to display partial coverage warnings
+   */
+  async getCombinedOverview(userId: string, companyId: string): Promise<CombinedOverviewWithCoverage> {
     console.log(`[Policy Matching] Generating combined overview for user ${userId}, company ${companyId}`);
 
-    const comparisons = await this.storage.getComparisonsByUserAndCompany(userId, companyId);
-
-    if (comparisons.length === 0) {
-      throw new Error('No comparisons found for this company');
+    // 1. Load all user's current policies (to detect missing coverage)
+    const allCurrentPolicies = await this.storage.getPoliciesByUser(userId);
+    const currentPolicies = allCurrentPolicies.filter(p => p.isOwnPolicy);
+    
+    // Build map of current policy types
+    const currentPolicyTypes = new Map<string, Policy>();
+    for (const policy of currentPolicies) {
+      if (policy.policyType && !currentPolicyTypes.has(policy.policyType)) {
+        currentPolicyTypes.set(policy.policyType, policy);
+      }
     }
 
-    let totalSavings = 0;
+    console.log(`[Policy Matching] User has ${currentPolicyTypes.size} current policy types: ${Array.from(currentPolicyTypes.keys()).join(', ')}`);
+
+    // 2. Load comparisons for this company
+    const comparisons = await this.storage.getComparisonsByUserAndCompany(userId, companyId);
+    
+    // Track which policy types have comparisons (matched)
+    const matchedPolicyTypes = new Set<string>();
+    for (const comparison of comparisons) {
+      if (comparison.policyType) {
+        matchedPolicyTypes.add(comparison.policyType);
+      }
+    }
+
+    console.log(`[Policy Matching] Company has ${matchedPolicyTypes.size} matched policy types: ${Array.from(matchedPolicyTypes).join(', ')}`);
+
+    // 3. Build policy matches with status
+    const policyMatches: PolicyMatchRow[] = [];
+    const missingPolicyTypes: MissingPolicyInfo[] = [];
+
+    // Add matched policies
+    for (const comparison of comparisons) {
+      const policyType = comparison.policyType || 'unknown';
+      const label = getPolicyTypeLabel(policyType);
+      
+      const currentPolicy = comparison.currentPolicyId 
+        ? await this.storage.getPolicy(comparison.currentPolicyId) 
+        : null;
+      const offerPolicy = comparison.offerPolicyId 
+        ? await this.storage.getPolicy(comparison.offerPolicyId) 
+        : null;
+
+      const currentPremium = this.extractPremium(currentPolicy);
+      const offerPremium = this.extractPremium(offerPolicy);
+      const savingsResult = computeSavings(currentPremium, offerPremium);
+
+      policyMatches.push({
+        policyType,
+        label,
+        matchStatus: 'matched',
+        currentPolicyId: comparison.currentPolicyId || null,
+        offerPolicyId: comparison.offerPolicyId || null,
+        currentPremium: savingsResult.currentPremium,
+        offerPremium: savingsResult.offerPremium,
+        hasPrice: savingsResult.hasPrice
+      });
+    }
+
+    // Add missing policies (current exists but no offer)
+    for (const [policyType, policy] of currentPolicyTypes) {
+      if (!matchedPolicyTypes.has(policyType)) {
+        const label = getPolicyTypeLabel(policyType);
+        const currentPremium = this.extractPremium(policy);
+
+        policyMatches.push({
+          policyType,
+          label,
+          matchStatus: 'missing_in_offer',
+          currentPolicyId: policy.id,
+          offerPolicyId: null,
+          currentPremium,
+          offerPremium: null,
+          hasPrice: currentPremium !== null
+        });
+
+        missingPolicyTypes.push({ policyType, label });
+      }
+    }
+
+    // Sort by policy type for consistent ordering
+    policyMatches.sort((a, b) => a.policyType.localeCompare(b.policyType));
+    missingPolicyTypes.sort((a, b) => a.policyType.localeCompare(b.policyType));
+
+    // 4. Calculate aggregated savings ONLY for matched policies with valid prices
+    const matchedWithPrice = policyMatches.filter(
+      row => row.matchStatus === 'matched' && row.hasPrice
+    );
+
+    let totalSavingsAmount: number | null = null;
     let totalCurrentPremium = 0;
-    let totalOfferPremium = 0;
-    const highlights: Array<any> = [];
-    const quickComparison: Array<any> = [];
+    let hasAnyPrice = matchedWithPrice.length > 0;
+
+    if (hasAnyPrice) {
+      totalSavingsAmount = 0;
+      for (const row of matchedWithPrice) {
+        totalSavingsAmount += (row.currentPremium! - row.offerPremium!);
+        totalCurrentPremium += row.currentPremium!;
+      }
+    }
+
+    const totalSavingsPercentage = hasAnyPrice && totalCurrentPremium > 0 
+      ? Math.round((totalSavingsAmount! / totalCurrentPremium) * 1000) / 10
+      : null;
+
+    // 5. Build quick comparison with match status
+    const quickComparison: CombinedOverviewWithCoverage['quickComparison'] = [];
+    const highlights: CombinedOverviewWithCoverage['highlights'] = [];
     const comparisonIds: string[] = [];
 
     let recommendedCount = 0;
@@ -309,70 +405,103 @@ export class PolicyMatchingService {
     for (const comparison of comparisons) {
       comparisonIds.push(comparison.id);
       const data = comparison.comparisonData as any;
+      const policyType = comparison.policyType || 'unknown';
+      const label = getPolicyTypeLabel(policyType);
       
-      if (!data) continue;
+      const matchRow = policyMatches.find(m => m.policyType === policyType && m.matchStatus === 'matched');
+      const savingsResult = matchRow 
+        ? computeSavings(matchRow.currentPremium, matchRow.offerPremium)
+        : { hasPrice: false, savingsAmount: null };
 
-      const savingsRaw = data.savings;
-      const savingsValue = typeof savingsRaw === 'object' && savingsRaw !== null
-        ? (savingsRaw.annual || 0)
-        : (savingsRaw || 0);
-      const savingsNumber = Number(savingsValue);
-      const savings = Number.isFinite(savingsNumber) ? savingsNumber : 0;
-      totalSavings += savings;
-
-      const currentPolicy = comparison.currentPolicyId ? 
-        await this.storage.getPolicy(comparison.currentPolicyId) : null;
-      const offerPolicy = comparison.offerPolicyId ? 
-        await this.storage.getPolicy(comparison.offerPolicyId) : null;
-
-      const currentDoc = currentPolicy ? await this.storage.getDocument(currentPolicy.documentId) : null;
-      const offerDoc = offerPolicy ? await this.storage.getDocument(offerPolicy.documentId) : null;
-
-      const currentOcrData = (currentDoc?.ocrData as any) || {};
-      const offerOcrData = (offerDoc?.ocrData as any) || {};
-      
-      const currentPremium = currentPolicy?.premium || currentOcrData.premium || currentOcrData.annualPremium || 0;
-      const offerPremium = offerPolicy?.premium || offerOcrData.premium || offerOcrData.annualPremium || 0;
-
-      totalCurrentPremium += Number(currentPremium);
-      totalOfferPremium += Number(offerPremium);
-
-      if (data.verdict === 'recommended') recommendedCount++;
-      else if (data.verdict === 'consider') considerCount++;
+      if (data?.verdict === 'recommended') recommendedCount++;
+      else if (data?.verdict === 'consider') considerCount++;
       else notRecommendedCount++;
 
       quickComparison.push({
-        policyType: comparison.policyType || 'Unknown',
-        currentPremium: Number(currentPremium),
-        offerPremium: Number(offerPremium),
-        savings: Number.isFinite(savings) ? savings : 0,
-        verdict: data.verdict || 'consider'
+        policyType,
+        label,
+        currentPremium: matchRow?.currentPremium ?? null,
+        offerPremium: matchRow?.offerPremium ?? null,
+        savings: savingsResult.savingsAmount,
+        hasPrice: savingsResult.hasPrice,
+        verdict: data?.verdict || 'consider',
+        matchStatus: 'matched'
       });
 
-      if (data.highlights && Array.isArray(data.highlights)) {
+      if (data?.highlights && Array.isArray(data.highlights)) {
         highlights.push(...data.highlights.slice(0, 2));
       }
     }
 
-    const totalSavingsPercentage = totalCurrentPremium > 0 
-      ? Math.round((totalSavings / totalCurrentPremium) * 100)
-      : 0;
-
-    let overallVerdict: 'recommended' | 'consider' | 'not_recommended' = 'consider';
-    if (recommendedCount > comparisons.length / 2) {
-      overallVerdict = 'recommended';
-    } else if (notRecommendedCount > comparisons.length / 2) {
-      overallVerdict = 'not_recommended';
+    // Add missing policies to quick comparison
+    for (const missing of missingPolicyTypes) {
+      const matchRow = policyMatches.find(m => m.policyType === missing.policyType && m.matchStatus === 'missing_in_offer');
+      
+      quickComparison.push({
+        policyType: missing.policyType,
+        label: missing.label,
+        currentPremium: matchRow?.currentPremium ?? null,
+        offerPremium: null,
+        savings: null,
+        hasPrice: false,
+        verdict: 'missing',
+        matchStatus: 'missing_in_offer'
+      });
     }
 
+    // 6. Determine overall verdict
+    let overallVerdict: 'recommended' | 'consider' | 'not_recommended' = 'consider';
+    if (comparisons.length > 0) {
+      if (recommendedCount > comparisons.length / 2) {
+        overallVerdict = 'recommended';
+      } else if (notRecommendedCount > comparisons.length / 2) {
+        overallVerdict = 'not_recommended';
+      }
+    }
+
+    const coversAllCurrentPolicies = missingPolicyTypes.length === 0;
+    const matchedCount = policyMatches.filter(m => m.matchStatus === 'matched').length;
+
+    console.log(`[Policy Matching] Combined overview: ${matchedCount} matched, ${missingPolicyTypes.length} missing, coversAll=${coversAllCurrentPolicies}`);
+
     return {
-      totalSavings,
+      totalSavings: totalSavingsAmount,
       totalSavingsPercentage,
-      policyCount: comparisons.length,
+      hasPrice: hasAnyPrice,
+      policyCount: currentPolicyTypes.size,
+      matchedPolicyCount: matchedCount,
       verdict: overallVerdict,
       highlights: highlights.slice(0, 6),
       quickComparison,
-      comparisonIds
+      comparisonIds,
+      policyMatches,
+      missingPolicyTypes,
+      coversAllCurrentPolicies
     };
+  }
+
+  /**
+   * Helper to extract premium from policy with fallbacks
+   */
+  private extractPremium(policy: Policy | null): number | null {
+    if (!policy) return null;
+    
+    // Try direct premium field first
+    if (policy.premium) {
+      const num = Number(policy.premium);
+      if (Number.isFinite(num) && num > 0) return num;
+    }
+
+    // Try coverage details
+    const details = policy.coverageDetails as any;
+    if (details) {
+      const premium = details.premium || details.annualPremium;
+      if (premium) {
+        const num = Number(premium);
+        if (Number.isFinite(num) && num > 0) return num;
+      }
+    }
+
+    return null;
   }
 }

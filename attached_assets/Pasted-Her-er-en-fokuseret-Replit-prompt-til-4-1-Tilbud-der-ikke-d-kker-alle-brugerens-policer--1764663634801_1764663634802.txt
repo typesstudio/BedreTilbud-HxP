@@ -1,0 +1,297 @@
+Her er en fokuseret Replit-prompt til:
+
+> **4.1 Tilbud, der ikke dækker alle brugerens policer**
+> → Vis kun besparelse for policy-typer med 1:1 match; markér manglende policer tydeligt.
+
+---
+
+### Replit-prompt – Step 4.1: Tilbud dækker ikke alle brugerens policer (delvis dækning)
+
+> Vi er nu i Kategori 4, Step **4.1**:
+> **Når et selskabs tilbud ikke dækker alle brugerens nuværende policer, må vi kun vise besparelse for policy-typer, hvor der er et 1:1 match – og vi skal tydeligt markere de policer, der mangler i tilbuddet.**
+>
+> Mål:
+>
+> * Matching og sammenligninger skal være pr. policy-type (bil, hus, indbo, ulykke, rejse).
+> * Kun policy-typer, hvor både **current** og **offer** findes (1:1 match), må indgå i besparelsesberegninger og total-savings.
+> * Policy-typer, hvor brugeren har en current-policy men selskabet ikke har givet et tilbud, skal markeres som “mangler i tilbuddet” i API + UI.
+> * “Samlet oversigt” må ikke få det til at se ud, som om tilbuddet dækker alt, hvis det kun dækker nogle policer.
+
+---
+
+### 1. Find matching- og sammenlignings-koden
+
+1. Find `PolicyMatchingService` / matching-logikken, der pt. parrer:
+
+   * Brugerens current policer (per policyType)
+   * Selskabets offer-policer for en `company_request`
+2. Find den centralle “comparison API” der leverer data til:
+
+   * `/sammenligning/:comparisonId` eller tilsvarende route
+   * “Samlet oversigt”-tab for et givent selskab i frontend
+3. Identificér:
+
+   * Hvor i koden vi i dag laver:
+
+     * match-lister (current vs offer)
+     * aggregated savings (total besparelse på tværs af policer)
+     * per-policy sammenligning (Indbo/Hus/Bil tabs)
+
+Vi skal ændre både matching-output og aggregated summary, ikke kun UI.
+
+---
+
+### 2. Udvid matching-output med “matchStatus” pr. policyType
+
+Vi vil have et tydeligt billede af, hvad der er:
+
+* matched
+* kun hos bruger (mangler i tilbud)
+* (senere) kun hos tilbuddet
+
+1. I den datastruktur, hvor matching-resultatet bygges (fx en intern struktur i `PolicyMatchingService`), udvid til noget i stil med:
+
+```ts
+type PolicyMatchStatus = "matched" | "missing_in_offer" | "missing_in_user";
+
+type PolicyMatchRow = {
+  policyType: string; // "indbo" | "hus" | "bil" | ...
+  currentPolicy: PolicySnapshot | null;
+  offerPolicy: PolicySnapshot | null;
+  matchStatus: PolicyMatchStatus;
+};
+```
+
+2. Når du bygger listen:
+
+   * Start med listen over **current** policies (kun `kind = 'current'`, `status = 'active'` osv.).
+   * For hver policyType:
+
+     * Hvis både current og offer findes →
+       `matchStatus = "matched"`
+       `currentPolicy != null`, `offerPolicy != null`.
+
+     * Hvis current findes, men **ingen** offer-policy med samme policyType (status `active`) under denne `company_request` →
+       `matchStatus = "missing_in_offer"`
+       `currentPolicy != null`, `offerPolicy = null`.
+
+     * (Hvis det giver mening allerede nu, kan du også forberede `missing_in_user` til 4.2, men fokus her er `missing_in_offer`).
+
+3. Sørg for at denne match-liste er tilgængelig for det lag, der bygger API-responsen til frontend.
+
+---
+
+### 3. Aggregated savings: brug kun `matched` rækker med gyldige præmier
+
+Vi skal sørge for, at total-besparelse KUN bygger på 1:1 matches med korrekte beløb.
+
+1. Find stedet, hvor du beregner samlet besparelse for et selskab, fx:
+
+```ts
+const totalSavings = sum(allComparisons.map(c => c.savingsAmount));
+const totalSavingsPct = totalSavings / sum(allCurrentPremiums);
+```
+
+2. Refaktor til at tage udgangspunkt i `PolicyMatchRow[]`, som vi definerede ovenfor:
+
+   * Filtrer til **kun** rækker med:
+
+     * `matchStatus === "matched"`
+     * `currentPolicy.premiumAmount` og `offerPolicy.premiumAmount` er ikke null og > 0
+   * Brug den helper du lavede i Step 3.2 (`computeSavings`) til at beregne savings per type.
+
+Eksempel:
+
+```ts
+const matchedWithPrice = policyMatches.filter(
+  (row) =>
+    row.matchStatus === "matched" &&
+    row.currentPolicy?.premiumAmount != null &&
+    row.currentPolicy.premiumAmount > 0 &&
+    row.offerPolicy?.premiumAmount != null &&
+    row.offerPolicy.premiumAmount >= 0
+);
+
+let totalSavingsAmount = 0;
+let totalCurrentPremium = 0;
+
+for (const row of matchedWithPrice) {
+  const current = row.currentPolicy!.premiumAmount!;
+  const offer = row.offerPolicy!.premiumAmount!;
+  totalSavingsAmount += current - offer;
+  totalCurrentPremium += current;
+}
+
+const totalSavingsPercentage =
+  totalCurrentPremium > 0 ? totalSavingsAmount / totalCurrentPremium : null;
+```
+
+3. Eksponer dette som en del af company-offer summary DTO’en, fx:
+
+```ts
+{
+  totalSavingsAmount: number | null;
+  totalSavingsPercentage: number | null;
+  hasPrice: boolean; // true hvis der er mindst én matchet policy med pris
+}
+```
+
+4. **Vigtigt:**
+
+   * Lad være med at antage, at “totalSavings” repræsenterer hele brugerens portefølje, hvis der mangler policer i tilbuddet.
+   * Det håndterer vi med ekstra felter i næste punkt.
+
+---
+
+### 4. Markér manglende policer tydeligt i API
+
+Vi vil have information i API-responsen, så frontend kan vise:
+
+* hvilke policy-typer tilbuddet **ikke** dækker
+
+1. I company-offer comparison DTO’en (respons til /sammenligning-siden), tilføj fx:
+
+```ts
+{
+  // eksisterende fields...
+  policyMatches: PolicyMatchRow[];
+
+  missingPolicyTypes: string[]; // liste over typer hvor matchStatus = "missing_in_offer"
+
+  coversAllCurrentPolicies: boolean; // true hvis missingPolicyTypes.length === 0
+}
+```
+
+2. Når du bygger responsen:
+
+```ts
+const missingPolicyTypes = policyMatches
+  .filter((row) => row.matchStatus === "missing_in_offer")
+  .map((row) => row.policyType);
+
+const coversAllCurrentPolicies = missingPolicyTypes.length === 0;
+```
+
+3. Du kan også tilføje en human-readable label på backend, hvis I har en central mapping:
+
+```ts
+const policyTypeLabels = {
+  indbo: "Indboforsikring",
+  hus: "Husforsikring",
+  bil: "Bilforsikring",
+  ulykke: "Ulykkesforsikring",
+  rejse: "Rejseforsikring",
+};
+```
+
+og evt. sende både machine + label:
+
+```ts
+missingPolicies: {
+  policyType: string;
+  label: string;
+}[]
+```
+
+Det gør det nemt for frontend at vise pæne danske tekster.
+
+---
+
+### 5. UI-opdateringer (Samlet oversigt + tabs)
+
+Frontend skal nu bruge disse felter til at kommunikere “delvis dækning”.
+
+1. På “Samlet oversigt”-kortet for et selskab:
+
+   * Hvis `coversAllCurrentPolicies === true`:
+
+     * Vis som i dag: samlet besparelse, procenter, 10 års graf osv.
+   * Hvis `coversAllCurrentPolicies === false`:
+
+     * Vis stadig besparelse (den er valid for de policer, der **er** matchet).
+     * MEN tilføj en tydelig note, fx:
+
+       * Kort tekst under besparelsen:
+
+         * **“Tilbuddet dækker ikke alle dine forsikringer endnu.”**
+       * Og evt. liste:
+
+         * **“Mangler: Husforsikring, Ulykkesforsikring”**
+
+2. I de individuelle policy-tabs:
+
+   * For hver policyType:
+
+     * Hvis `matchStatus === "matched"`:
+
+       * Vis normal sammenligning (som i dag).
+     * Hvis `matchStatus === "missing_in_offer"`:
+
+       * Vis et “empty state”-kort i stedet for en sammenligning, fx:
+
+         * Titel:
+
+           * **“Ingen tilbud på denne forsikring endnu”**
+         * Tekst:
+
+           * **“Vi har din nuværende [label], men selskabet har ikke sendt et tilbud på denne endnu.”**
+
+3. Sørg for, at links/CTA’er ikke lover “skift alle dine forsikringer” hvis der kun er én type matchet.
+
+---
+
+### 6. Acceptance criteria
+
+**Case 1 – Selskab A dækker kun Indbo og Bil (men bruger har Indbo + Hus + Bil)**
+
+* Matching-resultat:
+
+  * Indbo: `matchStatus = "matched"`
+  * Bil: `matchStatus = "matched"`
+  * Hus: `matchStatus = "missing_in_offer"`
+
+* Aggregated summary:
+
+  * `totalSavingsAmount` og `totalSavingsPercentage` er beregnet **kun** ud fra Indbo + Bil.
+  * `missingPolicyTypes = ["hus"]`
+  * `coversAllCurrentPolicies = false`
+
+* UI:
+
+  * “Samlet oversigt” viser besparelse, men også tekst:
+
+    * “Tilbuddet dækker ikke alle dine forsikringer endnu.”
+    * “Mangler: Husforsikring”
+  * På Hus-tabben:
+
+    * Vises ikke nogen sammenligning, men et kort med:
+
+      * “Ingen tilbud på denne forsikring endnu.”
+
+**Case 2 – Selskab B dækker alle policer (Indbo, Hus, Bil)**
+
+* `missingPolicyTypes = []`
+* `coversAllCurrentPolicies = true`
+* Aggregated summary bygger på alle tre.
+* UI viser ingen “mangler”-advarsel.
+
+**Case 3 – Tilbud mangler priser (fra 3.2)**
+
+* Hvis en policy er `matched`, men mangler premium på current eller offer:
+
+  * Den tæller **ikke** med i aggregated besparelse (`hasPrice = false` for den).
+* Men `matchStatus` er stadig `"matched"` (dækning kan sammenlignes).
+* UI:
+
+  * Viser dækning for denne type, men ingen besparelses-tal.
+  * “Samlet oversigt” beregner kun besparelse fra andre matched policer med pris.
+
+**Generelt:**
+
+* Ingen sammenligninger eller summer baseret på “tomt” eller manglende tilbud.
+* Bruger kan tydeligt se, hvilke policer der er med, og hvilke der mangler i tilbuddet.
+* Ingen NaN/Infinity i aggregated felter – alt går gennem den defensive savings-logik fra Step 3.2.
+
+---
+
+Det her step gør, at et “delvist” tilbud stadig er brugbart – men ærligt omkring, at det ikke dækker alt.

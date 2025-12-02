@@ -109,3 +109,63 @@ export const POLICY_TYPE_LABELS: Record<string, string> = {
 export function getPolicyTypeLabel(policyType: string): string {
   return POLICY_TYPE_LABELS[policyType.toLowerCase()] || policyType;
 }
+
+/**
+ * Step 4.1: Policy match status for partial coverage detection
+ */
+export type PolicyMatchStatus = 'matched' | 'missing_in_offer' | 'missing_in_user';
+
+/**
+ * Step 4.1: Policy match row with status
+ * Used to track which policies are matched vs missing in comparisons
+ */
+export type PolicyMatchRow = {
+  policyType: string;
+  label: string;
+  matchStatus: PolicyMatchStatus;
+  currentPolicyId: string | null;
+  offerPolicyId: string | null;
+  currentPremium: number | null;
+  offerPremium: number | null;
+  hasPrice: boolean;
+};
+
+/**
+ * Step 4.1: Missing policy info for UI display
+ */
+export type MissingPolicyInfo = {
+  policyType: string;
+  label: string;
+};
+
+/**
+ * Step 4.1: Extended combined overview with partial coverage info
+ */
+export type CombinedOverviewWithCoverage = {
+  totalSavings: number | null;
+  totalSavingsPercentage: number | null;
+  hasPrice: boolean;
+  policyCount: number;
+  matchedPolicyCount: number;
+  verdict: 'recommended' | 'consider' | 'not_recommended';
+  highlights: Array<{
+    title: string;
+    description: string;
+    icon: string;
+    variant: 'success' | 'warning' | 'error';
+  }>;
+  quickComparison: Array<{
+    policyType: string;
+    label: string;
+    currentPremium: number | null;
+    offerPremium: number | null;
+    savings: number | null;
+    hasPrice: boolean;
+    verdict: string;
+    matchStatus: PolicyMatchStatus;
+  }>;
+  comparisonIds: string[];
+  policyMatches: PolicyMatchRow[];
+  missingPolicyTypes: MissingPolicyInfo[];
+  coversAllCurrentPolicies: boolean;
+};
