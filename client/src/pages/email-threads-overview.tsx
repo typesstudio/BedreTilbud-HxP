@@ -14,6 +14,8 @@ export default function EmailThreadsOverview() {
   const { data: threadsData, isLoading } = useQuery<{ data: any[]; pagination: any }>({
     queryKey: [`/api/emails/threads/${userId}`],
     enabled: !!userId,
+    staleTime: 30000,
+    refetchInterval: 30000,
   });
 
   if (isLoading) {

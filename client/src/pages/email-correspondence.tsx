@@ -23,6 +23,8 @@ export default function EmailCorrespondence() {
   const { data: threadData, isLoading } = useQuery({
     queryKey: ["/api/emails/thread", threadId],
     enabled: !!threadId,
+    staleTime: 30000,
+    refetchInterval: 30000,
   });
 
   const approveDraft = useMutation({
