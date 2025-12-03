@@ -131,11 +131,7 @@ export default function EmailCorrespondence() {
   const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
   const [editedBody, setEditedBody] = useState("");
 
-  // If no threadId, show threads overview
-  if (!threadId) {
-    return <ThreadsOverview userId={userId || ''} />;
-  }
-
+  // Always call hooks at the top level (React rules of hooks)
   const { data: threadData, isLoading } = useQuery({
     queryKey: ["/api/emails/thread", threadId],
     enabled: !!threadId,
@@ -184,6 +180,11 @@ export default function EmailCorrespondence() {
       toast({ title: "Fejl", description: error.message, variant: "destructive" });
     },
   });
+
+  // Conditional return AFTER all hooks are called
+  if (!threadId) {
+    return <ThreadsOverview userId={userId || ''} />;
+  }
 
   if (isLoading) {
     return (
