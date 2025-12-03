@@ -176,25 +176,52 @@ export class EmailService {
         throw new Error("Company not found");
       }
 
-      // Get the last non-draft email in the thread to extract Message-ID for proper threading
+      // Get all non-draft emails in the thread to build threading headers
+      // Gmail requires proper In-Reply-To and References headers for thread grouping
       const threadEmails = await storage.getThreadEmails(thread.id);
-      const sentEmails = threadEmails.filter(e => e.status !== 'draft');
-      const lastEmail = sentEmails.length > 0 ? sentEmails[sentEmails.length - 1] : null;
-      const lastEmailMessageId = lastEmail?.emailMessageId;
+      const sentEmails = threadEmails
+        .filter(e => e.status !== 'draft')
+        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+      
+      // Collect all valid RFC Message-IDs from inbound emails (these have proper emailMessageId)
+      // Outbound emails via Resend don't have RFC-compliant Message-IDs we can reference
+      const messageIds = sentEmails
+        .filter(e => e.emailMessageId && e.emailMessageId.length > 0)
+        .map(e => e.emailMessageId as string);
+      
+      // Get the most recent Message-ID for In-Reply-To header
+      const lastEmailMessageId = messageIds.length > 0 ? messageIds[messageIds.length - 1] : null;
+      
+      // Build References header with all previous Message-IDs for proper threading
+      const referencesHeader = messageIds.length > 0 ? messageIds.join(' ') : null;
 
       const { client: resend, fromEmail } = await getUncachableResendClient();
       
       // Prepare email headers with threading support
+      // Both In-Reply-To (last message) and References (full chain) are needed for Gmail threading
       const emailHeaders: Record<string, string> = {};
       if (lastEmailMessageId) {
         emailHeaders['In-Reply-To'] = lastEmailMessageId;
-        emailHeaders['References'] = lastEmailMessageId;
+      }
+      if (referencesHeader) {
+        emailHeaders['References'] = referencesHeader;
+      }
+      
+      console.log(`[Email Threading] Sending reply with headers:`, {
+        inReplyTo: lastEmailMessageId || 'none',
+        references: referencesHeader ? `${messageIds.length} message(s)` : 'none'
+      });
+      
+      // Ensure subject doesn't stack "Re:" prefixes (Gmail threading requirement)
+      let replySubject = thread.subject || 'Follow-up';
+      if (replySubject && !replySubject.toLowerCase().startsWith('re:')) {
+        replySubject = `Re: ${replySubject}`;
       }
       
       const emailResult = await resend.emails.send({
         from: fromEmail,
         to: company.email,
-        subject: thread.subject ? `Re: ${thread.subject}` : 'Follow-up',
+        subject: replySubject,
         text: emailBody,
         replyTo: thread.replyToEmail || undefined,
         headers: Object.keys(emailHeaders).length > 0 ? emailHeaders : undefined
@@ -216,7 +243,7 @@ export class EmailService {
           threadId: thread.id,
           messageId: emailResult.data?.id || '',
           direction: 'outbound',
-          subject: thread.subject ? `Re: ${thread.subject}` : 'Follow-up',
+          subject: replySubject,
           body: emailBody,
           metadata: options?.questionIds ? { questionIds: options.questionIds } : null,
           sentAt: new Date(),
