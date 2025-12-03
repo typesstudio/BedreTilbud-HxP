@@ -2760,6 +2760,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Find the company_comparison associated with this document
       // The comparison is linked via: document.company_id = company_comparisons.offer_company
       let comparisonId: string | null = null;
+      let threadId: string | null = null;
       try {
         // Get the document to find its company_id
         const document = await storage.getDocument(documentId);
@@ -2778,9 +2779,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
               comparisonId 
             });
           }
+          
+          // Find the email thread for this user + company combination
+          const emailThread = await storage.getEmailThreadByCompany(userId, document.companyId);
+          if (emailThread) {
+            threadId = emailThread.id;
+            logger.info('[Health Check API] Found email thread for offer', {
+              documentId,
+              companyId: document.companyId,
+              threadId
+            });
+          }
         }
       } catch (comparisonError: any) {
-        logger.warn('[Health Check API] Failed to find comparison', { error: comparisonError?.message });
+        logger.warn('[Health Check API] Failed to find comparison or thread', { error: comparisonError?.message });
       }
 
       res.json({
@@ -2798,6 +2810,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         siblingSnapshots,
         documentId,
         comparisonId,
+        threadId,
       });
     } catch (error: any) {
       logger.error('[Health Check API] Error fetching/generating health check', error, { snapshotId: req.params.snapshotId });
