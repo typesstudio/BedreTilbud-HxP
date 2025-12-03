@@ -29,7 +29,7 @@ export default function EmailCorrespondence() {
 
   const approveDraft = useMutation({
     mutationFn: async (draftId: string) => {
-      return apiRequest(`/api/emails/draft/${draftId}/approve`, { method: "POST" });
+      return apiRequest("POST", `/api/emails/draft/${draftId}/approve`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/emails/thread", threadId] });
@@ -42,7 +42,7 @@ export default function EmailCorrespondence() {
 
   const rejectDraft = useMutation({
     mutationFn: async (draftId: string) => {
-      return apiRequest(`/api/emails/draft/${draftId}/reject`, { method: "POST" });
+      return apiRequest("POST", `/api/emails/draft/${draftId}/reject`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/emails/thread", threadId] });
@@ -55,11 +55,7 @@ export default function EmailCorrespondence() {
 
   const editDraft = useMutation({
     mutationFn: async ({ draftId, body }: { draftId: string; body: string }) => {
-      return apiRequest(`/api/emails/draft/${draftId}`, { 
-        method: "PATCH",
-        body: JSON.stringify({ body }),
-        headers: { "Content-Type": "application/json" }
-      });
+      return apiRequest("PATCH", `/api/emails/draft/${draftId}`, { body });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/emails/thread", threadId] });
