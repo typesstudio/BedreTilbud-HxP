@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
 import { useState } from "react";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
@@ -12,6 +12,7 @@ import { ComparisonDetailedMatrix } from "@/components/comparison/ComparisonDeta
 import { ComparisonSavingsSection } from "@/components/comparison/ComparisonSavingsSection";
 import { transformCompanyComparisonToViewModel, type ComparisonTabKey } from "@/utils/transformComparison";
 import LoadingComparison from "@/components/loading/LoadingComparison";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 
 export default function Comparison() {
   const { id } = useParams();
@@ -31,6 +32,18 @@ export default function Comparison() {
     enabled: !!userId,
   });
   const threads = threadsResponse?.data || [];
+
+  // Start or get existing thread mutation
+  const startThreadMutation = useMutation({
+    mutationFn: async ({ userId, companyId }: { userId: string; companyId: string }) => {
+      const response = await apiRequest("POST", "/api/emails/start-thread", { userId, companyId });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/emails/threads", userId] });
+      setLocation(`/emails/${data.threadId}`);
+    },
+  });
 
   // Loading state - show skeleton
   if (isLoading) {
@@ -78,6 +91,15 @@ export default function Comparison() {
   const thread = threads.find((t: any) => t.companyId === companyId);
   const threadId = thread?.id;
 
+  // Handler for "Se beskeder" - starts new thread if needed
+  const handleClickMessages = () => {
+    if (threadId) {
+      setLocation(`/emails/${threadId}`);
+    } else if (userId && companyId) {
+      startThreadMutation.mutate({ userId, companyId });
+    }
+  };
+
   return (
     <AppLayoutWithNav userId={userId!}>
       <div className="flex w-full flex-col items-center justify-center bg-default-background px-4 py-4 mobile:px-3 mobile:py-3">
@@ -95,8 +117,9 @@ export default function Comparison() {
                 setLocation(`/sundhedstjek/${snapshotId}`);
               }
             }}
-            onClickMessages={() => threadId && setLocation(`/emails/${threadId}`)}
-            canOpenMessages={!!threadId}
+            onClickMessages={handleClickMessages}
+            canOpenMessages={!!companyId}
+            isLoadingMessages={startThreadMutation.isPending}
           />
 
           {/* Tabs */}

@@ -1681,6 +1681,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Start or get existing email thread for a user + company
+  // Returns existing thread if one exists, otherwise creates a new one
+  app.post("/api/emails/start-thread", requireAuth, async (req, res) => {
+    try {
+      const { userId, companyId } = req.body;
+      
+      if (!userId || !companyId) {
+        return res.status(400).json({ message: "userId and companyId are required" });
+      }
+
+      // Check if thread already exists
+      const existingThread = await storage.getEmailThreadByCompany(userId, companyId);
+      
+      if (existingThread) {
+        // Return existing thread
+        return res.json({ 
+          threadId: existingThread.id,
+          isNew: false,
+          message: "Existing thread found"
+        });
+      }
+
+      // Create new thread
+      const company = await storage.getCompany(companyId);
+      if (!company) {
+        return res.status(404).json({ message: "Company not found" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Generate unique request token
+      const { generateRequestToken, formatReplyToEmail } = await import("./services/emailService");
+      const requestToken = generateRequestToken();
+      const replyToEmail = formatReplyToEmail(requestToken);
+      
+      const subject = `Samtale med ${company.name} - ${user.name || user.email}`;
+      
+      const newThread = await storage.createEmailThread({
+        userId,
+        companyId,
+        subject,
+        threadId: '', // No Gmail thread ID yet since no email sent
+        requestToken,
+        replyToEmail,
+        status: 'pending'
+      });
+
+      res.json({ 
+        threadId: newThread.id,
+        isNew: true,
+        message: "New thread created"
+      });
+    } catch (error: any) {
+      console.error('[Start Thread] Error:', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Check for new emails
   app.post("/api/emails/check-inbox", async (req, res) => {
     try {

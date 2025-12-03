@@ -9,6 +9,7 @@ interface ComparisonHeaderProps {
   onClickDetails?: () => void;
   onClickMessages?: () => void;
   canOpenMessages?: boolean;
+  isLoadingMessages?: boolean;
 }
 
 export function ComparisonHeader({
@@ -18,6 +19,7 @@ export function ComparisonHeader({
   onClickDetails,
   onClickMessages,
   canOpenMessages = true,
+  isLoadingMessages = false,
 }: ComparisonHeaderProps) {
   const showDetails = activeTab !== "samlet" && !!onClickDetails;
   const showMessages = !!onClickMessages;
@@ -50,10 +52,11 @@ export function ComparisonHeader({
         <Button
           className="mobile:w-full"
           variant="brand-secondary"
-          disabled={!canOpenMessages}
+          disabled={!canOpenMessages || isLoadingMessages}
+          loading={isLoadingMessages}
           onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
             event.preventDefault();
-            if (!canOpenMessages) return;
+            if (!canOpenMessages || isLoadingMessages) return;
             onClickMessages?.();
           }}
           data-testid="button-view-messages"
