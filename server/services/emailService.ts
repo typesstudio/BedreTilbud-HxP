@@ -624,7 +624,7 @@ export class EmailService {
         }
       }
 
-      // Record incoming email
+      // Record incoming email with proper status and author type
       await storage.createEmail({
         threadId: existingThread.id,
         messageId: messageId,
@@ -633,7 +633,9 @@ export class EmailService {
         subject,
         body,
         attachments,
-        sentAt: new Date(parseInt(message.data.internalDate || '0'))
+        sentAt: new Date(parseInt(message.data.internalDate || '0')),
+        status: 'received',
+        authorType: 'company'
       });
 
       // Update thread status
