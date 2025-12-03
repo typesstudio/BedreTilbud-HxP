@@ -46,6 +46,7 @@ function Router() {
         <Route path="/upload-offer" component={UploadOffer} />
         <Route path="/send-inquiry" component={SendInquiry} />
         <Route path="/comparison/:id" component={Comparison} />
+        <Route path="/email-correspondence" component={EmailCorrespondence} />
         <Route path="/emails/:threadId" component={EmailCorrespondence} />
         <Route path="/profile/:userId" component={ProfilePage} />
         <Route path="/gmail-setup" component={GmailSetup} />
