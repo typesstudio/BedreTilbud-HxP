@@ -1,49 +1,21 @@
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useParams, useLocation } from "wouter";
-import { useState } from "react";
-import { Button } from "@/ui";
-import { TextField } from "@/ui";
-import { FeatherBarChart2, FeatherSend, FeatherArrowLeft } from "@subframe/core";
-import { formatDistanceToNow } from "date-fns";
+import { Button } from "@/ui/components/Button";
+import { Badge } from "@/ui/components/Badge";
+import { Loader } from "@/ui/components/Loader";
+import { FeatherBarChart2 } from "@subframe/core";
+import { format } from "date-fns";
 import { da } from "date-fns/locale";
-import { apiRequest, queryClient } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 
 export default function EmailCorrespondence() {
   const { threadId } = useParams();
   const [location, setLocation] = useLocation();
   const userId = localStorage.getItem("userId");
-  const [messageText, setMessageText] = useState("");
-  const { toast } = useToast();
 
   const { data: threadData, isLoading } = useQuery({
     queryKey: ["/api/emails/thread", threadId],
     enabled: !!threadId,
-  });
-
-  // Send custom message mutation
-  const sendMessageMutation = useMutation({
-    mutationFn: async (message: string) => {
-      const response = await apiRequest("POST", `/api/emails/thread/${threadId}/send-message`, { message });
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/emails/thread", threadId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/emails/threads", userId] });
-      toast({
-        title: "Besked sendt",
-        description: "Din besked er sendt til forsikringsselskabet",
-      });
-      setMessageText("");
-    },
-    onError: () => {
-      toast({
-        title: "Fejl",
-        description: "Kunne ikke sende besked",
-        variant: "destructive",
-      });
-    },
   });
 
   if (isLoading) {
@@ -79,7 +51,7 @@ export default function EmailCorrespondence() {
 
   const formatTime = (dateString: string) => {
     try {
-      return formatDistanceToNow(new Date(dateString), { addSuffix: true, locale: da });
+      return format(new Date(dateString), "HH:mm", { locale: da });
     } catch {
       return '';
     }
@@ -105,7 +77,7 @@ export default function EmailCorrespondence() {
     return (
       <img
         className="h-8 w-8 flex-none rounded-full object-cover bg-neutral-200"
-        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(companyName)}&background=e5e5e5&color=737373`}
+        src={company?.logoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(companyName)}&background=e5e5e5&color=737373`}
         alt={companyName}
       />
     );
@@ -118,14 +90,14 @@ export default function EmailCorrespondence() {
     return companyName;
   };
 
-  const comparisonPath = comparisonId ? `/comparison/${comparisonId}` : "/offers";
+  const comparisonPath = comparisonId ? `/sammenligning/${comparisonId}` : "/oversigt";
 
   return (
     <AppLayoutWithNav userId={userId!}>
-      <div className="flex h-full w-full items-center justify-center bg-default-background">
-        <div className="flex w-full max-w-[900px] flex-none flex-col items-center justify-center rounded-md bg-white" style={{ height: 'calc(100vh - 100px)' }}>
+      <div className="flex h-full w-full items-center justify-center bg-default-background px-4 md:px-12 py-6 md:py-12">
+        <div className="flex w-full max-w-[768px] flex-none flex-col items-center justify-center rounded-md bg-white" style={{ height: 'calc(100vh - 120px)' }}>
           {/* Header */}
-          <div className="flex w-full items-center justify-between border-b border-solid border-neutral-border px-6 py-4">
+          <div className="flex w-full items-center justify-between border-b border-solid border-neutral-border px-4 md:px-6 py-4">
             <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2">
               <span className="text-heading-1 font-heading-1 text-default-font">
                 Din samtale med {companyName}
@@ -145,34 +117,8 @@ export default function EmailCorrespondence() {
             </Button>
           </div>
 
-          {/* AI Status Banner */}
-          {thread?.status === 'sent' && (
-            <div className="flex w-full items-center gap-4 bg-brand-50 px-6 py-3">
-              <div className="flex items-center gap-2">
-                <div className="flex h-2 w-2 flex-none items-start rounded-full bg-brand-500 animate-pulse" />
-                <span className="text-body-bold font-body-bold text-brand-700">
-                  BedreTilbud AI forhandler på dine vegne
-                </span>
-              </div>
-              <div className="flex items-center gap-2 ml-auto">
-                <span className="text-caption font-caption text-brand-600">
-                  Afventer svar fra {companyName}
-                </span>
-                <Button
-                  variant="brand-tertiary"
-                  size="small"
-                  onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                    alert('Pause AI funktionalitet kommer snart');
-                  }}
-                >
-                  Pause AI
-                </Button>
-              </div>
-            </div>
-          )}
-
           {/* Messages */}
-          <div className="flex w-full grow shrink-0 basis-0 flex-col items-start gap-6 px-6 py-6 overflow-auto">
+          <div className="flex w-full grow shrink-0 basis-0 flex-col items-start gap-6 px-4 md:px-6 py-6 overflow-auto">
             {emails.length === 0 ? (
               <div className="flex w-full h-full items-center justify-center">
                 <div className="text-center">
@@ -183,7 +129,7 @@ export default function EmailCorrespondence() {
               </div>
             ) : (
               emails.map((email: any, index: number) => (
-                <div key={email.id || index} className="flex w-full items-start gap-4">
+                <div key={email.id || index} className="flex w-full items-start gap-4" data-testid={`message-${index}`}>
                   {getAvatarContent(email.direction)}
                   <div className="flex flex-col items-start gap-2">
                     <div className="flex items-center gap-2">
@@ -205,81 +151,20 @@ export default function EmailCorrespondence() {
             )}
           </div>
 
-          {/* Input Area */}
-          <div className="flex w-full flex-col items-start gap-3 md:gap-4 border-t border-solid border-neutral-border px-4 md:px-6 py-4">
-            <div className="flex w-full flex-wrap items-start gap-2">
-              <Button
-                className="touch-target h-12 md:h-10"
-                variant="neutral-tertiary"
-                size="small"
-                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                  alert('Funktionalitet kommer snart');
-                }}
-              >
-                Acceptér dette tilbud
-              </Button>
-              <Button
-                className="touch-target h-12 md:h-10"
-                variant="neutral-tertiary"
-                size="small"
-                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                  alert('Funktionalitet kommer snart');
-                }}
-              >
-                Spørg om dækningsdetaljer
-              </Button>
-              <Button
-                className="touch-target h-12 md:h-10"
-                variant="neutral-tertiary"
-                size="small"
-                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                  alert('Funktionalitet kommer snart');
-                }}
-              >
-                Bed om bedre pris
-              </Button>
-              <Button
-                className="touch-target h-12 md:h-10"
-                variant="neutral-tertiary"
-                size="small"
-                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                  alert('Funktionalitet kommer snart');
-                }}
-              >
-                Lad AI fortsætte
-              </Button>
+          {/* AI Status Footer */}
+          <div className="flex w-full items-center gap-4 border-t border-solid border-neutral-border bg-brand-50 px-4 md:px-6 py-4">
+            <div className="flex h-8 w-8 flex-none items-center justify-center">
+              <Loader />
             </div>
-            <div className="flex w-full flex-col md:flex-row md:items-center gap-3 md:gap-4">
-              <TextField className="grow w-full" variant="filled" label="" helpText="">
-                <TextField.Input
-                  className="h-12 md:h-10"
-                  placeholder="Spring ind i samtalen eller lad AI fortsætte forhandlingen..."
-                  value={messageText}
-                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
-                    setMessageText(event.target.value);
-                  }}
-                  onKeyDown={(event: React.KeyboardEvent<HTMLInputElement>) => {
-                    if (event.key === 'Enter' && messageText.trim() && !sendMessageMutation.isPending) {
-                      sendMessageMutation.mutate(messageText);
-                    }
-                  }}
-                  data-testid="input-message"
-                />
-              </TextField>
-              <Button
-                className="h-12 md:h-10 w-full md:w-auto touch-target"
-                icon={<FeatherSend />}
-                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {
-                  if (messageText.trim()) {
-                    sendMessageMutation.mutate(messageText);
-                  }
-                }}
-                disabled={!messageText.trim() || sendMessageMutation.isPending}
-                data-testid="button-send-message"
-              >
-                {sendMessageMutation.isPending ? 'Sender...' : 'Send'}
-              </Button>
+            <div className="flex grow shrink-0 basis-0 flex-col items-start">
+              <span className="text-body-bold font-body-bold text-brand-700">
+                AI forhandler aktivt på dine vegne
+              </span>
+              <span className="text-body font-body text-brand-700">
+                Vores AI arbejder på at få dig det bedst mulige tilbud fra {companyName}
+              </span>
             </div>
+            <Badge>Aktiv</Badge>
           </div>
         </div>
       </div>
