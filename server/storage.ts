@@ -28,7 +28,9 @@ import {
   type MagicLink,
   type InsertMagicLink,
   type Notification,
-  type InsertNotification
+  type InsertNotification,
+  type AiDebugReport,
+  type InsertAiDebugReport
 } from "@shared/schema";
 import { randomUUID } from "crypto";
 import { withCache, apiCache } from "./utils/cache";
@@ -69,7 +71,15 @@ export interface IStorage {
   // Emails
   getEmail(id: string): Promise<Email | undefined>;
   getThreadEmails(threadId: string, direction?: string): Promise<Email[]>;
+  getThreadDraftEmails(threadId: string): Promise<Email[]>;
+  getDraftEmailsByUser(userId: string): Promise<Array<Email & { thread: EmailThread; company: Company | null }>>;
   createEmail(email: InsertEmail): Promise<Email>;
+  updateEmail(id: string, updates: Partial<InsertEmail>): Promise<Email>;
+  
+  // AI Debug Reports
+  createAiDebugReport(report: InsertAiDebugReport): Promise<AiDebugReport>;
+  getAiDebugReports(threadId?: string, limit?: number): Promise<AiDebugReport[]>;
+  getAiDebugReportByMessageId(aiMessageId: string): Promise<AiDebugReport | undefined>;
 
   // Comparisons
   getComparison(id: string): Promise<Comparison | undefined>;
@@ -453,7 +463,8 @@ export class MemStorage implements IStorage {
       requestToken: insertThread.requestToken ?? null,
       replyToEmail: insertThread.replyToEmail ?? null,
       status: insertThread.status ?? null,
-      createdAt: new Date() 
+      createdAt: new Date(),
+      aiMode: insertThread.aiMode ?? 'manual'
     };
     this.emailThreads.set(id, thread);
     return thread;
@@ -493,10 +504,72 @@ export class MemStorage implements IStorage {
       attachments: insertEmail.attachments ?? null,
       metadata: insertEmail.metadata ?? null,
       sentAt: insertEmail.sentAt ?? null,
-      createdAt: new Date() 
+      createdAt: new Date(),
+      status: insertEmail.status ?? 'sent',
+      authorType: insertEmail.authorType ?? 'system',
+      classifierLabel: insertEmail.classifierLabel ?? null,
+      debugMeta: insertEmail.debugMeta ?? null,
     };
     this.emails.set(id, email);
     return email;
+  }
+
+  async updateEmail(id: string, updates: Partial<InsertEmail>): Promise<Email> {
+    const email = this.emails.get(id);
+    if (!email) throw new Error("Email not found");
+    const updated = { ...email, ...updates } as Email;
+    this.emails.set(id, updated);
+    return updated;
+  }
+
+  async getThreadDraftEmails(threadId: string): Promise<Email[]> {
+    return Array.from(this.emails.values()).filter(
+      email => email.threadId === threadId && email.status === 'draft'
+    );
+  }
+
+  async getDraftEmailsByUser(userId: string): Promise<Array<Email & { thread: EmailThread; company: Company | null }>> {
+    const drafts = Array.from(this.emails.values()).filter(e => e.status === 'draft');
+    return drafts.map(email => {
+      const thread = this.emailThreads.get(email.threadId || '');
+      const company = thread?.companyId ? this.companies.get(thread.companyId) : null;
+      return {
+        ...email,
+        thread: thread!,
+        company: company || null
+      };
+    }).filter(d => d.thread?.userId === userId);
+  }
+
+  private aiDebugReports = new Map<string, AiDebugReport>();
+
+  async createAiDebugReport(report: InsertAiDebugReport): Promise<AiDebugReport> {
+    const id = randomUUID();
+    const created: AiDebugReport = {
+      id,
+      threadId: report.threadId,
+      companyMessageId: report.companyMessageId ?? null,
+      aiMessageId: report.aiMessageId ?? null,
+      finalSentBody: report.finalSentBody ?? null,
+      classifierOutput: report.classifierOutput ?? null,
+      replyPromptVersion: report.replyPromptVersion ?? null,
+      analysis: report.analysis ?? null,
+      createdAt: new Date()
+    };
+    this.aiDebugReports.set(id, created);
+    return created;
+  }
+
+  async getAiDebugReports(threadId?: string, limit = 50): Promise<AiDebugReport[]> {
+    let reports = Array.from(this.aiDebugReports.values());
+    if (threadId) {
+      reports = reports.filter(r => r.threadId === threadId);
+    }
+    return reports.slice(0, limit);
+  }
+
+  async getAiDebugReportByMessageId(aiMessageId: string): Promise<AiDebugReport | undefined> {
+    return Array.from(this.aiDebugReports.values()).find(r => r.aiMessageId === aiMessageId);
   }
 
   // Comparisons
@@ -1326,6 +1399,83 @@ export class DatabaseStorage implements IStorage {
     const { emails } = await import("@shared/schema");
     const [email] = await db.insert(emails).values(insertEmail).returning();
     return email;
+  }
+
+  async updateEmail(id: string, updates: Partial<InsertEmail>): Promise<Email> {
+    const { db } = await import("./db");
+    const { emails } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [email] = await db.update(emails).set(updates).where(eq(emails.id, id)).returning();
+    if (!email) throw new Error("Email not found");
+    return email;
+  }
+
+  async getThreadDraftEmails(threadId: string): Promise<Email[]> {
+    const { db } = await import("./db");
+    const { emails } = await import("@shared/schema");
+    const { eq, and, desc } = await import("drizzle-orm");
+    return db.select().from(emails)
+      .where(and(eq(emails.threadId, threadId), eq(emails.status, "draft")))
+      .orderBy(desc(emails.createdAt));
+  }
+
+  async getDraftEmailsByUser(userId: string): Promise<Array<Email & { thread: EmailThread; company: Company | null }>> {
+    const { db } = await import("./db");
+    const { emails, emailThreads, companies } = await import("@shared/schema");
+    const { eq, desc } = await import("drizzle-orm");
+    
+    const results = await db.select({
+      email: emails,
+      thread: emailThreads,
+      company: companies
+    })
+      .from(emails)
+      .innerJoin(emailThreads, eq(emails.threadId, emailThreads.id))
+      .leftJoin(companies, eq(emailThreads.companyId, companies.id))
+      .where(eq(emails.status, "draft"))
+      .orderBy(desc(emails.createdAt));
+    
+    return results
+      .filter(r => r.thread.userId === userId)
+      .map(r => ({
+        ...r.email,
+        thread: r.thread,
+        company: r.company
+      }));
+  }
+
+  // AI Debug Reports
+  async createAiDebugReport(report: InsertAiDebugReport): Promise<AiDebugReport> {
+    const { db } = await import("./db");
+    const { aiDebugReports } = await import("@shared/schema");
+    const [created] = await db.insert(aiDebugReports).values(report).returning();
+    return created;
+  }
+
+  async getAiDebugReports(threadId?: string, limit = 50): Promise<AiDebugReport[]> {
+    const { db } = await import("./db");
+    const { aiDebugReports } = await import("@shared/schema");
+    const { eq, desc } = await import("drizzle-orm");
+    
+    let query = db.select().from(aiDebugReports).orderBy(desc(aiDebugReports.createdAt)).limit(limit);
+    
+    if (threadId) {
+      return db.select().from(aiDebugReports)
+        .where(eq(aiDebugReports.threadId, threadId))
+        .orderBy(desc(aiDebugReports.createdAt))
+        .limit(limit);
+    }
+    
+    return query;
+  }
+
+  async getAiDebugReportByMessageId(aiMessageId: string): Promise<AiDebugReport | undefined> {
+    const { db } = await import("./db");
+    const { aiDebugReports } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [report] = await db.select().from(aiDebugReports)
+      .where(eq(aiDebugReports.aiMessageId, aiMessageId));
+    return report;
   }
 
   // Comparisons

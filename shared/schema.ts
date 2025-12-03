@@ -77,6 +77,10 @@ export const emailThreads = pgTable("email_threads", {
   replyToEmail: varchar("reply_to_email", { length: 255 }), // TOKEN@bedretilbud.com
   status: text("status").default("sent"), // "sent", "pending", "received"
   createdAt: timestamp("created_at").defaultNow(),
+  
+  // AI Messaging Mode (Dec 2025)
+  // Controls how AI auto-responses are handled for this thread
+  aiMode: text("ai_mode").default("manual"), // "manual" (approve each) | "auto" (send directly) | "off" (no AI)
 }, (table) => ({
   userIdIdx: index("email_threads_user_id_idx").on(table.userId),
   companyIdIdx: index("email_threads_company_id_idx").on(table.companyId),
@@ -85,6 +89,7 @@ export const emailThreads = pgTable("email_threads", {
   // Composite indexes for common query patterns
   userIdStatusIdx: index("email_threads_user_id_status_idx").on(table.userId, table.status),
   userIdCreatedIdx: index("email_threads_user_id_created_idx").on(table.userId, table.createdAt),
+  aiModeIdx: index("email_threads_ai_mode_idx").on(table.aiMode),
 }));
 
 export const emails = pgTable("emails", {
@@ -99,11 +104,24 @@ export const emails = pgTable("emails", {
   metadata: json("metadata"),
   sentAt: timestamp("sent_at"),
   createdAt: timestamp("created_at").defaultNow(),
+  
+  // AI Draft System (Dec 2025)
+  // Status tracks the email lifecycle: received (inbound), draft (AI suggestion), sent, failed, rejected
+  status: text("status").default("sent"), // "received" | "draft" | "sent" | "failed" | "rejected"
+  // Author type indicates who created the message
+  authorType: text("author_type").default("system"), // "company" | "user" | "ai" | "system"
+  // Classifier label from the AI Classifier Agent (for analytics and debugging)
+  classifierLabel: text("classifier_label"), // "missing_pdfs" | "mitid_only" | "need_cpr" | "general_question" | etc.
+  // Debug metadata for AI response analysis
+  debugMeta: jsonb("debug_meta"), // { classifierOutput, promptVersion, sendError, etc. }
 }, (table) => ({
   threadIdIdx: index("emails_thread_id_idx").on(table.threadId),
   messageIdIdx: index("emails_message_id_idx").on(table.messageId),
   // Composite index for efficient sorting in JOIN queries
   threadIdSentAtIdx: index("emails_thread_id_sent_at_idx").on(table.threadId, table.sentAt),
+  // New indexes for draft system
+  statusIdx: index("emails_status_idx").on(table.status),
+  threadIdStatusIdx: index("emails_thread_id_status_idx").on(table.threadId, table.status),
 }));
 
 export const comparisons = pgTable("comparisons", {
@@ -198,6 +216,43 @@ export const notifications = pgTable("notifications", {
   comparisonIdIdx: index("notifications_comparison_id_idx").on(table.comparisonId),
   statusIdx: index("notifications_status_idx").on(table.status),
   typeIdx: index("notifications_type_idx").on(table.type),
+}));
+
+// AI Debug Reports for analyzing AI email response quality (Dec 2025)
+// Each report analyzes a company message + AI reply pair
+export const aiDebugReports = pgTable("ai_debug_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  threadId: varchar("thread_id").references(() => emailThreads.id).notNull(),
+  companyMessageId: varchar("company_message_id").references(() => emails.id), // The inbound company email
+  aiMessageId: varchar("ai_message_id").references(() => emails.id), // The AI draft/response
+  finalSentBody: text("final_sent_body"), // The actual text sent (may differ from AI draft if user edited)
+  
+  // Classifier Agent output
+  classifierOutput: jsonb("classifier_output"), // { intent, must_ask_for_cpr, must_request_pdfs, risk_flags }
+  
+  // Reply Agent metadata
+  replyPromptVersion: text("reply_prompt_version"), // Version tracking for prompts
+  
+  // Debug Agent analysis (after send)
+  analysis: jsonb("analysis"), // Full analysis JSON - see schema below
+  // Analysis structure:
+  // {
+  //   intent: "request_for_offer_with_missing_pdfs",
+  //   answered_all_questions: true,
+  //   mentioned_cpr: false,
+  //   mentioned_pdf_requirement: true,
+  //   mentioned_mitid_only: false,
+  //   tone_score: 0.9,
+  //   length_ok: true,
+  //   issues: ["Should explicitly ask for CPR number if not present"],
+  //   prompt_suggestions: ["When CPR is needed, add clear request for CPR"]
+  // }
+  
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({
+  threadIdIdx: index("ai_debug_reports_thread_id_idx").on(table.threadId),
+  companyMessageIdIdx: index("ai_debug_reports_company_message_id_idx").on(table.companyMessageId),
+  aiMessageIdIdx: index("ai_debug_reports_ai_message_id_idx").on(table.aiMessageId),
 }));
 
 export const householdMembers = pgTable("household_members", {
@@ -491,6 +546,11 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   createdAt: true,
 });
 
+export const insertAiDebugReportSchema = createInsertSchema(aiDebugReports).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -524,6 +584,8 @@ export type MagicLink = typeof magicLinks.$inferSelect;
 export type InsertMagicLink = z.infer<typeof insertMagicLinkSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type AiDebugReport = typeof aiDebugReports.$inferSelect;
+export type InsertAiDebugReport = z.infer<typeof insertAiDebugReportSchema>;
 
 // ============================================================================
 // COMPARISON DATA STRUCTURES (Phase 3 + 4)
