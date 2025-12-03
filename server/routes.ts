@@ -1715,7 +1715,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Generate unique request token
-      const { generateRequestToken, formatReplyToEmail } = await import("./services/emailService");
+      const { generateRequestToken, formatReplyToEmail } = await import("./utils/tokenGenerator");
       const requestToken = generateRequestToken();
       const replyToEmail = formatReplyToEmail(requestToken);
       
