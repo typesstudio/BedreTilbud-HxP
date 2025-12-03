@@ -65,6 +65,7 @@ export interface IStorage {
   getEmailThreadByCompany(userId: string, companyId: string): Promise<EmailThread | undefined>;
   getUserEmailThreads(userId: string): Promise<EmailThread[]>;
   getUserEmailThreadsEnriched(userId: string, limit?: number, offset?: number): Promise<Array<EmailThread & { company: Company | null; emailCount: number; lastEmailAt: Date | null }>>;
+  getAllEmailThreadsEnriched(limit?: number, offset?: number): Promise<Array<EmailThread & { company: Company | null; user: User | null; emailCount: number; lastEmailAt: Date | null }>>;
   createEmailThread(thread: InsertEmailThread): Promise<EmailThread>;
   updateEmailThread(id: string, updates: Partial<InsertEmailThread>): Promise<EmailThread>;
 
@@ -1366,6 +1367,55 @@ export class DatabaseStorage implements IStorage {
       status: row.status,
       createdAt: row.createdAt,
       company: row.company,
+      emailCount: Number(row.emailCount),
+      lastEmailAt: row.lastEmailAt
+    }));
+  }
+
+  async getAllEmailThreadsEnriched(limit?: number, offset?: number): Promise<Array<EmailThread & { company: Company | null; user: User | null; emailCount: number; lastEmailAt: Date | null }>> {
+    const { db } = await import("./db");
+    const { emailThreads, companies, emails, users } = await import("@shared/schema");
+    const { desc, sql, eq } = await import("drizzle-orm");
+    
+    const results = await db
+      .select({
+        id: emailThreads.id,
+        userId: emailThreads.userId,
+        companyId: emailThreads.companyId,
+        subject: emailThreads.subject,
+        threadId: emailThreads.threadId,
+        requestToken: emailThreads.requestToken,
+        replyToEmail: emailThreads.replyToEmail,
+        status: emailThreads.status,
+        createdAt: emailThreads.createdAt,
+        aiMode: emailThreads.aiMode,
+        company: companies,
+        user: users,
+        emailCount: sql<number>`COALESCE(COUNT(${emails.id}), 0)`.as('emailCount'),
+        lastEmailAt: sql<Date>`MAX(${emails.sentAt})`.as('lastEmailAt')
+      })
+      .from(emailThreads)
+      .leftJoin(companies, eq(emailThreads.companyId, companies.id))
+      .leftJoin(users, eq(emailThreads.userId, users.id))
+      .leftJoin(emails, eq(emailThreads.id, emails.threadId))
+      .groupBy(emailThreads.id, companies.id, users.id)
+      .orderBy(desc(emailThreads.createdAt))
+      .limit(limit || 100)
+      .offset(offset || 0);
+    
+    return results.map(row => ({
+      id: row.id,
+      userId: row.userId,
+      companyId: row.companyId,
+      subject: row.subject,
+      threadId: row.threadId,
+      requestToken: row.requestToken,
+      replyToEmail: row.replyToEmail,
+      status: row.status,
+      createdAt: row.createdAt,
+      aiMode: row.aiMode,
+      company: row.company,
+      user: row.user,
       emailCount: Number(row.emailCount),
       lastEmailAt: row.lastEmailAt
     }));

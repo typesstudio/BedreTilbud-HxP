@@ -2260,6 +2260,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ====== Admin Endpoints ======
+
+  // Get all email threads (admin - for dashboard overview)
+  app.get("/api/admin/threads", requireAuth, async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 100;
+      const offset = parseInt(req.query.offset as string) || 0;
+      
+      const threads = await storage.getAllEmailThreadsEnriched(limit, offset);
+      
+      res.json({ 
+        threads,
+        count: threads.length 
+      });
+    } catch (error: any) {
+      logger.error('[Admin] Failed to fetch all threads', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Gmail OAuth routes
   app.get("/auth/gmail", async (req, res) => {
     try {

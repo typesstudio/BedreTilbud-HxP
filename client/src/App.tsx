@@ -16,11 +16,13 @@ const LandingWizard = lazy(() => import("@/pages/LandingWizard"));
 const Home = lazy(() => import("@/pages/home"));
 const Onboarding = lazy(() => import("@/pages/onboarding"));
 const EmailCorrespondence = lazy(() => import("@/pages/email-correspondence"));
+const EmailThreadsOverview = lazy(() => import("@/pages/email-threads-overview"));
 const UploadOffer = lazy(() => import("@/pages/upload-offer"));
 const GmailSetup = lazy(() => import("@/pages/gmail-setup"));
 const SendInquiry = lazy(() => import("@/pages/send-inquiry"));
 const AdminTesting = lazy(() => import("@/pages/admin-testing"));
 const AdminMessagingDebug = lazy(() => import("@/pages/admin-messaging-debug"));
+const AdminDashboard = lazy(() => import("@/pages/admin-dashboard"));
 const InsuranceCheck = lazy(() => import("@/pages/insurance-check"));
 const InsuranceCheckPage = lazy(() => import("@/pages/InsuranceCheckPage"));
 const OfferComparisonAll = lazy(() => import("@/pages/offer-comparison-all"));
@@ -46,7 +48,7 @@ function Router() {
         <Route path="/upload-offer" component={UploadOffer} />
         <Route path="/send-inquiry" component={SendInquiry} />
         <Route path="/comparison/:id" component={Comparison} />
-        <Route path="/email-correspondence" component={EmailCorrespondence} />
+        <Route path="/email-correspondence" component={EmailThreadsOverview} />
         <Route path="/emails/:threadId" component={EmailCorrespondence} />
         <Route path="/profile/:userId" component={ProfilePage} />
         <Route path="/gmail-setup" component={GmailSetup} />
@@ -58,7 +60,8 @@ function Router() {
         <Route path="/sammenligninger/:id" component={Comparison} />
         <Route path="/sundhedstjek/:snapshotId" component={PolicyHealthCheck} />
         <Route path="/selskaber" component={Selskaber} />
-        <Route path="/admin" component={AdminTesting} />
+        <Route path="/admin" component={AdminDashboard} />
+        <Route path="/admin/testing" component={AdminTesting} />
         <Route path="/admin/messaging-debug" component={AdminMessagingDebug} />
         <Route component={NotFound} />
       </Switch>
