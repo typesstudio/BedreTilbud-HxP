@@ -692,47 +692,36 @@ export class EmailService {
                   });
                 }
 
-                // Check if AI flagged for human review (only applicable for AI responses)
-                if (responseText.includes('DO NOT RESPOND - FLAG FOR HUMAN REVIEW')) {
-                  console.log(`[AI Auto-Response] Flagged for human review, not sending`);
-                  
-                  // Store as draft for human review
-                  await storage.createEmail({
-                    threadId: existingThread.id,
-                    messageId: '',
-                    direction: 'auto',
-                    subject: `[NEEDS REVIEW] Re: ${subject}`,
-                    body: responseText,
-                    attachments: [],
-                    sentAt: new Date()
-                  });
-                } else {
-                  // Send via Resend
-                  const { client: resend, fromEmail } = await getUncachableResendClient();
-                  
-                  const emailResult = await resend.emails.send({
-                    from: fromEmail,
-                    to: company.email,
-                    subject: `Re: ${subject}`,
-                    text: responseText,
-                    replyTo: formatReplyToEmail(existingThread.requestToken || '')
-                  });
-
-                  console.log(`[Auto-Response] Email sent via Resend: ${emailResult.data?.id}`);
-
-                  // Store sent auto-response in thread
-                  await storage.createEmail({
-                    threadId: existingThread.id,
-                    messageId: emailResult.data?.id || '',
-                    direction: 'auto',
-                    subject: `Re: ${subject}`,
-                    body: responseText,
-                    attachments: [],
-                    sentAt: new Date()
-                  });
-
-                  console.log(`[Auto-Response] Successfully responded to ${company.name} (mode: ${responseMode})`);
+                // DRAFT SYSTEM: Always create drafts for user approval instead of auto-sending
+                // Check if AI flagged for human review (special case)
+                const needsReview = responseText.includes('DO NOT RESPOND - FLAG FOR HUMAN REVIEW');
+                
+                if (needsReview) {
+                  console.log(`[AI Draft] Flagged for human review, creating draft`);
                 }
+                
+                // Create draft for user approval (never auto-send)
+                const draftEmail = await storage.createEmail({
+                  threadId: existingThread.id,
+                  messageId: '',
+                  direction: 'auto',
+                  subject: needsReview ? `[NEEDS REVIEW] Re: ${subject}` : `Re: ${subject}`,
+                  body: responseText,
+                  attachments: [],
+                  sentAt: new Date(),
+                  status: 'draft',
+                  authorType: 'ai',
+                  classifierLabel: responseMode
+                });
+
+                console.log(`[AI Draft] Created draft ${draftEmail.id} for user approval (mode: ${responseMode})`);
+                console.log(`[AI Draft] User can approve at: /emails/${existingThread.id}`);
+                
+                // Update thread status to indicate there's a pending draft
+                await storage.updateEmailThread(existingThread.id, { 
+                  status: 'draft_pending',
+                  aiMode: 'draft'
+                });
               }
             } catch (error) {
               console.error('[Auto-Response] Failed to generate/send response:', error);
