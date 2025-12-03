@@ -1,0 +1,433 @@
+Got it. You basically want to:
+
+1. **Decouple “AI writes” from “system sends”**
+2. **Use the app as a human-in-the-loop lab** to harden prompts and edge cases
+3. **Have a debug layer** that explains what the AI did well/badly and how to improve it
+
+Here’s a concrete strategy that fits your current BedreTilbud stack (Supabase + n8n + Resend + React message thread).
+
+---
+
+## 1. Messaging modes: manual first, auto later
+
+Add a messaging mode so you can start with *one* user in manual mode and later switch to auto.
+
+**User or company_request level flag**, e.g.:
+
+* `ai_messaging_mode = 'manual' | 'auto' | 'off'`
+
+For now:
+
+* Your own test user: `'manual'`
+* Everyone else: `'off'` (no AI replies at all)
+* Future: when you trust it, flip selected users/companies to `'auto'`
+
+This flag is checked by the AI messaging orchestrator every time a company email comes in.
+
+---
+
+## 2. Message lifecycle: introduce “draft” instead of auto-send
+
+Right now your flow is conceptually:
+
+> Incoming email → AI generates reply → send via Resend → save message → show in UI
+
+You want:
+
+> Incoming email → AI generates **draft** reply → store as draft → user approves → send → mark as sent
+
+### DB changes (Supabase `beskeder` or equivalent)
+
+Add:
+
+* `role` (if not already): `'company' | 'user' | 'ai' | 'system'`
+* `status`:
+
+  * `'received'` – inbound from company
+  * `'draft'` – AI suggestion waiting for approval
+  * `'sent'` – actually sent to company
+  * `'failed'` – send failed
+* `source_type` (optional): `'ai' | 'human'` (so we can distinguish AI draft vs user-typed reply)
+* `debug_meta` JSONB (for later debug info)
+
+A typical pair will be:
+
+* Company message: `role='company', status='received'`
+* AI draft: `role='ai', status='draft'`
+* Final sent: same row updated to `status='sent'` (or a new row `source_type='human'` if user rewrote the text completely).
+
+---
+
+## 3. Backend orchestration: split “generate” and “send”
+
+### 3.1. AI reply generator (no sending)
+
+Your IMAP / incoming-email flow (currently in n8n) should **stop sending** the AI reply itself.
+
+New behaviour:
+
+1. Incoming email → you create the company message in `beskeder`.
+2. n8n calls your backend `POST /ai-messaging/generate-reply` (or directly an OpenAI call if you keep it in n8n), with:
+
+   * `thread_id`
+   * `company_request_id`
+   * Last company message text + meta (CPR, missing PDFs, MitID, etc.)
+   * Full conversation context (if needed)
+3. The AI generates **only** a reply **text**, plus some tags (see debug section).
+4. Backend (or n8n) writes a new message:
+
+   * `role='ai'`
+   * `status='draft'`
+   * `body = <ai reply>`
+   * `source_type='ai'`
+
+No email is sent yet.
+
+### 3.2. “Send message” endpoint
+
+Frontend needs an API to trigger the actual send:
+
+`POST /messages/:id/send`
+
+Behaviour:
+
+1. Check that the message:
+
+   * belongs to the current user / thread
+   * has `status='draft'`
+2. If the user edited the text in the UI, take that new body instead of the original.
+3. Call Resend with:
+
+   * To: insurance company email
+   * From: thread-specific address (`thread_id@bedretilbud.com`)
+   * Subject: from original thread or system logic
+   * Body: final text
+4. Update the message row:
+
+   * `status='sent'`
+   * `sent_at=now()`
+5. If Resend fails:
+
+   * `status='failed'`
+   * Store error in `debug_meta.send_error`
+
+Optional: create a separate `user` message if they typed something from scratch instead of using the AI.
+
+---
+
+## 4. Frontend: use the existing thread design with a “Send” gate
+
+You keep your existing chat/message thread UI, but treat AI replies as **draft bubbles**.
+
+### 4.1. How it looks
+
+For each message:
+
+* **Company messages**: left side, gray bubble, `role='company'`.
+* **User/AI sent messages**: right side, normal bubble.
+
+For **AI draft** (`role='ai', status='draft'`):
+
+* Show as a right-side bubble with:
+
+  * Label/top line: “AI-forslag (kladde)” or similar
+  * Light/dashed border so it looks “not yet sent”
+  * Below bubble: buttons:
+
+    * **“Send som den er”** → calls `/messages/:id/send` directly
+    * **“Rediger & send”** → opens text in a textarea composer; when user hits send, updates message body then `/send`
+    * **“Afvis”** → mark `status='rejected'` and optionally show a comment field (“Hvorfor?”)
+
+### 4.2. Data fetching
+
+* Use TanStack Query to subscribe to messages for `thread_id`.
+* When a new `status='draft'` message arrives, it appears instantly in the thread.
+* You can optionally show a small banner: “Nyt AI-forslag klar – godkend før det sendes til selskabet”.
+
+---
+
+## 5. Messaging debug system: see what’s going on
+
+Now the fun part: a **debug layer** that uses the same AI to critique itself.
+
+Goal:
+
+* For every pair: **company message ↔ AI reply**, you get:
+
+  * What type of request it was
+  * Did the AI answer the question?
+  * Did it mention CPR if needed?
+  * Did it ask for PDFs instead of just MitID?
+  * Tone, length, clarity
+  * Suggestions for prompt improvements
+
+### 5.1. Data model
+
+New table `message_debug_reports` (or reuse `debug_meta` on messages with a structured schema):
+
+* `id`
+* `company_message_id`
+* `ai_message_id`
+* `final_sent_body` (if user edited)
+* `analysis` JSONB, e.g.:
+
+  ```json
+  {
+    "intent": "request_for_offer_with_missing_pdfs",
+    "answered_all_questions": true,
+    "mentioned_cpr": false,
+    "mentioned_pdf_requirement": true,
+    "mentioned_mitid_only": false,
+    "tone_score": 0.9,
+    "length_ok": true,
+    "issues": [
+      "Should explicitly ask for CPR number if not present",
+      "Could be shorter in the second paragraph"
+    ],
+    "prompt_suggestions": [
+      "When CPR is needed and not already stated, always add a clear, single-sentence request for CPR.",
+      "If company only links to MitID, tell them kindly you need the full PDF attached to this email."
+    ]
+  }
+  ```
+
+### 5.2. When to run the debug analysis
+
+Best: **right after a message is sent** (so you analyse the actual outgoing text, including user edits).
+
+Flow:
+
+1. `/messages/:id/send` → after successful send, enqueue a job (n8n or backend worker).
+2. Worker calls an **AI Debug Agent** with:
+
+   * Last company message text
+   * AI draft text
+   * Final sent text (maybe same as draft, maybe edited)
+   * Conversation context (optional)
+3. Debug Agent returns the structured JSON analysis.
+4. Save to `message_debug_reports` (or in `debug_meta` on the AI message).
+
+---
+
+## 6. Debug UI for you: “AI Messaging Lab”
+
+Build a simple internal page, e.g. `/admin/messaging-debug`, visible only to you.
+
+Views:
+
+1. **List of conversations**
+
+   * Columns: company name, thread_id, number of messages, number of AI replies.
+   * Filter: show only threads with issues (any `issues.length > 0`).
+
+2. **Per-thread view**
+
+   * Chat-like view:
+
+     * Company message
+     * AI draft + final sent text
+   * Next to each AI message, show:
+
+     * A small panel:
+
+       * Intent tag: `MitID-only`, `missing-pdfs`, `general-question`, `cpr-request`, etc.
+       * Relevance/coverage score
+       * Bullet list of issues
+       * Prompt suggestions
+
+3. **Global insights view**
+
+   * Aggregate:
+
+     * % of messages where:
+
+       * CPR should be requested but wasn’t
+       * PDFs missing but not mentioned
+       * AI mentioned “compare with others” (which you don’t want)
+     * Top 5 recurring issues and suggested prompt changes
+
+This gives you a **dashboard of how your AI behaves in the real world**.
+
+---
+
+## 7. Multi-agent thinking baked in
+
+To keep it scalable and robust, structure your AI layer as **three logical agents**:
+
+1. **Classifier Agent (no user-facing text)**
+   Input: last company message, context.
+   Output (JSON only):
+
+   * `intent` (enum): `missing_pdfs`, `mitid_only`, `general_question`, `need_cpr`, etc.
+   * `must_ask_for_cpr`: boolean
+   * `must_request_pdfs`: boolean
+   * `should_answer_technical_question`: boolean
+   * `risk_flags`: e.g. `["mentions_other_insurance_companies"]`
+
+2. **Reply Agent**
+   Input:
+
+   * User-facing system prompt
+   * Classifier output
+   * Company + thread context
+     Output: **Danish email text only** (no JSON), respecting rules:
+   * Answer their question first
+   * Then ask for missing PDFs if needed
+   * Then mention CPR if needed
+   * Never mention “we compare with others” etc.
+
+3. **Debug Agent** (for the reporting system)
+   Input: company message, classifier result, AI reply, final sent text.
+   Output: the `analysis` JSON described above.
+
+These can all still be implemented with one LLM, but logically separate prompts keeps it maintainable.
+
+---
+
+## 8. Iteration loop: how you’ll actually use this
+
+Here’s how you run your manual lab with one user:
+
+1. **Enable manual mode for you**
+
+   * `ai_messaging_mode='manual'` on your test account.
+
+2. **Real-world testing**
+
+   * Insurance companies reply as usual.
+   * AI drafts show up in the thread.
+   * You:
+
+     * Approve as-is
+     * Or tweak wording
+     * Or reject and write your own
+
+3. **Review debug reports**
+
+   * Once per day, go into `/admin/messaging-debug`.
+   * Look at:
+
+     * Where AI missed CPR
+     * Where it failed to ask for PDFs
+     * Where tone or clarity is off
+
+4. **Adjust system prompts**
+
+   * When you see recurring issues, update:
+
+     * Classifier prompt (better tags)
+     * Reply prompt (stronger rules)
+   * Optional: keep a `PROMPT_VERSION` in `debug_meta` so you know which version produced which behaviour.
+
+5. **Move towards partial automation**
+
+   * Later, you can add a confidence threshold:
+
+     * If Debug Agent predicts “high quality, no critical issues” → auto-send for low-risk intents.
+     * Else → keep manual approval.
+
+---
+
+## 9. Replit prompt you can paste to your dev
+
+You can feed this directly into Replit / Cursor as “architect brief”:
+
+> **Project:** BedreTilbud – manual gating of AI email replies + debug system
+>
+> **Goal:**
+> Stop auto-sending AI replies to insurance companies. Instead:
+>
+> * Generate AI replies as drafts shown in the existing message thread UI.
+> * Let the user approve/edit them before sending.
+> * Log structured debug data for each company↔AI message pair.
+>
+> **Tasks:**
+>
+> 1. **DB updates (Supabase):**
+>
+>    * In `beskeder` (messages) table, add columns:
+>
+>      * `role TEXT` (`'company' | 'user' | 'ai' | 'system'`)
+>      * `status TEXT` (`'received' | 'draft' | 'sent' | 'failed' | 'rejected'`)
+>      * `source_type TEXT` (`'ai' | 'human'`)
+>      * `debug_meta JSONB`
+>    * New table `message_debug_reports` with:
+>
+>      * `id UUID PK`
+>      * `company_message_id UUID`
+>      * `ai_message_id UUID`
+>      * `final_sent_body TEXT`
+>      * `analysis JSONB`
+> 2. **Messaging mode flag:**
+>
+>    * Add `ai_messaging_mode TEXT` to users or company_requests (`'manual' | 'auto' | 'off'`).
+>    * For now, set my user to `'manual'`, others `'off'`.
+> 3. **Backend: AI reply generator:**
+>
+>    * Refactor current AI email flow so that *no* AI reply is sent directly from n8n.
+>    * Implement `POST /ai-messaging/generate-reply` which:
+>
+>      * Accepts `thread_id`, `company_request_id`, last company message text, and context.
+>      * Calls the LLM with a Classifier Agent + Reply Agent (two-step or one-step with JSON→text).
+>      * Inserts a `beskeder` row with:
+>
+>        * `role='ai'`, `status='draft'`, `source_type='ai'`, `body=<reply>`
+>      * Returns the new message as JSON.
+>    * Update n8n incoming-email flow to call this endpoint after saving the company message.
+> 4. **Backend: send endpoint:**
+>
+>    * Implement `POST /messages/:id/send`:
+>
+>      * Validate ownership and that `status='draft'`.
+>      * Optionally take `body` in the payload if user edited the text; update message before sending.
+>      * Send via Resend using `thread_id@bedretilbud.com`.
+>      * On success: set `status='sent'`, `sent_at=now()`.
+>      * On failure: set `status='failed'` and store error in `debug_meta.send_error`.
+>      * After success, enqueue a job for debug analysis (see next task).
+> 5. **Backend: debug agent worker:**
+>
+>    * Background job or endpoint `POST /ai-messaging/debug-message`:
+>
+>      * Inputs: `company_message_id`, `ai_message_id`, `final_sent_body`, full context if needed.
+>      * Calls Debug Agent LLM to produce `analysis` JSON with fields:
+>
+>        * `intent`, `answered_all_questions`, `mentioned_cpr`, `mentioned_pdf_requirement`, `issues[]`, `prompt_suggestions[]`, etc.
+>      * Saves a record in `message_debug_reports`.
+>    * Trigger this after every successful send from `/messages/:id/send`.
+> 6. **Frontend: message thread UI changes:**
+>
+>    * For messages with `role='ai', status='draft'`:
+>
+>      * Render as “AI suggestion (draft)” bubble on the right.
+>      * Show 3 actions:
+>
+>        * “Send as is” → call `/messages/:id/send` directly.
+>        * “Edit & send” → open in a textarea composer; on submit, send updated body.
+>        * “Reject” → update `status='rejected'`.
+>    * Ensure messages list is updated in real-time via TanStack Query.
+> 7. **Frontend: debug UI:**
+>
+>    * `/admin/messaging-debug` route (admin only).
+>    * List of threads with counts of AI replies and issues.
+>    * Detail view showing each company message + AI reply + debug analysis.
+>    * Optional aggregate view with simple stats (% of messages missing CPR ask, etc.).
+> 8. **Config:**
+>
+>    * Ensure all LLM calls use the new multi-agent prompts and that the reply agent:
+>
+>      * Answers the company’s question first.
+>      * Requests PDFs when they suggest MitID-only.
+>      * Requests CPR when needed and not already provided.
+>      * Never mentions that we “compare with other companies”.
+>
+> Implement this step-by-step and keep the old auto-send path disabled for now.
+
+---
+
+If you want, next step I can help you write the actual prompts for:
+
+* Classifier Agent
+* Reply Agent
+* Debug Agent
+
+all tuned specifically to your CPR/PDF/MitID rules.
