@@ -80,39 +80,38 @@ export default function PolicyHealthCheckPage() {
       <div className="flex w-full flex-col items-center justify-center bg-default-background px-6 py-6 mobile:px-4 mobile:py-4">
         <div className="flex w-full max-w-[768px] flex-col items-start gap-6">
           {/* Header with action buttons */}
-          <div className="flex w-full items-start gap-2 px-2 py-2 mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:py-2">
-            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 px-2 py-2 mobile:px-0 mobile:py-0">
-              <span className="text-heading-1 font-heading-1 text-default-font mobile:text-heading-2 mobile:font-heading-2">
+          <div className="flex w-full items-start gap-2 px-2 py-2">
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 px-2 py-2">
+              <span className="text-heading-1 font-heading-1 text-default-font">
                 {data.title}
               </span>
-              <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+              <span className="text-body font-body text-subtext-color">
                 {data.subtitle}
               </span>
             </div>
-            <div className="flex items-center gap-2 mobile:w-full mobile:flex-col">
-              {data.kind === "offer" && data.threadId && (
-                <Button
-                  variant="neutral-secondary"
-                  onClick={() => {
+            {data.kind === "offer" && (
+              <Button
+                variant="neutral-secondary"
+                onClick={() => {
+                  if (data.threadId) {
                     setLocation(`/emails/${data.threadId}`);
-                  }}
-                  data-testid="button-view-messages"
-                >
-                  Se beskeder
-                </Button>
-              )}
-              {data.kind === "offer" && data.comparisonId && (
-                <Button
-                  variant="brand-primary"
-                  onClick={() => {
-                    setLocation(`/sammenligning/${data.comparisonId}`);
-                  }}
-                  data-testid="button-compare-offer"
-                >
-                  Sammenlign tilbudet
-                </Button>
-              )}
-            </div>
+                  }
+                }}
+                data-testid="button-view-messages"
+              >
+                Se beskeder
+              </Button>
+            )}
+            {data.kind === "offer" && data.comparisonId && (
+              <Button
+                onClick={() => {
+                  setLocation(`/sammenligning/${data.comparisonId}`);
+                }}
+                data-testid="button-compare-offer"
+              >
+                Sammenlign tilbudet
+              </Button>
+            )}
           </div>
 
           {/* Dynamic Tabs - Overblik first, then policy-specific tabs */}
