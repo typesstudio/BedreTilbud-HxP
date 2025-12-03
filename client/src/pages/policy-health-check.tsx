@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
+import { useMutation } from "@tanstack/react-query";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { usePolicyHealthCheck } from "@/hooks/usePolicyHealthCheck";
 import { useHealthCheckOverview } from "@/hooks/useHealthCheckOverview";
@@ -12,6 +13,7 @@ import { HealthCheckStrengthsWeaknesses } from "@/components/healthCheck/HealthC
 import { HealthCheckSavingsSection } from "@/components/healthCheck/HealthCheckSavingsSection";
 import { HealthCheckOverviewSection } from "@/components/healthCheck/HealthCheckOverviewSection";
 import LoadingInsuranceCheck from "@/components/loading/LoadingInsuranceCheck";
+import { apiRequest, queryClient } from "@/lib/queryClient";
 import { 
   FeatherHome, 
   FeatherShield, 
@@ -39,6 +41,18 @@ export default function PolicyHealthCheckPage() {
 
   const { data, isLoading, error } = usePolicyHealthCheck(snapshotId);
   const { data: overviewData, isLoading: overviewLoading } = useHealthCheckOverview(snapshotId);
+
+  // Start or get existing thread mutation
+  const startThreadMutation = useMutation({
+    mutationFn: async ({ userId, companyId }: { userId: string; companyId: string }) => {
+      const response = await apiRequest("POST", "/api/emails/start-thread", { userId, companyId });
+      return response.json();
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/emails/threads", userId] });
+      setLocation(`/emails/${result.threadId}`);
+    },
+  });
 
   if (isLoading) {
     return (
@@ -89,12 +103,16 @@ export default function PolicyHealthCheckPage() {
                 {data.subtitle}
               </span>
             </div>
-            {data.kind === "offer" && (
+            {data.kind === "offer" && data.offerCompanyId && (
               <Button
                 variant="neutral-secondary"
+                loading={startThreadMutation.isPending}
+                disabled={startThreadMutation.isPending}
                 onClick={() => {
                   if (data.threadId) {
                     setLocation(`/emails/${data.threadId}`);
+                  } else if (userId && data.offerCompanyId) {
+                    startThreadMutation.mutate({ userId, companyId: data.offerCompanyId });
                   }
                 }}
                 data-testid="button-view-messages"

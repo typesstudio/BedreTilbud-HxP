@@ -2822,10 +2822,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // The comparison is linked via: document.company_id = company_comparisons.offer_company
       let comparisonId: string | null = null;
       let threadId: string | null = null;
+      let offerCompanyId: string | null = null;
       try {
         // Get the document to find its company_id
         const document = await storage.getDocument(documentId);
         if (document && document.companyId) {
+          offerCompanyId = document.companyId;
           // Step 2.4: Only use active (non-superseded) comparisons
           const userId = req.headers['x-user-id'] as string;
           const companyComparisons = await storage.getActiveCompanyComparisonsByUser(userId);
@@ -2872,6 +2874,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         documentId,
         comparisonId,
         threadId,
+        offerCompanyId,
       });
     } catch (error: any) {
       logger.error('[Health Check API] Error fetching/generating health check', error, { snapshotId: req.params.snapshotId });

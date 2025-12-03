@@ -77,6 +77,7 @@ export interface HealthCheckApiResponse {
   documentId?: string;
   comparisonId?: string | null;
   threadId?: string | null;
+  offerCompanyId?: string | null;
 }
 
 export interface PolicyTab {
@@ -97,6 +98,7 @@ export interface HealthCheckViewModel {
   documentId?: string;
   comparisonId?: string | null;
   threadId?: string | null;
+  offerCompanyId?: string | null;
   annualPotentialSavings?: number;
   annualSavingsPercent?: number;
   benefits: HealthCheckBenefit[];
@@ -128,7 +130,7 @@ const policyTypeOrder = ["indbo", "ulykke", "hus", "fritidshus", "bil", "rejse"]
 export function transformPolicyHealthCheckToView(
   apiData: HealthCheckApiResponse
 ): HealthCheckViewModel {
-  const { snapshot, healthCheck, siblingSnapshots, documentId, comparisonId, threadId } = apiData;
+  const { snapshot, healthCheck, siblingSnapshots, documentId, comparisonId, threadId, offerCompanyId } = apiData;
   const policyTypeLabel = policyTypeLabels[snapshot.policyType] || snapshot.policyType;
 
   // Build sibling tabs from sibling snapshots, ordered by policy type
@@ -333,6 +335,7 @@ export function transformPolicyHealthCheckToView(
     documentId,
     comparisonId,
     threadId,
+    offerCompanyId,
     annualPotentialSavings,
     annualSavingsPercent,
     benefits,
