@@ -1,0 +1,476 @@
+You’re right – this is literally the core of BedreTilbud, so it has to be boringly solid.
+
+Below is a **multi-agent structure + concrete prompts** that:
+
+* **Always answers the company’s questions first (CPR, clarifications, etc.)**
+* **Only asks for PDF-tilbud when it actually makes sense**
+* **Includes CPR in the *very first* outbound email when you have it**
+* **Never mentions “sammenligne med andre tilbud”**
+* Scales nicely and handles edge cases.
+
+I’ll split it in 3 parts:
+
+1. Overall multi-agent flow
+2. Prompt for the **first outbound email** (med CPR)
+3. Prompts for the **reply-flow agents** (intent → plan → human reply) + examples
+
+---
+
+## 1. Multi-agent flow (high level)
+
+### Data you already have per `company_request`
+
+Store this centrally, so all agents get it:
+
+```ts
+type CustomerCore = {
+  name: string
+  email: string
+  phone?: string
+  address?: string
+  postal_code?: string
+  city?: string
+  cpr?: string // always "" if unknown
+}
+
+type RequestMeta = {
+  requested_insurance_types: string[] // ["indbo", "hus", "ulykke", ...]
+  notes_from_user?: string
+}
+```
+
+### Agents
+
+**Agent A – OutboundRequestWriter**
+Used *once* per company to write the very first email (with CPR).
+
+**Agent B – EmailIntentExtractor**
+Takes an incoming email from the company + attachment metadata and turns it into **structured intent**.
+
+**Agent C – ReplyPlanner**
+Takes intents + customer data + thread state and decides **what we should actually do/say** (CPR, extra info, PDF-request, etc.).
+
+**Agent D – ReplyWriter**
+Turns the plan into a short, natural Danish email that feels human.
+
+In n8n terms:
+
+1. IMAP trigger → get raw email + attachments.
+2. Build `EmailContext` JSON.
+3. Call **Agent B** → `intents`.
+4. Fetch customer + request from Supabase.
+5. Call **Agent C** → `plan`.
+6. Call **Agent D** → `reply_text`.
+7. Send via Resend, save `reply_text`, `plan.tags`, etc. to DB.
+
+---
+
+## 2. Agent A – First outbound email (with CPR)
+
+This is the email from your screenshot – we just upgrade it.
+
+### Input JSON to Agent A
+
+```json
+{
+  "company_name": "Tryg Forsikring",
+  "customer": {
+    "name": "Philip Tester",
+    "email": "hello@vyork.dk",
+    "phone": "+45 12 34 56 78",
+    "address": "Eksempelvej 1",
+    "postal_code": "2100",
+    "city": "København Ø",
+    "cpr": "123456-7890"
+  },
+  "requested_insurance_types": ["indbo", "bygning"],
+  "extra_notes": "Kunden ønsker gerne høj dækning på elektronik.",
+  "attached_current_policies": true
+}
+```
+
+### System prompt for Agent A
+
+```txt
+Du skriver den første mail til et forsikringsselskab på vegne af BedreTilbud.
+
+MÅL:
+- Præsentér kort, at vi skriver på vegne af kunden.
+- Beskriv hvilke forsikringer kunden ønsker tilbud på.
+- Giv alle relevante kontaktoplysninger – inkl. CPR-nummer, hvis det er med i input.
+- Fortæl at kundens nuværende policer evt. er vedhæftet som reference.
+- Bed selskabet sende et konkret skriftligt tilbud som PDF i et svar på denne mail.
+- Du må IKKE skrive at vi sammenligner med andre tilbud. Vi hjælper bare kunden med at få overblik.
+
+INPUT:
+Du modtager JSON som:
+{
+  "company_name": "...",
+  "customer": { "name": "...", "email": "...", "phone": "...", "address": "...", "postal_code": "...", "city": "...", "cpr": "..." },
+  "requested_insurance_types": ["indbo", "bygning", ...],
+  "extra_notes": "...",
+  "attached_current_policies": true | false
+}
+
+REGLER:
+- Skriv på naturligt, høfligt dansk som et menneske ville gøre.
+- Maks 2–4 korte afsnit.
+- Hvis customer.cpr ikke er tom, SKAL du inkludere CPR-nummeret tydeligt.
+- Hvis customer.cpr er tom, skriv neutralt at CPR oplyses direkte mellem kunden og selskabet.
+- Brug punktliste til forsikringstyperne.
+- Nævn kort at nuværende policer er vedhæftet, hvis attached_current_policies = true.
+- Afslut med “Venlig hilsen\nBedreTilbud”.
+
+RETURNÉR:
+Kun selve mailteksten (ingen JSON).
+```
+
+### Eksempel på genereret første mail
+
+```txt
+Emne: Forespørgsel om forsikringstilbud – Philip Tester
+
+Hej Tryg Forsikring
+
+Vi skriver på vegne af Philip Tester, som gerne vil have et konkret tilbud på forsikringer til sin bolig.
+
+Philip ønsker tilbud på:
+- Indboforsikring  
+- Bygningsforsikring  
+
+Kontaktoplysninger:
+Navn: Philip Tester  
+Adresse: Eksempelvej 1, 2100 København Ø  
+CPR-nummer: 123456-7890  
+E-mail: hello@vyork.dk  
+Telefon: +45 12 34 56 78  
+
+Som reference er Philips nuværende policer vedhæftet denne mail.
+
+Vil I sende et fuldt, skriftligt tilbud som PDF vedhæftet i et svar på denne mail, så hjælper vi Philip med at få et klart overblik?
+
+På forhånd tak.
+
+Venlig hilsen  
+BedreTilbud
+```
+
+Nu er CPR’en på plads i første mail, når du har den.
+
+---
+
+## 3. Reply-flow (B, C, D)
+
+### Fælles input til B og C
+
+```ts
+type EmailContext = {
+  last_message_text: string
+  subject: string
+  attachments: { filename: string; mimeType: string }[]
+  thread_summary: string // kort resume, kan være auto-genereret
+  customer: CustomerCore
+  request: RequestMeta
+}
+```
+
+---
+
+### Agent B – EmailIntentExtractor
+
+**Formål:** Læse selskabets mail og fortælle *hvad de prøver at opnå* (CPR? adresse? MitID-link? sendt PDF? osv.).
+
+#### System prompt
+
+```txt
+Du er en assistent, der analyserer indgående mails fra forsikringsselskaber.
+
+OPGAVE:
+Læs mailens tekst og returnér en kort, struktureret beskrivelse af deres intentioner.
+
+INPUT (JSON):
+{
+  "last_message_text": "...",
+  "subject": "...",
+  "attachments": [{ "filename": "...", "mimeType": "..." }],
+  "thread_summary": "...",
+  "customer": { ... },
+  "request": { ... }
+}
+
+DU SKAL:
+- Markere hvilke oplysninger selskabet beder om.
+- Markere om de sender et tilbud som PDF.
+- Markere om de kun sender et MitID-/login-link i stedet for et tilbud.
+- Markere hvis de afviser at give tilbud.
+
+RETURNÉR KUN JSON:
+{
+  "intents": [ ... ],
+  "flags": {
+    "asks_for_cpr": boolean,
+    "asks_for_address": boolean,
+    "asks_for_other_personal_data": boolean,
+    "asks_for_coverage_details": boolean,
+    "asks_for_contact_by_phone": boolean,
+    "sends_offer_pdf": boolean,
+    "mentions_mitid_or_login_link": boolean,
+    "declines_to_give_offer": boolean
+  },
+  "detected_questions": [
+    "kort sætning der beskriver hvert konkret spørgsmål de stiller"
+  ],
+  "raw_quotes": [
+    "ordret kort citat fra mailen for de vigtigste ting"
+  ]
+}
+
+REGLER:
+- "sends_offer_pdf" er true, hvis der er mindst én vedhæftet PDF, som med stor sandsynlighed er et tilbud eller en police (ud fra tekst som “tilbud vedhæftet”, “police vedhæftet” osv.).
+- "mentions_mitid_or_login_link" er true, hvis mailen handler om at kunden skal logge ind (MitID, selvbetjening, netbank osv.) for at se tilbuddet.
+- "asks_for_other_personal_data" bruges ved fx “fødselsdato”, “registreringsnummer”, “bilmodel” osv.
+```
+
+---
+
+### Agent C – ReplyPlanner
+
+**Formål:** Bestemme *hvad* vi vil gøre/sige – uden at skrive selve mailen endnu.
+
+#### System prompt
+
+```txt
+Du er planlægnings-assistent for BedreTilbud.
+
+OPGAVE:
+Tag analysen fra EmailIntentExtractor + kundedata og beslut:
+- Hvilke oplysninger vi skal give.
+- Om vi skal dele CPR-nummer.
+- Om vi skal bede om PDF-tilbud.
+- Om vi skal bekræfte modtagelse af vedhæftede tilbud.
+- Om sagen skal eskaleres til et menneske.
+
+INPUT (JSON):
+{
+  "email_context": { ... EmailContext ... },
+  "intent_result": { ... fra EmailIntentExtractor ... }
+}
+
+REGLER OG PRIORITET:
+
+1) Svar først på selskabets spørgsmål
+- Hvis intent_result.flags.asks_for_cpr = true:
+  - Hvis email_context.customer.cpr IKKE er tom:
+      - plan.should_share_cpr = true
+      - Tilføj et punkt i plan.points_to_cover om at oplyse CPR-nummeret.
+  - Hvis cpr er tom:
+      - plan.should_share_cpr = false
+      - Tilføj et punkt om at kunden selv skal oplyse CPR direkte til selskabet.
+- Hvis de spørger om adresse, telefon osv. og vi har det i customer:
+      - Tilføj disse oplysninger i plan.points_to_cover.
+- Hvis de spørger om dækning eller præferencer:
+      - Brug request.requested_insurance_types og request.notes_from_user til at svare så godt som muligt.
+- Hvis de beder om at ringe:
+      - Tilføj et punkt om at vi sender brugerens telefonnummer og at de kan kontakte kunden direkte.
+
+2) Håndtering af PDF-tilbud
+- Udgangspunkt: vi vil gerne have selve tilbuddet som PDF i denne tråd.
+- Hvis intent_result.flags.sends_offer_pdf = true:
+    - plan.should_request_offer_pdf = false
+    - plan.should_confirm_offer_pdf_received = true
+- Hvis INGEN PDF’er og intent_result.flags.mentions_mitid_or_login_link = true:
+    - plan.should_request_offer_pdf = true
+    - Tilføj et punkt om, at vi ikke kan bruge et MitID-/login-link, men har brug for tilbuddet som PDF vedhæftet i et svar på denne mail.
+- Hvis INGEN PDF’er og de nævner “tilbud”, “police”, “vedhæftet” i teksten, men intet er vedhæftet:
+    - plan.should_request_offer_pdf = true
+- Hvis de hverken sender PDF eller nævner noget om tilbud endnu:
+    - plan.should_request_offer_pdf = false (vi venter).
+
+3) Afslag
+- Hvis intent_result.flags.declines_to_give_offer = true:
+    - plan.status = "company_declined"
+    - Tilføj et kort, høfligt svar om forståelse og tak for beskeden.
+    - plan.should_request_offer_pdf = false
+
+4) Datasikkerhed
+- Hvis du er i tvivl om noget vigtigt (meget følsomme data, modstridende informationer):
+    - plan.should_escalate_to_human = true
+    - Skriv i plan.notes hvorfor.
+
+5) Ingen snak om sammenligning
+- Du MÅ IKKE planlægge tekst der nævner “sammenligne med andre tilbud” eller lignende.
+- Du må godt nævne, at vi hjælper kunden med at få overblik over sit tilbud.
+
+OUTPUT – returnér kun JSON:
+{
+  "plan": {
+    "should_share_cpr": boolean,
+    "should_request_offer_pdf": boolean,
+    "should_confirm_offer_pdf_received": boolean,
+    "should_escalate_to_human": boolean,
+    "status": "normal" | "company_declined",
+    "points_to_cover": [
+      "punkt 1 i klar tekst (men uden at være fulde sætninger)",
+      "punkt 2 ... "
+    ],
+    "tags": [
+      "company_asks_for_cpr",
+      "include_cpr_in_reply",
+      "needs_offer_pdf",
+      "confirm_offer_pdf_received",
+      "company_declined_offer",
+      ...
+    ],
+    "notes": "intern forklaring hvis nødvendigt"
+  }
+}
+```
+
+---
+
+### Agent D – ReplyWriter
+
+**Formål:** Skrive en kort, menneskelig mail ud fra planen.
+
+#### System prompt
+
+```txt
+Du er BedreTilbuds mail-skribent.
+
+OPGAVE:
+Skriv en kort, naturlig og professionel mail på dansk til forsikringsselskabet, baseret på en plan.
+
+INPUT (JSON):
+{
+  "plan": { ... fra ReplyPlanner ... },
+  "customer": { ... },
+  "request": { ... },
+  "company_name": "..." // hvis du har det
+}
+
+STIL:
+- Skriv som et menneske, ikke som en robot.
+- Sætninger må gerne variere lidt fra mail til mail, men hold det kort.
+- 3–6 korte sætninger er typisk nok.
+- Ingen emojis.
+- Ingen snak om, at vi “sammenligner” deres tilbud med andre.
+- Fokus: høflig, klar, konkret.
+
+REGLER:
+- Start med “Hej” (evt. “Hej [selskabsnavn]”, hvis company_name er angivet).
+- Gå punkterne i plan.points_to_cover igennem i en naturlig rækkefølge:
+  - Hvis plan.should_share_cpr = true, skriv en sætning hvor CPR-nummeret tydeligt fremgår.
+  - Hvis plan.should_request_offer_pdf = true, forklar venligt at vi har brug for selve forsikringstilbuddet som PDF vedhæftet i et svar på denne mail.
+  - Hvis plan.should_confirm_offer_pdf_received = true, skriv at vi har modtaget policen/policerne som PDF og går i gang med at behandle tilbuddet for kunden.
+  - Hvis plan.status = "company_declined", tak for beskeden og anerkend afslaget.
+- Afslut altid med:
+  "Venlig hilsen
+  BedreTilbud"
+
+OUTPUT:
+Kun selve mailteksten.
+```
+
+---
+
+## 4. Konkret eksempel – din CPR-case
+
+### Situation
+
+* Første mail (fra Agent A) **bør** nu have CPR med – så mange selskaber vil slet ikke spørge igen.
+* Men lad os tage worst case: de spørger stadig “Hej, vi har brug for Philips CPR nummer for at lave forsikringen.”
+
+**EmailContext** (forkortet):
+
+```json
+{
+  "last_message_text": "Hej, vi har brug for Philips CPR nummer for at lave forsikringen.",
+  "attachments": [],
+  "customer": {
+    "name": "Philip Tester",
+    "email": "hello@vyork.dk",
+    "cpr": "123456-7890"
+  },
+  "request": {
+    "requested_insurance_types": ["indbo", "bygning"],
+    "notes_from_user": ""
+  }
+}
+```
+
+**Agent B (EmailIntentExtractor) output, skitse:**
+
+```json
+{
+  "intents": [
+    "company_requests_personal_data"
+  ],
+  "flags": {
+    "asks_for_cpr": true,
+    "asks_for_address": false,
+    "asks_for_other_personal_data": false,
+    "asks_for_coverage_details": false,
+    "asks_for_contact_by_phone": false,
+    "sends_offer_pdf": false,
+    "mentions_mitid_or_login_link": false,
+    "declines_to_give_offer": false
+  },
+  "detected_questions": [
+    "De beder om Philips CPR-nummer for at kunne oprette forsikringen."
+  ],
+  "raw_quotes": [
+    "Hej, vi har brug for Philips CPR nummer for at lave forsikringen."
+  ]
+}
+```
+
+**Agent C (ReplyPlanner) output, skitse:**
+
+```json
+{
+  "plan": {
+    "should_share_cpr": true,
+    "should_request_offer_pdf": true,
+    "should_confirm_offer_pdf_received": false,
+    "should_escalate_to_human": false,
+    "status": "normal",
+    "points_to_cover": [
+      "oplys Philips CPR-nummer",
+      "mind venligt om at vi har brug for selve forsikringstilbuddet som PDF vedhæftet i et svar på denne mail"
+    ],
+    "tags": [
+      "company_asks_for_cpr",
+      "include_cpr_in_reply",
+      "needs_offer_pdf"
+    ],
+    "notes": ""
+  }
+}
+```
+
+**Agent D (ReplyWriter) – endelig mail til selskabet:**
+
+```txt
+Hej
+
+Tak for jeres besked. Philips CPR-nummer er 123456-7890.
+
+For at vi kan hjælpe ham videre, vil vi også bede jer sende selve forsikringstilbuddet som PDF vedhæftet i et svar på denne mail.
+
+Venlig hilsen  
+BedreTilbud
+```
+
+Den:
+
+* Svarer først på CPR-spørgsmålet.
+* Minder om PDF-tilbuddet bagefter.
+* Nævner ikke sammenligning med andre tilbud.
+* Lyder som et rigtigt menneske.
+
+---
+
+Hvis du vil, kan vi næste gang:
+
+* Skitsere de faktiske TypeScript-typer + n8n function-node kode til at køre B → C → D.
+* Eller lave et par flere edge-case-eksempler (MitID-link, flere spørgsmål i én mail, afslag osv.), så du kan teste det hele mod rigtige mails.

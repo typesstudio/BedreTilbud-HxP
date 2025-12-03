@@ -287,8 +287,6 @@ export class ComparisonService {
 Kundens oplysninger:
 - Navn: ${userInfo.userName || 'Ikke angivet'}
 - CPR-nummer: ${userInfo.cprNumber || 'Ikke angivet'}
-- E-mail: ${userInfo.email || 'Ikke angivet'}
-- Telefon: ${userInfo.phone || 'Ikke angivet'}
 - Adresse: ${userInfo.address || 'Ikke angivet'}
 - Boligtype: ${userInfo.housingType || 'Ikke angivet'}
 - Har bil: ${userInfo.hasCar ? 'Ja' : 'Nej'}
@@ -302,9 +300,13 @@ ${policySummary}
 Skriv en kort mail (maks. 10-12 linjer), der:
 1. Kort præsenterer henvendelsen
 2. Opsummerer ønskede forsikringstyper
-3. Angiver CPR og kontaktoplysninger
+3. Angiver CPR og adresse
 4. Forklarer at nuværende policer er vedhæftet
 5. Beder tydeligt om et konkret tilbud som PDF vedhæftet svaret
+
+VIGTIGE REGLER:
+- Du må ALDRIG inkludere kundens e-mailadresse eller telefonnummer i mailen.
+- Du må IKKE skrive at vi sammenligner med andre tilbud.
 
 Returnér kun selve e-mailens brødtekst, ingen emnelinje.`;
 
@@ -368,8 +370,7 @@ BedreTilbud skriver på vegne af en kunde, der søger forsikringstilbud.
 Kundens oplysninger:
 - Navn: ${userInfo.userName || 'Se vedhæftede dokumenter'}
 - CPR: ${userInfo.cprNumber || 'Se vedhæftede dokumenter'}
-- E-mail: ${userInfo.email || 'Ikke angivet'}
-- Telefon: ${userInfo.phone || 'Ikke angivet'}
+- Adresse: ${userInfo.address || 'Se vedhæftede dokumenter'}
 
 Ønskede forsikringstyper: ${insuranceTypesList}
 

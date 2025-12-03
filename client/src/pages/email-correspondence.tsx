@@ -90,7 +90,7 @@ export default function EmailCorrespondence() {
     return companyName;
   };
 
-  const comparisonPath = comparisonId ? `/sammenligning/${comparisonId}` : "/oversigt";
+  const comparisonPath = comparisonId ? `/sammenligning/${comparisonId}` : "/offers";
 
   return (
     <AppLayoutWithNav userId={userId!}>

@@ -80,8 +80,6 @@ export class MistralTextService {
       companyName,
       userName: userInfo.userName || 'Ikke angivet',
       cprNumber: userInfo.cprNumber || 'Ikke angivet',
-      email: userInfo.email || 'Ikke angivet',
-      phone: userInfo.phone || 'Ikke angivet',
       address: userInfo.address || 'Ikke angivet',
       housingType: userInfo.housingType || 'Ikke angivet',
       hasCar: userInfo.hasCar ? 'Ja' : 'Nej',
