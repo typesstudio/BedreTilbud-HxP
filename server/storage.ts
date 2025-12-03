@@ -70,6 +70,8 @@ export interface IStorage {
 
   // Emails
   getEmail(id: string): Promise<Email | undefined>;
+  getEmailById(id: string): Promise<Email | undefined>;
+  getEmailWithThread(id: string): Promise<{ email: Email; thread: EmailThread } | undefined>;
   getThreadEmails(threadId: string, direction?: string): Promise<Email[]>;
   getThreadDraftEmails(threadId: string): Promise<Email[]>;
   getDraftEmailsByUser(userId: string): Promise<Array<Email & { thread: EmailThread; company: Company | null }>>;
@@ -482,6 +484,18 @@ export class MemStorage implements IStorage {
   // Emails
   async getEmail(id: string): Promise<Email | undefined> {
     return this.emails.get(id);
+  }
+
+  async getEmailById(id: string): Promise<Email | undefined> {
+    return this.emails.get(id);
+  }
+
+  async getEmailWithThread(id: string): Promise<{ email: Email; thread: EmailThread } | undefined> {
+    const email = this.emails.get(id);
+    if (!email || !email.threadId) return undefined;
+    const thread = this.emailThreads.get(email.threadId);
+    if (!thread) return undefined;
+    return { email, thread };
   }
 
   async getThreadEmails(threadId: string, direction?: string): Promise<Email[]> {
@@ -1410,6 +1424,30 @@ export class DatabaseStorage implements IStorage {
     return email;
   }
 
+  async getEmailById(id: string): Promise<Email | undefined> {
+    const { db } = await import("./db");
+    const { emails } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    const [email] = await db.select().from(emails).where(eq(emails.id, id));
+    return email;
+  }
+
+  async getEmailWithThread(id: string): Promise<{ email: Email; thread: EmailThread } | undefined> {
+    const { db } = await import("./db");
+    const { emails, emailThreads } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    
+    const [result] = await db.select({
+      email: emails,
+      thread: emailThreads
+    })
+      .from(emails)
+      .innerJoin(emailThreads, eq(emails.threadId, emailThreads.id))
+      .where(eq(emails.id, id));
+    
+    return result;
+  }
+
   async getThreadDraftEmails(threadId: string): Promise<Email[]> {
     const { db } = await import("./db");
     const { emails } = await import("@shared/schema");
@@ -1434,6 +1472,15 @@ export class DatabaseStorage implements IStorage {
       .leftJoin(companies, eq(emailThreads.companyId, companies.id))
       .where(eq(emails.status, "draft"))
       .orderBy(desc(emails.createdAt));
+    
+    // userId 'all' returns all drafts (for admin/lookup purposes)
+    if (userId === 'all') {
+      return results.map(r => ({
+        ...r.email,
+        thread: r.thread,
+        company: r.company
+      }));
+    }
     
     return results
       .filter(r => r.thread.userId === userId)

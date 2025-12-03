@@ -20,6 +20,7 @@ const UploadOffer = lazy(() => import("@/pages/upload-offer"));
 const GmailSetup = lazy(() => import("@/pages/gmail-setup"));
 const SendInquiry = lazy(() => import("@/pages/send-inquiry"));
 const AdminTesting = lazy(() => import("@/pages/admin-testing"));
+const AdminMessagingDebug = lazy(() => import("@/pages/admin-messaging-debug"));
 const InsuranceCheck = lazy(() => import("@/pages/insurance-check"));
 const InsuranceCheckPage = lazy(() => import("@/pages/InsuranceCheckPage"));
 const OfferComparisonAll = lazy(() => import("@/pages/offer-comparison-all"));
@@ -57,6 +58,7 @@ function Router() {
         <Route path="/sundhedstjek/:snapshotId" component={PolicyHealthCheck} />
         <Route path="/selskaber" component={Selskaber} />
         <Route path="/admin" component={AdminTesting} />
+        <Route path="/admin/messaging-debug" component={AdminMessagingDebug} />
         <Route component={NotFound} />
       </Switch>
     </Suspense>

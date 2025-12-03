@@ -1755,6 +1755,187 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ====== AI Draft Management Endpoints ======
+
+  // Get all pending AI drafts for a user
+  app.get("/api/emails/drafts/:userId", requireAuth, async (req, res) => {
+    try {
+      const drafts = await storage.getDraftEmailsByUser(req.params.userId);
+      res.json({ drafts });
+    } catch (error: any) {
+      console.error("[Drafts] Error fetching drafts:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get AI drafts for a specific thread
+  app.get("/api/emails/thread/:threadId/drafts", requireAuth, async (req, res) => {
+    try {
+      const drafts = await storage.getThreadDraftEmails(req.params.threadId);
+      res.json({ drafts });
+    } catch (error: any) {
+      console.error("[Drafts] Error fetching thread drafts:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Approve and send an AI draft
+  app.post("/api/emails/draft/:id/approve", requireAuth, async (req, res) => {
+    try {
+      const draftId = req.params.id;
+      const authenticatedUserId = req.user!.id;
+      console.log("📤 Approving AI draft:", draftId, "by user:", authenticatedUserId);
+
+      // Get the draft with thread for authorization
+      const result = await storage.getEmailWithThread(draftId);
+      
+      if (!result) {
+        return res.status(404).json({ message: "Draft ikke fundet" });
+      }
+
+      const { email: draft, thread } = result;
+
+      // Verify draft status
+      if (draft.status !== 'draft') {
+        return res.status(400).json({ message: "Beskeden er ikke en kladde" });
+      }
+
+      // Authorization: check if authenticated user owns this thread
+      if (thread.userId !== authenticatedUserId) {
+        return res.status(403).json({ message: "Du har ikke adgang til denne kladde" });
+      }
+
+      // Send the email through the email service
+      const sentEmail = await emailService.sendFollowUpEmail(
+        thread.id,
+        draft.body || '',
+        { existingDraftId: draftId }
+      );
+
+      console.log("✅ Draft approved and sent:", sentEmail.id);
+
+      res.json({
+        success: true,
+        email: sentEmail,
+        message: "Besked godkendt og sendt"
+      });
+    } catch (error: any) {
+      console.error("[Draft Approve] Error:", error);
+      res.status(500).json({ message: error.message || "Kunne ikke godkende draft" });
+    }
+  });
+
+  // Reject (discard) an AI draft
+  app.post("/api/emails/draft/:id/reject", requireAuth, async (req, res) => {
+    try {
+      const draftId = req.params.id;
+      const authenticatedUserId = req.user!.id;
+      console.log("❌ Rejecting AI draft:", draftId, "by user:", authenticatedUserId);
+
+      // Get the draft with thread for authorization
+      const result = await storage.getEmailWithThread(draftId);
+      
+      if (!result) {
+        return res.status(404).json({ message: "Draft ikke fundet" });
+      }
+
+      const { email: draft, thread } = result;
+
+      // Verify draft status
+      if (draft.status !== 'draft') {
+        return res.status(400).json({ message: "Beskeden er ikke en kladde" });
+      }
+
+      // Authorization: check if authenticated user owns this thread
+      if (thread.userId !== authenticatedUserId) {
+        return res.status(403).json({ message: "Du har ikke adgang til denne kladde" });
+      }
+
+      // Update draft status to rejected
+      const updated = await storage.updateEmail(draftId, { status: 'rejected' });
+
+      console.log("✅ Draft rejected:", updated.id);
+
+      res.json({
+        success: true,
+        message: "Draft afvist"
+      });
+    } catch (error: any) {
+      console.error("[Draft Reject] Error:", error);
+      res.status(500).json({ message: error.message || "Kunne ikke afvise draft" });
+    }
+  });
+
+  // Edit an AI draft before approving
+  app.patch("/api/emails/draft/:id", requireAuth, async (req, res) => {
+    try {
+      const draftId = req.params.id;
+      const authenticatedUserId = req.user!.id;
+      const { body, subject } = req.body;
+      
+      console.log("✏️ Editing AI draft:", draftId, "by user:", authenticatedUserId);
+
+      // Get the draft with thread for authorization
+      const result = await storage.getEmailWithThread(draftId);
+      
+      if (!result) {
+        return res.status(404).json({ message: "Draft ikke fundet" });
+      }
+
+      const { email: draft, thread } = result;
+
+      // Verify draft status
+      if (draft.status !== 'draft') {
+        return res.status(400).json({ message: "Beskeden er ikke en kladde" });
+      }
+
+      // Authorization: check if authenticated user owns this thread
+      if (thread.userId !== authenticatedUserId) {
+        return res.status(403).json({ message: "Du har ikke adgang til denne kladde" });
+      }
+
+      // Update draft content
+      const updates: any = {};
+      if (body !== undefined) updates.body = body;
+      if (subject !== undefined) updates.subject = subject;
+
+      const updated = await storage.updateEmail(draftId, updates);
+
+      console.log("✅ Draft edited:", updated.id);
+
+      res.json({
+        success: true,
+        email: updated,
+        message: "Draft opdateret"
+      });
+    } catch (error: any) {
+      console.error("[Draft Edit] Error:", error);
+      res.status(500).json({ message: error.message || "Kunne ikke opdatere draft" });
+    }
+  });
+
+  // Update thread AI mode
+  app.patch("/api/emails/thread/:threadId/ai-mode", requireAuth, async (req, res) => {
+    try {
+      const { aiMode } = req.body;
+      
+      if (!['manual', 'auto', 'off'].includes(aiMode)) {
+        return res.status(400).json({ message: "Ugyldig AI mode" });
+      }
+
+      const thread = await storage.updateEmailThread(req.params.threadId, { aiMode });
+
+      res.json({
+        success: true,
+        thread,
+        message: `AI mode opdateret til ${aiMode}`
+      });
+    } catch (error: any) {
+      console.error("[AI Mode] Error:", error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Debug endpoint for document extraction status (Step 3.1)
   app.get("/api/debug/document-status", async (req, res) => {
     try {
@@ -2026,6 +2207,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
         documentId: req.params.documentId 
       });
       res.status(500).json({ message: error.message, stack: error.stack });
+    }
+  });
+
+  // ====== AI Debug Reports Endpoints ======
+
+  // Get AI debug reports (admin)
+  app.get("/api/debug/ai-reports", requireAuth, async (req, res) => {
+    try {
+      const threadId = req.query.threadId as string | undefined;
+      const limit = parseInt(req.query.limit as string) || 50;
+      
+      const { debugAgentService } = await import("./services/debugAgentService");
+      const reports = await debugAgentService.getRecentReports(threadId, limit);
+      
+      res.json({ reports });
+    } catch (error: any) {
+      logger.error('[AI Debug] Failed to fetch reports', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get AI debug metrics (admin)
+  app.get("/api/debug/ai-metrics", requireAuth, async (req, res) => {
+    try {
+      const days = parseInt(req.query.days as string) || 7;
+      
+      const { debugAgentService } = await import("./services/debugAgentService");
+      const metrics = await debugAgentService.getAggregatedMetrics(days);
+      
+      res.json(metrics);
+    } catch (error: any) {
+      logger.error('[AI Debug] Failed to fetch metrics', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
+  // Get debug report for specific AI message
+  app.get("/api/debug/ai-reports/:messageId", requireAuth, async (req, res) => {
+    try {
+      const { debugAgentService } = await import("./services/debugAgentService");
+      const report = await debugAgentService.getReportByMessageId(req.params.messageId);
+      
+      if (!report) {
+        return res.status(404).json({ message: "Report not found" });
+      }
+      
+      res.json({ report });
+    } catch (error: any) {
+      logger.error('[AI Debug] Failed to fetch report', error);
+      res.status(500).json({ message: error.message });
     }
   });
 

@@ -158,7 +158,11 @@ export class EmailService {
     }
   }
 
-  async sendFollowUpEmail(threadId: string, emailBody: string, questionIds?: string[]): Promise<Email> {
+  async sendFollowUpEmail(
+    threadId: string, 
+    emailBody: string, 
+    options?: { questionIds?: string[]; existingDraftId?: string }
+  ): Promise<Email> {
     try {
       const thread = await storage.getEmailThread(threadId);
       
@@ -172,9 +176,10 @@ export class EmailService {
         throw new Error("Company not found");
       }
 
-      // Get the last email in the thread to extract Message-ID for proper threading
+      // Get the last non-draft email in the thread to extract Message-ID for proper threading
       const threadEmails = await storage.getThreadEmails(thread.id);
-      const lastEmail = threadEmails.length > 0 ? threadEmails[threadEmails.length - 1] : null;
+      const sentEmails = threadEmails.filter(e => e.status !== 'draft');
+      const lastEmail = sentEmails.length > 0 ? sentEmails[sentEmails.length - 1] : null;
       const lastEmailMessageId = lastEmail?.emailMessageId;
 
       const { client: resend, fromEmail } = await getUncachableResendClient();
@@ -195,15 +200,30 @@ export class EmailService {
         headers: Object.keys(emailHeaders).length > 0 ? emailHeaders : undefined
       });
 
-      const email = await storage.createEmail({
-        threadId: thread.id,
-        messageId: emailResult.data?.id || '',
-        direction: 'outbound',
-        subject: thread.subject ? `Re: ${thread.subject}` : 'Follow-up',
-        body: emailBody,
-        metadata: questionIds ? { questionIds } : null,
-        sentAt: new Date()
-      });
+      let email: Email;
+      
+      // If approving an existing draft, update it instead of creating new record
+      if (options?.existingDraftId) {
+        email = await storage.updateEmail(options.existingDraftId, {
+          messageId: emailResult.data?.id || '',
+          status: 'sent',
+          sentAt: new Date(),
+          body: emailBody
+        });
+        console.log(`✅ Draft ${options.existingDraftId} approved and sent`);
+      } else {
+        email = await storage.createEmail({
+          threadId: thread.id,
+          messageId: emailResult.data?.id || '',
+          direction: 'outbound',
+          subject: thread.subject ? `Re: ${thread.subject}` : 'Follow-up',
+          body: emailBody,
+          metadata: options?.questionIds ? { questionIds: options.questionIds } : null,
+          sentAt: new Date(),
+          status: 'sent',
+          authorType: 'user'
+        });
+      }
 
       await storage.updateEmailThread(thread.id, { status: 'sent' });
 
