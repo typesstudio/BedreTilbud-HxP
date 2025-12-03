@@ -179,7 +179,9 @@ export default function EmailCorrespondence() {
   };
 
   const comparisonPath = comparisonId ? `/sammenligning/${comparisonId}` : "/offers";
-  const visibleEmails = emails.filter((e: any) => e.status !== 'rejected');
+  const visibleEmails = emails
+    .filter((e: any) => e.status !== 'rejected')
+    .sort((a: any, b: any) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
   const hasPendingDrafts = emails.some((e: any) => isDraft(e));
 
   return (
