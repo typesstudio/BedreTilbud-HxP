@@ -90,9 +90,20 @@ export default function PolicyHealthCheckPage() {
               </span>
             </div>
             <div className="flex items-center gap-2 mobile:w-full mobile:flex-col">
-              {data.kind === "offer" && data.comparisonId && (
+              {data.kind === "offer" && data.threadId && (
                 <Button
                   variant="neutral-secondary"
+                  onClick={() => {
+                    setLocation(`/emails/${data.threadId}`);
+                  }}
+                  data-testid="button-view-messages"
+                >
+                  Se beskeder
+                </Button>
+              )}
+              {data.kind === "offer" && data.comparisonId && (
+                <Button
+                  variant="brand-primary"
                   onClick={() => {
                     setLocation(`/sammenligning/${data.comparisonId}`);
                   }}
@@ -101,15 +112,6 @@ export default function PolicyHealthCheckPage() {
                   Sammenlign tilbudet
                 </Button>
               )}
-              <Button
-                variant="brand-primary"
-                onClick={() => {
-                  // TODO: Navigate to "få bedre tilbud" page when ready
-                }}
-                data-testid="button-get-better-offer"
-              >
-                Få bedre tilbud
-              </Button>
             </div>
           </div>
 
