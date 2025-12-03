@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 import { storage } from "../storage";
 import { InsertAiDebugReport } from "@shared/schema";
-import { logger } from "../lib/logger";
+import { logger } from "../utils/logging";
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
