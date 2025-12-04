@@ -1,0 +1,217 @@
+Her er en Replit-prompt du kan copy/paste, som retter pris-problemet i sundhedstjekket:
+
+````text
+I need you to fix a regression in the health-check pricing pipeline.
+
+### Bug recap (very important)
+
+- On the "Forsikringstjek" / health check page, the **annual prices per policy** (Årlig pris) are empty: `—`.
+- Logs show that the PricingAgent actually extracts prices correctly, e.g.:
+  - Fritidshus: 8.734 kr
+  - Indbo: 2.078 kr
+  - Ulykke: 1.059 kr
+- But in the database, these values are **NOT** saved in `policy_snapshots.structured_policy`:
+  ```sql
+  SELECT id, policy_type,
+         structured_policy->>'annualPremium'  AS annual_premium,
+         structured_policy->>'monthlyPremium' AS monthly_premium
+  FROM policy_snapshots
+  WHERE document_id = '7af98e9e-5779-43d6-9f73-1930fabc1e50'
+    AND is_active = true;
+````
+
+→ `annual_premium` / `monthly_premium` are NULL.
+
+From earlier logs:
+
+* New snapshots are created in **policy_snapshots** via `policySnapshotService.createSnapshotsFromDocument(...)`.
+* But the orchestrator still calls **`updateOfferSnapshot`** on the old `offer_snapshots` table to save `structuredPolicy`.
+* Snapshot IDs don’t match:
+
+  * DB has: `817f908f-...`, `c818ff9b-...`, `1d1d3a6e-...`
+  * Orchestrator updates: `19465f70-...`, `2552fb51-...`, `115abc04-...`
+* Result: health check queries `policy_snapshots`, but pricing is written to old / wrong snapshots.
+
+### Goal
+
+When a document is (re)processed, each **active policy snapshot** in `policy_snapshots` must have `structured_policy.annualPremium` and `structured_policy.monthlyPremium` filled from the PricingAgent result.
+
+Health check should then show the correct “Årlig pris” per policy.
+
+---
+
+## Step 1 – Find where pricing is saved
+
+1. Search for the PricingAgent usage:
+
+   * `rg -n "PricingAgent" server`
+   * or `rg -n "structuredPolicy" server`
+2. Open the orchestrator that runs after segmentation & snapshot creation, something like:
+
+   * `server/services/extractionOrchestratorService.ts`
+   * or `server/services/comparison/ComparisonOrchestratorService.ts`
+   * or any file where it:
+
+     * loops over snapshots
+     * calls pricing
+     * then calls `updateOfferSnapshot(...)`.
+
+You should find code roughly like:
+
+```ts
+for (const snapshot of snapshots) {
+  const pricing = await this.pricingAgent.extractPricing({ rawText: snapshot.rawText, ... });
+
+  await this.storage.updateOfferSnapshot(snapshot.id, {
+    structuredPolicy: {
+      ...pricing,
+      // etc
+    }
+  });
+}
+```
+
+This is the core bug: we create **policy_snapshots**, but update **offer_snapshots**.
+
+---
+
+## Step 2 – Switch from offer_snapshots → policy_snapshots
+
+1. Search for `updateOfferSnapshot`:
+
+   * `rg -n "updateOfferSnapshot" server`
+
+2. Replace its usage in the *current-policy* extraction/health-check pipeline with the equivalent for `policy_snapshots`.
+
+   * First, search if we already have a helper for this:
+
+     * `rg -n "updatePolicySnapshot" server`
+     * `rg -n "policySnapshot" server`
+
+   * **If such a method already exists**, use it instead of `updateOfferSnapshot`:
+
+     ```ts
+     await this.storage.updatePolicySnapshot(snapshot.id, {
+       structuredPolicy: {
+         ...pricing,
+         // preserve any existing fields if needed
+       },
+     });
+     ```
+
+   * **If we do NOT have an update method for policy_snapshots**, add one to the storage/service layer where other DB helpers live (where `updateOfferSnapshot` is defined). Example (pseudo-code, adapt to your actual drizzle schema):
+
+     ```ts
+     // in storage service / repository
+     async updatePolicySnapshot(id: string, payload: { structuredPolicy?: any }) {
+       await db
+         .update(policySnapshots)
+         .set({
+           structuredPolicy: payload.structuredPolicy,
+           updatedAt: new Date(),
+         })
+         .where(eq(policySnapshots.id, id));
+     }
+     ```
+
+   * Then update the orchestrator loop to use `updatePolicySnapshot` instead of `updateOfferSnapshot`.
+
+3. Make sure you only change the paths used for:
+
+   * user’s **current** policies / health check
+   * and any new `policy_snapshots`-based flows.
+
+If there is still a separate legacy flow for company *offers* that genuinely still uses `offer_snapshots`, leave that intact — but clearly separate the two code paths with comments if needed.
+
+---
+
+## Step 3 – Ensure we use the **right snapshot IDs**
+
+We saw that pricing was being written to **old snapshot IDs**. We must ensure we always update the snapshots that were just created.
+
+1. Find where `policySnapshotService.createSnapshotsFromDocument(...)` is called in the orchestrator.
+
+   It should return a list/array of snapshot records or IDs, e.g.:
+
+   ```ts
+   const snapshots = await this.policySnapshotService.createSnapshotsFromDocument(
+     documentId,
+     segments,
+     { kind: 'current' }
+   );
+   ```
+
+2. Confirm that the **same `snapshots` array** is used in the pricing loop:
+
+   ```ts
+   for (const snapshot of snapshots) {
+     const pricing = await this.pricingAgent.extractPricing({ rawText: snapshot.rawText, ... });
+     await this.storage.updatePolicySnapshot(snapshot.id, { structuredPolicy: pricing });
+   }
+   ```
+
+3. If the pricing loop is instead reusing some old `snapshotIds` from a previous run or from `offer_snapshots`, fix it so that:
+
+   * It either:
+
+     * uses the `snapshots` returned from `createSnapshotsFromDocument(...)`, or
+     * queries fresh active snapshots from `policy_snapshots`:
+
+       ```ts
+       const activeSnapshots = await this.policySnapshotService.getActiveSnapshotsForDocument(documentId);
+
+       for (const snapshot of activeSnapshots) {
+         const pricing = await this.pricingAgent.extractPricing({ rawText: snapshot.rawText, ... });
+         await this.storage.updatePolicySnapshot(snapshot.id, { structuredPolicy: pricing });
+       }
+       ```
+
+   * There must be **no mixing** of `offer_snapshots` IDs in this flow.
+
+---
+
+## Step 4 – Sanity check the health-check query
+
+1. Search for the health check service:
+
+   * `rg -n "healthCheck" server`
+   * or `rg -n "Forsikringstjek" server client`
+
+2. Confirm that the health check backend uses `policy_snapshots.structured_policy` as source for annual and monthly premiums, e.g.:
+
+   ```ts
+   const annualPremium = snapshot.structuredPolicy?.annualPremium;
+   ```
+
+If it still reads from `offer_snapshots`, update it to read from `policy_snapshots` instead.
+
+---
+
+## Step 5 – Verify end-to-end
+
+After making the above changes:
+
+1. Run the extraction + health check pipeline on a fresh upload (or re-run “force reprocess” for the problematic document).
+
+2. Check the DB:
+
+   ```sql
+   SELECT id,
+          policy_type,
+          structured_policy->>'annualPremium'  AS annual_premium,
+          structured_policy->>'monthlyPremium' AS monthly_premium
+   FROM policy_snapshots
+   WHERE document_id = '7af98e9e-5779-43d6-9f73-1930fabc1e50'
+     AND is_active = true;
+   ```
+
+   * Now `annual_premium` and/or `monthly_premium` should be non-null and match the values logged from PricingAgent.
+
+3. Open the `/sundhedstjek/:id` page in the UI:
+
+   * Under “Dækningstype” table, the "Årlig pris" column should now show the same premiums instead of `—`.
+
+Please implement all of the above, keep the code style consistent, and add a couple of comments marking the new `policy_snapshots`-based path so it’s clear this is the new source of truth for pricing in the health check.
+
+```
+```
