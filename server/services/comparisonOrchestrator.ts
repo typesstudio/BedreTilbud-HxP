@@ -5,6 +5,7 @@ import { comparisonAgentService } from "./comparisonAgentService";
 import { matchCoverages } from "./coverageMatcher";
 import { generateHighlights } from "./highlightsGenerator";
 import { SUPPORTED_POLICY_TYPES } from "./policySnapshots/PolicySnapshotService";
+import { computeSavings } from "../utils/savingsCalculator";
 
 interface ComparisonOptions {
   userId: string;
@@ -763,7 +764,6 @@ export class ComparisonOrchestrator {
         const offerAnnualPremium = this.getAnnualPremiumFromSnapshot(offerPolicy);
         
         // Step 3.2: Use null-safe savings calculator (never produces NaN/Infinity)
-        const { computeSavings } = await import('../utils/savingsCalculator');
         const savingsResult = computeSavings(currentAnnualPremium, offerAnnualPremium);
         
         const annualSavings = savingsResult.savingsAmount;
