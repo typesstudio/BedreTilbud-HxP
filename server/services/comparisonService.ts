@@ -100,6 +100,78 @@ export interface ComparisonResult {
 }
 
 export class ComparisonService {
+  /**
+   * Ensures the projection array exists with exactly 120 entries.
+   * If missing or incomplete, generates it from pricing data.
+   */
+  private ensureProjection(
+    result: any, 
+    currentPolicy: InsuranceData | OfferSnapshot, 
+    offerPolicy: InsuranceData | OfferSnapshot
+  ): any {
+    // Check if projection exists and has correct length
+    if (result.projection && Array.isArray(result.projection) && result.projection.length === 120) {
+      console.log('[Comparison] Projection array present with 120 entries');
+      return result;
+    }
+    
+    console.log('[Comparison] Generating fallback projection from pricing data');
+    
+    // Extract monthly premiums from various sources
+    let currentMonthly = result.pricing?.currentMonthly;
+    let offerMonthly = result.pricing?.offerMonthlyIntro;
+    
+    // Try to extract from policy objects if not in result
+    if (!currentMonthly || !offerMonthly) {
+      const extractMonthly = (policy: any): number | null => {
+        // Try structured policy data
+        if (policy.structuredPolicy?.pricing?.annualPremium) {
+          return policy.structuredPolicy.pricing.annualPremium / 12;
+        }
+        // Try direct annual premium
+        if (policy.annualPremium) {
+          return policy.annualPremium / 12;
+        }
+        // Try extractedData
+        if (policy.extractedData?.pricing?.annualPremium) {
+          return policy.extractedData.pricing.annualPremium / 12;
+        }
+        // Try premium field
+        if (typeof policy.premium === 'number') {
+          return policy.premium / 12;
+        }
+        return null;
+      };
+      
+      currentMonthly = currentMonthly || extractMonthly(currentPolicy);
+      offerMonthly = offerMonthly || extractMonthly(offerPolicy);
+    }
+    
+    // Calculate monthly savings
+    const monthlySavings = (currentMonthly && offerMonthly) 
+      ? currentMonthly - offerMonthly 
+      : (result.savings?.annual ? result.savings.annual / 12 : 0);
+    
+    console.log(`[Comparison] Fallback projection: monthly savings = ${monthlySavings.toFixed(2)} kr`);
+    
+    // Generate 120-month projection
+    const projection: { monthIndex: number; cumulative: number }[] = [];
+    let cumulative = 0;
+    
+    for (let month = 1; month <= 120; month++) {
+      cumulative += monthlySavings;
+      projection.push({
+        monthIndex: month,
+        cumulative: Math.round(cumulative * 100) / 100
+      });
+    }
+    
+    result.projection = projection;
+    console.log(`[Comparison] Generated ${projection.length} projection entries, 10-year cumulative: ${cumulative.toFixed(2)} kr`);
+    
+    return result;
+  }
+
   private validateComparisonCompleteness(result: any): void {
     const issues: string[] = [];
 
@@ -211,12 +283,26 @@ export class ComparisonService {
             }
           ],
           response_format: { type: "json_object" },
-          max_completion_tokens: 3000,
+          max_completion_tokens: 8000, // Increased to accommodate 120-entry projection array
         });
       }, 'policy-comparison');
 
       logAIUsage('OpenAI-gpt-4o', 'policy-comparison', true);
-      const result = JSON.parse(response.choices[0].message.content || "{}");
+      
+      const rawContent = response.choices[0].message.content || "{}";
+      let result: any;
+      
+      try {
+        result = JSON.parse(rawContent);
+      } catch (parseError) {
+        console.error('[Comparison] JSON parse failed, raw content length:', rawContent.length);
+        console.error('[Comparison] First 500 chars:', rawContent.substring(0, 500));
+        console.error('[Comparison] Last 200 chars:', rawContent.substring(rawContent.length - 200));
+        throw new Error(`Failed to parse AI response as JSON: ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}`);
+      }
+      
+      // Generate projection fallback if missing or incomplete
+      result = this.ensureProjection(result, currentPolicy, offerPolicy);
       
       this.validateComparisonCompleteness(result);
       

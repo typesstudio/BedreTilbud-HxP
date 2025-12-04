@@ -215,8 +215,30 @@ JSON-OUTPUT (STRICT – KUN DETTE)
       {
         "name": "Pris & Økonomi",
         "icon": "dollar-sign",
-        "iconVariant": "error",
+        "iconVariant": "error" | "warning" | "neutral",
         "items": [
           {
-            "severity": "critical" | "important" | "
-```
+            "severity": "critical" | "important" | "question",
+            "question": "string",
+            "explanation": "string",
+            "policyRef": "offer" | "current" | "both"
+          }
+        ]
+      }
+    ]
+  },
+  "qualityScore": number,
+  "projection": [
+    { "monthIndex": 1, "cumulative": number },
+    { "monthIndex": 2, "cumulative": number },
+    "... (PRÆCIS 120 entries, monthIndex 1-120)"
+  ],
+  "notes": "string | null"
+}
+
+VIGTIGT OM PROJECTION:
+- projection array SKAL have PRÆCIS 120 entries
+- Hver entry: {"monthIndex": N, "cumulative": X} hvor N går fra 1 til 120
+- cumulative = akkumuleret besparelse i kr efter N måneder
+- Hvis besparelse er negativ (tilbud er dyrere), vil cumulative være negativ
+- Brug pricing.currentMonthly og pricing.offerMonthlyIntro til beregning
