@@ -6,6 +6,7 @@ interface ScoredCandidate {
   offerPolicyId: string;
   score: number;
   policyType: string;
+  originalOfferType: string;
 }
 
 const SCORE_WEIGHTS = {
@@ -16,9 +17,74 @@ const SCORE_WEIGHTS = {
 
 const MIN_SCORE_THRESHOLD = 1;
 
+/**
+ * POLICY TYPE NORMALIZATION
+ * Maps similar/related policy types to a canonical form for matching.
+ * This handles cases where offer documents use different terminology than current policies.
+ * 
+ * Example: An offer with "hus" should match a current policy with "fritidshus"
+ * because both are property/building insurance types.
+ */
+const POLICY_TYPE_ALIASES: Record<string, string> = {
+  'hus': 'fritidshus',
+  'sommerhus': 'fritidshus',
+  'villa': 'fritidshus',
+  'bygning': 'fritidshus',
+  'ejerbolig': 'fritidshus',
+  'husforsikring': 'fritidshus',
+};
+
+/**
+ * Normalize policy type for matching purposes.
+ * Returns the canonical type that should be used for grouping and matching.
+ */
+function normalizePolicyType(policyType: string): string {
+  const lowerType = policyType.toLowerCase().trim();
+  return POLICY_TYPE_ALIASES[lowerType] || lowerType;
+}
+
 function normalizeString(str: string | null | undefined): string {
   if (!str) return '';
   return str.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+/**
+ * Normalize address for fuzzy matching.
+ * Removes punctuation, extra spaces, and common formatting differences.
+ * Also handles common OCR errors like missing spaces between numbers.
+ * Example: "Kornvænget 19, 3230 Græsted" → "kornvænget 19 3230 græsted"
+ */
+function normalizeAddress(addr: string): string {
+  if (!addr) return '';
+  return addr
+    .toLowerCase()
+    .trim()
+    .replace(/[,\.;:]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Fuzzy address comparison for handling OCR errors.
+ * Returns true if addresses are similar enough to be considered a match.
+ * Handles cases like "kornvænget 193230 græsted" vs "kornvænget 19 3230 græsted"
+ */
+function addressesMatch(addr1: string, addr2: string): boolean {
+  if (!addr1 || !addr2) return false;
+  
+  // Exact match after normalization
+  if (addr1 === addr2) return true;
+  
+  // Remove ALL spaces and compare (handles OCR merging spaces)
+  const compact1 = addr1.replace(/\s/g, '');
+  const compact2 = addr2.replace(/\s/g, '');
+  
+  if (compact1 === compact2) {
+    console.log(`[Matcher] Fuzzy address match (spaces removed): "${addr1}" ≈ "${addr2}"`);
+    return true;
+  }
+  
+  return false;
 }
 
 function extractAddress(policy: Policy): string {
@@ -30,7 +96,7 @@ function extractAddress(policy: Policy): string {
     try {
       const structuredData = typeof structured === 'string' ? JSON.parse(structured) : structured;
       if (structuredData?.address) {
-        const addr = normalizeString(structuredData.address);
+        const addr = normalizeAddress(structuredData.address);
         console.log(`[Matcher] extractAddress from structuredPolicy for ${policyId}: "${addr}"`);
         return addr;
       }
@@ -46,7 +112,7 @@ function extractAddress(policy: Policy): string {
   if (details) {
     const address = details.insuredAddress || details.address || '';
     if (address) {
-      const addr = normalizeString(address);
+      const addr = normalizeAddress(address);
       console.log(`[Matcher] extractAddress from coverageDetails for ${policyId}: "${addr}"`);
       return addr;
     }
@@ -122,7 +188,7 @@ function scoreMatch(currentPolicy: Policy, offerPolicy: Policy): number {
   
   const currentAddress = extractAddress(currentPolicy);
   const offerAddress = extractAddress(offerPolicy);
-  if (currentAddress && offerAddress && currentAddress === offerAddress) {
+  if (addressesMatch(currentAddress, offerAddress)) {
     score += SCORE_WEIGHTS.ADDRESS_MATCH;
   }
   
@@ -225,24 +291,44 @@ export function computeBestMatches(
     };
   }
   
+  // Group current policies by NORMALIZED type for matching
+  // This allows "hus" current policies to match "fritidshus" offers
   const currentByType = new Map<string, Policy[]>();
   for (const policy of currentPolicies) {
     if (!policy.policyType || !policy.id) continue;
     
-    if (!currentByType.has(policy.policyType)) {
-      currentByType.set(policy.policyType, []);
+    const normalizedType = normalizePolicyType(policy.policyType);
+    const originalType = policy.policyType;
+    
+    // Log normalization when it happens
+    if (normalizedType !== originalType) {
+      console.log(`[Matcher] Policy type normalized: "${originalType}" → "${normalizedType}" for current ${policy.id}`);
     }
-    currentByType.get(policy.policyType)!.push(policy);
+    
+    if (!currentByType.has(normalizedType)) {
+      currentByType.set(normalizedType, []);
+    }
+    currentByType.get(normalizedType)!.push(policy);
   }
   
-  const offerByType = new Map<string, Policy[]>();
+  // Group offer policies by NORMALIZED type for matching
+  // This allows "hus" offers to match "fritidshus" current policies
+  const offerByType = new Map<string, { policy: Policy; originalType: string }[]>();
   for (const policy of offerPolicies) {
     if (!policy.policyType || !policy.id) continue;
     
-    if (!offerByType.has(policy.policyType)) {
-      offerByType.set(policy.policyType, []);
+    const normalizedType = normalizePolicyType(policy.policyType);
+    const originalType = policy.policyType;
+    
+    // Log normalization when it happens
+    if (normalizedType !== originalType) {
+      console.log(`[Matcher] Policy type normalized: "${originalType}" → "${normalizedType}" for offer ${policy.id}`);
     }
-    offerByType.get(policy.policyType)!.push(policy);
+    
+    if (!offerByType.has(normalizedType)) {
+      offerByType.set(normalizedType, []);
+    }
+    offerByType.get(normalizedType)!.push({ policy, originalType });
   }
   
   const allTypes = new Set([
@@ -252,27 +338,28 @@ export function computeBestMatches(
   
   for (const policyType of Array.from(allTypes)) {
     const currents = currentByType.get(policyType) || [];
-    const offers = offerByType.get(policyType) || [];
+    const offerEntries = offerByType.get(policyType) || [];
     
     if (currents.length === 0) {
-      offers.forEach(offer => unmatchedOffer.add(offer.id!));
+      offerEntries.forEach(entry => unmatchedOffer.add(entry.policy.id!));
       continue;
     }
     
-    if (offers.length === 0) {
+    if (offerEntries.length === 0) {
       currents.forEach(current => unmatchedCurrent.add(current.id!));
       continue;
     }
     
     const candidates: ScoredCandidate[] = [];
     for (const current of currents) {
-      for (const offer of offers) {
-        const score = scoreMatch(current, offer);
+      for (const offerEntry of offerEntries) {
+        const score = scoreMatch(current, offerEntry.policy);
         candidates.push({
           currentPolicyId: current.id!,
-          offerPolicyId: offer.id!,
+          offerPolicyId: offerEntry.policy.id!,
           score,
           policyType,
+          originalOfferType: offerEntry.originalType,
         });
       }
     }
@@ -312,22 +399,22 @@ export function computeBestMatches(
     
     // FALLBACK: If exactly 1 current + 1 offer of this type, and no pairs created (score=0 due to missing metadata),
     // create a simple 1:1 match instead of leaving them unmatched
-    if (currents.length === 1 && offers.length === 1 && usedCurrent.size === 0 && usedOffer.size === 0) {
+    if (currents.length === 1 && offerEntries.length === 1 && usedCurrent.size === 0 && usedOffer.size === 0) {
       const current = currents[0];
-      const offer = offers[0];
+      const offerEntry = offerEntries[0];
       const policyTypeLabel = getPolicyTypeLabel(policyType);
       
-      console.log(`[Matcher] FALLBACK: Auto-matching single ${policyType} pair (current ${current.id} ↔ offer ${offer.id}) despite score=0 (missing metadata)`);
+      console.log(`[Matcher] FALLBACK: Auto-matching single ${policyType} pair (current ${current.id} ↔ offer ${offerEntry.policy.id}) despite score=0 (missing metadata)`);
       
       pairs.push({
         policyType: policyType as any,
         label: policyTypeLabel,
         currentPolicyId: current.id!,
-        offerPolicyId: offer.id!,
+        offerPolicyId: offerEntry.policy.id!,
       });
       
       usedCurrent.add(current.id!);
-      usedOffer.add(offer.id!);
+      usedOffer.add(offerEntry.policy.id!);
     }
     
     for (const current of currents) {
@@ -336,9 +423,9 @@ export function computeBestMatches(
       }
     }
     
-    for (const offer of offers) {
-      if (!usedOffer.has(offer.id!)) {
-        unmatchedOffer.add(offer.id!);
+    for (const offerEntry of offerEntries) {
+      if (!usedOffer.has(offerEntry.policy.id!)) {
+        unmatchedOffer.add(offerEntry.policy.id!);
       }
     }
   }
@@ -353,6 +440,8 @@ export function computeBestMatches(
 function getPolicyTypeLabel(policyType: string): string {
   const labels: Record<string, string> = {
     hus: "Hus",
+    fritidshus: "Fritidshus",
+    sommerhus: "Sommerhus",
     indbo: "Indbo",
     ulykke: "Ulykke",
     bil: "Bil",

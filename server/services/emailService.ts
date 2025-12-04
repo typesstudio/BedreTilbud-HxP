@@ -181,7 +181,7 @@ export class EmailService {
       const threadEmails = await storage.getThreadEmails(thread.id);
       const sentEmails = threadEmails
         .filter(e => e.status !== 'draft')
-        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+        .sort((a, b) => new Date(a.createdAt ?? 0).getTime() - new Date(b.createdAt ?? 0).getTime());
       
       // Collect all valid RFC Message-IDs from inbound emails (these have proper emailMessageId)
       // Outbound emails via Resend don't have RFC-compliant Message-IDs we can reference
@@ -428,8 +428,17 @@ export class EmailService {
       }
       console.log(`[Email] Found ${allAttachments.length} attachments:`, allAttachments.map(a => a.fileName).join(', '));
 
-      // Process PDF attachments (stored in attachments list)
-      // Track seen hashes within this email to avoid duplicates in same mail
+      // ========================================
+      // BATCH PDF PROCESSING (Race Condition Fix)
+      // ========================================
+      // Process ALL PDFs from email before running comparison.
+      // This ensures comparison includes all policies from a single offer email.
+      // 
+      // PHASE 1: Collect and save all PDFs, run extraction for each
+      // PHASE 2: Run health checks for all documents
+      // PHASE 3: Run ComparisonOrchestrator ONCE after ALL PDFs are processed
+      // ========================================
+      
       const seenHashesInThisEmail = new Set<string>();
       const { computeFileHash } = await import('../utils/hash');
       
@@ -437,7 +446,13 @@ export class EmailService {
       let documentsCreated = 0;
       let duplicatesSkipped = 0;
       
+      // Collect all processed documents for batch comparison
+      const processedDocuments: { documentId: string; snapshotCount: number }[] = [];
+      
+      // PHASE 1: Download PDFs, run extraction pipeline for ALL
       if (message.data.payload?.parts) {
+        console.log(`[Email Batch] Starting PHASE 1: PDF extraction for ${message.data.payload.parts.length} parts`);
+        
         for (const part of message.data.payload.parts) {
           if (part.filename && part.body?.attachmentId) {
             const attachment = await gmail.users.messages.attachments.get({
@@ -486,42 +501,36 @@ export class EmailService {
               fs.writeFileSync(filePath, pdfBuffer);
               
               // Create document with fileHash for future duplicate detection
-              // Step 3.1: Create with 'pending' status - orchestrator will set to 'processing'
               const document = await storage.createDocument({
                 userId: existingThread.userId,
                 fileName,
                 filePath,
                 fileSize: pdfBuffer.length,
-                fileHash, // Store hash for duplicate detection
-                ocrRawResponse: null, // Will be populated by orchestrator
+                fileHash,
+                ocrRawResponse: null,
                 extractionStatus: 'pending',
                 documentType: 'offer',
                 companyId: existingThread.companyId
               });
               documentsCreated++;
               
-              console.log(`[Email] Document created, running new 2-step extraction pipeline`, { documentId: document.id });
+              console.log(`[Email Batch] Document created: ${document.id} (${part.filename})`);
               
-              // Run NEW extraction pipeline (OCR → Segmentation → Per-segment Extraction)
+              // Run extraction pipeline (OCR → Segmentation → Per-segment Extraction)
               const { ExtractionOrchestratorService } = await import('./extractionOrchestratorService');
               const orchestrator = new ExtractionOrchestratorService(storage);
               const orchestratorResult = await orchestrator.processDocument(document.id);
               
               if (!orchestratorResult.success) {
-                console.error(`[Email] Extraction pipeline failed:`, orchestratorResult.error);
-                throw new Error(orchestratorResult.error || 'Extraction pipeline failed');
+                console.error(`[Email Batch] Extraction failed for ${document.id}:`, orchestratorResult.error);
+                continue;
               }
               
-              console.log(`[Email] Extraction pipeline completed`, { 
-                documentId: document.id, 
-                snapshotsCreated: orchestratorResult.snapshots.length,
-                pipelineVersion: '2.1.0'
-              });
+              console.log(`[Email Batch] Extraction completed: ${orchestratorResult.snapshots.length} snapshots from ${part.filename}`);
 
-              // Create policy records from OfferSnapshots
-              const offerPolicies: any[] = [];
+              // Create policy records from OfferSnapshots (for legacy compatibility)
               for (const snapshot of orchestratorResult.snapshots) {
-                const policy = await storage.createPolicy({
+                await storage.createPolicy({
                   documentId: document.id,
                   userId: existingThread.userId ?? '',
                   companyId: snapshot.companyId || existingThread.companyId || null,
@@ -531,49 +540,12 @@ export class EmailService {
                   coverageDetails: snapshot.coverageDetails as any,
                   isOwnPolicy: false
                 });
-                offerPolicies.push(policy);
-                console.log(`[Email] Policy created from snapshot`, { 
-                  policyId: policy.id, 
-                  type: snapshot.policyType,
-                  snapshotId: snapshot.id
-                });
               }
-
-              // Use PolicyMatchingService to create comparisons
-              if (offerPolicies.length > 0 && existingThread.userId && existingThread.companyId) {
-                console.log(`[Email] Matching ${offerPolicies.length} offer policies to user's current policies`);
-                const policyMatchingService = new PolicyMatchingService(storage, comparisonService);
-                const matchResult = await policyMatchingService.matchAndCompareOfferPolicies(
-                  existingThread.userId,
-                  existingThread.companyId,
-                  document.id,
-                  offerPolicies
-                );
-                console.log(`[Email] Policy matching complete`, { 
-                  comparisonsCreated: matchResult.matchedComparisons.length,
-                  healthChecksCreated: matchResult.unmatchedHealthChecks.length
-                });
-              }
-
-              // NEW: Run HealthCheckOrchestrator to create health_checks table records
-              // This ensures frontend can retrieve health checks via /api/health-checks/document/:documentId
-              const { HealthCheckOrchestrator } = await import('./healthCheckOrchestrator');
-              const healthCheckOrchestrator = new HealthCheckOrchestrator(storage);
               
-              const healthCheckResult = await healthCheckOrchestrator.runForDocument(
-                document.id,
-                {
-                  source: 'email_offer',
-                  userId: existingThread.userId ?? '',
-                  forceRerun: false
-                }
-              );
-
-              console.log(`[Email] Health check orchestration completed`, {
+              // Track for batch processing
+              processedDocuments.push({
                 documentId: document.id,
-                success: healthCheckResult.success,
-                healthChecksCreated: healthCheckResult.healthChecksCreated,
-                healthChecksFailed: healthCheckResult.healthChecksFailed
+                snapshotCount: orchestratorResult.snapshots.length
               });
               
               attachments.push({ fileName, filePath });
@@ -582,9 +554,51 @@ export class EmailService {
         }
       }
       
+      // PHASE 2: Run health checks for ALL documents
+      if (processedDocuments.length > 0) {
+        console.log(`[Email Batch] Starting PHASE 2: Health checks for ${processedDocuments.length} documents`);
+        
+        const { HealthCheckOrchestrator } = await import('./healthCheckOrchestrator');
+        const healthCheckOrchestrator = new HealthCheckOrchestrator(storage);
+        
+        for (const doc of processedDocuments) {
+          const healthCheckResult = await healthCheckOrchestrator.runForDocument(
+            doc.documentId,
+            {
+              source: 'email_offer',
+              userId: existingThread.userId ?? '',
+              forceRerun: false
+            }
+          );
+          
+          console.log(`[Email Batch] Health check for ${doc.documentId}: ${healthCheckResult.healthChecksCreated} created`);
+        }
+      }
+      
+      // PHASE 3: Run ComparisonOrchestrator ONCE after ALL PDFs are processed
+      // This ensures the comparison includes ALL policies from this offer email
+      if (processedDocuments.length > 0 && existingThread.userId && existingThread.companyId) {
+        const totalSnapshots = processedDocuments.reduce((sum, d) => sum + d.snapshotCount, 0);
+        console.log(`[Email Batch] Starting PHASE 3: Running comparison for ${totalSnapshots} total snapshots from ${processedDocuments.length} documents`);
+        
+        const { ComparisonOrchestrator } = await import('./comparisonOrchestrator');
+        const comparisonOrchestrator = new ComparisonOrchestrator(storage);
+        
+        const comparisonResult = await comparisonOrchestrator.runForUser({
+          userId: existingThread.userId,
+          forceRerun: true
+        });
+        
+        console.log(`[Email Batch] PHASE 3 completed: ${comparisonResult.comparisonsCreated} comparisons created, ${comparisonResult.comparisonsFailed} failed`);
+        
+        if (comparisonResult.comparisonIds.length > 0) {
+          console.log(`[Email Batch] ✅ Comparison IDs: ${comparisonResult.comparisonIds.join(', ')}`);
+        }
+      }
+      
       // Log attachment processing summary
-      if (duplicatesSkipped > 0) {
-        console.log(`[Email] Attachment processing complete`, { 
+      if (duplicatesSkipped > 0 || documentsCreated > 0) {
+        console.log(`[Email Batch] Processing complete`, { 
           documentsCreated, 
           duplicatesSkipped,
           totalPdfsInEmail: documentsCreated + duplicatesSkipped
