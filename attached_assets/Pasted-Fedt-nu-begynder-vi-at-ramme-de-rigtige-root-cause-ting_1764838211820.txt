@@ -1,0 +1,91 @@
+Fedt, nu begynder vi at ramme de rigtige “root cause”-ting 💪
+Her er en Replit-prompt du kan copy/paste direkte ind:
+
+````text
+I want you to fix a regression in the insurance “health check” pipeline, specifically in the policy segmentation + snapshot step.
+
+### Bug context
+
+- When I upload a new insurance PDF, OCR works correctly:
+  - `documents.ocr_text` contains ~39,094 characters of markdown with all coverage details.
+- The **segmentation stage** is broken:
+  - For the new documents, each policy snapshot only has **178–246 chars** in `policy_snapshots.rawText`.
+  - Previously (working documents), each snapshot had **1000+ chars** of full policy text.
+- Logs show this error from OpenAI:
+  - `404 The model "o1-mini" does not exist or you do not have access to it.`
+- The code then falls back to `gpt-4o`, but the current prompt makes the model return **short summaries / headings**, not the full policy text.
+
+Result:
+- OCR is fine (full text in `documents.ocr_text`).
+- Segmentation stores only a short header/summary in `segment.rawContent` → `policy_snapshots.rawText`.
+- The health check therefore has almost no data to work with.
+
+### Goal
+
+Fix the segmentation so that each policy snapshot again gets the **full policy segment text** (all coverage lines, limits, etc.), not just a 2–3 line summary.
+
+### What I want you to do
+
+1. **Fix the model configuration**
+
+- Open `server/services/policySegmentationService.ts` (or similarly named service that runs the segmentation stage).
+- Find where the OpenAI model for segmentation is configured. Right now it uses `"o1-mini"` and causes a 404.
+- Change this so it:
+  - Uses the **same standard text model** as the rest of the app (for example `gpt-4o-mini` or whatever is already defined in a shared config like `config/openai.ts`).
+  - Do NOT hardcode `"o1-mini"`. Instead, either:
+    - import and reuse an existing shared model constant, or
+    - use the same `openai` client + default model as other analysis/extraction steps.
+
+2. **Fix the segmentation prompt so it returns full text, not a summary**
+
+- In the same `policySegmentationService.ts`, locate the prompt/template that is sent to the model during segmentation.
+- The service should take the full OCR markdown (`documents.ocr_text`) as input and ask the model to split it into segments per policy type.
+- Update the prompt so that for each segment it returns a JSON object with at least:
+  - `policyType`
+  - `rawContent`
+  - `confidence`
+- VERY IMPORTANT: change the instructions for `rawContent` to:
+
+  - “`rawContent` must be the full markdown excerpt from the original document that belongs to that policy.”
+  - It must **preserve all coverage lines, bullet lists, limits, deductibles, and details**.
+  - It must **not** be a paraphrase or a short summary.
+  - The model should effectively “copy out” the relevant portion of the original OCR text for each policy type.
+
+- If there is a separate markdown/JSON template file for this prompt (e.g. under `server/ai-prompts/...`), update that file instead of inlining strings.
+
+3. **Ensure snapshots store the full rawContent unchanged**
+
+- Open `server/services/policySnapshots/PolicySnapshotService.ts` (or equivalent).
+- Find where we create records in `policy_snapshots` from the segmentation result.
+- Verify that:
+  - `snapshot.rawText` (or similarly named column) is set directly from `segment.rawContent`.
+  - There is **no manual truncation** like `.slice(0, 200)` or limiting to just the first few lines.
+
+- Add a small safety check here:
+  - If `segment.rawContent.length < 500` characters **and** `document.ocr_text.length > 10_000`, log a warning, e.g.:
+
+    ```ts
+    if (segment.rawContent.length < 500 && document.ocr_text.length > 10_000) {
+      logger.warn(
+        `Suspiciously short segment.rawContent for document ${document.id}, policyType=${segment.policyType}, length=${segment.rawContent.length}`
+      );
+    }
+    ```
+
+4. **Do NOT touch the health check logic**
+
+- The health check itself is fine; it just needs rich text again.
+- Only adjust:
+  - the segmentation model config,
+  - the segmentation prompt,
+  - and snapshot storage as described.
+
+5. **Sanity check after changes**
+
+- After implementing the changes, re-run the full extraction pipeline for a fresh upload.
+- Check the DB:
+  - `documents.ocr_text` for the new document should still be ~39k characters.
+  - Each `policy_snapshots.rawText` for that document should now be **hundreds or thousands of characters** and visibly contain detailed coverage bullets and values, not just 1–2 headings.
+
+Please implement these changes cleanly, reusing existing config patterns for OpenAI clients/models, and keep the code style consistent with the rest of the codebase.
+````

@@ -133,11 +133,10 @@ const DEFAULT_PIPELINE_CONFIG: PipelineConfig = {
     maxTokens: 128000
   },
   policySegmentation: {
-    modelId: 'gpt-4o-reasoning',
-    fallbackChain: ['gpt-4o', 'gpt-4o-mini'],
+    modelId: 'gpt-4o',
+    fallbackChain: ['gpt-4o-mini'],
     temperature: 0.1,
-    maxTokens: 16384,
-    reasoningEffort: 'medium'
+    maxTokens: 16384
   },
   structuredExtraction: {
     modelId: 'gpt-4o',

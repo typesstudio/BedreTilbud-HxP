@@ -111,7 +111,6 @@ OPGAVE:
 1. Identificer ALLE separate forsikringer i teksten
 2. For hver forsikring:
    - Bestem forsikringstype (Indbo, Fritidshus, Ulykke, osv.)
-   - Udtræk ALT relevant indhold for den forsikring
    - Find priser (årlig og månedlig hvis tilgængelig)
    - Find forsikringsselskab, policenummer, adresse hvis nævnt
    - Identificer notable sections (priser, dækninger, selvrisiko, tilvalg)
@@ -123,13 +122,20 @@ OPGAVE:
    - Overall confidence
    - Processing notes hvis der er usikkerhed
 
+KRITISK VIGTIGT FOR rawContent:
+- rawContent SKAL indeholde den KOMPLETTE markdown-tekst fra originaldokumentet for hver forsikring
+- Du skal KOPIERE hele den relevante sektion ord-for-ord fra OCR-teksten - IKKE omskrive eller opsummere
+- rawContent skal inkludere ALLE dækningslinjer, tabeller, selvrisici, forsikringssummer, tilvalg, vilkår osv.
+- Hvert segment bør typisk være 500-3000 tegn afhængigt af policens kompleksitet
+- ALDRIG returnér en kort opsummering - returner den FULDE tekst
+
 SVAR I DETTE JSON FORMAT:
 {
   "segments": [
     {
       "policyType": "Indbo",
       "policySubtype": null,
-      "rawContent": "... hele teksten for denne forsikring ...",
+      "rawContent": "[KOPIER HELE DEN RELEVANTE SEKTION FRA OCR-TEKSTEN HER - ALLE DÆKNINGER, PRISER, SELVRISICI, TABELLER OSV.]",
       "metadata": {
         "pageSpan": "1-3",
         "confidence": 0.95,
@@ -168,31 +174,16 @@ export async function segmentPolicies(
   try {
     let response: OpenAI.Chat.Completions.ChatCompletion;
 
-    if (modelMetadata.supportsReasoning && stepProfile.reasoningEffort) {
-      console.log(`[Policy Segmentation] Using reasoning model with effort: ${stepProfile.reasoningEffort}`);
-      response = await openai.chat.completions.create({
-        model: 'o1-mini',
-        messages: [
-          {
-            role: 'user',
-            content: SEGMENTATION_SYSTEM_PROMPT + '\n\n' + SEGMENTATION_USER_PROMPT(ocrText)
-          }
-        ],
-        reasoning_effort: stepProfile.reasoningEffort as any,
-        max_completion_tokens: stepProfile.maxTokens || 16384
-      });
-    } else {
-      response = await openai.chat.completions.create({
-        model: modelId,
-        messages: [
-          { role: 'system', content: SEGMENTATION_SYSTEM_PROMPT },
-          { role: 'user', content: SEGMENTATION_USER_PROMPT(ocrText) }
-        ],
-        temperature: stepProfile.temperature || 0.1,
-        max_tokens: stepProfile.maxTokens || 16384,
-        response_format: { type: 'json_object' }
-      });
-    }
+    response = await openai.chat.completions.create({
+      model: modelId,
+      messages: [
+        { role: 'system', content: SEGMENTATION_SYSTEM_PROMPT },
+        { role: 'user', content: SEGMENTATION_USER_PROMPT(ocrText) }
+      ],
+      temperature: stepProfile.temperature || 0.1,
+      max_tokens: stepProfile.maxTokens || 16384,
+      response_format: { type: 'json_object' }
+    });
 
     const content = response.choices[0]?.message?.content;
     if (!content) {

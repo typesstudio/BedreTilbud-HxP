@@ -140,8 +140,21 @@ export class PolicySnapshotService {
     // Create one snapshot per segment
     const snapshots: PolicySnapshot[] = [];
     
+    // Get OCR text length for quality validation
+    const ocrTextLength = (document as any).ocrRawResponse?.length || 0;
+    
     for (let i = 0; i < segments.length; i++) {
       const segment = segments[i];
+      
+      // Safety check: Warn if segment rawContent is suspiciously short
+      const rawContentLength = segment.rawContent?.length || 0;
+      if (rawContentLength < 500 && ocrTextLength > 10000) {
+        console.warn(
+          `[PolicySnapshotService] ⚠️ Suspiciously short segment.rawContent for document ${document.id}, ` +
+          `policyType=${segment.policyType}, rawContentLength=${rawContentLength}, ocrTextLength=${ocrTextLength}. ` +
+          `This may indicate a segmentation prompt issue.`
+        );
+      }
       
       try {
         // Normalize policy type (e.g., "Fritidshus" → "fritidshus", unknown → "unknown")
