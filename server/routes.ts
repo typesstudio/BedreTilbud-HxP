@@ -1301,6 +1301,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Force reprocess a specific document by ID (for debugging/fixing)
+  app.post("/api/documents/force-reprocess/:documentId", requireAuth, async (req, res) => {
+    try {
+      const { documentId } = req.params;
+      const { db } = await import("./db");
+      const { documents: documentsTable, policySnapshots: policySnapshotsTable, healthChecks: healthChecksTable } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      // Get the document
+      const [doc] = await db.select().from(documentsTable).where(eq(documentsTable.id, documentId));
+      if (!doc) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      console.log(`[Force Reprocess] Starting for document ${documentId}: ${doc.fileName}`);
+
+      // Delete existing policy snapshots and health checks for this document
+      await db.delete(healthChecksTable).where(eq(healthChecksTable.documentId, documentId));
+      await db.delete(policySnapshotsTable).where(eq(policySnapshotsTable.documentId, documentId));
+      console.log(`[Force Reprocess] Cleared existing snapshots and health checks`);
+
+      // Reset document status
+      await db
+        .update(documentsTable)
+        .set({ extractionStatus: 'pending', errorReason: null })
+        .where(eq(documentsTable.id, documentId));
+
+      // Run extraction pipeline with forceReprocess to bypass duplicate detection
+      const { ExtractionOrchestratorService } = await import('./services/extractionOrchestratorService');
+      const orchestrator = new ExtractionOrchestratorService(storage);
+      const result = await orchestrator.processDocument(documentId, { forceReprocess: true });
+
+      if (!result.success) {
+        return res.status(500).json({ 
+          message: "Extraction failed", 
+          error: result.error,
+          stages: result.stages
+        });
+      }
+
+      // Log rawText lengths for each snapshot
+      for (const snapshot of result.snapshots) {
+        console.log(`[Force Reprocess] Snapshot ${snapshot.policyType}: rawText length = ${(snapshot as any).rawText?.length || 0}`);
+      }
+
+      res.json({
+        message: `Successfully reprocessed document`,
+        documentId,
+        fileName: doc.fileName,
+        snapshotsCreated: result.snapshots.length,
+        policyTypes: result.snapshots.map(s => s.policyType)
+      });
+    } catch (error: any) {
+      console.error(`[Force Reprocess] Error:`, error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Policy routes
   app.get("/api/policies/user/:userId", requireAuth, async (req, res) => {
     try {
