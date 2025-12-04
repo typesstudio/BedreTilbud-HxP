@@ -3,19 +3,19 @@ import { Button } from "@/ui/components/Button";
 import { TextField } from "@/ui/components/TextField";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowRight, 
   Eye, 
   Percent, 
   Sparkles, 
   MessageCircle,
-  Type
+  Type,
+  CheckCircle2
 } from "lucide-react";
 
 function ComingSoon() {
   const [email, setEmail] = useState("");
-  const { toast } = useToast();
+  const [isSignedUp, setIsSignedUp] = useState(false);
 
   const signupMutation = useMutation({
     mutationFn: async (email: string) => {
@@ -26,18 +26,8 @@ function ComingSoon() {
       });
     },
     onSuccess: () => {
-      toast({
-        title: "Du er skrevet op!",
-        description: "Vi sender dig en besked, når vi er klar.",
-      });
+      setIsSignedUp(true);
       setEmail("");
-    },
-    onError: () => {
-      toast({
-        title: "Noget gik galt",
-        description: "Prøv venligst igen.",
-        variant: "destructive"
-      });
     }
   });
 
@@ -73,30 +63,46 @@ function ComingSoon() {
                 Upload din police og spar uden besvær.
               </span>
             </div>
-            <form onSubmit={handleSubmit} className="flex w-full items-center gap-2 rounded-md border border-solid border-neutral-200 bg-white px-2 py-2 shadow-lg">
-              <TextField
-                className="h-auto grow shrink-0 basis-0"
-                label=""
-                helpText=""
-              >
-                <TextField.Input
-                  placeholder="din@email.dk"
-                  value={email}
-                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => setEmail(event.target.value)}
-                  data-testid="input-email-signup"
-                />
-              </TextField>
-              <Button
-                variant="variation"
-                size="large"
-                iconRight={<ArrowRight className="h-4 w-4" />}
-                type="submit"
-                loading={signupMutation.isPending}
-                data-testid="button-signup"
-              >
-                Skriv dig op
-              </Button>
-            </form>
+            
+            {isSignedUp ? (
+              <div className="flex w-full items-center justify-center gap-3 rounded-md border border-solid border-green-200 bg-green-50 px-6 py-4 shadow-lg" data-testid="signup-success">
+                <CheckCircle2 className="h-6 w-6 text-green-600" />
+                <div className="flex flex-col">
+                  <span className="font-['Inter'] text-[16px] font-[600] leading-[24px] text-green-800">
+                    Tak! Du er nu skrevet op
+                  </span>
+                  <span className="font-['Inter'] text-[14px] font-[400] leading-[20px] text-green-700">
+                    Vi sender dig en besked, når vi er klar til at hjælpe dig.
+                  </span>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="flex w-full items-center gap-2 rounded-md border border-solid border-neutral-200 bg-white px-2 py-2 shadow-lg">
+                <TextField
+                  className="h-auto grow shrink-0 basis-0"
+                  label=""
+                  helpText=""
+                >
+                  <TextField.Input
+                    placeholder="din@email.dk"
+                    value={email}
+                    onChange={(event: React.ChangeEvent<HTMLInputElement>) => setEmail(event.target.value)}
+                    data-testid="input-email-signup"
+                  />
+                </TextField>
+                <Button
+                  variant="variation"
+                  size="large"
+                  iconRight={<ArrowRight className="h-4 w-4" />}
+                  type="submit"
+                  loading={signupMutation.isPending}
+                  data-testid="button-signup"
+                >
+                  Skriv dig op
+                </Button>
+              </form>
+            )}
+            
             <div className="flex w-full max-w-[448px] flex-col items-center gap-4">
               <div className="flex items-center gap-8">
                 <div className="flex items-center gap-2">
