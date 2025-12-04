@@ -1019,26 +1019,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized" });
       }
 
-      // CASCADE DELETE: First delete all policies associated with this document
-      const relatedPolicies = await storage.getPoliciesByDocument(req.params.id);
-      logger.info('[Document Delete] Deleting related policies', { 
-        documentId: req.params.id, 
-        policyCount: relatedPolicies.length 
-      });
-      
-      for (const policy of relatedPolicies) {
-        await storage.deletePolicy(policy.id);
-        logger.info('[Document Delete] Policy deleted', { policyId: policy.id, policyType: policy.policyType });
-      }
+      const { db } = await import("./db");
+      const { policies, policySnapshots, offerSnapshots, healthChecks } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
 
-      // Delete the physical file
+      // CASCADE DELETE: Delete all related records before deleting the document
+      const documentId = req.params.id;
+
+      // 1. Delete health checks referencing this document
+      await db.delete(healthChecks).where(eq(healthChecks.documentId, documentId));
+      logger.info('[Document Delete] Health checks deleted', { documentId });
+
+      // 2. Delete policy snapshots referencing this document
+      await db.delete(policySnapshots).where(eq(policySnapshots.documentId, documentId));
+      logger.info('[Document Delete] Policy snapshots deleted', { documentId });
+
+      // 3. Delete offer snapshots referencing this document
+      await db.delete(offerSnapshots).where(eq(offerSnapshots.documentId, documentId));
+      logger.info('[Document Delete] Offer snapshots deleted', { documentId });
+
+      // 4. Delete policies associated with this document
+      await db.delete(policies).where(eq(policies.documentId, documentId));
+      logger.info('[Document Delete] Policies deleted', { documentId });
+
+      // 5. Delete the physical file
       if (document.filePath && fs.existsSync(document.filePath)) {
         fs.unlinkSync(document.filePath);
       }
 
-      // Finally delete the document record
-      await storage.deleteDocument(req.params.id);
-      auditLog('document_deleted', userId, `Deleted document: ${document.fileName} with ${relatedPolicies.length} policies`);
+      // 6. Finally delete the document record
+      await storage.deleteDocument(documentId);
+      auditLog('document_deleted', userId, `Deleted document: ${document.fileName}`);
       
       res.status(204).send();
     } catch (error: any) {
