@@ -28,6 +28,14 @@ export default function ProfilePage() {
   const [prefs, setPrefs] = useState<any>({ insurancePriority: "" });
   const [password, setPassword] = useState({ current: "", new: "", confirm: "" });
   const [deleteConfirmDocId, setDeleteConfirmDocId] = useState<string | null>(null);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [editedProfile, setEditedProfile] = useState({
+    name: "",
+    phone: "",
+    dateOfBirth: "",
+    address: "",
+    personalIdNumber: ""
+  });
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -71,6 +79,36 @@ export default function ProfilePage() {
       toast({ title: "Præferencer opdateret" });
     },
   });
+
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const response = await apiRequest("PUT", `/api/users/${userId}`, data);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users", userId] });
+      setIsEditingProfile(false);
+      toast({ title: "Oplysninger gemt" });
+    },
+    onError: () => {
+      toast({ title: "Kunne ikke gemme", variant: "destructive" });
+    },
+  });
+
+  const startEditing = () => {
+    setEditedProfile({
+      name: user?.name || "",
+      phone: user?.phone || "",
+      dateOfBirth: user?.dateOfBirth || "",
+      address: user?.address || "",
+      personalIdNumber: user?.personalIdNumber || ""
+    });
+    setIsEditingProfile(true);
+  };
+
+  const saveProfile = () => {
+    updateProfileMutation.mutate(editedProfile);
+  };
 
   const uploadDocumentMutation = useMutation({
     mutationFn: async (file: File) => {
@@ -218,32 +256,144 @@ export default function ProfilePage() {
                   <span className="grow shrink-0 basis-0 text-heading-2 font-heading-2 text-default-font">
                     Personlige oplysninger
                   </span>
-                  <Button
-                    className="h-12 mobile:grow mobile:shrink-0 mobile:basis-0 touch-target"
-                    variant="neutral-secondary"
-                    data-testid="button-edit-info"
-                  >
-                    Rediger oplysninger
-                  </Button>
+                  {isEditingProfile ? (
+                    <Button
+                      className="h-12 mobile:grow mobile:shrink-0 mobile:basis-0 touch-target"
+                      variant="brand-primary"
+                      onClick={saveProfile}
+                      loading={updateProfileMutation.isPending}
+                      data-testid="button-save-info"
+                    >
+                      Gem
+                    </Button>
+                  ) : (
+                    <Button
+                      className="h-12 mobile:grow mobile:shrink-0 mobile:basis-0 touch-target"
+                      variant="neutral-secondary"
+                      onClick={startEditing}
+                      data-testid="button-edit-info"
+                    >
+                      Rediger oplysninger
+                    </Button>
+                  )}
                 </div>
                 <div className="flex w-full flex-col items-start">
-                  {[
-                    { label: "Fulde navn", value: user.name || "Ikke oplyst", testid: "text-full-name" },
-                    { label: "Email", value: user.email, testid: "text-email" },
-                    { label: "Telefonnummer", value: user.phone || "Ikke oplyst", testid: "text-phone" },
-                    { label: "Fødselsdato", value: user.dateOfBirth || "Ikke oplyst", testid: "text-dob" },
-                    { label: "Adresse", value: user.address || "Ikke oplyst", testid: "text-address" },
-                    { label: "CPR-nummer", value: user.personalIdNumber ? "************" : "Ikke oplyst", testid: "text-cpr" },
-                  ].map((item) => (
-                    <div key={item.label} className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
-                      <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-subtext-color mobile:text-caption mobile:font-caption">
-                        {item.label}
+                  {/* Fulde navn */}
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
+                    <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-subtext-color mobile:text-caption mobile:font-caption">
+                      Fulde navn
+                    </span>
+                    {isEditingProfile ? (
+                      <TextField className="grow shrink-0 basis-0">
+                        <TextField.Input
+                          placeholder="Dit fulde navn"
+                          value={editedProfile.name}
+                          onChange={(e) => setEditedProfile({ ...editedProfile, name: e.target.value })}
+                          data-testid="input-full-name"
+                        />
+                      </TextField>
+                    ) : (
+                      <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid="text-full-name">
+                        {user.name || "Ikke oplyst"}
                       </span>
-                      <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid={item.testid}>
-                        {item.value}
+                    )}
+                  </div>
+                  
+                  {/* Email (read-only) */}
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
+                    <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-subtext-color mobile:text-caption mobile:font-caption">
+                      Email
+                    </span>
+                    <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid="text-email">
+                      {user.email}
+                    </span>
+                  </div>
+                  
+                  {/* Telefonnummer */}
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
+                    <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-subtext-color mobile:text-caption mobile:font-caption">
+                      Telefonnummer
+                    </span>
+                    {isEditingProfile ? (
+                      <TextField className="grow shrink-0 basis-0">
+                        <TextField.Input
+                          placeholder="Dit telefonnummer"
+                          value={editedProfile.phone}
+                          onChange={(e) => setEditedProfile({ ...editedProfile, phone: e.target.value })}
+                          data-testid="input-phone"
+                        />
+                      </TextField>
+                    ) : (
+                      <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid="text-phone">
+                        {user.phone || "Ikke oplyst"}
                       </span>
-                    </div>
-                  ))}
+                    )}
+                  </div>
+                  
+                  {/* Fødselsdato */}
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
+                    <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-subtext-color mobile:text-caption mobile:font-caption">
+                      Fødselsdato
+                    </span>
+                    {isEditingProfile ? (
+                      <TextField className="grow shrink-0 basis-0">
+                        <TextField.Input
+                          placeholder="DD-MM-ÅÅÅÅ"
+                          value={editedProfile.dateOfBirth}
+                          onChange={(e) => setEditedProfile({ ...editedProfile, dateOfBirth: e.target.value })}
+                          data-testid="input-dob"
+                        />
+                      </TextField>
+                    ) : (
+                      <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid="text-dob">
+                        {user.dateOfBirth || "Ikke oplyst"}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Adresse */}
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
+                    <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-subtext-color mobile:text-caption mobile:font-caption">
+                      Adresse
+                    </span>
+                    {isEditingProfile ? (
+                      <TextField className="grow shrink-0 basis-0">
+                        <TextField.Input
+                          placeholder="Din adresse"
+                          value={editedProfile.address}
+                          onChange={(e) => setEditedProfile({ ...editedProfile, address: e.target.value })}
+                          data-testid="input-address"
+                        />
+                      </TextField>
+                    ) : (
+                      <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid="text-address">
+                        {user.address || "Ikke oplyst"}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* CPR-nummer */}
+                  <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
+                    <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-subtext-color mobile:text-caption mobile:font-caption">
+                      CPR-nummer
+                    </span>
+                    {isEditingProfile ? (
+                      <TextField className="grow shrink-0 basis-0">
+                        <TextField.Input
+                          placeholder="DDMMÅÅ-XXXX"
+                          value={editedProfile.personalIdNumber}
+                          onChange={(e) => setEditedProfile({ ...editedProfile, personalIdNumber: e.target.value })}
+                          data-testid="input-cpr"
+                        />
+                      </TextField>
+                    ) : (
+                      <span className="grow shrink-0 basis-0 text-body font-body text-default-font mobile:text-body-bold mobile:font-body-bold" data-testid="text-cpr">
+                        {user.personalIdNumber ? "************" : "Ikke oplyst"}
+                      </span>
+                    )}
+                  </div>
+                  
+                  {/* Adgangskode */}
                   <div className="flex w-full items-center gap-2 border-b border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:items-start mobile:justify-start mobile:gap-1 mobile:px-0 mobile:py-4">
                     <span className="grow shrink-0 basis-0 text-body-bold font-body-bold text-subtext-color mobile:text-caption mobile:font-caption">
                       Adgangskode
