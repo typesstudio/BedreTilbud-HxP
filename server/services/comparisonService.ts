@@ -233,28 +233,9 @@ export class ComparisonService {
     userInfo: {
       userName?: string;
       cprNumber?: string;
-      email?: string;
-      phone?: string;
-      address?: string;
-      housingType?: string;
-      hasCar?: boolean;
-      deductible?: string;
-      insuranceTypes?: string[];
-      importantPoints?: string;
-      additionalInfo?: string;
-    },
-    currentPolicies: InsuranceData[]
-  ): Promise<string> {
-    // Sanitize user input to prevent prompt injection
-    if (userInfo.additionalInfo) {
-      const sanitized = sanitizePrompt(userInfo.additionalInfo);
-      const injectionCheck = detectInjection(sanitized);
-      if (!injectionCheck.safe) {
-        throw new Error(`Unsafe user input detected: ${injectionCheck.reason}`);
-      }
-      userInfo.additionalInfo = sanitized;
+      requestedInsurances?: string;
     }
-    
+  ): Promise<string> {
     // Strategy: Try Mistral first (cheapest), then OpenAI, then template fallback
     
     // Try 1: Mistral (most cost-effective)
@@ -262,8 +243,7 @@ export class ComparisonService {
       console.log("[Email Gen] Attempting Mistral first (most cost-effective)...");
       const email = await mistralTextService.generatePersonalizedEmail(
         companyName,
-        userInfo,
-        currentPolicies
+        userInfo
       );
       logAIUsage('Mistral-large', 'personalized-email', true);
       return email;
@@ -275,47 +255,43 @@ export class ComparisonService {
     // Try 2: OpenAI gpt-4o-mini (cheaper than GPT-4)
     try {
       console.log("[Email Gen] Attempting OpenAI gpt-4o-mini fallback...");
-      const insuranceTypesList = userInfo.insuranceTypes?.length 
-        ? userInfo.insuranceTypes.join(', ')
-        : 'Ikke angivet';
-      const policySummary = currentPolicies.length > 0
-        ? currentPolicies.map(p => `- ${p.policyType}: ${p.annualPremium} kr./år (${p.companyName})`).join('\n')
-        : 'Ingen nuværende policer vedhæftet';
       
-      const prompt = `Generér en personlig forsikringshenvendelse til ${companyName}.
+      const prompt = `Generér en kort forsikringshenvendelse til ${companyName}.
 
-Kundens oplysninger:
-- Navn: ${userInfo.userName || 'Ikke angivet'}
-- CPR-nummer: ${userInfo.cprNumber || 'Ikke angivet'}
-- Adresse: ${userInfo.address || 'Ikke angivet'}
-- Boligtype: ${userInfo.housingType || 'Ikke angivet'}
-- Har bil: ${userInfo.hasCar ? 'Ja' : 'Nej'}
-- Ønsket selvrisiko: ${userInfo.deductible || 'Ikke angivet'}
-- Ønskede forsikringstyper: ${insuranceTypesList}
-- Det der er vigtigst for kunden: ${userInfo.importantPoints || userInfo.additionalInfo || 'Ingen'}
+Kundens navn: ${userInfo.userName || 'Ikke angivet'}
+Kundens CPR-nummer: ${userInfo.cprNumber || 'Ikke angivet'}
 
-Nuværende policer:
-${policySummary}
+Forsikringstyper der ønskes tilbud på:
+${userInfo.requestedInsurances || '- Forsikringer (se vedhæftede policer)'}
 
-Skriv en kort mail (maks. 10-12 linjer), der:
-1. Kort præsenterer henvendelsen
-2. Opsummerer ønskede forsikringstyper
-3. Angiver CPR og adresse
-4. Forklarer at nuværende policer er vedhæftet
-5. Beder tydeligt om et konkret tilbud som PDF vedhæftet svaret
+Skriv en kort mail (maks. 8-10 linjer) baseret på denne skabelon:
+
+Hej hos [selskab],
+
+Vi skriver på vegne af [kundens navn], som gerne vil modtage forsikringstilbud på følgende forsikringer:
+
+[liste over forsikringstyper]
+
+For jeres reference har vi vedhæftet kopi af de nuværende policer, så I kan se eksisterende dækning.
+
+Vi beder jer venligst om at sende et konkret, fuldt tilbud som PDF direkte vedhæftet svaret på denne mail – ikke kun et link eller MitID-login.
+
+Tak for hjælpen – vi ser frem til jeres tilbagemelding.
+
+Venlig hilsen
+BedreTilbud
 
 VIGTIGE REGLER:
-- Du må ALDRIG inkludere kundens e-mailadresse eller telefonnummer i mailen.
-- Du må IKKE skrive at vi sammenligner med andre tilbud.
-
-Returnér kun selve e-mailens brødtekst, ingen emnelinje.`;
+- Du må ALDRIG inkludere kundens e-mailadresse eller telefonnummer.
+- Du må IKKE nævne sammenligning med andre tilbud.
+- Returnér kun selve e-mailens brødtekst, ingen emnelinje.`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
           {
             role: "system",
-            content: "Du er en professionel forsikringsmægler hos BedreTilbud, der skriver på vegne af en privatkunde. Skriv korte, klare og høflige mails på dansk."
+            content: "Du er en professionel forsikringsmægler hos BedreTilbud. Skriv korte, klare og høflige mails på dansk."
           },
           {
             role: "user",
@@ -335,7 +311,7 @@ Returnér kun selve e-mailens brødtekst, ingen emnelinje.`;
     // Try 3: Template fallback (always works)
     console.log("[Email Gen] Using template fallback (no AI cost)");
     logAIUsage('Template', 'personalized-email', true);
-    return this.generateTemplateEmail(companyName, userInfo, currentPolicies);
+    return this.generateTemplateEmail(companyName, userInfo);
   }
 
   private generateTemplateEmail(
@@ -343,43 +319,22 @@ Returnér kun selve e-mailens brødtekst, ingen emnelinje.`;
     userInfo: {
       userName?: string;
       cprNumber?: string;
-      email?: string;
-      phone?: string;
-      address?: string;
-      housingType?: string;
-      hasCar?: boolean;
-      deductible?: string;
-      insuranceTypes?: string[];
-      importantPoints?: string;
-      additionalInfo?: string;
-    },
-    currentPolicies: InsuranceData[]
+      requestedInsurances?: string;
+    }
   ): string {
-    const policySummary = currentPolicies.length > 0
-      ? currentPolicies.map(p => `- ${p.policyType}: ${p.annualPremium} kr./år (${p.companyName})`).join('\n')
-      : 'Se vedhæftede policer';
-    
-    const insuranceTypesList = userInfo.insuranceTypes?.length 
-      ? userInfo.insuranceTypes.join(', ')
-      : 'Alle relevante forsikringstyper';
+    return `Hej hos ${companyName},
 
-    return `Hej ${companyName},
+Vi skriver på vegne af ${userInfo.userName || 'vores kunde'}, som gerne vil modtage forsikringstilbud på følgende forsikringer:
 
-BedreTilbud skriver på vegne af en kunde, der søger forsikringstilbud.
+${userInfo.requestedInsurances || '- Forsikringer (se vedhæftede policer)'}
 
-Kundens oplysninger:
-- Navn: ${userInfo.userName || 'Se vedhæftede dokumenter'}
-- CPR: ${userInfo.cprNumber || 'Se vedhæftede dokumenter'}
-- Adresse: ${userInfo.address || 'Se vedhæftede dokumenter'}
+For jeres reference har vi vedhæftet kopi af de nuværende policer, så I kan se eksisterende dækning.
 
-Ønskede forsikringstyper: ${insuranceTypesList}
+Vi beder jer venligst om at sende et konkret, fuldt tilbud som PDF direkte vedhæftet svaret på denne mail – ikke kun et link eller MitID-login. På den måde kan vi nemt gemme og gennemgå tilbuddet for kunden.
 
-Nuværende forsikringer:
-${policySummary}
+Tak for hjælpen – vi ser frem til jeres tilbagemelding.
 
-Nuværende policer er vedhæftet som reference. Vi beder venligst om et konkret, skriftligt tilbud sendt som PDF vedhæftet jeres svar på denne mail.
-
-Med venlig hilsen
+Venlig hilsen
 BedreTilbud`;
   }
 

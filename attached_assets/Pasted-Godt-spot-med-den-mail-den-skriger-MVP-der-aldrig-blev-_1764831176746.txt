@@ -1,0 +1,281 @@
+Godt spot med den mail – den skriger “MVP der aldrig blev opdateret” 😅
+Lad os skille det ad og så designe, hvad vi *faktisk* vil have.
+
+---
+
+## 1. Hvordan den første tilbuds-mail bliver lavet i dag
+
+Ud fra det du har postet (og Replit-analysen) er flowet ungefær sådan her:
+
+1. **Hent nuværende policer**
+
+   * I `server/routes.ts`:
+
+     ```ts
+     const currentDocs = await storage.getUserDocuments(userId, 'current');
+     const ocrPolicies = currentDocs
+       .map(doc => doc.ocrData)
+       .filter(Boolean);
+     ```
+   * Hver `ocrData` følger noget ala `InsuranceData`:
+
+     ```ts
+     {
+       companyName: string;
+       policyType: string;        // "Bilforsikring", "Indboforsikring" osv.
+       annualPremium: number;     // årlig præmie
+       deductible: number;
+       coverages: [...];
+       benefits: [...];
+     }
+     ```
+
+2. **Byg en tekstlig liste af policer**
+
+   * Noget i stil med:
+
+     ```ts
+     const currentPolicies = ocrPolicies
+       .map(p => `- ${p.policyType}: ${p.annualPremium} kr./år (${p.companyName})`)
+       .join('\n');
+     ```
+   * Denne `currentPolicies` sendes som placeholder ind i email-prompten.
+
+3. **Byg prompten til AI’en**
+
+   * System-prompt (fx `server/ai-prompts/emails/system-prompt.md`):
+
+     * Definerer rollen, dansk sprog, max længde, “bed om PDF ikke MitID” osv.
+   * User-prompt template (fx `server/ai-prompts/emails/personalized-inquiry.md`):
+
+     * Har placeholders som:
+
+       * `${companyName}`
+       * `${userName}`
+       * `${cprNumber}`
+       * `${address}`
+       * `${housingType}`
+       * `${hasCar}`
+       * `${insuranceTypes}`
+       * `${currentPolicies}`
+
+   Herinde ligger i dag sandsynligvis linjer a la:
+
+   * “…til sin villa”
+   * “Philip har angivet en ønsket selvrisiko på 5.000 kr.”
+
+   → Det er **template-teksten**, ikke noget AI selv finder på.
+
+4. **Kald Mistral / OpenAI**
+
+   * I `comparisonService` (eller tilsvarende):
+
+     ```ts
+     await mistralTextService.generatePersonalizedEmail({
+       companyName,
+       userName,
+       cprNumber,
+       address,
+       housingType,
+       hasCar,
+       insuranceTypes,
+       currentPolicies,
+     })
+     ```
+   * Hvis Mistral fejler → fallback til OpenAI → fallback til hardcoded template.
+
+**Konklusion:**
+Data om forsikringer kommer fra `ocrData` på brugerens *current* dokumenter, men selve sætningerne “til sin villa” og “selvrisiko 5.000 kr” kommer fra **selve email-templaten**, ikke fra brugerens input.
+
+---
+
+## 2. Hvad du gerne vil ændre (kort)
+
+Du vil:
+
+1. **Fjerne**:
+
+   * “selvrisiko på 5.000 kr”
+   * “forsikringer til sin villa” (fordi brugeren kan have bil, rejse osv.)
+
+2. I stedet skal mailen:
+
+   * Sigte generelt:
+
+     > “Vi har en kunde, der gerne vil have forsikringstilbud på X”
+   * Og **X skal være en liste over det, brugeren har uploadet** (typer af policer).
+   * Beholde de gode linjer:
+
+     ```txt
+     For jeres reference har vi vedhæftet kopi af nuværende policer, så I
+     kan se eksisterende dækning.
+
+     Vi beder jer venligst om at sende et konkret, fuldt tilbud som PDF
+     direkte vedhæftet svaret på denne mail – ikke kun et link eller
+     MitID-login. På den måde kan vi nemt sammenligne og gemme tilbuddet
+     for kunden.
+
+     Tak for hjælpen – jeg ser frem til jeres tilbagemelding.
+     ```
+
+---
+
+## 3. Forslag til ny logik: “kunde vil have tilbud på X”
+
+### 3.1. Byg den liste vi vil vise (X)
+
+I stedet for at gætte på “villa” + “indbo/bygning” bør vi **direkte bruge de policetyper**, vi har fundet i OCR:
+
+```ts
+const ocrPolicies = currentDocs
+  .map(doc => doc.ocrData)
+  .filter((p): p is InsuranceData => Boolean(p));
+
+const uniquePolicyTypes = Array.from(
+  new Set(
+    ocrPolicies
+      .map(p => p.policyType)
+      .filter(Boolean)
+  )
+);
+
+// Ren liste af typer til mailen
+const requestedInsurancesText = uniquePolicyTypes
+  .map(type => `- ${type}`)
+  .join('\n');
+```
+
+Eksempel hvis brugeren har uploadet Bil + Indbo + Ulykke:
+
+```txt
+- Bilforsikring
+- Indboforsikring
+- Ulykkesforsikring
+```
+
+Den tekst skal så bruges i templaten som fx `${requestedInsurances}`.
+
+> **Bonus:** Du kan stadig have en anden placeholder `${currentPolicies}` til internt brug / debugging, men mailen til selskabet bliver ren og forståelig.
+
+---
+
+### 3.2. Ny email-tekst (skabelon)
+
+Her er et bud på en ny *body*, uden villa / 5.000 kr, og som bruger den liste:
+
+```md
+Hej hos ${companyName},
+
+Vi skriver på vegne af ${userName}, som gerne vil modtage forsikringstilbud på følgende forsikringer:
+
+${requestedInsurances}
+
+For jeres reference har vi vedhæftet kopi af de nuværende policer, så I kan se eksisterende dækning.
+
+Vi beder jer venligst om at sende et konkret, fuldt tilbud som PDF direkte vedhæftet svaret på denne mail – ikke kun et link eller MitID-login. På den måde kan vi nemt gemme og gennemgå tilbuddet for kunden.
+
+Tak for hjælpen – vi ser frem til jeres tilbagemelding.
+
+Venlig hilsen  
+BedreTilbud
+```
+
+Hvis du vil have CPR med (som du har nævnt tidligere), kan du tilføje fx:
+
+```md
+Kundens CPR-nummer er: ${cprNumber}.
+```
+
+som en *separat* linje lige efter første afsnit – uden at blande det sammen med villa/selvrisiko.
+
+---
+
+## 4. Helt konkret: sådan får du Replit til at ændre det
+
+Her er en “copy-paste” prompt du kan give til Replit-agenten:
+
+---
+
+**Replit-prompt (kan du bare smide direkte ind):**
+
+> 1. Åbn `server/services/comparisonService.ts` (eller den fil hvor `generatePersonalizedEmail` bliver kaldt).
+> 2. Find stedet hvor vi henter `currentDocs` og bygger data til email-prompten.
+> 3. Tilføj en ny tekst-variabel `requestedInsurances` baseret på `ocrData.policyType`:
+>
+>    ```ts
+>    const ocrPolicies = currentDocs
+>      .map(doc => doc.ocrData)
+>      .filter((p): p is InsuranceData => Boolean(p));
+>
+>    const uniquePolicyTypes = Array.from(
+>      new Set(
+>        ocrPolicies
+>          .map(p => p.policyType)
+>          .filter(Boolean)
+>      )
+>    );
+>
+>    const requestedInsurances = uniquePolicyTypes
+>      .map(type => `- ${type}`)
+>      .join('\n');
+>    ```
+> 4. Sørg for at `requestedInsurances` bliver sendt med i payloadet til `mistralTextService.generatePersonalizedEmail(...)` / `generatePersonalizedEmailTemplate(...)`.
+>    Eksempel:
+>
+>    ```ts
+>    const emailBody = await mistralTextService.generatePersonalizedEmail({
+>      companyName,
+>      userName: user.name,
+>      cprNumber: user.cprNumber,
+>      requestedInsurances,
+>      // behold eventuelt currentPolicies, men vi bruger det ikke i teksten
+>    });
+>    ```
+> 5. Åbn `server/ai-prompts/emails/personalized-inquiry.md`.
+> 6. Fjern alle steder hvor der står noget om:
+>
+>    * “til sin villa”
+>    * “ønsket selvrisiko på 5.000 kr”
+>    * eventuelle hårdkodede lister som “Indboforsikring / Bygningsforsikring / andre relevante til villaejere”
+> 7. Erstat selve email-skabelonen med denne:
+>
+>    ```md
+>    Hej hos ${companyName},
+>
+>    Vi skriver på vegne af ${userName}, som gerne vil modtage forsikringstilbud på følgende forsikringer:
+>
+>    ${requestedInsurances}
+>
+>    For jeres reference har vi vedhæftet kopi af de nuværende policer, så I kan se eksisterende dækning.
+>
+>    Vi beder jer venligst om at sende et konkret, fuldt tilbud som PDF direkte vedhæftet svaret på denne mail – ikke kun et link eller MitID-login. På den måde kan vi nemt gemme og gennemgå tilbuddet for kunden.
+>
+>    Tak for hjælpen – vi ser frem til jeres tilbagemelding.
+>
+>    Venlig hilsen  
+>    BedreTilbud
+>    ```
+> 8. Sørg for at system-prompten stadig indeholder reglerne om:
+>
+>    * Kort og præcis mail (ca. 8–12 linjer)
+>    * Danske virksomheder
+>    * Ingen direkte kontaktinfo på kunden
+>    * Bed om *PDF-tilbud vedhæftet*, ikke MitID-links.
+> 9. Kør tests eller lav en lokal request, så vi kan se, at en bruger med fx Bil + Indbo + Rejse får:
+>
+>    ```txt
+>    Vi skriver på vegne af Philip Tester, som gerne vil modtage forsikringstilbud på følgende forsikringer:
+>
+>    - Bilforsikring
+>    - Indboforsikring
+>    - Rejseforsikring
+>    ```
+>
+>    uden villa-tekst og uden selvrisiko 5.000 kr.
+
+---
+
+Hvis du vil, kan vi næste skridt gøre mailen endnu smartere, fx:
+
+* Gruppere policer (“Pakke af hus + indbo + ulykke”)
+* Tilføje en kort “prioriteter”-linje baseret på et par checkboxe i onboarding (pris vs. dækning).

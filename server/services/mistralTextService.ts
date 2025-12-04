@@ -52,41 +52,17 @@ export class MistralTextService {
     userInfo: {
       userName?: string;
       cprNumber?: string;
-      email?: string;
-      phone?: string;
-      address?: string;
-      housingType?: string;
-      hasCar?: boolean;
-      deductible?: string;
-      insuranceTypes?: string[];
-      importantPoints?: string;
-      additionalInfo?: string;
-    },
-    currentPolicies: { policyType: string; annualPremium: number; companyName: string; }[]
+      requestedInsurances?: string;
+    }
   ): Promise<string> {
     const systemPrompt = loadPrompt('emails/system-prompt');
     const promptTemplate = loadPrompt('emails/personalized-inquiry');
-    const currentPoliciesSummary = currentPolicies.length > 0 
-      ? currentPolicies.map(p => 
-          `- ${p.policyType}: ${p.annualPremium} kr./år (${p.companyName})`
-        ).join('\n')
-      : 'Ingen nuværende policer vedhæftet';
-    
-    const insuranceTypesList = userInfo.insuranceTypes?.length 
-      ? userInfo.insuranceTypes.join(', ')
-      : 'Ikke angivet';
     
     const prompt = replaceVariables(promptTemplate, {
       companyName,
-      userName: userInfo.userName || 'Ikke angivet',
+      userName: userInfo.userName || 'vores kunde',
       cprNumber: userInfo.cprNumber || 'Ikke angivet',
-      address: userInfo.address || 'Ikke angivet',
-      housingType: userInfo.housingType || 'Ikke angivet',
-      hasCar: userInfo.hasCar ? 'Ja' : 'Nej',
-      deductible: userInfo.deductible || 'Ikke angivet',
-      insuranceTypes: insuranceTypesList,
-      importantPoints: userInfo.importantPoints || userInfo.additionalInfo || 'Ingen',
-      currentPolicies: currentPoliciesSummary
+      requestedInsurances: userInfo.requestedInsurances || '- Forsikringer (se vedhæftede policer)'
     });
 
     return this.generateText(systemPrompt, prompt, { maxTokens: 1024 });

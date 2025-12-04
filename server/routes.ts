@@ -1539,29 +1539,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentDocs = await storage.getUserDocuments(userId, 'current');
       const attachmentPaths = currentDocs.map(doc => doc.filePath);
 
+      // Extract unique policy types from OCR data for the email
+      const ocrPolicies = currentDocs
+        .map(doc => doc.ocrData)
+        .filter((p): p is { policyType: string; annualPremium: number; companyName: string } => 
+          Boolean(p && typeof p === 'object' && 'policyType' in p)
+        );
+
+      const uniquePolicyTypes = Array.from(
+        new Set(
+          ocrPolicies
+            .map(p => p.policyType)
+            .filter(Boolean)
+        )
+      );
+
+      // Build the requested insurances list for the email
+      const requestedInsurances = uniquePolicyTypes.length > 0
+        ? uniquePolicyTypes.map(type => `- ${type}`).join('\n')
+        : '- Forsikringer (se vedhæftede policer)';
+
       const threadIds = [];
 
       for (const companyId of companyIds) {
         const company = await storage.getCompany(companyId);
         if (!company) continue;
 
-        // Generate personalized email with full user context
+        // Generate personalized email with simplified context
         const emailBody = customMessage || await comparisonService.generatePersonalizedEmail(
           company.name,
           {
             userName: user.name || undefined,
-            cprNumber: user.cpr || undefined,
-            email: user.email || undefined,
-            phone: user.phone || undefined,
-            address: user.address || undefined,
-            housingType: user.housingType || undefined,
-            hasCar: user.hasCar || undefined,
-            deductible: user.deductible || undefined,
-            insuranceTypes: user.insuranceTypes || undefined,
-            importantPoints: user.preference || undefined,
-            additionalInfo: user.additionalInfo || undefined
-          },
-          currentDocs.map(doc => doc.ocrData).filter(Boolean) as any[]
+            cprNumber: user.personalIdNumber || undefined,
+            requestedInsurances
+          }
         );
 
         const threadId = await emailService.sendInsuranceInquiry(
@@ -2774,7 +2785,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const email = await emailService.sendFollowUpEmail(
         thread.id,
         emailBody,
-        questionIds // Store question IDs with the email
+        { questionIds } // Store question IDs with the email
       );
 
       res.json({ 
