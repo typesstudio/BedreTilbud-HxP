@@ -1019,12 +1019,80 @@ export class ExtractionOrchestratorService {
         const snapshot = snapshots[i];
         const structuredPolicy = extractionResult.policies[i];
 
-        console.log(`[Orchestrator] Updating snapshot ${snapshot.id} with structured policy (${structuredPolicy.policyType})`);
+        console.log(`[Orchestrator] Updating offer_snapshot ${snapshot.id} with structured policy (${structuredPolicy.policyType})`);
 
-        // Update snapshot with structured policy (includes pricing)
+        // Update offer_snapshot with structured policy (includes pricing) - LEGACY
         await this.storage.updateOfferSnapshot(snapshot.id, {
           structuredPolicy: structuredPolicy as any
         });
+      }
+
+      // ========================================================================
+      // NEW: Also update policy_snapshots table (the NEW canonical source of truth)
+      // This ensures health check page can show pricing from policy_snapshots
+      // ========================================================================
+      try {
+        const { policySnapshotService } = await import("./policySnapshots/PolicySnapshotService");
+        
+        // Get the document ID from any snapshot (they all have the same documentId)
+        const documentId = snapshots.length > 0 ? snapshots[0].documentId : null;
+        
+        if (documentId) {
+          // Fetch active policy_snapshots for this document
+          const policySnapshots = await policySnapshotService.getActiveSnapshotsByDocument(documentId);
+          
+          console.log(`[Orchestrator] Updating ${policySnapshots.length} policy_snapshots with pricing data...`);
+          
+          // Policy type equivalences for matching (extracted type → snapshot types that match)
+          const policyTypeEquivalences: Record<string, string[]> = {
+            'hus': ['hus', 'fritidshus', 'villa', 'sommerhus'],
+            'fritidshus': ['fritidshus', 'hus', 'sommerhus'],
+            'indbo': ['indbo', 'indboforsikring'],
+            'ulykke': ['ulykke', 'ulykkesforsikring'],
+            'bil': ['bil', 'bilforsikring', 'auto'],
+            'rejse': ['rejse', 'rejseforsikring'],
+            'ansvar': ['ansvar', 'ansvarsforsikring'],
+            'husdyr': ['husdyr', 'dyreforsikring', 'hund', 'kat'],
+          };
+          
+          // Match by policyType (with equivalences) and update each policy_snapshot
+          for (const policySnapshot of policySnapshots) {
+            const snapshotType = policySnapshot.policyType.toLowerCase();
+            
+            // Find matching extracted policy using equivalences
+            const matchingPolicy = extractionResult.policies.find(p => {
+              const extractedType = p.policyType.toLowerCase();
+              
+              // Direct match
+              if (extractedType === snapshotType) return true;
+              
+              // Check if extracted type has equivalences that include snapshot type
+              const equivalents = policyTypeEquivalences[extractedType] || [];
+              if (equivalents.includes(snapshotType)) return true;
+              
+              // Reverse check: snapshot type has equivalences that include extracted type
+              const reverseEquivalents = policyTypeEquivalences[snapshotType] || [];
+              if (reverseEquivalents.includes(extractedType)) return true;
+              
+              return false;
+            });
+            
+            if (matchingPolicy) {
+              console.log(`[Orchestrator] Updating policy_snapshot ${policySnapshot.id} with structured policy (${matchingPolicy.policyType} → ${snapshotType})`);
+              
+              await policySnapshotService.updateSnapshotEnrichment(policySnapshot.id, {
+                structuredPolicy: matchingPolicy as any
+              });
+            } else {
+              console.warn(`[Orchestrator] No matching extracted policy for policy_snapshot ${policySnapshot.id} (${policySnapshot.policyType})`);
+            }
+          }
+          
+          console.log(`[Orchestrator] ✓ policy_snapshots updated with pricing data`);
+        }
+      } catch (error) {
+        console.error(`[Orchestrator] Failed to update policy_snapshots:`, error);
+        // Don't throw - this shouldn't break the pipeline
       }
 
       stage.status = "completed";

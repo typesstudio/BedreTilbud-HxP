@@ -170,6 +170,9 @@ export class PolicySnapshotService {
         const coverageAddress = this.extractCoverageAddress(segment, policyType);
         
         // Build the snapshot record
+        // Sanitize rawContent to remove null characters that PostgreSQL can't handle
+        const sanitizedRawText = this.sanitizeText(segment.rawContent);
+        
         const snapshotData: InsertPolicySnapshot = {
           documentId: document.id,
           userId: document.userId || null,
@@ -178,7 +181,7 @@ export class PolicySnapshotService {
           policyType,
           coverageAddress,
           status, // Step 3.3: Mark unknown types so they're skipped in matching
-          rawText: segment.rawContent,
+          rawText: sanitizedRawText,
           structuredPolicy: null, // Will be enriched later
           pricing: null, // Will be enriched later
           sourceSegmentMeta: {
@@ -314,6 +317,18 @@ export class PolicySnapshotService {
       );
       return 0;
     }
+  }
+
+  /**
+   * Sanitize text to remove null characters and other problematic characters
+   * that PostgreSQL cannot store. This is needed because OCR output sometimes
+   * contains \u0000 (null bytes) which cause "invalid byte sequence" errors.
+   */
+  private sanitizeText(text: string | undefined | null): string {
+    if (!text) return '';
+    // Remove null characters (\u0000) which PostgreSQL can't handle
+    // Also remove other control characters except newline/tab
+    return text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
   }
 
   /**
@@ -518,6 +533,20 @@ export class PolicySnapshotService {
       .select()
       .from(policySnapshots)
       .where(eq(policySnapshots.documentId, documentId));
+  }
+
+  /**
+   * Get ACTIVE snapshots for a specific document
+   * Used by extraction orchestrator to update pricing data
+   */
+  async getActiveSnapshotsByDocument(documentId: string): Promise<PolicySnapshot[]> {
+    return await db
+      .select()
+      .from(policySnapshots)
+      .where(and(
+        eq(policySnapshots.documentId, documentId),
+        eq(policySnapshots.isActive, true)
+      ));
   }
 
   /**
