@@ -190,6 +190,9 @@ export interface IStorage {
     status: "pending" | "sent" | "failed" | "not_required",
     error?: string | null
   ): Promise<CompanyComparison>;
+
+  // Waitlist
+  addToWaitlist(email: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -1106,6 +1109,16 @@ export class MemStorage implements IStorage {
 
   async setBenchmarkPrice(policyType: string, annualPremium: number): Promise<void> {
     this.benchmarkPrices.set(policyType, annualPremium);
+  }
+
+  // Waitlist (MemStorage - stores in memory, not persistent)
+  private waitlistEmails: Set<string> = new Set();
+  
+  async addToWaitlist(email: string): Promise<void> {
+    if (this.waitlistEmails.has(email)) {
+      throw new Error('duplicate key value');
+    }
+    this.waitlistEmails.add(email);
   }
 }
 
@@ -2391,6 +2404,13 @@ export class DatabaseStorage implements IStorage {
     }
     
     return comparison;
+  }
+
+  // Waitlist
+  async addToWaitlist(email: string): Promise<void> {
+    const { db } = await import("./db");
+    const { waitlist } = await import("@shared/schema");
+    await db.insert(waitlist).values({ email });
   }
 }
 

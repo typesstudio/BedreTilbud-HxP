@@ -461,6 +461,20 @@ export const healthChecks = pgTable("health_checks", {
   userIdCreatedIdx: index("health_checks_user_id_created_idx").on(table.userId, table.createdAt),
 }));
 
+export const waitlist = pgTable("waitlist", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  email: text("email").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertWaitlistSchema = createInsertSchema(waitlist).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type InsertWaitlist = z.infer<typeof insertWaitlistSchema>;
+export type Waitlist = typeof waitlist.$inferSelect;
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,

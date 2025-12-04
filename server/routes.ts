@@ -110,11 +110,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(email)) {
+      if (!emailRegex.test(email.trim())) {
         return res.status(400).json({ message: "Ugyldig email adresse" });
       }
 
-      logger.info('Waitlist signup', { email: email.substring(0, 3) + '***' });
+      const normalizedEmail = email.trim().toLowerCase();
+      
+      try {
+        await storage.addToWaitlist(normalizedEmail);
+        logger.info('Waitlist signup', { email: normalizedEmail.substring(0, 3) + '***' });
+      } catch (dbError: any) {
+        if (dbError.message?.includes('duplicate') || dbError.code === '23505') {
+          logger.info('Waitlist duplicate signup attempt', { email: normalizedEmail.substring(0, 3) + '***' });
+        } else {
+          throw dbError;
+        }
+      }
       
       res.status(200).json({ 
         success: true, 
