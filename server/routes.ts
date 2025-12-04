@@ -100,6 +100,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Waitlist signup endpoint (public)
+  app.post("/api/waitlist", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email || typeof email !== 'string') {
+        return res.status(400).json({ message: "Email er påkrævet" });
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ message: "Ugyldig email adresse" });
+      }
+
+      logger.info('Waitlist signup', { email: email.substring(0, 3) + '***' });
+      
+      res.status(200).json({ 
+        success: true, 
+        message: "Du er skrevet op til ventelisten" 
+      });
+    } catch (error: any) {
+      logger.error('Waitlist signup failed', error);
+      res.status(500).json({ message: "Noget gik galt" });
+    }
+  });
+
   // Magic link authentication endpoint
   app.get("/magic/:token", noCache, async (req, res) => {
     const escapeHtml = (str: string): string => {

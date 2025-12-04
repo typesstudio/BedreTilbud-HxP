@@ -1,0 +1,148 @@
+1) Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync --all -p 34bd735365b5
+```
+  
+2) Create a new page using the following TSX code. If the page already exists, use it as reference to update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+"use client";
+
+import React from "react";
+import { Button } from "@/ui/components/Button";
+import { TextField } from "@/ui/components/TextField";
+import { FeatherArrowRight } from "@subframe/core";
+import { FeatherEye } from "@subframe/core";
+import { FeatherPercent } from "@subframe/core";
+import { FeatherSparkles } from "@subframe/core";
+import { FeatherSpeech } from "@subframe/core";
+import { FeatherTypeOutline } from "@subframe/core";
+
+function ComingSoon() {
+  return (
+    <div className="flex h-full w-full flex-col items-center bg-default-background">
+      <div className="flex w-full flex-col items-center">
+        <div className="flex min-h-[576px] w-full flex-col items-center justify-center gap-16 px-4 pt-16 pb-32 bg-gradient-to-br from-brand-50 via-white to-neutral-50">
+          <div className="flex w-256 items-center justify-center gap-2 rounded-lg border border-solid border-neutral-200 bg-white px-6 py-4 shadow-sm">
+            <span className="text-heading-3 font-heading-3 text-default-font">
+              Bedretilbud.com
+            </span>
+          </div>
+          <div className="flex w-full max-w-[576px] flex-col items-center gap-16">
+            <div className="flex items-center gap-1 rounded-md border border-solid border-brand-200 bg-brand-50 pl-3 pr-2 py-1">
+              <span className="whitespace-nowrap font-['Inter'] text-[14px] font-[500] leading-[20px] text-brand-700">
+                Automatisk besparelse
+              </span>
+              <FeatherSparkles className="font-['Inter'] text-[14px] font-[400] leading-[20px] text-brand-700" />
+            </div>
+            <div className="flex w-full flex-col items-center gap-4">
+              <span className="w-full font-['Inter'] text-[64px] font-[600] leading-[68px] text-default-font text-center -tracking-[0.04em]">
+                Stop med at betale for meget
+              </span>
+              <span className="w-full font-['Inter'] text-[20px] font-[500] leading-[28px] text-subtext-color text-center -tracking-[0.02em]">
+                Vi forhandler automatisk med forsikringsselskaber på dine vegne.
+                Upload din police og spar uden besvær.
+              </span>
+            </div>
+            <div className="flex w-full items-center gap-2 rounded-md border border-solid border-neutral-200 bg-white px-2 py-2 shadow-lg">
+              <TextField
+                className="h-auto grow shrink-0 basis-0"
+                label=""
+                helpText=""
+              >
+                <TextField.Input
+                  placeholder="din@email.dk"
+                  value=""
+                  onChange={(event: React.ChangeEvent<HTMLInputElement>) => {}}
+                />
+              </TextField>
+              <Button
+                variant="variation"
+                size="large"
+                iconRight={<FeatherArrowRight />}
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+              >
+                Skriv dig op
+              </Button>
+            </div>
+            <div className="flex w-full max-w-[448px] flex-col items-center gap-4">
+              <div className="flex items-center gap-8">
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center">
+                    <img
+                      className="h-8 w-8 flex-none rounded-full border-2 border-solid border-neutral-900 object-cover"
+                      src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop"
+                    />
+                    <img
+                      className="h-8 w-8 flex-none rounded-full border-2 border-solid border-neutral-900 object-cover -ml-2"
+                      src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop"
+                    />
+                    <img
+                      className="h-8 w-8 flex-none rounded-full border-2 border-solid border-neutral-900 object-cover -ml-2"
+                      src="https://images.unsplash.com/photo-1438761681033-6461ffad8d80?w=100&h=100&fit=crop"
+                    />
+                  </div>
+                  <span className="text-body font-body text-subtext-color">
+                    12.400+ danskere bruger får bedre tilbud
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="flex w-full max-w-[1024px] flex-wrap items-center gap-12 py-16">
+            <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-2">
+              <div className="flex items-center gap-2">
+                <FeatherSpeech className="font-['Inter'] text-[16px] font-[400] leading-[16px] text-default-font" />
+                <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-default-font -tracking-[0.01em]">
+                  Ingen telefonkøer
+                </span>
+              </div>
+              <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
+                Alt klares online, uden app, eller glemte kodeord, kun din email
+              </span>
+            </div>
+            <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-2">
+              <div className="flex items-center gap-2">
+                <FeatherEye className="font-['Inter'] text-[16px] font-[400] leading-[16px] text-default-font" />
+                <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-default-font -tracking-[0.01em]">
+                  Side-om-side overblik
+                </span>
+              </div>
+              <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
+                Dækning, pris, selvrisiko og udelukkelser på én skærm
+              </span>
+            </div>
+            <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-2">
+              <div className="flex items-center gap-2">
+                <FeatherTypeOutline className="font-['Inter'] text-[16px] font-[400] leading-[16px] text-default-font" />
+                <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-default-font -tracking-[0.01em]">
+                  Simpel forklaring
+                </span>
+              </div>
+              <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
+                Vi oversætter jura og gebyrer til klart dansk simpelt og nemt
+              </span>
+            </div>
+            <div className="flex min-w-[160px] grow shrink-0 basis-0 flex-col items-start gap-2">
+              <div className="flex items-center gap-2">
+                <FeatherPercent className="font-['Inter'] text-[16px] font-[400] leading-[16px] text-default-font" />
+                <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-default-font -tracking-[0.01em]">
+                  Ikke i lommen på selskaberne
+                </span>
+              </div>
+              <span className="font-['Inter'] text-[14px] font-[500] leading-[20px] text-subtext-color -tracking-[0.01em]">
+                Vi tjener ikke en lead pris  fra forsikrings selskaberne
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default ComingSoon;
+
+```
+  

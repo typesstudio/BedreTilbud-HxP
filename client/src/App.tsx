@@ -11,6 +11,7 @@ import PolicyHealthCheck from "@/pages/policy-health-check";
 import ProfilePage from "@/pages/ProfilePage";
 
 const NotFound = lazy(() => import("@/pages/not-found"));
+const ComingSoon = lazy(() => import("@/pages/coming-soon"));
 const ModernLandingPage = lazy(() => import("@/pages/ModernLandingPage"));
 const LandingWizard = lazy(() => import("@/pages/LandingWizard"));
 const Home = lazy(() => import("@/pages/home"));
@@ -39,7 +40,8 @@ function Router() {
   return (
     <Suspense fallback={<LoadingFallback />}>
       <Switch>
-        <Route path="/" component={ModernLandingPage} />
+        <Route path="/" component={ComingSoon} />
+        <Route path="/platform" component={ModernLandingPage} />
         <Route path="/wizard" component={LandingWizard} />
         <Route path="/home" component={Home} />
         <Route path="/onboarding" component={Onboarding} />
