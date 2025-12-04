@@ -58,11 +58,15 @@ export class MistralTextService {
     const systemPrompt = loadPrompt('emails/system-prompt');
     const promptTemplate = loadPrompt('emails/personalized-inquiry');
     
+    // Conditionally include CPR only when available
+    const hasCpr = userInfo.cprNumber && userInfo.cprNumber.trim().length > 0;
+    const cprValue = hasCpr ? userInfo.cprNumber : 'UDELAD_CPR_FRA_MAIL';
+    
     const prompt = replaceVariables(promptTemplate, {
       companyName,
       userName: userInfo.userName || 'vores kunde',
-      cprNumber: userInfo.cprNumber || 'Ikke angivet',
-      requestedInsurances: userInfo.requestedInsurances || '- Forsikringer (se vedhæftede policer)'
+      cprNumber: cprValue,
+      requestedInsurances: userInfo.requestedInsurances || '- Forsikring (baseret på vedhæftede policer)'
     });
 
     return this.generateText(systemPrompt, prompt, { maxTokens: 1024 });

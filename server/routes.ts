@@ -1539,6 +1539,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const currentDocs = await storage.getUserDocuments(userId, 'current');
       const attachmentPaths = currentDocs.map(doc => doc.filePath);
 
+      // Validate: Must have documents to attach
+      if (currentDocs.length === 0) {
+        return res.status(400).json({ 
+          message: "Du skal uploade dine nuværende forsikringspolicer først, før du kan anmode om tilbud." 
+        });
+      }
+
       // Extract unique policy types from OCR data for the email
       const ocrPolicies = currentDocs
         .map(doc => doc.ocrData)
@@ -1554,10 +1561,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         )
       );
 
+      // Validate: Warn if no policy types found (OCR may have failed)
+      if (uniquePolicyTypes.length === 0) {
+        console.warn(`[Email] No policy types found for user ${userId} - OCR may have failed or documents not processed`);
+        // Continue but use fallback text - the PDFs are still attached for reference
+      }
+
       // Build the requested insurances list for the email
       const requestedInsurances = uniquePolicyTypes.length > 0
         ? uniquePolicyTypes.map(type => `- ${type}`).join('\n')
-        : '- Forsikringer (se vedhæftede policer)';
+        : '- Forsikring (baseret på vedhæftede policer)';
 
       const threadIds = [];
 

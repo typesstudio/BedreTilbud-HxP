@@ -256,21 +256,29 @@ export class ComparisonService {
     try {
       console.log("[Email Gen] Attempting OpenAI gpt-4o-mini fallback...");
       
+      // Build CPR instruction based on whether CPR is available
+      const hasCpr = userInfo.cprNumber && userInfo.cprNumber !== 'Ikke angivet';
+      const cprInstruction = hasCpr 
+        ? `Kundens CPR-nummer er: ${userInfo.cprNumber} - inkluder denne linje i mailen.`
+        : 'Kundens CPR-nummer er IKKE tilgængeligt - UDELAD CPR fra mailen.';
+
       const prompt = `Generér en kort forsikringshenvendelse til ${companyName}.
 
 Kundens navn: ${userInfo.userName || 'Ikke angivet'}
-Kundens CPR-nummer: ${userInfo.cprNumber || 'Ikke angivet'}
+${cprInstruction}
 
 Forsikringstyper der ønskes tilbud på:
-${userInfo.requestedInsurances || '- Forsikringer (se vedhæftede policer)'}
+${userInfo.requestedInsurances || '- Forsikring (baseret på vedhæftede policer)'}
 
-Skriv en kort mail (maks. 8-10 linjer) baseret på denne skabelon:
+Skriv en kort mail (maks. 10-12 linjer) baseret på denne skabelon:
 
 Hej hos [selskab],
 
 Vi skriver på vegne af [kundens navn], som gerne vil modtage forsikringstilbud på følgende forsikringer:
 
 [liste over forsikringstyper]
+
+[CPR-linje KUN hvis CPR er tilgængeligt]
 
 For jeres reference har vi vedhæftet kopi af de nuværende policer, så I kan se eksisterende dækning.
 
@@ -322,12 +330,17 @@ VIGTIGE REGLER:
       requestedInsurances?: string;
     }
   ): string {
+    // Build CPR line only if CPR is provided
+    const cprLine = userInfo.cprNumber 
+      ? `\nKundens CPR-nummer er: ${userInfo.cprNumber}\n`
+      : '';
+
     return `Hej hos ${companyName},
 
 Vi skriver på vegne af ${userInfo.userName || 'vores kunde'}, som gerne vil modtage forsikringstilbud på følgende forsikringer:
 
-${userInfo.requestedInsurances || '- Forsikringer (se vedhæftede policer)'}
-
+${userInfo.requestedInsurances || '- Forsikring (baseret på vedhæftede policer)'}
+${cprLine}
 For jeres reference har vi vedhæftet kopi af de nuværende policer, så I kan se eksisterende dækning.
 
 Vi beder jer venligst om at sende et konkret, fuldt tilbud som PDF direkte vedhæftet svaret på denne mail – ikke kun et link eller MitID-login. På den måde kan vi nemt gemme og gennemgå tilbuddet for kunden.
