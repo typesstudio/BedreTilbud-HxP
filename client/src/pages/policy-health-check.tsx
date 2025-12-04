@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { usePolicyHealthCheck } from "@/hooks/usePolicyHealthCheck";
 import { useHealthCheckOverview } from "@/hooks/useHealthCheckOverview";
@@ -22,6 +22,7 @@ import {
   FeatherPlane,
   FeatherSunrise,
   FeatherStar,
+  FeatherUploadCloud,
 } from "@subframe/core";
 
 const policyTypeIcons: Record<string, React.ReactNode> = {
@@ -38,9 +39,41 @@ export default function PolicyHealthCheckPage() {
   const [, setLocation] = useLocation();
   const userId = localStorage.getItem("userId") || "";
   const [activeTab, setActiveTab] = useState<"overblik" | string>("overblik");
+  const [hasAttemptedRedirect, setHasAttemptedRedirect] = useState(false);
 
+  // Always fetch health check data for the current snapshotId
   const { data, isLoading, error } = usePolicyHealthCheck(snapshotId);
-  const { data: overviewData, isLoading: overviewLoading } = useHealthCheckOverview(snapshotId);
+  
+  // Only fetch overview if main data is available (not in error state)
+  const { data: overviewData, isLoading: overviewLoading } = useHealthCheckOverview(
+    !error ? snapshotId : undefined
+  );
+
+  // Proactively fetch navigation data - we'll need it for redirect or sidebar anyway
+  const { data: navData, isLoading: navDataLoading } = useQuery<{
+    currentInsuranceSnapshotId: string | null;
+  }>({
+    queryKey: ["/api/nav-data", userId],
+    enabled: !!userId,
+    staleTime: 30000,
+  });
+
+  // Reset redirect attempt when snapshotId changes
+  useEffect(() => {
+    setHasAttemptedRedirect(false);
+  }, [snapshotId]);
+
+  // Auto-redirect to valid snapshot if current one doesn't exist
+  useEffect(() => {
+    if (hasAttemptedRedirect) return;
+    if (!error) return;
+    if (navDataLoading) return;
+    
+    if (navData?.currentInsuranceSnapshotId && navData.currentInsuranceSnapshotId !== snapshotId) {
+      setHasAttemptedRedirect(true);
+      setLocation(`/sundhedstjek/${navData.currentInsuranceSnapshotId}`);
+    }
+  }, [error, navData, navDataLoading, snapshotId, setLocation, hasAttemptedRedirect]);
 
   // Start or get existing thread mutation
   const startThreadMutation = useMutation({
@@ -54,7 +87,8 @@ export default function PolicyHealthCheckPage() {
     },
   });
 
-  if (isLoading) {
+  // Show loading during initial load or while determining redirect
+  if (isLoading || (error && navDataLoading)) {
     return (
       <AppLayoutWithNav userId={userId}>
         <LoadingInsuranceCheck />
@@ -62,19 +96,33 @@ export default function PolicyHealthCheckPage() {
     );
   }
 
+  // Show error state with helpful message
   if (error || !data) {
+    // If we have a valid snapshot to redirect to, show loading while redirect happens
+    if (navData?.currentInsuranceSnapshotId && navData.currentInsuranceSnapshotId !== snapshotId) {
+      return (
+        <AppLayoutWithNav userId={userId}>
+          <LoadingInsuranceCheck />
+        </AppLayoutWithNav>
+      );
+    }
+
+    // No valid snapshots found - show empty state with upload prompt
     return (
       <AppLayoutWithNav userId={userId}>
-        <div className="flex items-center justify-center min-h-screen bg-default-background">
-          <div className="flex flex-col items-center gap-4 px-4">
+        <div className="flex items-center justify-center min-h-[60vh] bg-default-background">
+          <div className="flex flex-col items-center gap-6 px-4 max-w-md text-center">
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-50">
+              <FeatherUploadCloud className="h-8 w-8 text-brand-600" />
+            </div>
             <span className="text-heading-2 font-heading-2 text-default-font">
-              Der opstod en fejl
+              Ingen forsikringsdokumenter
             </span>
-            <span className="text-body font-body text-subtext-color text-center">
-              Kunne ikke hente sundhedstjek data. Prøv venligst igen.
+            <span className="text-body font-body text-subtext-color">
+              Upload dine nuværende forsikringspapirer for at få et sundhedstjek af din dækning og finde bedre tilbud.
             </span>
-            <Button onClick={() => window.history.back()} data-testid="button-go-back">
-              Gå tilbage
+            <Button onClick={() => setLocation("/profil")} data-testid="button-upload-documents">
+              Upload dokumenter
             </Button>
           </div>
         </div>

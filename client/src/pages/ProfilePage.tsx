@@ -124,6 +124,7 @@ export default function ProfilePage() {
     onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents/user", userId] });
       queryClient.invalidateQueries({ queryKey: ["/api/policies", "user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/nav-data", userId] });
       
       if (result.ok === false && result.errorCode === "duplicate_file") {
         toast({ 
@@ -185,6 +186,8 @@ export default function ProfilePage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/documents/user", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/nav-data", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/policies", "user", userId] });
       setDeleteConfirmDocId(null);
       toast({ title: "Dokument slettet" });
     },
