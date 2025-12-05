@@ -1,6 +1,6 @@
 import { Button } from "@/ui/components/Button";
 
-export type ComparisonTab = "samlet" | "indbo" | "hus" | "ulykke" | "bil" | "rejse";
+export type ComparisonTab = "samlet" | "indbo" | "hus" | "fritidshus" | "ulykke" | "bil" | "rejse";
 
 interface ComparisonHeaderProps {
   title: string;

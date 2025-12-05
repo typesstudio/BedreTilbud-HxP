@@ -1,0 +1,373 @@
+Add the following code to the page. If the code already exists, update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+<DefaultPageLayout>
+  <div className="flex w-full flex-col items-center justify-center bg-default-background px-4 py-4 mobile:px-3 mobile:py-3">
+    <div className="flex w-full max-w-[768px] flex-col items-start gap-6 mobile:flex-col mobile:flex-nowrap mobile:gap-4">
+      <div className="flex w-full items-start gap-2 px-2 py-2 mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:py-2">
+        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 mobile:px-0 mobile:py-0">
+          <span className="text-heading-1 font-heading-1 text-default-font mobile:text-heading-2 mobile:font-heading-2">
+            Tryg sammenligning
+          </span>
+          <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption">
+            Compare and review insurance offers tailored for you
+          </span>
+        </div>
+        <Button
+          variant="brand-secondary"
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+        >
+          Se beskeder
+        </Button>
+      </div>
+      <div className="flex w-full items-center gap-2 overflow-x-auto">
+        <ListingsTabs>
+          <ListingsTabs.Item checked={true} icon={<FeatherStar />}>
+            Samlet
+          </ListingsTabs.Item>
+          <ListingsTabs.Item icon={<FeatherHome />}>Indbo</ListingsTabs.Item>
+          <ListingsTabs.Item icon={<FeatherShield />}>Ulykke</ListingsTabs.Item>
+          <ListingsTabs.Item icon={<FeatherBuilding />}>Hus</ListingsTabs.Item>
+          <ListingsTabs.Item icon={<FeatherCar />}>Bil</ListingsTabs.Item>
+          <ListingsTabs.Item icon={<FeatherPlane />}>Rejse</ListingsTabs.Item>
+        </ListingsTabs>
+      </div>
+      <div className="flex w-full items-start gap-4 flex-wrap">
+        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-error-50 px-6 py-6">
+          <span className="text-body-bold font-body-bold text-neutral-600">
+            Samlet besparelse
+          </span>
+          <span className="text-heading-1 font-heading-1 text-error-600">
+            5.324 kr
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            44.8% dyrere
+          </span>
+        </div>
+        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6">
+          <span className="text-body-bold font-body-bold text-neutral-600">
+            Tryg tilbud
+          </span>
+          <span className="text-heading-1 font-heading-1 text-default-font">
+            6.549 kr
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Per år
+          </span>
+        </div>
+        <div className="flex grow shrink-0 basis-0 flex-col items-start gap-2 rounded-md bg-neutral-50 px-6 py-6">
+          <span className="text-body-bold font-body-bold text-neutral-600">
+            Din nuværende
+          </span>
+          <span className="text-heading-1 font-heading-1 text-default-font">
+            11.873 kr
+          </span>
+          <span className="text-caption font-caption text-subtext-color">
+            Per år
+          </span>
+        </div>
+      </div>
+      <div className="flex w-full flex-col items-start rounded-lg border border-solid border-neutral-border bg-default-background overflow-x-auto">
+        <Table
+          header={
+            <Table.HeaderRow>
+              <Table.HeaderCell>Kategori</Table.HeaderCell>
+              <Table.HeaderCell>Nuværende</Table.HeaderCell>
+              <Table.HeaderCell>Tilbud</Table.HeaderCell>
+              <Table.HeaderCell>Besparelse</Table.HeaderCell>
+              <Table.HeaderCell>Status</Table.HeaderCell>
+            </Table.HeaderRow>
+          }
+        >
+          <Table.Row>
+            <Table.Cell>
+              <div className="flex items-center gap-2">
+                <IconWithBackground size="small" icon={<FeatherHome />} />
+                <span className="whitespace-nowrap text-body-bold font-body-bold text-default-font">
+                  Indbo
+                </span>
+              </div>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body font-body text-default-font">
+                1.203 kr
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body font-body text-default-font">
+                3.400 kr
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body-bold font-body-bold text-error-600">
+                -1.200 kr
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <Button
+                variant="brand-tertiary"
+                size="small"
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+              >
+                Se detaljer
+              </Button>
+            </Table.Cell>
+          </Table.Row>
+          <Table.Row>
+            <Table.Cell>
+              <div className="flex items-center gap-2">
+                <IconWithBackground size="small" icon={<FeatherCar />} />
+                <span className="whitespace-nowrap text-body-bold font-body-bold text-default-font">
+                  Bil
+                </span>
+              </div>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body font-body text-default-font">
+                600 kr
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body font-body text-default-font">
+                300 kr
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body-bold font-body-bold text-error-600">
+                -3.200 kr
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <Button
+                variant="brand-tertiary"
+                size="small"
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+              >
+                Se detaljer
+              </Button>
+            </Table.Cell>
+          </Table.Row>
+          <Table.Row>
+            <Table.Cell>
+              <div className="flex items-center gap-2">
+                <IconWithBackground size="small" icon={<FeatherBuilding />} />
+                <span className="whitespace-nowrap text-body-bold font-body-bold text-default-font">
+                  Hus
+                </span>
+              </div>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body font-body text-default-font">
+                950 kr
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body font-body text-default-font">
+                600 kr
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body-bold font-body-bold text-error-600">
+                -2.800 kr
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <Button
+                variant="brand-tertiary"
+                size="small"
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+              >
+                Se detaljer
+              </Button>
+            </Table.Cell>
+          </Table.Row>
+          <Table.Row>
+            <Table.Cell>
+              <div className="flex items-center gap-2">
+                <IconWithBackground
+                  variant="warning"
+                  size="small"
+                  icon={<FeatherShield />}
+                />
+                <span className="whitespace-nowrap text-body-bold font-body-bold text-subtext-color">
+                  Ulykke
+                </span>
+              </div>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body font-body text-subtext-color">
+                Afventer
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body font-body text-subtext-color">
+                Afventer
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body font-body text-subtext-color">
+                —
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <Button
+                variant="neutral-tertiary"
+                size="small"
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+              >
+                Afventer
+              </Button>
+            </Table.Cell>
+          </Table.Row>
+          <Table.Row>
+            <Table.Cell>
+              <div className="flex items-center gap-2">
+                <IconWithBackground
+                  variant="warning"
+                  size="small"
+                  icon={<FeatherPlane />}
+                />
+                <span className="whitespace-nowrap text-body-bold font-body-bold text-subtext-color">
+                  Rejse
+                </span>
+              </div>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body font-body text-subtext-color">
+                Afventer
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body font-body text-subtext-color">
+                Afventer
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <span className="whitespace-nowrap text-body font-body text-subtext-color">
+                —
+              </span>
+            </Table.Cell>
+            <Table.Cell>
+              <Button
+                variant="neutral-tertiary"
+                size="small"
+                onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+              >
+                Afventer
+              </Button>
+            </Table.Cell>
+          </Table.Row>
+        </Table>
+      </div>
+      <div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+        <span className="text-heading-2 font-heading-2 text-default-font">
+          Hvor du kan forbedre dig
+        </span>
+        <div className="flex w-full items-start gap-4">
+          <div className="flex grow shrink-0 basis-0 flex-col items-start gap-3">
+            <div className="flex items-center gap-2">
+              <IconWithBackground
+                variant="warning"
+                size="small"
+                icon={<FeatherAlertTriangle />}
+              />
+              <span className="text-body-bold font-body-bold text-warning-700">
+                Forbedringsmuligheder
+              </span>
+            </div>
+            <div className="flex w-full flex-col items-start gap-2">
+              <div className="flex w-full items-start gap-2 rounded-md border border-solid border-warning-200 bg-warning-50 px-3 py-3">
+                <FeatherAlertCircle className="text-body font-body text-warning-600 mt-0.5" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <span className="text-body-bold font-body-bold text-default-font">
+                    Ingen glas/kvummer dækning
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    Lejligheden mangler denne dækning
+                  </span>
+                </div>
+              </div>
+              <div className="flex w-full items-start gap-2 rounded-md border border-solid border-warning-200 bg-warning-50 px-3 py-3">
+                <FeatherAlertCircle className="text-body font-body text-warning-600 mt-0.5" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <span className="text-body-bold font-body-bold text-default-font">
+                    Høj selvrisiko ved skybrud
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    5.000 kr. er over gennemsnittet
+                  </span>
+                </div>
+              </div>
+              <div className="flex w-full items-start gap-2 rounded-md border border-solid border-warning-200 bg-warning-50 px-3 py-3">
+                <FeatherAlertCircle className="text-body font-body text-warning-600 mt-0.5" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <span className="text-body-bold font-body-bold text-default-font">
+                    Lav dækning på særlige værdier
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    Maks 125.340 kr. kan være utilstrækkeligt
+                  </span>
+                </div>
+              </div>
+              <div className="flex w-full items-start gap-2 rounded-md border border-solid border-error-200 bg-error-50 px-3 py-3">
+                <FeatherX className="text-body font-body text-error-600 mt-0.5" />
+                <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+                  <span className="text-body-bold font-body-bold text-default-font">
+                    Manglende invaliditetsdækning
+                  </span>
+                  <span className="text-caption font-caption text-subtext-color">
+                    Ingen dækning ved ulykke
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="flex w-full items-center gap-2 rounded-md bg-brand-100 px-4 py-3">
+          <FeatherLightbulb className="text-body font-body text-brand-700" />
+          <span className="text-caption font-caption text-brand-700">
+            Vi kan hjælpe dig med at få bedre dækning til en lavere pris
+          </span>
+        </div>
+      </div>
+      <div className="flex w-full flex-col items-center gap-4 border-t border-solid border-neutral-border py-6 mobile:flex-col mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:py-4">
+        <Button
+          className="h-10 w-full flex-none"
+          variant="variation"
+          size="large"
+          onClick={(event: React.MouseEvent<HTMLButtonElement>) => {}}
+        >
+          Få flere bedre tilbud
+        </Button>
+        <span className="text-body font-body text-subtext-color mobile:text-caption mobile:font-caption mobile:text-center">
+          Dette var ikke bedre end det du har nu så få flere tilbud 
+        </span>
+      </div>
+    </div>
+  </div>
+</DefaultPageLayout>
+
+```Be sure to import the components using the following code:
+  
+```tsx
+import React from "react";
+import { Button } from "@/ui/components/Button";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { ListingsTabs } from "@/ui/components/ListingsTabs";
+import { Table } from "@/ui/components/Table";
+import { DefaultPageLayout } from "@/ui/layouts/DefaultPageLayout";
+import { FeatherAlertCircle } from "@subframe/core";
+import { FeatherAlertTriangle } from "@subframe/core";
+import { FeatherBuilding } from "@subframe/core";
+import { FeatherCar } from "@subframe/core";
+import { FeatherHome } from "@subframe/core";
+import { FeatherLightbulb } from "@subframe/core";
+import { FeatherPlane } from "@subframe/core";
+import { FeatherShield } from "@subframe/core";
+import { FeatherStar } from "@subframe/core";
+import { FeatherX } from "@subframe/core";
+```Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync DefaultPageLayout Button ListingsTabs Table IconWithBackground -p 34bd735365b5
+```

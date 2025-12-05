@@ -1,0 +1,336 @@
+Nice, that makes sense – “Samlet” skal være et hurtigt beslutnings-overblik, ikke et detaljeret nørde-view.
+
+Her får du en Replit-prompt du kan paste direkte ind, som:
+
+1. Fjerner **Detaljeret sammenligning** + **Besparelser over tid** fra *Samlet*.
+2. Indsætter en ny sektion med **styrker / svagheder** ved det nye tilbud vs nuværende.
+3. Tester ændringen på Types Studio-sammenligningen `/sammenligning/014e5198-cec6-45ec-a3f4-3cf1cb0108c6`.
+
+---
+
+### Replit prompt (copy-paste)
+
+````text
+You are an expert TypeScript/React developer working on the BedreTilbud comparison page.
+
+Goal:
+On the comparison page `/sammenligning/[comparisonId]`, in the **Samlet** tab:
+- Do NOT show "Detaljeret sammenligning" or the "Besparelser over tid" chart.
+- Instead, show a new section with a list of **strengths** and **weaknesses** of the new offer compared to the user's current insurance.
+- On the other tabs (Indbo, Hus, Ulykke, Fritidshus, etc.) everything should stay as it is today (detailed comparison table + savings over time).
+
+Use comparison `/sammenligning/014e5198-cec6-45ec-a3f4-3cf1cb0108c6` as the main test (Types Studio).
+
+---
+
+## Step 1 – Find where the Samlet tab content is rendered
+
+1. Open `client/src/pages/comparison.tsx`.
+   - This is the main page for `/sammenligning/[comparisonId]`.
+
+2. Locate:
+   - `activeTab` state (likely "samlet", "indbo", etc.).
+   - Where the tab content for "Samlet" vs the other tabs is rendered.
+   - The components responsible for:
+     - "Detaljeret sammenligning" (detailed comparison table)
+     - "Besparelser over tid" (savings chart)
+   These might be called something like:
+   - `<DetailedComparisonSection />`
+   - `<ComparisonTable />`
+   - `<SavingsOverTimeChart />`, `<SavingsChartSection />`, etc.
+
+3. Confirm that currently **Samlet** renders the same sections as the individual policy tabs (table + chart).
+
+---
+
+## Step 2 – Hide table + chart only for Samlet
+
+In `comparison.tsx`, adjust the JSX so that:
+
+- When `activeTab === "samlet"`:
+  - Do **NOT** render the detailed comparison section.
+  - Do **NOT** render the savings-over-time/chart component.
+- For all other tabs, keep existing behaviour.
+
+Concretely, change the section where these components are rendered to something like:
+
+```tsx
+{activeTab === "samlet" ? (
+  <OverallProsConsSection
+    comparison={comparison}
+  />
+) : (
+  <>
+    <DetailedComparisonSection
+      comparison={comparison}
+      activePolicyType={activeTab}
+    />
+    <SavingsOverTimeSection
+      comparison={comparison}
+      activePolicyType={activeTab}
+    />
+  </>
+)}
+````
+
+Adjust names/props to match the actual components in the codebase.
+The key is: `Samlet` shows only the new `OverallProsConsSection`, other tabs show the existing detailed table + chart exactly as before.
+
+---
+
+## Step 3 – Create OverallProsConsSection component
+
+Create a new component for the Samlet view, e.g.:
+
+`client/src/components/comparison/OverallProsConsSection.tsx`
+
+This component should:
+
+1. Accept the full comparison result:
+
+   ```ts
+   interface OverallProsConsSectionProps {
+     comparison: ComparisonResult; // use the actual type used in comparison.tsx
+   }
+   ```
+
+2. Derive **strengths** and **weaknesses** based on the comparison data.
+
+   The intention is:
+
+   * Strengths (pros) = things that speak FOR switching to the new company.
+   * Weaknesses (cons) = things that speak AGAINST switching (or reasons to stay).
+
+   Use deterministic rules from the existing data – do NOT call any LLM.
+
+   Suggested logic (adapt to the actual shape):
+
+   * Assume something like:
+
+     ```ts
+     comparison.companyName           // e.g. "Tryg", "Types Studio"
+     comparison.currentCompanyName    // e.g. "Privatsikring"
+     comparison.totalAnnualSavings    // number (can be negative)
+     comparison.policyComparisons: PolicyComparison[] // one per policy type
+     ```
+
+   * For each `policyComparison`:
+
+     ```ts
+     type PolicyComparison = {
+       policyType: string;
+       annualSavings: number; // positive = offer cheaper, negative = offer more expensive
+       betterCoverages?: CoverageHighlight[]; // offer better than current
+       worseCoverages?: CoverageHighlight[];  // offer worse than current
+       // or similar fields - inspect the actual type used in the comparison JSON
+     };
+     ```
+
+   * Build two string arrays:
+
+     ```ts
+     const strengths: string[] = [];
+     const weaknesses: string[] = [];
+     ```
+
+     a) Price points:
+
+     * If `comparison.totalAnnualSavings > 0`:
+
+       ```ts
+       strengths.push(
+         `Du sparer ca. ${formatCurrency(comparison.totalAnnualSavings)} om året i alt ved at skifte.`
+       );
+       ```
+
+     * If `comparison.totalAnnualSavings < 0`:
+
+       ```ts
+       weaknesses.push(
+         `${comparison.companyName}-tilbuddet er ca. ${formatCurrency(Math.abs(comparison.totalAnnualSavings))} dyrere om året samlet set.`
+       );
+       ```
+
+     * For each `policyComparison`:
+
+       * If `annualSavings > 0`:
+
+         ```ts
+         strengths.push(
+           `Billigere ${getPolicyTypeLabel(policyType)}: du sparer ca. ${formatCurrency(annualSavings)} om året.`
+         );
+         ```
+       * If `annualSavings < 0`:
+
+         ```ts
+         weaknesses.push(
+           `Dyrere ${getPolicyTypeLabel(policyType)}: ca. ${formatCurrency(Math.abs(annualSavings))} mere om året.`
+         );
+         ```
+
+     b) Coverage improvements/downgrades:
+
+     * Inspect the existing comparison data structure used for the detailed table.
+       There is likely information about which coverage rows are “offer better” vs “offer worse” (for example with flags or `status` values).
+
+       If you find arrays like `betterCoverages` / `worseCoverages` on each `policyComparison`, use them:
+
+       ```ts
+       policyComparison.betterCoverages?.slice(0, 3).forEach((c) => {
+         strengths.push(
+           `Bedre dækning på ${c.label} i ${getPolicyTypeLabel(policyType)} (${c.currentValue} → ${c.offerValue}).`
+         );
+       });
+
+       policyComparison.worseCoverages?.slice(0, 3).forEach((c) => {
+         weaknesses.push(
+           `Lavere dækning på ${c.label} i ${getPolicyTypeLabel(policyType)} (${c.currentValue} → ${c.offerValue}).`
+         );
+       });
+       ```
+
+       If there is no explicit `betterCoverages`/`worseCoverages` array, derive them from the same data the detailed table uses (e.g. filtering coverage rows by a status/flag that indicates better/worse coverage).
+
+   * Keep the list fairly short and readable:
+
+     * After building the arrays, you can limit to e.g. max 6 items each:
+
+       ```ts
+       const strengthsToShow = strengths.slice(0, 6);
+       const weaknessesToShow = weaknesses.slice(0, 6);
+       ```
+
+   * If one of the lists is empty, show a friendly fallback like:
+
+     * For strengths: `"Ingen klare forbedringer i forhold til din nuværende dækning."`
+     * For weaknesses: `"Ingen tydelige svagheder i forhold til din nuværende dækning."`
+
+3. Render layout:
+
+   * Title: `"Styrker og svagheder ved tilbuddet"`
+   * Short subtitle referencing both companies:
+
+     ```tsx
+     <p>
+       Sammenligning mellem {comparison.companyName} og {comparison.currentCompanyName}.
+     </p>
+     ```
+   * Two side-by-side cards/columns on desktop, stacked on mobile:
+
+   ```tsx
+   <section className="mt-8 space-y-4">
+     <div className="flex flex-col gap-4 md:flex-row">
+       <div className="flex-1 rounded-2xl border bg-white p-4 md:p-6">
+         <h3 className="text-sm font-semibold text-green-700">
+           Styrker ved {comparison.companyName}-tilbuddet
+         </h3>
+         <ul className="mt-3 space-y-2 text-sm">
+           {strengthsToShow.map((item, i) => (
+             <li key={i} className="flex gap-2">
+               <span className="mt-1 h-1.5 w-1.5 rounded-full bg-green-600" />
+               <span>{item}</span>
+             </li>
+           ))}
+           {strengthsToShow.length === 0 && (
+             <li className="text-sm text-slate-500">
+               Ingen klare forbedringer i forhold til din nuværende dækning.
+             </li>
+           )}
+         </ul>
+       </div>
+
+       <div className="flex-1 rounded-2xl border bg-white p-4 md:p-6">
+         <h3 className="text-sm font-semibold text-red-700">
+           Svagheder ved {comparison.companyName}-tilbuddet
+         </h3>
+         <ul className="mt-3 space-y-2 text-sm">
+           {weaknessesToShow.map((item, i) => (
+             <li key={i} className="flex gap-2">
+               <span className="mt-1 h-1.5 w-1.5 rounded-full bg-red-600" />
+               <span>{item}</span>
+             </li>
+           ))}
+           {weaknessesToShow.length === 0 && (
+             <li className="text-sm text-slate-500">
+               Ingen tydelige svagheder i forhold til din nuværende dækning.
+             </li>
+           )}
+         </ul>
+       </div>
+     </div>
+   </section>
+   ```
+
+   * Reuse existing typography/spacing utilities from the project so it fits the current design system (Inter, rounded cards, etc.).
+
+4. Export this component and import it in `comparison.tsx`.
+
+---
+
+## Step 4 – Wire up in comparison.tsx
+
+Back in `client/src/pages/comparison.tsx`:
+
+1. Import the new component:
+
+   ```ts
+   import { OverallProsConsSection } from "@/components/comparison/OverallProsConsSection";
+   ```
+
+2. Replace the existing table+chart rendering block with the conditional:
+
+   ```tsx
+   {activeTab === "samlet" ? (
+     <OverallProsConsSection comparison={comparison} />
+   ) : (
+     <>
+       <DetailedComparisonSection
+         comparison={comparison}
+         activePolicyType={activeTab}
+       />
+       <SavingsOverTimeSection
+         comparison={comparison}
+         activePolicyType={activeTab}
+       />
+     </>
+   )}
+   ```
+
+   Adjust component names/props to match the actual file names.
+
+3. Make sure TypeScript compiles without errors.
+
+---
+
+## Step 5 – Test with Types Studio comparison
+
+1. Start the dev server (or restart if already running).
+
+2. Open:
+   `/sammenligning/014e5198-cec6-45ec-a3f4-3cf1cb0108c6`
+
+3. Verify:
+
+   * On the **Samlet** tab:
+
+     * You see the standard top cards (Samlet besparelse, Types Studio tilbud, Din nuværende).
+     * Under dem ser du **IKKE** “Detaljeret sammenligning” eller “Besparelser over tid”.
+     * I stedet ser du sektionen “Styrker ved …” og “Svagheder ved …” med bullet points, hvor det fx fremgår hvis:
+
+       * Tilbuddet er billigere men har dårligere dækning på nogle områder.
+       * Eller dyrere men med bedre dækning.
+   * På de enkelte tabs (Indbo, Fritidshus, Ulykke, osv.):
+
+     * Du ser stadig den detaljerede række-for-række sammenligning.
+     * Du ser stadig besparelse-over-tid grafen.
+
+4. Also quickly test another comparison with positive savings to ensure the pros/cons text makes sense in both directions.
+
+If everything looks good and is readable, you’re done.
+
+```
+
+---
+
+Hvis du vil, kan vi bagefter tweake selve tekst-skabelonerne (hvordan vi formulerer styrker/svagheder), så de bliver helt spot on til din tone of voice.
+```

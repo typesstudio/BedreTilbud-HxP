@@ -10,6 +10,7 @@ import { ComparisonAnnualCost } from "@/components/comparison/ComparisonAnnualCo
 import { ComparisonHighlights } from "@/components/comparison/ComparisonHighlights";
 import { ComparisonDetailedMatrix } from "@/components/comparison/ComparisonDetailedMatrix";
 import { ComparisonSavingsSection } from "@/components/comparison/ComparisonSavingsSection";
+import { CoverageComparisonSection } from "@/components/comparison/CoverageComparisonSection";
 import { transformCompanyComparisonToViewModel, type ComparisonTabKey } from "@/utils/transformComparison";
 import LoadingComparison from "@/components/loading/LoadingComparison";
 import { apiRequest, queryClient } from "@/lib/queryClient";
@@ -163,13 +164,18 @@ export default function Comparison() {
             />
           )}
 
-          {/* Highlights Section */}
-          {activeView.highlights.length > 0 && (
+          {/* Coverage Comparison Section - ONLY for Samlet tab */}
+          {activeTab === "samlet" && (
+            <CoverageComparisonSection viewModel={viewModel} />
+          )}
+
+          {/* Highlights Section - for individual policy tabs only */}
+          {activeTab !== "samlet" && activeView.highlights.length > 0 && (
             <ComparisonHighlights highlights={activeView.highlights} />
           )}
 
-          {/* Detailed Coverage Matrix */}
-          {activeView.coverageRows.length > 0 && (
+          {/* Detailed Coverage Matrix - for individual policy tabs only */}
+          {activeTab !== "samlet" && activeView.coverageRows.length > 0 && (
             <ComparisonDetailedMatrix
               currentCompanyName={viewModel.currentCompanyName}
               offerCompanyName={viewModel.offerCompanyName}
@@ -177,11 +183,11 @@ export default function Comparison() {
             />
           )}
 
-          {/* Savings Over Time Chart */}
-          {activeView.savingsOverTime && (
+          {/* Savings Over Time Chart - for individual policy tabs only */}
+          {activeTab !== "samlet" && activeView.savingsOverTime && (
             <ComparisonSavingsSection
               savings={activeView.savingsOverTime}
-              activePolicyKey={activeTab === "samlet" ? "all" : activeTab}
+              activePolicyKey={activeTab}
               hasPrice={activeView.savingsOverTime.hasPrice}
             />
           )}

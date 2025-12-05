@@ -1,0 +1,242 @@
+Add the following code to the page. If the code already exists, update the existing code but preserve existing business logic or functionality.
+  
+```tsx
+<div className="flex w-full flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-default-background px-6 py-6">
+  <span className="text-heading-2 font-heading-2 text-default-font">
+    Dækningssammenligning
+  </span>
+  <div className="flex w-full items-start gap-4">
+    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+      <div className="flex w-full items-center justify-between">
+        <div className="flex items-center gap-2">
+          <img
+            className="h-8 w-8 flex-none rounded-md object-cover"
+            src="https://images.unsplash.com/photo-1560472355-536de3962603"
+          />
+          <span className="text-heading-3 font-heading-3 text-default-font">
+            Tryg Tilbud
+          </span>
+        </div>
+        <Badge>6.549 kr/år</Badge>
+      </div>
+      <div className="flex w-full flex-col items-start gap-3">
+        <div className="flex items-center gap-2">
+          <IconWithBackground
+            variant="success"
+            size="small"
+            icon={<FeatherCheckCircle />}
+          />
+          <span className="text-body-bold font-body-bold text-success-700">
+            Styrker
+          </span>
+        </div>
+        <div className="flex w-full flex-col items-start gap-2">
+          <div className="flex w-full items-start gap-2 rounded-md border border-solid border-success-200 bg-success-50 px-3 py-3">
+            <FeatherCheck className="text-body font-body text-success-600 mt-0.5" />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-body-bold font-body-bold text-default-font">
+                Billigere pris
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                5.324 kr årligt billigere
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full items-start gap-2 rounded-md border border-solid border-success-200 bg-success-50 px-3 py-3">
+            <FeatherCheck className="text-body font-body text-success-600 mt-0.5" />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-body-bold font-body-bold text-default-font">
+                24/7 akut service
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                Altid hjælp når du har brug
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full items-start gap-2 rounded-md border border-solid border-success-200 bg-success-50 px-3 py-3">
+            <FeatherCheck className="text-body font-body text-success-600 mt-0.5" />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-body-bold font-body-bold text-default-font">
+                Ingen bindingsperiode
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                Fuld fleksibilitet
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex w-full flex-col items-start gap-3">
+        <div className="flex items-center gap-2">
+          <IconWithBackground
+            variant="warning"
+            size="small"
+            icon={<FeatherAlertTriangle />}
+          />
+          <span className="text-body-bold font-body-bold text-warning-700">
+            Svagheder
+          </span>
+        </div>
+        <div className="flex w-full flex-col items-start gap-2">
+          <div className="flex w-full items-start gap-2 rounded-md border border-solid border-warning-200 bg-warning-50 px-3 py-3">
+            <FeatherAlertCircle className="text-body font-body text-warning-600 mt-0.5" />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-body-bold font-body-bold text-default-font">
+                Lavere dækningssum
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                Indbo: 1.500.000 kr vs 2.000.000 kr
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full items-start gap-2 rounded-md border border-solid border-warning-200 bg-warning-50 px-3 py-3">
+            <FeatherAlertCircle className="text-body font-body text-warning-600 mt-0.5" />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-body-bold font-body-bold text-default-font">
+                Højere selvrisiko
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                5.000 kr ved skybrud
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full items-start gap-2 rounded-md border border-solid border-warning-200 bg-warning-50 px-3 py-3">
+            <FeatherAlertCircle className="text-body font-body text-warning-600 mt-0.5" />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-body-bold font-body-bold text-default-font">
+                Ingen glas/kvummer dækning
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                Koster ekstra at tilkøbe
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div className="flex grow shrink-0 basis-0 flex-col items-start gap-4 rounded-lg border border-solid border-neutral-border bg-neutral-50 px-4 py-4">
+      <div className="flex w-full items-center justify-between">
+        <div className="flex items-center gap-2">
+          <img
+            className="h-8 w-8 flex-none rounded-md object-cover"
+            src="https://images.unsplash.com/photo-1486406146926-c627a92ad1ab"
+          />
+          <span className="text-heading-3 font-heading-3 text-default-font">
+            Din Nuværende
+          </span>
+        </div>
+        <Badge variant="neutral">11.873 kr/år</Badge>
+      </div>
+      <div className="flex w-full flex-col items-start gap-3">
+        <div className="flex items-center gap-2">
+          <IconWithBackground
+            variant="success"
+            size="small"
+            icon={<FeatherCheckCircle />}
+          />
+          <span className="text-body-bold font-body-bold text-success-700">
+            Styrker
+          </span>
+        </div>
+        <div className="flex w-full flex-col items-start gap-2">
+          <div className="flex w-full items-start gap-2 rounded-md border border-solid border-success-200 bg-success-50 px-3 py-3">
+            <FeatherCheck className="text-body font-body text-success-600 mt-0.5" />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-body-bold font-body-bold text-default-font">
+                Høj dækningssum
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                Indbo: 2.000.000 kr dækning
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full items-start gap-2 rounded-md border border-solid border-success-200 bg-success-50 px-3 py-3">
+            <FeatherCheck className="text-body font-body text-success-600 mt-0.5" />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-body-bold font-body-bold text-default-font">
+                Lavere selvrisiko
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                Kun 2.000 kr ved skybrud
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full items-start gap-2 rounded-md border border-solid border-success-200 bg-success-50 px-3 py-3">
+            <FeatherCheck className="text-body font-body text-success-600 mt-0.5" />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-body-bold font-body-bold text-default-font">
+                Glas/kvummer dækning
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                Inkluderet i prisen
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="flex w-full flex-col items-start gap-3">
+        <div className="flex items-center gap-2">
+          <IconWithBackground
+            variant="warning"
+            size="small"
+            icon={<FeatherAlertTriangle />}
+          />
+          <span className="text-body-bold font-body-bold text-warning-700">
+            Svagheder
+          </span>
+        </div>
+        <div className="flex w-full flex-col items-start gap-2">
+          <div className="flex w-full items-start gap-2 rounded-md border border-solid border-warning-200 bg-warning-50 px-3 py-3">
+            <FeatherAlertCircle className="text-body font-body text-warning-600 mt-0.5" />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-body-bold font-body-bold text-default-font">
+                Meget højere pris
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                5.324 kr dyrere om året
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full items-start gap-2 rounded-md border border-solid border-warning-200 bg-warning-50 px-3 py-3">
+            <FeatherAlertCircle className="text-body font-body text-warning-600 mt-0.5" />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-body-bold font-body-bold text-default-font">
+                Bindingsperiode
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                12 måneders binding
+              </span>
+            </div>
+          </div>
+          <div className="flex w-full items-start gap-2 rounded-md border border-solid border-warning-200 bg-warning-50 px-3 py-3">
+            <FeatherAlertCircle className="text-body font-body text-warning-600 mt-0.5" />
+            <div className="flex grow shrink-0 basis-0 flex-col items-start gap-1">
+              <span className="text-body-bold font-body-bold text-default-font">
+                Begrænset service
+              </span>
+              <span className="text-caption font-caption text-subtext-color">
+                Kun mandag-fredag 9-17
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+```Be sure to import the components using the following code:
+  
+```tsx
+import React from "react";
+import { Badge } from "@/ui/components/Badge";
+import { IconWithBackground } from "@/ui/components/IconWithBackground";
+import { FeatherAlertCircle } from "@subframe/core";
+import { FeatherAlertTriangle } from "@subframe/core";
+import { FeatherCheck } from "@subframe/core";
+import { FeatherCheckCircle } from "@subframe/core";
+```Run the following command to sync Subframe components:
+  
+```bash
+npx @subframe/cli@latest sync Badge IconWithBackground -p 34bd735365b5
+```
