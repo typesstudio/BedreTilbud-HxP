@@ -91,6 +91,9 @@ export default function OfferComparisonDetail() {
   const thread = threads.find((t: any) => t.company?.companyName === offerCompanyName);
   const threadId = thread?.id;
 
+  // Generate availableTabs dynamically from actual comparison data
+  const availableTabs = ["samlet", ...comparisons.map(c => c.policyType?.toLowerCase()).filter(Boolean)];
+
   // TODO: Replace with real highlights data from API when available
   const highlights: Highlight[] = [];
 
@@ -127,6 +130,7 @@ export default function OfferComparisonDetail() {
                   setLocation(`/sammenligning/tilbud/${tab}`);
                 }
               }}
+              availableTabs={availableTabs}
             />
 
             {/* Empty State for Missing Policy */}
@@ -205,6 +209,7 @@ export default function OfferComparisonDetail() {
                 setLocation(`/sammenligning/tilbud/${tab}`);
               }
             }}
+            availableTabs={availableTabs}
           />
 
           {/* Annual Cost Comparison */}

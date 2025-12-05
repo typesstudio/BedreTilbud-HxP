@@ -23,7 +23,7 @@ export const policyTypeLabels: { [key: string]: string } = {
   indbo: "Indbo",
   ulykke: "Ulykke",
   hus: "Hus",
-  fritidshus: "Hus",
+  fritidshus: "Fritidshus",
   bil: "Bil",
   rejse: "Rejse",
 };

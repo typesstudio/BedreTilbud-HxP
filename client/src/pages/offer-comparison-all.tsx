@@ -84,6 +84,10 @@ export default function OfferComparisonAll() {
   const thread = threads.find((t: any) => t.company?.companyName === offerCompanyName);
   const threadId = thread?.id;
 
+  // Generate availableTabs dynamically from actual comparison data
+  // This ensures tabs always match the policies in the data
+  const availableTabs = ["samlet", ...comparisons.map(c => c.policyType?.toLowerCase()).filter(Boolean)];
+
   return (
     <DefaultPageLayout>
       <div className="flex w-full flex-col items-center justify-center bg-default-background px-4 py-4 mobile:px-3 mobile:py-3">
@@ -107,6 +111,7 @@ export default function OfferComparisonAll() {
                 setLocation(`/sammenligning/tilbud/${tab}`);
               }
             }}
+            availableTabs={availableTabs}
           />
 
           {/* Summary Cards - Step 4.4: Use savingsDirection for styling */}
