@@ -2695,6 +2695,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Delete company comparison
+  app.delete("/api/company-comparisons/:id", requireAuth, async (req, res) => {
+    try {
+      const authenticatedUserId = req.headers["x-user-id"] as string;
+      const comparison = await storage.getCompanyComparison(req.params.id);
+      
+      if (!comparison) {
+        return res.status(404).json({ message: "Sammenligning ikke fundet" });
+      }
+
+      // Verify ownership
+      if (comparison.userId !== authenticatedUserId) {
+        return res.status(403).json({ message: "Du har ikke adgang til at slette denne sammenligning" });
+      }
+
+      await storage.deleteCompanyComparison(req.params.id);
+      
+      logger.info('Company comparison deleted', { comparisonId: req.params.id, userId: authenticatedUserId });
+      
+      res.json({ success: true, message: "Sammenligning slettet" });
+    } catch (error: any) {
+      logger.error('Failed to delete company comparison', error, { comparisonId: req.params.id });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Generate debug report for a comparison
   app.post("/api/company-comparisons/:id/debug-report", requireAuth, async (req, res) => {
     try {

@@ -11,12 +11,22 @@ import {
   TextField
 } from "@/ui";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
-import { FeatherDownload, FeatherEdit, FeatherFileText, FeatherMoreVertical, FeatherPlus, FeatherUpload, FeatherX } from "@subframe/core";
+import { FeatherDownload, FeatherEdit, FeatherFileText, FeatherMoreVertical, FeatherPlus, FeatherUpload, FeatherX, FeatherGitCompare, FeatherTrash2 } from "@subframe/core";
 import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import LoadingProfile from "@/components/loading/LoadingProfile";
+
+interface CompanyComparisonData {
+  id: string;
+  userId: string;
+  currentCompany: string | null;
+  offerCompany: string | null;
+  status: string;
+  createdAt: string;
+  isSuperseded?: boolean;
+}
 
 export default function ProfilePage() {
   const { userId } = useParams<{ userId: string }>();
@@ -53,6 +63,30 @@ export default function ProfilePage() {
   const { data: householdMembers = [], isLoading: loadingMembers } = useQuery({
     queryKey: ["/api/household-members", userId],
     enabled: !!userId,
+  });
+
+  const { data: comparisonsData, isLoading: loadingComparisons } = useQuery<CompanyComparisonData[]>({
+    queryKey: ["/api/offers", userId],
+    enabled: !!userId,
+  });
+  const comparisons = (comparisonsData || []).filter((c: CompanyComparisonData) => !c.isSuperseded);
+
+  const [deleteComparisonId, setDeleteComparisonId] = useState<string | null>(null);
+
+  const deleteComparisonMutation = useMutation({
+    mutationFn: async (comparisonId: string) => {
+      const response = await apiRequest("DELETE", `/api/company-comparisons/${comparisonId}`, {});
+      return response;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/offers", userId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/nav-data", userId] });
+      setDeleteComparisonId(null);
+      toast({ title: "Tilbud slettet" });
+    },
+    onError: () => {
+      toast({ title: "Kunne ikke slette tilbud", variant: "destructive" });
+    },
   });
 
   const addMemberMutation = useMutation({
@@ -564,6 +598,84 @@ export default function ProfilePage() {
                 </div>
               </div>
 
+              {/* Offers/Comparisons Section */}
+              <div className="flex w-full flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
+                <div className="flex w-full items-center gap-2 flex-wrap">
+                  <span className="grow shrink-0 basis-0 text-heading-3 font-heading-3 text-default-font">
+                    Mine tilbud og sammenligninger
+                  </span>
+                </div>
+                {loadingComparisons ? (
+                  <div className="w-full text-center py-8 text-body font-body text-subtext-color">Indlæser...</div>
+                ) : comparisons.length === 0 ? (
+                  <div className="w-full text-center py-8 text-body font-body text-subtext-color">
+                    Ingen tilbud modtaget endnu
+                  </div>
+                ) : (
+                  <div className="flex w-full flex-col items-start gap-3">
+                    {comparisons.map((comparison: CompanyComparisonData) => (
+                      <div 
+                        key={comparison.id} 
+                        className="flex w-full items-center gap-4 rounded-md border border-solid border-neutral-border bg-default-background px-4 py-4 hover:bg-neutral-50 transition-colors mobile:flex-row mobile:flex-nowrap mobile:gap-3 mobile:px-3 mobile:py-3"
+                      >
+                        <IconWithBackground
+                          className="mobile:hidden"
+                          size="large"
+                          icon={<FeatherGitCompare />}
+                          variant={comparison.status === 'completed' ? 'success' : comparison.status === 'failed' ? 'error' : 'warning'}
+                        />
+                        <IconWithBackground
+                          className="hidden mobile:flex"
+                          size="medium"
+                          icon={<FeatherGitCompare />}
+                          variant={comparison.status === 'completed' ? 'success' : comparison.status === 'failed' ? 'error' : 'warning'}
+                        />
+                        <div className="flex grow shrink-0 basis-0 flex-col items-start justify-center gap-1">
+                          <div className="flex items-center gap-2 w-full flex-wrap">
+                            <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold" data-testid={`text-comparison-company-${comparison.id}`}>
+                              Tilbud fra {comparison.offerCompany || 'Ukendt selskab'}
+                            </span>
+                            {comparison.status === 'completed' && (
+                              <Badge variant="success">Klar</Badge>
+                            )}
+                            {comparison.status === 'pending' && (
+                              <Badge variant="warning">Afventer</Badge>
+                            )}
+                            {comparison.status === 'processing' && (
+                              <Badge variant="warning">Behandler</Badge>
+                            )}
+                            {comparison.status === 'failed' && (
+                              <Badge variant="error">Fejl</Badge>
+                            )}
+                          </div>
+                          <span className="w-full text-body font-body text-subtext-color mobile:text-caption mobile:font-caption" data-testid={`text-comparison-date-${comparison.id}`}>
+                            Oprettet {comparison.createdAt ? format(new Date(comparison.createdAt), "d. MMMM yyyy", { locale: da }) : "ukendt"}
+                          </span>
+                        </div>
+                        {comparison.status === 'completed' && (
+                          <Button
+                            className="mobile:hidden touch-target"
+                            variant="brand-secondary"
+                            size="small"
+                            onClick={() => setLocation(`/sammenligning/${comparison.id}`)}
+                            data-testid={`button-view-comparison-${comparison.id}`}
+                          >
+                            Se sammenligning
+                          </Button>
+                        )}
+                        <IconButton
+                          className="touch-target"
+                          size="small"
+                          icon={<FeatherTrash2 />}
+                          onClick={() => setDeleteComparisonId(comparison.id)}
+                          data-testid={`button-delete-comparison-${comparison.id}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Household Members Section */}
               <div className="flex w-full flex-col items-start gap-4 mobile:flex-col mobile:flex-nowrap mobile:gap-3">
                 <div className="flex w-full items-center gap-2 flex-wrap">
@@ -856,6 +968,45 @@ export default function ProfilePage() {
                 data-testid="button-save-password"
               >
                 {updatePasswordMutation.isPending ? "Gemmer..." : "Gem"}
+              </Button>
+            </div>
+          </div>
+        </Dialog.Content>
+      </Dialog>
+
+      {/* Delete Comparison Confirmation Dialog */}
+      <Dialog open={!!deleteComparisonId} onOpenChange={() => setDeleteComparisonId(null)}>
+        <Dialog.Content>
+          <div className="flex flex-col gap-6 p-6 w-full max-w-md">
+            <div className="flex items-center justify-between">
+              <span className="text-heading-3 font-heading-3 text-default-font">Slet tilbud</span>
+              <IconButton size="small" icon={<FeatherX />} onClick={() => setDeleteComparisonId(null)} />
+            </div>
+            
+            <p className="text-body text-default-font">
+              Er du sikker på, at du vil slette dette tilbud? Denne handling kan ikke fortrydes.
+            </p>
+
+            <div className="flex gap-3">
+              <Button
+                className="flex-1"
+                variant="neutral-secondary"
+                onClick={() => setDeleteComparisonId(null)}
+              >
+                Annuller
+              </Button>
+              <Button
+                className="flex-1"
+                variant="destructive-primary"
+                onClick={() => {
+                  if (deleteComparisonId) {
+                    deleteComparisonMutation.mutate(deleteComparisonId);
+                  }
+                }}
+                disabled={deleteComparisonMutation.isPending}
+                data-testid="button-confirm-delete-comparison"
+              >
+                {deleteComparisonMutation.isPending ? "Sletter..." : "Slet tilbud"}
               </Button>
             </div>
           </div>

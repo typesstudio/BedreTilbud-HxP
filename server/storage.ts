@@ -101,6 +101,7 @@ export interface IStorage {
   createCompanyComparison(comparison: InsertCompanyComparison): Promise<CompanyComparison>;
   updateCompanyComparisonStatus(id: string, status: string, comparisonJSON?: any, errorMessage?: string, statusReason?: string): Promise<CompanyComparison>;
   supersedeCompanyComparisons(userId: string, currentCompany: string, offerCompany: string): Promise<number>;
+  deleteCompanyComparison(id: string): Promise<void>;
 
   // Household Members
   getHouseholdMember(id: string): Promise<HouseholdMember | undefined>;
@@ -732,6 +733,10 @@ export class MemStorage implements IStorage {
     
     this.companyComparisons.set(id, updated);
     return updated;
+  }
+
+  async deleteCompanyComparison(id: string): Promise<void> {
+    this.companyComparisons.delete(id);
   }
 
   // Household Members
@@ -1803,6 +1808,13 @@ export class DatabaseStorage implements IStorage {
       .returning();
     
     return result.length;
+  }
+
+  async deleteCompanyComparison(id: string): Promise<void> {
+    const { db } = await import("./db");
+    const { companyComparisons } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    await db.delete(companyComparisons).where(eq(companyComparisons.id, id));
   }
 
   // Household Members
