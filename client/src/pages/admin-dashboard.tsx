@@ -7,7 +7,7 @@ import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FeatherMail, FeatherMessageCircle, FeatherActivity, FeatherAlertCircle } from "@subframe/core";
+import { FeatherMail, FeatherMessageCircle, FeatherActivity, FeatherAlertCircle, FeatherEdit3 } from "@subframe/core";
 
 interface ThreadData {
   id: string;
@@ -16,11 +16,26 @@ interface ThreadData {
   subject: string | null;
   status: string;
   createdAt: string;
-  aiMode: string | null;
   company: { id: string; name: string; logoUrl: string | null } | null;
   user: { id: string; email: string; name: string | null } | null;
   emailCount: number;
   lastEmailAt: string | null;
+}
+
+interface DraftData {
+  id: string;
+  threadId: string;
+  subject: string | null;
+  body: string | null;
+  createdAt: string;
+  thread: {
+    id: string;
+    userId: string;
+    companyId: string | null;
+    subject: string | null;
+  };
+  company: { id: string; name: string } | null;
+  user: { id: string; email: string; name: string | null } | null;
 }
 
 interface DebugReport {
@@ -42,13 +57,31 @@ interface Metrics {
   privacyIssueRate: number;
 }
 
+function formatCopenhagenTime(dateStr: string, formatStr: string): string {
+  const date = new Date(dateStr);
+  const copenhagenOffset = 1;
+  const isDST = (() => {
+    const jan = new Date(date.getFullYear(), 0, 1).getTimezoneOffset();
+    const jul = new Date(date.getFullYear(), 6, 1).getTimezoneOffset();
+    return Math.max(jan, jul) !== date.getTimezoneOffset();
+  })();
+  const offset = isDST ? 2 : copenhagenOffset;
+  const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
+  const copenhagenDate = new Date(utc + (3600000 * offset));
+  return format(copenhagenDate, formatStr, { locale: da });
+}
+
 export default function AdminDashboard() {
   const userId = localStorage.getItem("userId");
   const [, setLocation] = useLocation();
-  const [activeTab, setActiveTab] = useState<'threads' | 'debug'>('threads');
+  const [activeTab, setActiveTab] = useState<'attention' | 'threads' | 'debug'>('attention');
 
   const { data: threadsData, isLoading: threadsLoading } = useQuery<{ threads: ThreadData[]; count: number }>({
     queryKey: ["/api/admin/threads"],
+  });
+
+  const { data: draftsData, isLoading: draftsLoading } = useQuery<{ drafts: DraftData[]; count: number }>({
+    queryKey: ["/api/admin/drafts"],
   });
 
   const { data: metrics } = useQuery<Metrics>({
@@ -60,6 +93,7 @@ export default function AdminDashboard() {
   });
 
   const threads = threadsData?.threads || [];
+  const drafts = draftsData?.drafts || [];
   const reports = reportsData?.reports || [];
 
   const getStatusBadge = (status: string) => {
@@ -73,13 +107,6 @@ export default function AdminDashboard() {
       default:
         return <Badge variant="neutral">{status}</Badge>;
     }
-  };
-
-  const getAiModeBadge = (aiMode: string | null) => {
-    if (aiMode === 'auto') {
-      return <Badge variant="success">Auto AI</Badge>;
-    }
-    return <Badge variant="neutral">Manuel</Badge>;
   };
 
   return (
@@ -96,6 +123,20 @@ export default function AdminDashboard() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <Card className={drafts.length > 0 ? "border-warning-500 bg-warning-50" : ""}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-subtext-color flex items-center gap-2">
+                  <FeatherEdit3 className="w-4 h-4" />
+                  Afventer godkendelse
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className={`text-3xl font-bold ${drafts.length > 0 ? 'text-warning-700' : 'text-default-font'}`} data-testid="stat-drafts">
+                  {draftsLoading ? "..." : drafts.length}
+                </p>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-subtext-color flex items-center gap-2">
@@ -106,20 +147,6 @@ export default function AdminDashboard() {
               <CardContent>
                 <p className="text-3xl font-bold text-default-font" data-testid="stat-threads">
                   {threadsLoading ? "..." : threads.length}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-medium text-subtext-color flex items-center gap-2">
-                  <FeatherMessageCircle className="w-4 h-4" />
-                  AI Rapporter
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-3xl font-bold text-default-font" data-testid="stat-reports">
-                  {metrics?.totalReports || 0}
                 </p>
               </CardContent>
             </Card>
@@ -155,6 +182,13 @@ export default function AdminDashboard() {
 
           <div className="flex gap-2 mb-6">
             <Button
+              variant={activeTab === 'attention' ? 'brand-primary' : 'neutral-secondary'}
+              onClick={() => setActiveTab('attention')}
+              data-testid="tab-attention"
+            >
+              Kræver opmærksomhed {drafts.length > 0 && `(${drafts.length})`}
+            </Button>
+            <Button
               variant={activeTab === 'threads' ? 'brand-primary' : 'neutral-secondary'}
               onClick={() => setActiveTab('threads')}
               data-testid="tab-threads"
@@ -177,6 +211,83 @@ export default function AdminDashboard() {
             </Button>
           </div>
 
+          {activeTab === 'attention' && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FeatherEdit3 className="w-5 h-5 text-warning-600" />
+                  Kladder der afventer godkendelse
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {draftsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="w-8 h-8 border-4 border-brand-600 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                ) : drafts.length === 0 ? (
+                  <div className="text-center py-8">
+                    <FeatherMessageCircle className="w-12 h-12 text-neutral-300 mx-auto mb-3" />
+                    <p className="text-subtext-color">Ingen kladder afventer godkendelse</p>
+                    <p className="text-caption text-neutral-400 mt-1">Alt er opdateret!</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {drafts.map((draft) => (
+                      <div 
+                        key={draft.id} 
+                        className="border border-warning-200 bg-warning-50 rounded-lg p-4 hover:border-warning-400 transition-colors cursor-pointer"
+                        onClick={() => setLocation(`/emails/${draft.threadId}`)}
+                        data-testid={`draft-card-${draft.id}`}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-full bg-warning-200 flex items-center justify-center">
+                              <FeatherEdit3 className="w-5 h-5 text-warning-700" />
+                            </div>
+                            <div>
+                              <p className="text-body-bold font-body-bold text-default-font">
+                                {draft.company?.name || 'Ukendt selskab'}
+                              </p>
+                              <p className="text-caption text-subtext-color">
+                                Bruger: {draft.user?.name || draft.user?.email || 'Ukendt'}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <Badge variant="warning">Afventer godkendelse</Badge>
+                            <p className="text-caption text-subtext-color mt-1">
+                              {formatCopenhagenTime(draft.createdAt, "d. MMM HH:mm")}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-3 bg-white rounded p-3 border border-warning-100">
+                          <p className="text-caption text-subtext-color mb-1">Kladde-indhold:</p>
+                          <p className="text-body text-default-font line-clamp-3">
+                            {draft.body?.substring(0, 200) || 'Ingen indhold'}
+                            {(draft.body?.length || 0) > 200 && '...'}
+                          </p>
+                        </div>
+                        <div className="mt-3 flex justify-end">
+                          <Button
+                            size="small"
+                            variant="brand-primary"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLocation(`/emails/${draft.threadId}`);
+                            }}
+                            data-testid={`btn-review-draft-${draft.id}`}
+                          >
+                            Gennemse og godkend
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {activeTab === 'threads' && (
             <Card>
               <CardHeader>
@@ -197,7 +308,6 @@ export default function AdminDashboard() {
                           <th className="text-left py-3 px-2 text-caption font-caption text-subtext-color">Bruger</th>
                           <th className="text-left py-3 px-2 text-caption font-caption text-subtext-color">Selskab</th>
                           <th className="text-left py-3 px-2 text-caption font-caption text-subtext-color">Status</th>
-                          <th className="text-left py-3 px-2 text-caption font-caption text-subtext-color">AI Mode</th>
                           <th className="text-left py-3 px-2 text-caption font-caption text-subtext-color">Beskeder</th>
                           <th className="text-left py-3 px-2 text-caption font-caption text-subtext-color">Seneste</th>
                           <th className="text-left py-3 px-2 text-caption font-caption text-subtext-color">Handling</th>
@@ -225,9 +335,6 @@ export default function AdminDashboard() {
                               {getStatusBadge(thread.status)}
                             </td>
                             <td className="py-3 px-2">
-                              {getAiModeBadge(thread.aiMode)}
-                            </td>
-                            <td className="py-3 px-2">
                               <span className="text-body font-body text-default-font">
                                 {thread.emailCount}
                               </span>
@@ -235,7 +342,7 @@ export default function AdminDashboard() {
                             <td className="py-3 px-2">
                               <span className="text-caption text-subtext-color">
                                 {thread.lastEmailAt 
-                                  ? format(new Date(thread.lastEmailAt), "d. MMM HH:mm", { locale: da })
+                                  ? formatCopenhagenTime(thread.lastEmailAt, "d. MMM HH:mm")
                                   : '-'
                                 }
                               </span>
@@ -284,7 +391,7 @@ export default function AdminDashboard() {
                             )}
                           </div>
                           <span className="text-caption text-subtext-color">
-                            {format(new Date(report.createdAt), "d. MMM HH:mm", { locale: da })}
+                            {formatCopenhagenTime(report.createdAt, "d. MMM HH:mm")}
                           </span>
                         </div>
                         {report.analysis?.issues && report.analysis.issues.length > 0 && (

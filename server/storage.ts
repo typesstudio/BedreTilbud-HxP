@@ -76,6 +76,7 @@ export interface IStorage {
   getThreadEmails(threadId: string, direction?: string): Promise<Email[]>;
   getThreadDraftEmails(threadId: string): Promise<Email[]>;
   getDraftEmailsByUser(userId: string): Promise<Array<Email & { thread: EmailThread; company: Company | null }>>;
+  getAllDraftEmails(): Promise<Array<Email & { thread: EmailThread; company: Company | null; user: User | null }>>;
   createEmail(email: InsertEmail): Promise<Email>;
   updateEmail(id: string, updates: Partial<InsertEmail>): Promise<Email>;
   
@@ -557,6 +558,21 @@ export class MemStorage implements IStorage {
         company: company || null
       };
     }).filter(d => d.thread?.userId === userId);
+  }
+
+  async getAllDraftEmails(): Promise<Array<Email & { thread: EmailThread; company: Company | null; user: User | null }>> {
+    const drafts = Array.from(this.emails.values()).filter(e => e.status === 'draft');
+    return drafts.map(email => {
+      const thread = this.emailThreads.get(email.threadId || '');
+      const company = thread?.companyId ? this.companies.get(thread.companyId) : null;
+      const user = thread?.userId ? this.users.get(thread.userId) : null;
+      return {
+        ...email,
+        thread: thread!,
+        company: company || null,
+        user: user || null
+      };
+    }).filter(d => d.thread);
   }
 
   private aiDebugReports = new Map<string, AiDebugReport>();
@@ -1552,6 +1568,32 @@ export class DatabaseStorage implements IStorage {
         thread: r.thread,
         company: r.company
       }));
+  }
+
+  async getAllDraftEmails(): Promise<Array<Email & { thread: EmailThread; company: Company | null; user: User | null }>> {
+    const { db } = await import("./db");
+    const { emails, emailThreads, companies, users } = await import("@shared/schema");
+    const { eq, desc } = await import("drizzle-orm");
+    
+    const results = await db.select({
+      email: emails,
+      thread: emailThreads,
+      company: companies,
+      user: users
+    })
+      .from(emails)
+      .innerJoin(emailThreads, eq(emails.threadId, emailThreads.id))
+      .leftJoin(companies, eq(emailThreads.companyId, companies.id))
+      .leftJoin(users, eq(emailThreads.userId, users.id))
+      .where(eq(emails.status, "draft"))
+      .orderBy(desc(emails.createdAt));
+    
+    return results.map(r => ({
+      ...r.email,
+      thread: r.thread,
+      company: r.company,
+      user: r.user
+    }));
   }
 
   // AI Debug Reports

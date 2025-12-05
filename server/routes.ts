@@ -2410,6 +2410,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all pending drafts (admin - for attention needed overview)
+  app.get("/api/admin/drafts", requireAuth, async (req, res) => {
+    try {
+      const drafts = await storage.getAllDraftEmails();
+      
+      res.json({ 
+        drafts,
+        count: drafts.length 
+      });
+    } catch (error: any) {
+      logger.error('[Admin] Failed to fetch all drafts', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Gmail OAuth routes
   app.get("/auth/gmail", async (req, res) => {
     try {
