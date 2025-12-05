@@ -86,7 +86,8 @@ export default function OfferComparisonAll() {
 
   // Generate availableTabs dynamically from actual comparison data
   // This ensures tabs always match the policies in the data
-  const availableTabs = ["samlet", ...comparisons.map(c => c.policyType?.toLowerCase()).filter(Boolean)];
+  // Using Set to deduplicate in case of data anomalies
+  const availableTabs = ["samlet", ...new Set(comparisons.map(c => c.policyType?.toLowerCase()).filter(Boolean))];
 
   return (
     <DefaultPageLayout>

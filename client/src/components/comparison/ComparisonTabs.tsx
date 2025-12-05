@@ -38,7 +38,7 @@ interface ComparisonTabsProps {
 export function ComparisonTabs({
   selectedTab,
   onTabChange,
-  availableTabs = ["samlet", "indbo", "ulykke", "hus", "bil", "rejse"],
+  availableTabs = ["samlet", "indbo", "ulykke", "hus", "fritidshus", "bil", "rejse"],
   className = "",
 }: ComparisonTabsProps) {
   return (

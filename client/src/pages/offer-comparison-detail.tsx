@@ -92,7 +92,8 @@ export default function OfferComparisonDetail() {
   const threadId = thread?.id;
 
   // Generate availableTabs dynamically from actual comparison data
-  const availableTabs = ["samlet", ...comparisons.map(c => c.policyType?.toLowerCase()).filter(Boolean)];
+  // Using Set to deduplicate in case of data anomalies
+  const availableTabs = ["samlet", ...new Set(comparisons.map(c => c.policyType?.toLowerCase()).filter(Boolean))];
 
   // TODO: Replace with real highlights data from API when available
   const highlights: Highlight[] = [];
