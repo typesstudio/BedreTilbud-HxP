@@ -47,6 +47,19 @@ Venlig hilsen
 BedreTilbud`;
 }
 
+/**
+ * Encode a string for use in email headers (RFC 2047).
+ * Handles Danish characters (ÆØÅ) and other non-ASCII characters.
+ */
+function encodeEmailHeader(text: string): string {
+  const hasNonAscii = /[^\x00-\x7F]/.test(text);
+  if (!hasNonAscii) {
+    return text;
+  }
+  const base64 = Buffer.from(text, 'utf8').toString('base64');
+  return `=?UTF-8?B?${base64}?=`;
+}
+
 export class EmailService {
   private async getGmailClient() {
     // Try custom OAuth first, fallback to Replit connector
@@ -89,7 +102,7 @@ export class EmailService {
         `To: ${company.email}`,
         `From: hej@bedretilbud.com`,
         `Reply-To: ${replyToEmail}`,
-        `Subject: ${subject}`,
+        `Subject: ${encodeEmailHeader(subject)}`,
         'MIME-Version: 1.0',
         'Content-Type: multipart/mixed; boundary="boundary123"',
         '',
