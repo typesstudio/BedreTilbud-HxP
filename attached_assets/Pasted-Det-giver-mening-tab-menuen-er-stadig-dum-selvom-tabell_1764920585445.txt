@@ -1,0 +1,301 @@
+Det giver mening – tab-menuen er stadig “dum”, selvom tabellen viser alle policer.
+Lad mig først lige forklare, hvad der højst sandsynligt sker, og bagefter får du en færdig Replit-prompt du kan copy/paste.
+
+---
+
+## Kort analyse (hvorfor “Fritidshus” mangler)
+
+Ud fra dine log-uddrag og filnavne er det næsten sikkert, at følgende sker:
+
+1. **`ComparisonTabs` har stadig en intern “whitelist”**
+   Noget i stil med:
+
+   ```ts
+   const KNOWN_TABS = ["samlet", "indbo", "ulykke", "hus", "bil", "rejse"];
+   const tabsToShow = KNOWN_TABS.filter((tab) => availableTabs.includes(tab));
+   ```
+
+   Så selvom `availableTabs` indeholder `"fritidshus"`, bliver den filtreret væk.
+
+2. **Label/ikon-mapping til tabs er adskilt fra det, der bruges i tabellen**
+   Tabellen kan vise “Fritidshus”, fordi den bruger en fælles helper (fx `getPolicyTypeLabel` / `PolicyTypeIcon`).
+   Tabs bruger sandsynligvis sin egen lille mapping og kender ikke “fritidshus”.
+
+3. **`availableTabs` beregnes ikke konsekvent alle steder**
+
+   * På `/sammenligning/[comparisonId]` (`comparison.tsx`) er den delvist dynamisk.
+   * På offer-detail-siden (`offer-comparison-detail.tsx`) og evt. `offer-comparison-all.tsx` er der stadig noget hardcodet logik.
+
+Resultat:
+Listen i tabellen er korrekt (Fritidshus, Indbo, Ulykke), men tabs bliver filtreret igennem en gammel hardcodet liste og mister nye policy-typer.
+
+Vi skal derfor:
+
+1. Fjerne al “whitelisting” af tabs.
+2. Generere tabs **direkte** fra de policy-typer, der faktisk findes i comparison-data.
+3. Genbruge den samme label/ikon-helper som tabellen bruger (så nye typer automatisk får rigtigt navn).
+4. Rerunne `regenerate-single-comparison` for `014e5198-cec6-45ec-a3f4-3cf1cb0108c6` og teste med den.
+
+---
+
+## Replit-prompt (copy/paste direkte i Replit)
+
+````text
+You are an expert TypeScript/React developer working on the BedreTilbud app. 
+Fix a bug in the comparison tabs so that ALL actual policy types from the comparison data always appear as tabs — including "Fritidshus" — and then re-run the comparison for Types Studio as a test.
+
+Context:
+- On the comparison page `/sammenligning/014e5198-cec6-45ec-a3f4-3cf1cb0108c6` the summary table shows three policies: Fritidshus, Indbo, Ulykke.
+- The tab bar only shows "Samlet", "Indbo", "Ulykke". There is no "Fritidshus" tab, so the user cannot see the per-policy view for that type.
+- Previous attempts tried to make tabs dynamic, but "Fritidshus" is still missing.
+
+### Overall goal
+
+1. Tabs must be generated 100% dynamically from the comparison data.
+2. There must be NO hardcoded whitelist that drops unknown policy types.
+3. The tab labels and icons should reuse the same helpers as the table rows (so any future policy types just work).
+4. After the code change, re-run the comparison generation for comparisonId `014e5198-cec6-45ec-a3f4-3cf1cb0108c6` and manually verify that the Fritidshus tab appears and works.
+
+---
+
+## Step 1 – Fix `ComparisonTabs` so it does not filter away unknown types
+
+1. Open `client/src/components/comparison/ComparisonTabs.tsx`.
+
+2. Inspect how tabs are built. Right now there is likely something like:
+   - A constant list or union such as `const DEFAULT_TABS = ["samlet", "indbo", "ulykke", "hus", "bil", "rejse"];`
+   - A filter like `DEFAULT_TABS.filter(tab => availableTabs.includes(tab))`
+   - A label map that only knows these standard keys.
+
+3. Change `ComparisonTabs` so that:
+   - It **does not** filter through a fixed list.
+   - It **uses the `availableTabs` prop as the single source of truth**, in the order it is given.
+   - It still deduplicates any duplicates, but does NOT drop unknown strings.
+
+   Concretely, do something like:
+
+   ```ts
+   type ComparisonTabKey = string; // allow arbitrary policyType strings
+
+   interface ComparisonTabsProps {
+     activeTab: ComparisonTabKey;
+     onTabChange: (tab: ComparisonTabKey) => void;
+     availableTabs: ComparisonTabKey[]; // must include "samlet" plus any policy types
+   }
+
+   const ComparisonTabs: React.FC<ComparisonTabsProps> = ({ activeTab, onTabChange, availableTabs }) => {
+     const uniqueTabs = Array.from(new Set(availableTabs)); // dedupe but keep order
+
+     return (
+       <Tabs value={activeTab} onValueChange={onTabChange}>
+         <TabsList>
+           {uniqueTabs.map((tab) => (
+             <TabsTrigger key={tab} value={tab}>
+               {/* render label + icon here */}
+             </TabsTrigger>
+           ))}
+         </TabsList>
+       </Tabs>
+     );
+   };
+````
+
+4. For the label & icon inside each `TabsTrigger`:
+
+   * If `tab === "samlet"`, render the existing "Samlet" label + the same icon as today.
+   * For all other values, use the **same helper that the comparison table uses** to render policy type names and icons.
+
+   For example, if there is already something like `getPolicyTypeConfig(policyType)` or `getPolicyTypeLabel(policyType)` used in the rows, import and reuse that here:
+
+   ```ts
+   import { getPolicyTypeLabel, getPolicyTypeIcon } from "@/utils/policyType"; // adjust to correct path
+
+   const renderTabContent = (tab: string) => {
+     if (tab === "samlet") {
+       return (
+         <>
+           <SomeSummaryIcon />
+           <span>Samlet</span>
+         </>
+       );
+     }
+
+     const label = getPolicyTypeLabel(tab) ?? capitalize(tab);
+     const Icon = getPolicyTypeIcon(tab) ?? DefaultShieldIcon;
+
+     return (
+       <>
+         <Icon />
+         <span>{label}</span>
+       </>
+     );
+   };
+   ```
+
+   Then inside `TabsTrigger`:
+
+   ```tsx
+   <TabsTrigger key={tab} value={tab}>
+     {renderTabContent(tab)}
+   </TabsTrigger>
+   ```
+
+5. Make sure there is **no leftover hardcoded list** like `["indbo","ulykke","hus","bil","rejse"]` being used to filter or gate tabs. Remove or refactor such code so that new policy types (e.g. `"fritidshus"`) are never dropped.
+
+---
+
+## Step 2 – Make `availableTabs` truly dynamic on all comparison pages
+
+There are multiple pages using `ComparisonTabs`. All of them must build `availableTabs` from the actual comparison data.
+
+### 2a) Main comparison page (`client/src/pages/comparison.tsx`)
+
+1. Open `client/src/pages/comparison.tsx`.
+
+2. Find where `availableTabs` (or similarly named variable) is built. It might currently be:
+
+   ```ts
+   const availableTabs: ComparisonTabKey[] = ["samlet", "indbo", "ulykke", "hus", "bil", "rejse"].filter(...)
+   ```
+
+   or some variant.
+
+3. Change this logic to:
+
+   * Always start with `"samlet"` as the first tab.
+   * Then append **all unique policy types** that exist in the comparison data.
+
+   Use the actual data structure of the comparison result. For example, if you have something like `comparisonResult.policyComparisons`:
+
+   ```ts
+   const policyTypeTabs = Array.from(
+     new Set(
+       (comparisonResult.policyComparisons ?? [])
+         .map((p) => p.policyType)
+         .filter(Boolean)
+     )
+   );
+
+   const availableTabs: string[] = ["samlet", ...policyTypeTabs];
+   ```
+
+4. Pass this `availableTabs` into `ComparisonTabs`:
+
+   ```tsx
+   <ComparisonTabs
+     activeTab={activeTab}
+     onTabChange={setActiveTab}
+     availableTabs={availableTabs}
+   />
+   ```
+
+5. Make sure that when rendering tab content for each tab, you use this same `activeTab` value to decide which slice of data to display (including “fritidshus”).
+
+### 2b) Offer comparison detail page (`client/src/pages/offer-comparison-detail.tsx`)
+
+1. Open `client/src/pages/offer-comparison-detail.tsx`.
+
+2. Repeat the same approach: derive `policyTypeTabs` from the offer's comparison data, then define:
+
+   ```ts
+   const policyTypeTabs = Array.from(
+     new Set(
+       (offerComparison.policyComparisons ?? [])
+         .map((p) => p.policyType)
+         .filter(Boolean)
+     )
+   );
+
+   const availableTabs: string[] = ["samlet", ...policyTypeTabs];
+   ```
+
+3. Pass `availableTabs` to `ComparisonTabs` in exactly the same way.
+
+4. Remove any hardcoded filtering logic here as well.
+
+### 2c) Any other usage of `ComparisonTabs`
+
+Use ripgrep to find all usage:
+
+```bash
+rg "ComparisonTabs" client/src -n
+```
+
+For each usage:
+
+* Ensure `availableTabs` is built from the underlying data.
+* Ensure `"samlet"` is the only special case; all other tabs come from real policy types.
+
+---
+
+## Step 3 – Make sure Fritidshus has a label/icon mapping
+
+1. Locate the helper used for labels/icons in the comparison table (for the “Kategori” column). It might be in a file like:
+
+   * `client/src/utils/policyType.ts`
+   * or a `PolicyTypeLabel` / `PolicyTypeIcon` component.
+
+2. Confirm that `"fritidshus"` is included in its mapping, since the table already shows that label.
+   If it is not, add it, e.g.:
+
+   ```ts
+   const POLICY_TYPE_CONFIG: Record<string, { label: string; Icon: IconType }> = {
+     indbo: { label: "Indbo", Icon: HomeIcon },
+     hus: { label: "Hus", Icon: HouseIcon },
+     ulykke: { label: "Ulykke", Icon: AlertIcon },
+     bil: { label: "Bil", Icon: CarIcon },
+     rejse: { label: "Rejse", Icon: PlaneIcon },
+     fritidshus: { label: "Fritidshus", Icon: HolidayHomeIcon },
+   };
+   ```
+
+3. Reuse this config inside `ComparisonTabs` as described in Step 1 so the tabs always match the table labels.
+
+---
+
+## Step 4 – Re-run comparison for Types Studio and test
+
+1. From the project root, run the comparison regeneration script specifically for the Types Studio comparison:
+
+   * First open `server/scripts/regenerate-single-comparison.ts` and check how it expects arguments.
+     If it already accepts a `comparisonId` argument, run:
+
+     ```bash
+     cd /home/runner/workspace
+     npx tsx server/scripts/regenerate-single-comparison.ts 014e5198-cec6-45ec-a3f4-3cf1cb0108c6
+     ```
+
+   * If it instead reads `comparisonId` from an environment variable, set and run it accordingly:
+
+     ```bash
+     export COMPARISON_ID=014e5198-cec6-45ec-a3f4-3cf1cb0108c6
+     cd /home/runner/workspace
+     npx tsx server/scripts/regenerate-single-comparison.ts
+     ```
+
+2. After regeneration, restart the dev server if needed (or use the existing “Start application” runner).
+
+3. In the running app, open the URL:
+
+   ```
+   /sammenligning/014e5198-cec6-45ec-a3f4-3cf1cb0108c6
+   ```
+
+4. Verify:
+
+   * In the tab bar you now see: `Samlet`, `Fritidshus`, `Indbo`, `Ulykke` (order can be Samlet + all policies).
+   * Clicking `Fritidshus` shows the per-policy view for the holiday home comparison, with correct pricing and coverage comparison.
+   * The behavior is the same for other offers/companies that might have different combinations of policy types (e.g. only Indbo+Hus, Bil+Ulykke, etc.).
+
+5. If everything works, commit the changes.
+
+---
+
+Make sure that after these changes, there is *no* code path that hard-filters tabs by a fixed list of policy types. New policy types must automatically appear as tabs without any extra work.
+
+```
+
+---
+
+Hvis du vil, kan jeg bagefter hjælpe dig med en lille check-liste du kan bruge til fremtidige nye policy-typer (fx hvis der kommer “Erhverv”, “Kæledyr” osv.), så du undgår at stå med samme type bug igen.
+```

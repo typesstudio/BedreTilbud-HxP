@@ -55,7 +55,7 @@ export interface SavingsOverTimeView {
   hasPrice?: boolean;
 }
 
-export type ComparisonTabKey = "samlet" | "indbo" | "hus" | "ulykke" | "bil" | "rejse";
+export type ComparisonTabKey = "samlet" | "indbo" | "hus" | "fritidshus" | "ulykke" | "bil" | "rejse";
 
 export interface ComparisonTabView {
   key: ComparisonTabKey;
@@ -322,6 +322,7 @@ function generateTabViews(input: TabGenerationInput): Record<ComparisonTabKey, C
     },
     indbo: generatePolicyTab("indbo", "Indbo", policyComparisons, perPolicySummary),
     hus: generatePolicyTab("hus", "Hus", policyComparisons, perPolicySummary),
+    fritidshus: generatePolicyTab("fritidshus", "Fritidshus", policyComparisons, perPolicySummary),
     ulykke: generatePolicyTab("ulykke", "Ulykke", policyComparisons, perPolicySummary),
     bil: generatePolicyTab("bil", "Bil", policyComparisons, perPolicySummary),
     rejse: generatePolicyTab("rejse", "Rejse", policyComparisons, perPolicySummary),

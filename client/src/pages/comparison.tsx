@@ -78,10 +78,11 @@ export default function Comparison() {
   // Get active tab view
   const activeView = viewModel.tabs[activeTab];
   
-  // Calculate available tabs (samlet is always available, plus any policy tabs with data)
+  // Calculate available tabs dynamically from viewModel.tabs
+  // This ensures ALL policy types (including fritidshus) are shown when available
   const availableTabs: ComparisonTabKey[] = ["samlet"];
-  (["indbo", "hus", "ulykke", "bil", "rejse"] as ComparisonTabKey[]).forEach((tabKey) => {
-    if (viewModel.tabs[tabKey]?.isAvailable) {
+  (Object.keys(viewModel.tabs) as ComparisonTabKey[]).forEach((tabKey) => {
+    if (tabKey !== "samlet" && viewModel.tabs[tabKey]?.isAvailable) {
       availableTabs.push(tabKey);
     }
   });
