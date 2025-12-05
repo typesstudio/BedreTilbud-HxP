@@ -98,9 +98,13 @@ export class EmailService {
       // Create email with attachments
       const subject = `Forespørgsel om forsikringstilbud - ${user.name || user.email}`;
       
+      // Format sender name with user's name for better identification
+      const senderName = user.name ? `${user.name} via BedreTilbud` : 'BedreTilbud';
+      const fromHeader = `${encodeEmailHeader(senderName)} <hej@bedretilbud.com>`;
+      
       let emailContent = [
         `To: ${company.email}`,
-        `From: hej@bedretilbud.com`,
+        `From: ${fromHeader}`,
         `Reply-To: ${replyToEmail}`,
         `Subject: ${encodeEmailHeader(subject)}`,
         'MIME-Version: 1.0',
@@ -189,6 +193,9 @@ export class EmailService {
         throw new Error("Company not found");
       }
 
+      // Get user for personalized sender name
+      const user = thread.userId ? await storage.getUser(thread.userId) : null;
+
       // Get all non-draft emails in the thread to build threading headers
       // Gmail requires proper In-Reply-To and References headers for thread grouping
       const threadEmails = await storage.getThreadEmails(thread.id);
@@ -209,6 +216,11 @@ export class EmailService {
       const referencesHeader = messageIds.length > 0 ? messageIds.join(' ') : null;
 
       const { client: resend, fromEmail } = await getUncachableResendClient();
+      
+      // Format sender with user's name for personalized from address
+      // Resend format: "Name <email@domain.com>"
+      const senderName = user?.name ? `${user.name} via BedreTilbud` : 'BedreTilbud';
+      const formattedFrom = `${senderName} <${fromEmail.includes('<') ? fromEmail.match(/<(.+)>/)?.[1] || fromEmail : fromEmail}>`;
       
       // Prepare email headers with threading support
       // Both In-Reply-To (last message) and References (full chain) are needed for Gmail threading
@@ -232,7 +244,7 @@ export class EmailService {
       }
       
       const emailResult = await resend.emails.send({
-        from: fromEmail,
+        from: formattedFrom,
         to: company.email,
         subject: replySubject,
         text: emailBody,

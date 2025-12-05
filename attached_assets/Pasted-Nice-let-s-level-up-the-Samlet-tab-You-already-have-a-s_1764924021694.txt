@@ -1,0 +1,307 @@
+Nice, let’s level up the **Samlet** tab 👌
+
+You already have a section there with strengths/weaknesses on overall level.
+Now we’ll change it so it’s **per insurance type**, and more “board-level”:
+
+* Fritidshus → Styrker & Svagheder (pris + dækning)
+* Indbo → Styrker & Svagheder
+* Ulykke → Styrker & Svagheder
+  …osv.
+
+Here’s a Replit prompt you can paste directly.
+
+---
+
+### Replit prompt – per-insurance “Dækningssammenligning”
+
+````text
+You are an expert TypeScript/React developer working on the BedreTilbud comparison page.
+
+Context:
+- On `/sammenligning/[comparisonId]`, in the **Samlet** tab, we recently added an `OverallProsConsSection` (or similar) that shows a list of generic strengths/weaknesses for the offer vs the current insurance.
+- We now want this “Dækningssammenligning” to be **per insurance type**, not just a flat list.
+
+Goal:
+On the **Samlet** tab:
+- Keep the top KPI cards (Samlet besparelse, Tilbud pr. år, Nuværende pr. år) as they are.
+- Replace/extend the current pros/cons section so it shows, for **each policy type** (Fritidshus, Indbo, Ulykke, etc.):
+  - A small card with:
+    - Title: policy type label (e.g. “Fritidshus”)
+    - Two columns: “Styrker” and “Svagheder”
+    - Each column contains 1–3 short bullets based on **price** and **coverage**.
+- The goal is **overview, not detail**:
+  - No row-by-row coverage.
+  - No long lists – just a couple of bullets per insurance: one about price, one about coverage, possibly one extra if needed.
+
+Use the Types Studio comparison `/sammenligning/014e5198-cec6-45ec-a3f4-3cf1cb0108c6` as the main test.
+
+---
+
+## Step 1 – Reuse comparison data per policy
+
+1. Open `client/src/components/comparison/OverallProsConsSection.tsx` (or the component currently used only in the Samlet tab).
+
+2. Ensure the component receives the **full comparison result**, something like:
+
+   ```ts
+   interface OverallProsConsSectionProps {
+     comparison: ComparisonResult;
+   }
+````
+
+3. Inside this component, derive an array of per-policy comparison objects from the data, e.g.:
+
+   ```ts
+   const policyComparisons = comparison.policyComparisons ?? [];
+   ```
+
+   Each element should contain at least:
+
+   * `policyType: string`
+   * `annualSavings: number` (offer premium vs current)
+   * Some way of knowing coverage diffs (see next step – use whatever structure the detailed comparison table uses).
+
+---
+
+## Step 2 – Derive price & coverage summary per policy
+
+For each `policyComparison`, build small “pros” and “cons” arrays.
+
+1. Create helpers at the top of the component (or in a util file):
+
+   ```ts
+   import { formatCurrency } from "@/utils/format"; // adjust path
+   import { getPolicyTypeLabel } from "@/utils/policyType"; // same as table uses
+
+   type SummaryItem = { type: "pro" | "con"; text: string };
+   ```
+
+2. For each policy, calculate:
+
+   ```ts
+   const items: SummaryItem[] = [];
+
+   // a) Price summary
+   if (pc.annualSavings > 0) {
+     items.push({
+       type: "pro",
+       text: `Pris: ca. ${formatCurrency(pc.annualSavings)} billigere om året.`,
+     });
+   } else if (pc.annualSavings < 0) {
+     items.push({
+       type: "con",
+       text: `Pris: ca. ${formatCurrency(Math.abs(pc.annualSavings))} dyrere om året.`,
+     });
+   } else {
+     // optional neutral text, or skip
+   }
+   ```
+
+3. Coverage summary:
+
+   Reuse the same data the detailed comparison table uses for better/worse coverage.
+   There is likely a structure like `pc.coverageRows`, `pc.betterCoverages`, `pc.worseCoverages`, or a `status` enum per row.
+
+   * Derive counts:
+
+     ```ts
+     const coverageRows = pc.coverageRows ?? [];
+     const betterCount = coverageRows.filter(r => r.difference === "better").length;
+     const worseCount  = coverageRows.filter(r => r.difference === "worse").length;
+     ```
+
+   * Turn into one or two short bullets:
+
+     ```ts
+     if (betterCount > 0 || worseCount > 0) {
+       if (betterCount > worseCount) {
+         items.push({
+           type: "pro",
+           text: `Dækning: Overordnet bedre (${betterCount} forbedringer, ${worseCount} forringelser).`,
+         });
+       } else if (worseCount > betterCount) {
+         items.push({
+           type: "con",
+           text: `Dækning: Overordnet dårligere (${worseCount} forringelser, ${betterCount} forbedringer).`,
+         });
+       } else {
+         items.push({
+           type: "pro",
+           text: `Dækning: Nogle forbedringer (${betterCount}) og nogle forringelser (${worseCount}).`,
+         });
+         items.push({
+           type: "con",
+           text: `Dækning: Nogle forringelser (${worseCount}) og nogle forbedringer (${betterCount}).`,
+         });
+       }
+     } else {
+       // optional neutral bullet:
+       // items.push({ type: "neutral", text: "Dækning: Overordnet uændret." });
+     }
+     ```
+
+4. Split into pros/cons and limit to a compact overview:
+
+   ```ts
+   const pros  = items.filter(i => i.type === "pro").slice(0, 2);
+   const cons  = items.filter(i => i.type === "con").slice(0, 2);
+   ```
+
+   We want max 2 bullets per column to keep it readable.
+
+---
+
+## Step 3 – Render per-policy “Dækningssammenligning”
+
+Inside `OverallProsConsSection`, instead of (or in addition to) the old global list, render a section like this:
+
+```tsx
+export const OverallProsConsSection: React.FC<OverallProsConsSectionProps> = ({ comparison }) => {
+  const policyComparisons = comparison.policyComparisons ?? [];
+
+  if (!policyComparisons.length) return null;
+
+  return (
+    <section className="mt-8 space-y-6">
+      <div>
+        <h2 className="text-base font-semibold text-slate-900">
+          Dækningssammenligning – overblik pr. forsikring
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          Kort overblik over pris og dækning for hver forsikring i {comparison.companyName}-tilbuddet
+          sammenlignet med {comparison.currentCompanyName}.
+        </p>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {policyComparisons.map((pc) => {
+          const label = getPolicyTypeLabel(pc.policyType) ?? pc.policyType;
+
+          const items: SummaryItem[] = [];
+          // build items as described in Step 2 for this `pc`:
+          // - push price bullet
+          // - push coverage bullet(s)
+
+          const pros  = items.filter(i => i.type === "pro").slice(0, 2);
+          const cons  = items.filter(i => i.type === "con").slice(0, 2);
+
+          return (
+            <article
+              key={pc.policyType}
+              className="rounded-2xl border bg-white p-4 md:p-5"
+            >
+              <header className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    {label}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {comparison.companyName} vs. {comparison.currentCompanyName}
+                  </p>
+                </div>
+              </header>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-green-700">
+                    Styrker
+                  </h4>
+                  <ul className="mt-2 space-y-1.5 text-xs sm:text-sm">
+                    {pros.length > 0 ? (
+                      pros.map((item, idx) => (
+                        <li key={idx} className="flex gap-2">
+                          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-green-600" />
+                          <span>{item.text}</span>
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-xs text-slate-500">
+                        Ingen tydelige styrker på pris eller dækning.
+                      </li>
+                    )}
+                  </ul>
+                </div>
+
+                <div>
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-red-700">
+                    Svagheder
+                  </h4>
+                  <ul className="mt-2 space-y-1.5 text-xs sm:text-sm">
+                    {cons.length > 0 ? (
+                      cons.map((item, idx) => (
+                        <li key={idx} className="flex gap-2">
+                          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-red-600" />
+                          <span>{item.text}</span>
+                        </li>
+                      ))
+                    ) : (
+                      <li className="text-xs text-slate-500">
+                        Ingen tydelige svagheder på pris eller dækning.
+                      </li>
+                    )}
+                  </ul>
+                </div>
+              </div>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+};
+```
+
+Adjust utility classes to match the rest of the design system if needed.
+
+---
+
+## Step 4 – Ensure Samlet tab uses this section only
+
+In `client/src/pages/comparison.tsx`, where `OverallProsConsSection` is used for the Samlet tab:
+
+* Keep the logic from the previous task that hides the detailed comparison + savings chart when `activeTab === "samlet"`.
+* Make sure that in the Samlet case, you now render only this **per-policy overview** (no long global list, no chart, no row-table).
+
+Example:
+
+```tsx
+{activeTab === "samlet" ? (
+  <OverallProsConsSection comparison={comparison} />
+) : (
+  <>
+    <DetailedComparisonSection
+      comparison={comparison}
+      activePolicyType={activeTab}
+    />
+    <SavingsOverTimeSection
+      comparison={comparison}
+      activePolicyType={activeTab}
+    />
+  </>
+)}
+```
+
+---
+
+## Step 5 – Test with Types Studio comparison
+
+1. Start the dev server (or restart the “Start application” runner).
+2. Open `/sammenligning/014e5198-cec6-45ec-a3f4-3cf1cb0108c6`.
+3. On the **Samlet** tab, verify:
+
+   * Top cards look the same.
+   * Under dem ser du nu en “Dækningssammenligning – overblik pr. forsikring”.
+   * For hver forsikring (Fritidshus, Indbo, Ulykke):
+
+     * En lille boks med “Styrker” (pris/dækning hvor tilbuddet er bedre).
+     * En lille boks med “Svagheder” (pris/dækning hvor tilbuddet er dårligere).
+   * Du får et hurtigt overblik: fx at Fritidshus er dyrere men måske bedre dækket, Indbo billigere men med enkelte forringelser osv.
+
+If all looks good and text feels like a clear overview, you’re done.
+
+```
+
+---
+
+Hvis du vil kan vi bagefter finpudse selve formuleringerne (“tone of voice”) så de matcher BedreTilbuds brand helt præcist.
+```
