@@ -1,5 +1,7 @@
 import express, { type Request, Response, NextFunction } from "express";
 import compression from "compression";
+import path from "path";
+import fs from "fs";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { emailService } from "./services/emailService";
@@ -84,6 +86,76 @@ app.use((req, res, next) => {
 
   next();
 });
+
+// PRODUCTION ONLY: Static assets middleware with correct MIME types (must be before API routes)
+// In development, Vite handles this via setupVite()
+if (process.env.NODE_ENV !== "development") {
+  const distPath = path.resolve(import.meta.dirname, "public");
+  const distAssetsPath = path.join(distPath, "assets");
+  
+  // Verify build output exists
+  if (fs.existsSync(distAssetsPath)) {
+    log("📦 Production mode: Serving static assets from " + distAssetsPath);
+    
+    // Serve /assets/* with correct MIME types and aggressive caching
+    app.use("/assets", express.static(distAssetsPath, {
+      immutable: true,
+      maxAge: 31536000000, // 1 year in ms
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith(".css")) {
+          res.setHeader("Content-Type", "text/css; charset=utf-8");
+        } else if (filePath.endsWith(".js")) {
+          res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+        } else if (filePath.endsWith(".map")) {
+          res.setHeader("Content-Type", "application/json; charset=utf-8");
+        } else if (filePath.endsWith(".woff2")) {
+          res.setHeader("Content-Type", "font/woff2");
+        } else if (filePath.endsWith(".woff")) {
+          res.setHeader("Content-Type", "font/woff");
+        } else if (filePath.endsWith(".svg")) {
+          res.setHeader("Content-Type", "image/svg+xml");
+        } else if (filePath.endsWith(".png")) {
+          res.setHeader("Content-Type", "image/png");
+        } else if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) {
+          res.setHeader("Content-Type", "image/jpeg");
+        } else if (filePath.endsWith(".webp")) {
+          res.setHeader("Content-Type", "image/webp");
+        }
+        res.setHeader("Vary", "Accept-Encoding");
+      }
+    }));
+    
+    // Health check endpoint for assets verification
+    app.get("/healthz/assets", (_req, res) => {
+      try {
+        const files = fs.readdirSync(distAssetsPath);
+        const jsFiles = files.filter(f => f.endsWith('.js'));
+        const cssFiles = files.filter(f => f.endsWith('.css'));
+        
+        if (jsFiles.length === 0 || cssFiles.length === 0) {
+          res.status(500).json({ 
+            status: "error", 
+            message: "Missing JS or CSS assets",
+            jsCount: jsFiles.length,
+            cssCount: cssFiles.length
+          });
+          return;
+        }
+        
+        res.json({ 
+          status: "ok", 
+          jsCount: jsFiles.length, 
+          cssCount: cssFiles.length,
+          totalAssets: files.length
+        });
+      } catch (error) {
+        res.status(500).json({ status: "error", message: "Cannot read assets directory" });
+      }
+    });
+  } else {
+    log("⚠️ Warning: Production assets directory not found at " + distAssetsPath);
+  }
+}
 
 (async () => {
   const server = await registerRoutes(app);
