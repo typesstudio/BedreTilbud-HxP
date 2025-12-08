@@ -1054,8 +1054,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { db } = await import("./db");
-      const { policies, policySnapshots, offerSnapshots, healthChecks } = await import("@shared/schema");
-      const { eq } = await import("drizzle-orm");
+      const { policies, policySnapshots, offerSnapshots, healthChecks, companyComparisons, comparisonCurrentSnapshots, magicLinks, notifications } = await import("@shared/schema");
+      const { eq, and } = await import("drizzle-orm");
 
       // CASCADE DELETE: Delete all related records before deleting the document
       const documentId = req.params.id;
@@ -1076,12 +1076,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await db.delete(policies).where(eq(policies.documentId, documentId));
       logger.info('[Document Delete] Policies deleted', { documentId });
 
-      // 5. Delete the physical file
+      // 5. If this is an offer document with a companyId, clean up company_comparisons
+      // Only delete comparisons if there are no other offer documents from this company
+      if (document.documentType === 'offer' && document.companyId && document.userId) {
+        // Check if there are other offer documents from this company for this user
+        const otherOfferDocs = await db.select()
+          .from((await import("@shared/schema")).documents)
+          .where(and(
+            eq((await import("@shared/schema")).documents.userId, document.userId),
+            eq((await import("@shared/schema")).documents.companyId, document.companyId),
+            eq((await import("@shared/schema")).documents.documentType, 'offer')
+          ));
+        
+        // Filter out the document we're deleting
+        const remainingOfferDocs = otherOfferDocs.filter(d => d.id !== documentId);
+        
+        if (remainingOfferDocs.length === 0) {
+          // No other offer documents from this company, delete the comparison
+          const comparisonsToDelete = await db.select()
+            .from(companyComparisons)
+            .where(and(
+              eq(companyComparisons.userId, document.userId),
+              eq(companyComparisons.offerCompany, document.companyId)
+            ));
+          
+          for (const comparison of comparisonsToDelete) {
+            // Delete related records first (due to foreign key constraints)
+            await db.delete(comparisonCurrentSnapshots).where(eq(comparisonCurrentSnapshots.comparisonId, comparison.id));
+            await db.delete(notifications).where(eq(notifications.comparisonId, comparison.id));
+            await db.delete(magicLinks).where(eq(magicLinks.comparisonId, comparison.id));
+            await db.delete(companyComparisons).where(eq(companyComparisons.id, comparison.id));
+            logger.info('[Document Delete] Company comparison deleted', { comparisonId: comparison.id, offerCompany: document.companyId });
+          }
+        }
+      }
+
+      // 6. Delete the physical file
       if (document.filePath && fs.existsSync(document.filePath)) {
         fs.unlinkSync(document.filePath);
       }
 
-      // 6. Finally delete the document record
+      // 7. Finally delete the document record
       await storage.deleteDocument(documentId);
       auditLog('document_deleted', userId, `Deleted document: ${document.fileName}`);
       
@@ -2633,6 +2668,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Cleanup orphaned company comparisons (admin - for maintenance)
+  // Deletes company_comparisons where no offer documents exist for that company
+  app.post("/api/admin/cleanup-orphaned-comparisons", requireAuth, requireCSRFToken, async (req, res) => {
+    try {
+      const { db } = await import("./db");
+      const { companyComparisons, documents, comparisonCurrentSnapshots, magicLinks, notifications } = await import("@shared/schema");
+      const { eq, and, sql } = await import("drizzle-orm");
+
+      // Find all company_comparisons
+      const allComparisons = await db.select().from(companyComparisons);
+      
+      let deletedCount = 0;
+      const deletedComparisons: string[] = [];
+
+      for (const comparison of allComparisons) {
+        // Check if there are any offer documents for this user + company combination
+        const offerDocs = await db.select()
+          .from(documents)
+          .where(and(
+            eq(documents.userId, comparison.userId),
+            eq(documents.companyId, comparison.offerCompany),
+            eq(documents.documentType, 'offer')
+          ));
+
+        if (offerDocs.length === 0) {
+          // No offer documents exist, this comparison is orphaned - delete it
+          await db.delete(comparisonCurrentSnapshots).where(eq(comparisonCurrentSnapshots.comparisonId, comparison.id));
+          await db.delete(notifications).where(eq(notifications.comparisonId, comparison.id));
+          await db.delete(magicLinks).where(eq(magicLinks.comparisonId, comparison.id));
+          await db.delete(companyComparisons).where(eq(companyComparisons.id, comparison.id));
+          
+          deletedCount++;
+          deletedComparisons.push(comparison.id);
+          logger.info('[Admin Cleanup] Deleted orphaned comparison', { 
+            comparisonId: comparison.id, 
+            userId: comparison.userId,
+            offerCompany: comparison.offerCompany 
+          });
+        }
+      }
+
+      res.json({
+        message: `Slettet ${deletedCount} forældreløse sammenligninger`,
+        deletedCount,
+        deletedComparisons
+      });
+    } catch (error: any) {
+      logger.error('[Admin Cleanup] Failed to cleanup orphaned comparisons', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Gmail OAuth routes
   app.get("/auth/gmail", async (req, res) => {
     try {
@@ -2770,8 +2857,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = (page - 1) * limit;
 
-      // Get all offer documents for the user
-      const offerDocuments = await storage.getUserDocuments(req.params.userId, 'offer');
+      // Get only ACTIVE offer documents for the user (documents with isActive !== false)
+      const offerDocuments = await storage.getActiveUserDocuments(req.params.userId, 'offer');
       const totalCount = offerDocuments.length;
       const paginatedOffers = offerDocuments.slice(offset, offset + limit);
 
