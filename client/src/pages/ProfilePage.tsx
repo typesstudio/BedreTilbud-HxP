@@ -8,7 +8,8 @@ import {
   IconButton, 
   IconWithBackground, 
   Dialog,
-  TextField
+  TextField,
+  Switch
 } from "@/ui";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { FeatherDownload, FeatherEdit, FeatherFileText, FeatherMoreVertical, FeatherPlus, FeatherUpload, FeatherX, FeatherGitCompare, FeatherTrash2 } from "@subframe/core";
@@ -228,6 +229,23 @@ export default function ProfilePage() {
       queryClient.invalidateQueries({ queryKey: ["/api/policies", "user", userId] });
       setDeleteConfirmDocId(null);
       toast({ title: "Dokument slettet" });
+    },
+  });
+
+  const toggleDocumentActiveMutation = useMutation({
+    mutationFn: async ({ documentId, isActive }: { documentId: string; isActive: boolean }) => {
+      const response = await apiRequest("PATCH", `/api/documents/${documentId}/active`, { isActive });
+      return response.json();
+    },
+    onSuccess: (_, { isActive }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/documents/user", userId] });
+      toast({ 
+        title: isActive ? "Dokument aktiveret" : "Dokument deaktiveret",
+        description: isActive ? "Dokumentet vil nu blive brugt til forespørgsler" : "Dokumentet vil ikke blive sendt til forsikringsselskaber"
+      });
+    },
+    onError: () => {
+      toast({ title: "Kunne ikke ændre status", variant: "destructive" });
     },
   });
 
@@ -489,22 +507,32 @@ export default function ProfilePage() {
                     </div>
                   ) : (
                     documents.map((doc: any) => (
-                      <div key={doc.id} className="flex w-full items-center gap-4 border-b border-solid border-neutral-border py-6 mobile:flex-row mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:py-4">
+                      <div key={doc.id} className={`flex w-full items-center gap-4 border-b border-solid border-neutral-border py-6 mobile:flex-row mobile:flex-nowrap mobile:gap-3 mobile:px-0 mobile:py-4 ${doc.isActive === false ? 'opacity-50' : ''}`}>
                         <IconWithBackground
                           className="mobile:hidden"
                           size="large"
                           icon={<FeatherFileText />}
+                          variant={doc.isActive === false ? 'neutral' : 'brand'}
                         />
                         <IconWithBackground
                           className="hidden mobile:flex"
                           size="medium"
                           icon={<FeatherFileText />}
+                          variant={doc.isActive === false ? 'neutral' : 'brand'}
                         />
                         <div className="flex grow shrink-0 basis-0 flex-col items-start justify-center gap-1">
                           <div className="flex items-center gap-2 w-full flex-wrap">
                             <span className="text-body-bold font-body-bold text-default-font mobile:text-caption-bold mobile:font-caption-bold" data-testid={`text-doc-name-${doc.id}`}>
                               {doc.fileName}
                             </span>
+                            {doc.isActive === false && (
+                              <span 
+                                className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                                data-testid={`badge-inactive-doc-${doc.id}`}
+                              >
+                                Deaktiveret
+                              </span>
+                            )}
                             {doc.documentKind === 'unknown' && (
                               <span 
                                 className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
@@ -564,6 +592,16 @@ export default function ProfilePage() {
                               Der skete en teknisk fejl, da vi forsøgte at læse filen. Prøv igen eller upload en anden version.
                             </span>
                           )}
+                        </div>
+                        <div className="flex items-center gap-2 mobile:hidden">
+                          <span className="text-caption font-caption text-subtext-color">Aktiv</span>
+                          <Switch
+                            checked={doc.isActive !== false}
+                            onCheckedChange={(checked: boolean) => {
+                              toggleDocumentActiveMutation.mutate({ documentId: doc.id, isActive: checked });
+                            }}
+                            data-testid={`switch-doc-active-${doc.id}`}
+                          />
                         </div>
                         <Button
                           className="mobile:hidden touch-target"
