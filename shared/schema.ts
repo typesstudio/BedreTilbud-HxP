@@ -24,6 +24,7 @@ export const users = pgTable("users", {
   priorityThree: text("priority_three"),
   insurancePriority: text("insurance_priority"), // "cheap", "coverage", or "convenience" from onboarding
   aiAutoResponseEnabled: boolean("ai_auto_response_enabled").default(true),
+  isAdmin: boolean("is_admin").default(false), // Admin flag for draft approval override
   createdAt: timestamp("created_at").defaultNow(),
 });
 

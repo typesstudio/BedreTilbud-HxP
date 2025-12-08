@@ -1914,7 +1914,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const draftId = req.params.id;
       const authenticatedUserId = req.user!.id;
-      console.log("📤 Approving AI draft:", draftId, "by user:", authenticatedUserId);
+      const authenticatedUser = await storage.getUser(authenticatedUserId);
+      const isAdmin = authenticatedUser?.isAdmin === true;
+      
+      console.log("📤 Approving AI draft:", draftId, "by user:", authenticatedUserId, "isAdmin:", isAdmin);
 
       // Get the draft with thread for authorization
       const result = await storage.getEmailWithThread(draftId);
@@ -1930,8 +1933,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Beskeden er ikke en kladde" });
       }
 
-      // Authorization: check if authenticated user owns this thread
-      if (thread.userId !== authenticatedUserId) {
+      // Authorization: check if authenticated user owns this thread OR is admin
+      if (thread.userId !== authenticatedUserId && !isAdmin) {
         return res.status(403).json({ message: "Du har ikke adgang til denne kladde" });
       }
 
@@ -1960,7 +1963,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const draftId = req.params.id;
       const authenticatedUserId = req.user!.id;
-      console.log("❌ Rejecting AI draft:", draftId, "by user:", authenticatedUserId);
+      const authenticatedUser = await storage.getUser(authenticatedUserId);
+      const isAdmin = authenticatedUser?.isAdmin === true;
+      
+      console.log("❌ Rejecting AI draft:", draftId, "by user:", authenticatedUserId, "isAdmin:", isAdmin);
 
       // Get the draft with thread for authorization
       const result = await storage.getEmailWithThread(draftId);
@@ -1976,8 +1982,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Beskeden er ikke en kladde" });
       }
 
-      // Authorization: check if authenticated user owns this thread
-      if (thread.userId !== authenticatedUserId) {
+      // Authorization: check if authenticated user owns this thread OR is admin
+      if (thread.userId !== authenticatedUserId && !isAdmin) {
         return res.status(403).json({ message: "Du har ikke adgang til denne kladde" });
       }
 
@@ -2001,9 +2007,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const draftId = req.params.id;
       const authenticatedUserId = req.user!.id;
+      const authenticatedUser = await storage.getUser(authenticatedUserId);
+      const isAdmin = authenticatedUser?.isAdmin === true;
       const { body, subject } = req.body;
       
-      console.log("✏️ Editing AI draft:", draftId, "by user:", authenticatedUserId);
+      console.log("✏️ Editing AI draft:", draftId, "by user:", authenticatedUserId, "isAdmin:", isAdmin);
 
       // Get the draft with thread for authorization
       const result = await storage.getEmailWithThread(draftId);
@@ -2019,8 +2027,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Beskeden er ikke en kladde" });
       }
 
-      // Authorization: check if authenticated user owns this thread
-      if (thread.userId !== authenticatedUserId) {
+      // Authorization: check if authenticated user owns this thread OR is admin
+      if (thread.userId !== authenticatedUserId && !isAdmin) {
         return res.status(403).json({ message: "Du har ikke adgang til denne kladde" });
       }
 
