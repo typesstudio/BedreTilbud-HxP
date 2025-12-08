@@ -90,8 +90,8 @@ app.use((req, res, next) => {
 // PRODUCTION ONLY: Static assets middleware with correct MIME types (must be before API routes)
 // In development, Vite handles this via setupVite()
 if (process.env.NODE_ENV !== "development") {
-  // Build output is in dist/public (as configured in vite.config.ts)
-  const distPath = path.resolve(import.meta.dirname, "..", "dist", "public");
+  // Build output is synced to server/public (matching server/vite.ts expectations)
+  const distPath = path.resolve(import.meta.dirname, "public");
   const distAssetsPath = path.join(distPath, "assets");
   
   // Verify build output exists
