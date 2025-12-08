@@ -2001,9 +2001,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/emails/check-inbox", async (req, res) => {
     try {
       const stats = await emailService.checkInbox();
+      
+      // Catch-up: Run ComparisonOrchestrator for threads with received status but no comparisons
+      // This ensures comparisons are created even if PDFs were processed in previous runs
+      // Guards against duplicate runs: only runs if no active comparison exists AND offer policies are available
+      const { ComparisonOrchestrator } = await import("./services/comparisonOrchestrator");
+      const comparisonOrchestrator = new ComparisonOrchestrator(storage);
+      
+      const receivedThreads = await storage.getEmailThreadsByStatus('received');
+      let catchupComparisonsCreated = 0;
+      let catchupSkipped = 0;
+      
+      for (const thread of receivedThreads) {
+        if (!thread.userId || !thread.companyId) continue;
+        
+        // Check if this user/company pair already has a non-superseded comparison
+        const existingComparison = await storage.getActiveCompanyComparison(thread.userId, thread.companyId);
+        
+        if (existingComparison) {
+          console.log(`[Catch-up] Skipping thread ${thread.id} - comparison already exists (${existingComparison.id})`);
+          catchupSkipped++;
+          continue;
+        }
+        
+        // Check if there are any completed offer policy snapshots for this user from this company's thread
+        // This prevents futile runs when documents are still processing
+        // We check for offer snapshots from documents linked to this thread's company
+        const { policySnapshots, documents } = await import("@shared/schema");
+        const { db } = await import("./db");
+        const { eq, and, inArray } = await import("drizzle-orm");
+        
+        // Get document IDs for this user/company pair (only completed documents)
+        const companyDocs = await db.select({ id: documents.id })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.userId, thread.userId),
+              eq(documents.companyId, thread.companyId),
+              eq(documents.documentType, 'offer'),
+              eq(documents.extractionStatus, 'completed')
+            )
+          );
+        
+        if (companyDocs.length === 0) {
+          console.log(`[Catch-up] Skipping thread ${thread.id} - no completed offer documents for this company`);
+          catchupSkipped++;
+          continue;
+        }
+        
+        const docIds = companyDocs.map(d => d.id);
+        const offerSnapshots = await db.select()
+          .from(policySnapshots)
+          .where(
+            and(
+              eq(policySnapshots.userId, thread.userId),
+              eq(policySnapshots.kind, 'offer'),
+              eq(policySnapshots.isActive, true),
+              inArray(policySnapshots.documentId, docIds)
+            )
+          )
+          .limit(1);
+        
+        if (offerSnapshots.length === 0) {
+          console.log(`[Catch-up] Skipping thread ${thread.id} - no completed offer snapshots from company docs yet`);
+          catchupSkipped++;
+          continue;
+        }
+        
+        console.log(`[Catch-up] Running comparison for thread ${thread.id} (user: ${thread.userId}, company: ${thread.companyId})`);
+        const result = await comparisonOrchestrator.runForUser({
+          userId: thread.userId,
+          forceRerun: false
+        });
+        catchupComparisonsCreated += result.comparisonsCreated;
+      }
+      
+      if (catchupComparisonsCreated > 0) {
+        console.log(`[Catch-up] Created ${catchupComparisonsCreated} missing comparisons, skipped ${catchupSkipped} threads`);
+      }
+      
       res.json({ 
         message: `Fandt ${stats.messagesFound} emails, processerede ${stats.messagesProcessed}, oprettede ${stats.newDocuments} nye dokumenter`,
-        stats 
+        stats,
+        catchupComparisonsCreated
       });
     } catch (error: any) {
       res.status(500).json({ message: error.message });

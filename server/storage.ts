@@ -64,6 +64,7 @@ export interface IStorage {
   getEmailThreadByGmailId(gmailThreadId: string): Promise<EmailThread | undefined>;
   getEmailThreadByToken(token: string): Promise<EmailThread | undefined>;
   getEmailThreadByCompany(userId: string, companyId: string): Promise<EmailThread | undefined>;
+  getEmailThreadsByStatus(status: string): Promise<EmailThread[]>;
   getUserEmailThreads(userId: string): Promise<EmailThread[]>;
   getUserEmailThreadsEnriched(userId: string, limit?: number, offset?: number): Promise<Array<EmailThread & { company: Company | null; emailCount: number; lastEmailAt: Date | null }>>;
   getAllEmailThreadsEnriched(limit?: number, offset?: number): Promise<Array<EmailThread & { company: Company | null; user: User | null; emailCount: number; lastEmailAt: Date | null }>>;
@@ -98,6 +99,7 @@ export interface IStorage {
   getCompanyComparison(id: string): Promise<CompanyComparison | undefined>;
   getCompanyComparisonsByUser(userId: string): Promise<CompanyComparison[]>;
   getActiveCompanyComparisonsByUser(userId: string): Promise<CompanyComparison[]>;
+  getActiveCompanyComparison(userId: string, companyId: string): Promise<CompanyComparison | undefined>;
   getCompanyComparisonByCompanies(userId: string, currentCompany: string, offerCompany: string): Promise<CompanyComparison | undefined>;
   createCompanyComparison(comparison: InsertCompanyComparison): Promise<CompanyComparison>;
   updateCompanyComparisonStatus(id: string, status: string, comparisonJSON?: any, errorMessage?: string, statusReason?: string): Promise<CompanyComparison>;
@@ -447,6 +449,10 @@ export class MemStorage implements IStorage {
     return Array.from(this.emailThreads.values()).find(t => t.userId === userId && t.companyId === companyId);
   }
 
+  async getEmailThreadsByStatus(status: string): Promise<EmailThread[]> {
+    return Array.from(this.emailThreads.values()).filter(t => t.status === status);
+  }
+
   async getUserEmailThreads(userId: string): Promise<EmailThread[]> {
     return Array.from(this.emailThreads.values()).filter(t => t.userId === userId);
   }
@@ -669,6 +675,11 @@ export class MemStorage implements IStorage {
   async getActiveCompanyComparisonsByUser(userId: string): Promise<CompanyComparison[]> {
     return Array.from(this.companyComparisons.values())
       .filter(c => c.userId === userId && !(c as any).isSuperseded);
+  }
+
+  async getActiveCompanyComparison(userId: string, companyId: string): Promise<CompanyComparison | undefined> {
+    return Array.from(this.companyComparisons.values())
+      .find(c => c.userId === userId && c.offerCompany === companyId && !(c as any).isSuperseded);
   }
 
   async supersedeCompanyComparisons(userId: string, currentCompany: string, offerCompany: string): Promise<number> {
@@ -1380,6 +1391,13 @@ export class DatabaseStorage implements IStorage {
     return thread || undefined;
   }
 
+  async getEmailThreadsByStatus(status: string): Promise<EmailThread[]> {
+    const { db } = await import("./db");
+    const { emailThreads } = await import("@shared/schema");
+    const { eq } = await import("drizzle-orm");
+    return await db.select().from(emailThreads).where(eq(emailThreads.status, status));
+  }
+
   async getUserEmailThreads(userId: string): Promise<EmailThread[]> {
     const { db } = await import("./db");
     const { emailThreads } = await import("@shared/schema");
@@ -1809,6 +1827,22 @@ export class DatabaseStorage implements IStorage {
         )
       )
       .orderBy(desc(companyComparisons.createdAt));
+  }
+
+  async getActiveCompanyComparison(userId: string, companyId: string): Promise<CompanyComparison | undefined> {
+    const { db } = await import("./db");
+    const { companyComparisons } = await import("@shared/schema");
+    const { eq, and } = await import("drizzle-orm");
+    const [comparison] = await db.select()
+      .from(companyComparisons)
+      .where(
+        and(
+          eq(companyComparisons.userId, userId),
+          eq(companyComparisons.offerCompany, companyId),
+          eq(companyComparisons.isSuperseded, false)
+        )
+      );
+    return comparison || undefined;
   }
 
   async supersedeCompanyComparisons(

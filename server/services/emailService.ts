@@ -600,11 +600,12 @@ export class EmailService {
         }
       }
       
-      // PHASE 3: Run ComparisonOrchestrator ONCE after ALL PDFs are processed
-      // This ensures the comparison includes ALL policies from this offer email
+      // PHASE 3: Run ComparisonOrchestrator ONLY when new documents were actually processed
+      // This prevents duplicate runs with the catch-up mechanism in check-inbox endpoint
+      // The catch-up handles retry scenarios where PDFs were already processed
       if (processedDocuments.length > 0 && existingThread.userId && existingThread.companyId) {
         const totalSnapshots = processedDocuments.reduce((sum, d) => sum + d.snapshotCount, 0);
-        console.log(`[Email Batch] Starting PHASE 3: Running comparison for ${totalSnapshots} total snapshots from ${processedDocuments.length} documents`);
+        console.log(`[Email Batch] Starting PHASE 3: Running comparison for ${totalSnapshots} new snapshots from ${processedDocuments.length} documents`);
         
         const { ComparisonOrchestrator } = await import('./comparisonOrchestrator');
         const comparisonOrchestrator = new ComparisonOrchestrator(storage);
@@ -618,6 +619,10 @@ export class EmailService {
         
         if (comparisonResult.comparisonIds.length > 0) {
           console.log(`[Email Batch] ✅ Comparison IDs: ${comparisonResult.comparisonIds.join(', ')}`);
+        }
+        
+        if (comparisonResult.skipped) {
+          console.log(`[Email Batch] Comparison skipped: ${comparisonResult.skipReason}`);
         }
       }
       

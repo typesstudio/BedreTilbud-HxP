@@ -43,6 +43,14 @@ The backend is built with Node.js and Express.js, providing a RESTful API. Key a
 -   **Security**: Input validation, RBAC, rate limiting, PII-redacting logging.
 -   **Reliability**: AI retry logic, distributed locking, Zod for structured validation, null-safe pricing logic, and enhanced pricing extraction prompts.
 -   **Extraction Status State Machine (Step 3.1)**: Documents follow strict status progression: `pending` → `processing` → `completed`/`failed`. All entry points (upload, email, reprocess) create documents with `pending` status. `ExtractionOrchestratorService` manages transitions with centralized `markDocumentStatus` helper. Failed extractions include machine-readable `errorReason` codes (ocr_timeout, pdf_password_protected, json_parse_error, etc.). Downstream orchestrators (Health Check, Comparison) only process documents with `completed` status.
+-   **ComparisonOrchestrator Automatic Trigger System**: Two-path architecture for reliable comparison execution:
+    -   **PHASE 3 (Primary)**: Runs immediately after email PDF processing when new documents are created (`processedDocuments.length > 0`). Triggered in `emailService.checkInbox()`.
+    -   **Catch-up Mechanism (Fallback)**: Runs in `/api/emails/check-inbox` for threads with `received` status. Guards prevent futile runs:
+        1. Checks for existing non-superseded comparison via `getActiveCompanyComparison(userId, companyId)`
+        2. Verifies completed offer documents exist (`extraction_status = 'completed'`) for this user/company pair
+        3. Verifies active offer snapshots exist from those completed documents
+    -   **Admin Manual Trigger**: Button in admin dashboard to manually run ComparisonOrchestrator for threads with `received` status.
+    -   **Storage Methods**: `getEmailThreadsByStatus(status)` and `getActiveCompanyComparison(userId, companyId)` support catch-up logic.
 
 ## External Dependencies
 -   **Google APIs client library**: For Gmail integration.
