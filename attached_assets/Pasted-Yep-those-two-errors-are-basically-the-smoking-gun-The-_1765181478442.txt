@@ -1,0 +1,161 @@
+Yep — those two errors are basically the “smoking gun”:
+
+* The browser asks for a **CSS file** at `/assets/index-…css`
+* Your server replies with **JSON** (`Content-Type: application/json`) instead of `text/css`
+* So the browser refuses to apply it → the page stays blank.
+* The JS file returning **500** confirms the same thing: **the `/assets/*` route is not serving real static files in production** (it’s hitting an API/error handler or the files don’t exist where the server expects them).
+
+So this is **not a “cache/incognito” issue**. It’s a **production static-assets routing / build output path mismatch**.
+
+Below is a Replit prompt that fixes it “for always” by **aligning Vite build output with what the production server serves** + **adding build-output assertions** so you never deploy a broken build again.
+
+---
+
+## Replit prompt: Fix blank page + wrong MIME for /assets in production
+
+### Objective
+
+Ensure that in production:
+
+* `/assets/*.css` returns `Content-Type: text/css`
+* `/assets/*.js` returns `Content-Type: application/javascript`
+* No `/assets/*` request ever returns JSON
+* Build output directory matches what the server actually serves
+* Server refuses to boot if build output is missing
+
+### Step 1 — Find what directory the production server serves
+
+1. Open `server/vite.ts` (read-only is fine) and locate the production static serving path. It will be something like:
+
+* `server/public`
+* `dist/public`
+* `dist`
+* `public`
+
+Write down the exact directory the server expects (call it `PROD_PUBLIC_DIR`).
+
+> From your own analysis it sounds like:
+> **Vite builds to `dist/public`** but server serves **`server/public`**.
+> If that’s correct, we fix Vite to output to `server/public`.
+
+---
+
+### Step 2 — Make Vite build into the directory the server serves
+
+Edit `vite.config.ts` to force a single source of truth:
+
+```ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  base: "/", // IMPORTANT so /assets/... resolves correctly
+  build: {
+    outDir: "server/public",     // <-- MUST match PROD_PUBLIC_DIR
+    assetsDir: "assets",
+    emptyOutDir: true,
+    sourcemap: true,
+  },
+});
+```
+
+If `PROD_PUBLIC_DIR` is different, use that instead of `server/public`.
+
+---
+
+### Step 3 — Ensure the server serves that same folder BEFORE API routes
+
+Open your server entrypoint (commonly `server/index.ts`, `server/app.ts`, `server/main.ts` etc.) and ensure order is:
+
+1. Static serving
+2. API routes
+3. SPA fallback
+
+Add this near the top (Express example):
+
+```ts
+import path from "path";
+import fs from "fs";
+import express from "express";
+
+const app = express();
+
+const publicDir = path.resolve(process.cwd(), "server/public");
+const indexHtml = path.join(publicDir, "index.html");
+
+// Hard fail if build output is missing (prevents broken deploys)
+if (!fs.existsSync(indexHtml)) {
+  throw new Error(
+    `Missing ${indexHtml}. Production build not found. Did you run "npm run build"?`
+  );
+}
+
+// Serve assets first
+app.use(express.static(publicDir, { maxAge: "1h" }));
+app.use("/assets", express.static(path.join(publicDir, "assets"), {
+  immutable: true,
+  maxAge: "1y",
+}));
+
+// ... THEN api routes after this
+// app.use("/api", apiRouter);
+
+// SPA fallback last (only for HTML navigations)
+app.get("*", (req, res, next) => {
+  const accept = req.headers.accept || "";
+  if (req.method !== "GET" || !accept.includes("text/html")) return next();
+  if (req.path.startsWith("/assets/")) return next();
+  if (req.path.startsWith("/api/")) return next();
+  res.sendFile(indexHtml);
+});
+```
+
+If you’re not using Express, implement the same ordering in your framework.
+
+---
+
+### Step 4 — Make deploy/start ALWAYS build first
+
+Update `package.json` so production cannot start without a fresh build:
+
+```json
+{
+  "scripts": {
+    "build": "vite build",
+    "start": "node server/index.js",
+    "prestart": "npm run build"
+  }
+}
+```
+
+(Adjust `start` to your actual server file.)
+
+---
+
+### Step 5 — Verify with curl (this is the pass/fail test)
+
+After deploy, run:
+
+```bash
+curl -I https://bedretilbud.com/assets/index-BBGG7_n0.css
+curl -I https://bedretilbud.com/assets/index-DL0HSvKT.js
+```
+
+You MUST see:
+
+* CSS: `Content-Type: text/css` (or `text/css; charset=utf-8`)
+* JS: `Content-Type: application/javascript` (or similar)
+* Status: `200`
+
+If you still see `application/json`, it means `/assets/*` is still being handled by the API / error handler and the static middleware is not first (or not pointing to the correct folder).
+
+---
+
+## Why incognito didn’t help
+
+Because the server is literally replying “here’s JSON” to a CSS request — the browser will never apply that stylesheet.
+
+---
+
+If you paste the **exact snippet** from your `server/vite.ts` that shows the prod static folder (the lines where it sets the public directory), I can tailor the outDir and the server snippet to match your codebase 1:1 in one shot.
