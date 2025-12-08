@@ -3,7 +3,7 @@ import compression from "compression";
 import path from "path";
 import fs from "fs";
 import { registerRoutes } from "./routes";
-import { setupVite, log } from "./vite";
+import { setupVite, serveStatic, log } from "./vite";
 import { emailService } from "./services/emailService";
 import { createEmailPollingLock } from "./utils/distributedLock";
 import { validateSecrets } from "./config/secrets";
@@ -87,95 +87,58 @@ app.use((req, res, next) => {
   next();
 });
 
-// PRODUCTION ONLY: Static assets middleware with correct MIME types (must be before API routes)
-// In development, Vite handles this via setupVite()
-if (process.env.NODE_ENV !== "development") {
-  // Try multiple possible paths for production assets
-  // Order of priority: dist/public (vite output), then relative to bundle
-  const possiblePaths = [
-    path.resolve(process.cwd(), "dist", "public"),  // Vite build output
-    path.resolve(import.meta.dirname, "public"),    // Relative to bundled index.js
-    path.resolve(process.cwd(), "server", "public"), // Sync-static output
-  ];
-  
-  let distPath: string | null = null;
-  let distAssetsPath: string | null = null;
-  
-  for (const tryPath of possiblePaths) {
-    const tryAssetsPath = path.join(tryPath, "assets");
-    if (fs.existsSync(tryAssetsPath)) {
-      distPath = tryPath;
-      distAssetsPath = tryAssetsPath;
-      break;
-    }
-  }
-  
-  // Verify build output exists
-  if (distPath && distAssetsPath) {
-    log("📦 Production mode: Serving static assets from " + distAssetsPath);
+// Health check endpoint for assets verification (works in both dev and production)
+app.get("/healthz/assets", (_req, res) => {
+  try {
+    const possiblePaths = [
+      path.resolve(process.cwd(), "dist", "public", "assets"),
+      path.resolve(import.meta.dirname, "public", "assets"),
+      path.resolve(process.cwd(), "server", "public", "assets"),
+    ];
     
-    // Serve /assets/* with correct MIME types and aggressive caching
-    app.use("/assets", express.static(distAssetsPath, {
-      immutable: true,
-      maxAge: 31536000000, // 1 year in ms
-      setHeaders: (res, filePath) => {
-        if (filePath.endsWith(".css")) {
-          res.setHeader("Content-Type", "text/css; charset=utf-8");
-        } else if (filePath.endsWith(".js")) {
-          res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-        } else if (filePath.endsWith(".map")) {
-          res.setHeader("Content-Type", "application/json; charset=utf-8");
-        } else if (filePath.endsWith(".woff2")) {
-          res.setHeader("Content-Type", "font/woff2");
-        } else if (filePath.endsWith(".woff")) {
-          res.setHeader("Content-Type", "font/woff");
-        } else if (filePath.endsWith(".svg")) {
-          res.setHeader("Content-Type", "image/svg+xml");
-        } else if (filePath.endsWith(".png")) {
-          res.setHeader("Content-Type", "image/png");
-        } else if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) {
-          res.setHeader("Content-Type", "image/jpeg");
-        } else if (filePath.endsWith(".webp")) {
-          res.setHeader("Content-Type", "image/webp");
-        }
-        res.setHeader("Vary", "Accept-Encoding");
-      }
-    }));
-    
-    // Health check endpoint for assets verification
-    app.get("/healthz/assets", (_req, res) => {
-      try {
-        const files = fs.readdirSync(distAssetsPath);
-        const jsFiles = files.filter(f => f.endsWith('.js'));
-        const cssFiles = files.filter(f => f.endsWith('.css'));
-        
-        if (jsFiles.length === 0 || cssFiles.length === 0) {
-          res.status(500).json({ 
-            status: "error", 
-            message: "Missing JS or CSS assets",
-            jsCount: jsFiles.length,
-            cssCount: cssFiles.length
-          });
-          return;
-        }
-        
-        res.json({ 
-          status: "ok", 
-          jsCount: jsFiles.length, 
-          cssCount: cssFiles.length,
-          totalAssets: files.length
-        });
-      } catch (error) {
-        res.status(500).json({ status: "error", message: "Cannot read assets directory" });
-      }
-    });
-  } else {
-    log("⚠️ Warning: Production assets directory not found. Tried paths:");
+    let assetsPath: string | null = null;
     for (const tryPath of possiblePaths) {
-      log("   - " + path.join(tryPath, "assets"));
+      if (fs.existsSync(tryPath)) {
+        assetsPath = tryPath;
+        break;
+      }
     }
+    
+    if (!assetsPath) {
+      res.status(500).json({ 
+        status: "error", 
+        message: "Assets directory not found",
+        triedPaths: possiblePaths
+      });
+      return;
+    }
+    
+    const files = fs.readdirSync(assetsPath);
+    const jsFiles = files.filter(f => f.endsWith('.js'));
+    const cssFiles = files.filter(f => f.endsWith('.css'));
+    
+    if (jsFiles.length === 0 || cssFiles.length === 0) {
+      res.status(500).json({ 
+        status: "error", 
+        message: "Missing JS or CSS assets",
+        jsCount: jsFiles.length,
+        cssCount: cssFiles.length,
+        assetsPath
+      });
+      return;
+    }
+    
+    res.json({ 
+      status: "ok", 
+      jsCount: jsFiles.length, 
+      cssCount: cssFiles.length,
+      totalAssets: files.length,
+      assetsPath
+    });
+  } catch (error) {
+    res.status(500).json({ status: "error", message: "Cannot read assets directory" });
   }
-}
+});
 
 (async () => {
   const server = await registerRoutes(app);
@@ -197,38 +160,8 @@ if (process.env.NODE_ENV !== "development") {
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
-    // Custom serveStatic that tries multiple paths for production assets
-    const staticPaths = [
-      path.resolve(process.cwd(), "dist", "public"),  // Vite build output
-      path.resolve(import.meta.dirname, "public"),    // Relative to bundled index.js
-      path.resolve(process.cwd(), "server", "public"), // Sync-static output
-    ];
-    
-    let staticDistPath: string | null = null;
-    for (const tryPath of staticPaths) {
-      if (fs.existsSync(path.join(tryPath, "index.html"))) {
-        staticDistPath = tryPath;
-        break;
-      }
-    }
-    
-    if (!staticDistPath) {
-      log("❌ Could not find build directory with index.html. Tried:");
-      for (const tryPath of staticPaths) {
-        log("   - " + tryPath);
-      }
-      throw new Error("Could not find the build directory, make sure to build the client first");
-    }
-    
-    log("📄 Serving index.html from " + staticDistPath);
-    
-    // Serve static files (fallback for non-asset files)
-    app.use(express.static(staticDistPath));
-    
-    // Fall through to index.html for SPA routing
-    app.use("*", (_req, res) => {
-      res.sendFile(path.resolve(staticDistPath as string, "index.html"));
-    });
+    // Use the battle-tested serveStatic from server/vite.ts
+    serveStatic(app);
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
