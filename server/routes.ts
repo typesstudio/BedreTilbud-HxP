@@ -1810,7 +1810,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           direction: 'outbound',
           subject,
           body: emailBody,
-          attachments: attachmentPaths.map(p => ({ fileName: require('path').basename(p), filePath: p })),
+          attachments: attachmentPaths.map(p => ({ fileName: path.basename(p), filePath: p })),
           metadata: { 
             isInitialInquiry: true, 
             attachmentPaths,
