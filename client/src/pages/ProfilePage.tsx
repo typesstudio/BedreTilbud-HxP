@@ -67,6 +67,10 @@ export default function ProfilePage() {
 
   const { data: comparisonsData, isLoading: loadingComparisons } = useQuery<CompanyComparisonData[]>({
     queryKey: ["/api/offers", userId],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/company-comparisons/user/${userId}`);
+      return response.json();
+    },
     enabled: !!userId,
   });
   const comparisons = (comparisonsData || []).filter((c: CompanyComparisonData) => !c.isSuperseded);

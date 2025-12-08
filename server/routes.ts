@@ -2841,6 +2841,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get all company comparisons for a user
+  app.get("/api/company-comparisons/user/:userId", requireAuth, async (req, res) => {
+    try {
+      const comparisons = await storage.getCompanyComparisonsByUser(req.params.userId);
+      
+      const enrichedComparisons = await Promise.all(
+        comparisons.map(async (comparison: any) => {
+          const currentCompany = comparison.currentCompany 
+            ? await storage.getCompany(comparison.currentCompany) 
+            : null;
+          const offerCompany = comparison.offerCompany 
+            ? await storage.getCompany(comparison.offerCompany) 
+            : null;
+
+          return {
+            id: comparison.id,
+            userId: comparison.userId,
+            currentCompany: currentCompany?.name || null,
+            offerCompany: offerCompany?.name || null,
+            status: comparison.status,
+            createdAt: comparison.createdAt,
+            isSuperseded: comparison.isSuperseded || false
+          };
+        })
+      );
+
+      res.json(enrichedComparisons);
+    } catch (error: any) {
+      logger.error('Failed to fetch user company comparisons', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // NEW: Get company comparison by ID (company_comparisons table)
   app.get("/api/company-comparisons/:id", requireAuth, async (req, res) => {
     try {
