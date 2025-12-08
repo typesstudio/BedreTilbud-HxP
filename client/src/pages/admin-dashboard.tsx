@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/ui/components/Button";
@@ -7,7 +7,9 @@ import { format } from "date-fns";
 import { da } from "date-fns/locale";
 import { AppLayoutWithNav } from "@/components/AppLayoutWithNav";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FeatherMail, FeatherMessageCircle, FeatherActivity, FeatherAlertCircle, FeatherEdit3 } from "@subframe/core";
+import { FeatherMail, FeatherMessageCircle, FeatherActivity, FeatherAlertCircle, FeatherEdit3, FeatherRefreshCw, FeatherCheck, FeatherX } from "@subframe/core";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface ThreadData {
   id: string;
