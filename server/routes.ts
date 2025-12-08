@@ -1677,14 +1677,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "User not found" });
       }
 
-      // Get user's current documents for attachments
-      const currentDocs = await storage.getUserDocuments(userId, 'current');
+      // Get user's ACTIVE current documents for attachments (only docs user has marked as active)
+      const currentDocs = await storage.getActiveUserDocuments(userId, 'current');
       const attachmentPaths = currentDocs.map(doc => doc.filePath);
 
-      // Validate: Must have documents to attach
+      // Validate: Must have active documents to attach
       if (currentDocs.length === 0) {
         return res.status(400).json({ 
-          message: "Du skal uploade dine nuværende forsikringspolicer først, før du kan anmode om tilbud." 
+          message: "Du har ingen aktive forsikringsdokumenter. Upload dokumenter eller aktiver eksisterende dokumenter på din profilside, før du kan anmode om tilbud." 
         });
       }
 

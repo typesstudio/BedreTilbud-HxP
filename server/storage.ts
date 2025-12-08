@@ -52,6 +52,7 @@ export interface IStorage {
   getDocumentByFileHash(userId: string, fileHash: string): Promise<Document | undefined>;
   getOfferDocumentByUserCompanyAndHash(userId: string, companyId: string, fileHash: string): Promise<Document | undefined>;
   getUserDocuments(userId: string, documentType?: string, limit?: number, offset?: number): Promise<Document[]>;
+  getActiveUserDocuments(userId: string, documentType?: string): Promise<Document[]>;
   countUserDocuments(userId: string, documentType?: string): Promise<number>;
   createDocument(document: InsertDocument): Promise<Document>;
   updateDocument(id: string, updates: Partial<InsertDocument>): Promise<Document>;
@@ -369,6 +370,14 @@ export class MemStorage implements IStorage {
     }
     
     return filtered;
+  }
+
+  async getActiveUserDocuments(userId: string, documentType?: string): Promise<Document[]> {
+    return Array.from(this.documents.values()).filter(doc => 
+      doc.userId === userId && 
+      doc.isActive !== false &&
+      (documentType ? doc.documentType === documentType : true)
+    );
   }
 
   async countUserDocuments(userId: string, documentType?: string): Promise<number> {
@@ -1265,6 +1274,25 @@ export class DatabaseStorage implements IStorage {
     }
     
     return await query;
+  }
+
+  async getActiveUserDocuments(userId: string, documentType?: string): Promise<Document[]> {
+    const { db } = await import("./db");
+    const { documents } = await import("@shared/schema");
+    const { eq, and, desc, or, isNull } = await import("drizzle-orm");
+    
+    let conditions = [
+      eq(documents.userId, userId),
+      or(eq(documents.isActive, true), isNull(documents.isActive))
+    ];
+    
+    if (documentType) {
+      conditions.push(eq(documents.documentType, documentType));
+    }
+    
+    return await db.select().from(documents)
+      .where(and(...conditions))
+      .orderBy(desc(documents.createdAt));
   }
 
   async countUserDocuments(userId: string, documentType?: string): Promise<number> {
