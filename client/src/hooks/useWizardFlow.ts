@@ -354,10 +354,17 @@ export function useWizardFlow() {
 
       localStorage.removeItem(STORAGE_KEY);
 
-      toast({
-        title: "Forespørgsler sendt!",
-        description: `Vi har sendt forespørgsler til ${result.successfulCompanies?.length || companyIds.length} forsikringsselskaber`,
-      });
+      if (result.isDraft) {
+        toast({
+          title: "Forespørgsler oprettet",
+          description: `Dine forespørgsler til ${companyIds.length} selskaber afventer godkendelse fra administrator.`,
+        });
+      } else {
+        toast({
+          title: "Forespørgsler sendt!",
+          description: `Vi har sendt forespørgsler til ${result.successfulCompanies?.length || companyIds.length} forsikringsselskaber`,
+        });
+      }
 
       setTimeout(() => {
         setLocation('/offers');

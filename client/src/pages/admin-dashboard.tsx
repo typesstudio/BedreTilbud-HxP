@@ -30,6 +30,10 @@ interface DraftData {
   subject: string | null;
   body: string | null;
   createdAt: string;
+  direction: string | null;
+  authorType: string | null;
+  metadata: { isInitialInquiry?: boolean; attachmentPaths?: string[]; companyEmail?: string } | null;
+  attachments: { fileName: string; filePath: string }[] | null;
   thread: {
     id: string;
     userId: string;
@@ -327,8 +331,15 @@ export default function AdminDashboard() {
                       >
                         <div className="flex items-start justify-between mb-2">
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-warning-200 flex items-center justify-center">
-                              <FeatherEdit3 className="w-5 h-5 text-warning-700" />
+                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                              draft.metadata?.isInitialInquiry 
+                                ? 'bg-blue-200' 
+                                : 'bg-warning-200'
+                            }`}>
+                              {draft.metadata?.isInitialInquiry 
+                                ? <FeatherMail className="w-5 h-5 text-blue-700" />
+                                : <FeatherEdit3 className="w-5 h-5 text-warning-700" />
+                              }
                             </div>
                             <div>
                               <p className="text-body-bold font-body-bold text-default-font">
@@ -337,10 +348,19 @@ export default function AdminDashboard() {
                               <p className="text-caption text-subtext-color">
                                 Bruger: {draft.user?.name || draft.user?.email || 'Ukendt'}
                               </p>
+                              {draft.metadata?.isInitialInquiry && draft.attachments && draft.attachments.length > 0 && (
+                                <p className="text-caption text-blue-600 mt-1">
+                                  📎 {draft.attachments.length} vedhæftning{draft.attachments.length > 1 ? 'er' : ''}
+                                </p>
+                              )}
                             </div>
                           </div>
                           <div className="text-right">
-                            <Badge variant="warning">Afventer godkendelse</Badge>
+                            {draft.metadata?.isInitialInquiry ? (
+                              <Badge variant="brand">Første henvendelse</Badge>
+                            ) : (
+                              <Badge variant="warning">AI-svar afventer</Badge>
+                            )}
                             <p className="text-caption text-subtext-color mt-1">
                               {formatCopenhagenTime(draft.createdAt, "d. MMM HH:mm")}
                             </p>

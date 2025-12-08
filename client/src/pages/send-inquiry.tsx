@@ -47,18 +47,26 @@ export default function SendInquiry() {
   });
   const documents = documentsResponse?.data || [];
 
-  // Send inquiries mutation
+  // Send inquiries mutation - now creates drafts for admin approval
   const sendInquiriesMutation = useMutation({
     mutationFn: async (data: { userId: string; companyIds: string[]; documentId?: string }) => {
       const response = await apiRequest("POST", "/api/emails/send-inquiries", data);
       return response.json();
     },
-    onSuccess: () => {
-      toast({
-        title: "Forespørgsler sendt",
-        description: "Forespørgsler er sendt til de valgte selskaber",
-      });
+    onSuccess: (data) => {
+      if (data.isDraft) {
+        toast({
+          title: "Forespørgsler oprettet",
+          description: "Forespørgslerne afventer godkendelse fra administrator før de sendes.",
+        });
+      } else {
+        toast({
+          title: "Forespørgsler sendt",
+          description: "Forespørgsler er sendt til de valgte selskaber",
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/emails/threads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/drafts"] });
       setLocation("/offers");
     },
     onError: (error: any) => {

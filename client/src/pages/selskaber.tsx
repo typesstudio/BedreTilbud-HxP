@@ -191,12 +191,20 @@ export default function Selskaber() {
       const response = await apiRequest("POST", "/api/emails/send-inquiries", data);
       return response.json();
     },
-    onSuccess: () => {
-      toast({
-        title: "Forespørgsler sendt",
-        description: "Dine forespørgsler er sendt til de valgte selskaber",
-      });
+    onSuccess: (data) => {
+      if (data.isDraft) {
+        toast({
+          title: "Forespørgsler oprettet",
+          description: "Dine forespørgsler afventer godkendelse fra administrator før de sendes.",
+        });
+      } else {
+        toast({
+          title: "Forespørgsler sendt",
+          description: "Dine forespørgsler er sendt til de valgte selskaber",
+        });
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/emails/threads"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/drafts"] });
       setLocation("/offers");
     },
     onError: (error: any) => {
