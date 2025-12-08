@@ -120,6 +120,30 @@ export default function AdminDashboard() {
     },
   });
 
+  const runComparisonMutation = useMutation({
+    mutationFn: async (targetUserId: string) => {
+      const response = await apiRequest("POST", "/api/admin/run-comparison", { 
+        userId: targetUserId, 
+        forceRerun: true 
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      const result = data.result;
+      toast({ 
+        title: `Sammenligning kørt: ${result.comparisonsCreated} oprettet, ${result.comparisonsFailed} fejlede` 
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/threads"] });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Kunne ikke køre sammenligning", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
   const approveDraftMutation = useMutation({
     mutationFn: async (draftId: string) => {
       const response = await apiRequest("POST", `/api/emails/draft/${draftId}/approve`, {});
@@ -504,14 +528,27 @@ export default function AdminDashboard() {
                               </span>
                             </td>
                             <td className="py-3 px-2">
-                              <Button
-                                size="small"
-                                variant="neutral-secondary"
-                                onClick={() => setLocation(`/emails/${thread.id}`)}
-                                data-testid={`btn-view-thread-${thread.id}`}
-                              >
-                                Se tråd
-                              </Button>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="small"
+                                  variant="neutral-secondary"
+                                  onClick={() => setLocation(`/emails/${thread.id}`)}
+                                  data-testid={`btn-view-thread-${thread.id}`}
+                                >
+                                  Se tråd
+                                </Button>
+                                {thread.status === 'received' && thread.userId && (
+                                  <Button
+                                    size="small"
+                                    variant="brand-secondary"
+                                    onClick={() => runComparisonMutation.mutate(thread.userId)}
+                                    disabled={runComparisonMutation.isPending}
+                                    data-testid={`btn-run-comparison-${thread.id}`}
+                                  >
+                                    {runComparisonMutation.isPending ? "Kører..." : "Kør sammenligning"}
+                                  </Button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         ))}

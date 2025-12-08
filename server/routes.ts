@@ -2720,6 +2720,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Trigger ComparisonOrchestrator manually for a user (admin - for debugging)
+  app.post("/api/admin/run-comparison", requireAuth, requireCSRFToken, async (req, res) => {
+    try {
+      const authenticatedUserId = req.user!.id;
+      const authenticatedUser = await storage.getUser(authenticatedUserId);
+      const isAdmin = authenticatedUser?.isAdmin === true;
+      
+      if (!isAdmin) {
+        return res.status(403).json({ message: "Kun administratorer kan køre denne funktion" });
+      }
+      
+      const { userId, forceRerun = true } = req.body;
+      
+      if (!userId) {
+        return res.status(400).json({ message: "userId er påkrævet" });
+      }
+      
+      logger.info('[Admin] Manually triggering ComparisonOrchestrator', { userId, forceRerun });
+      
+      const { ComparisonOrchestrator } = await import('./services/comparisonOrchestrator');
+      const comparisonOrchestrator = new ComparisonOrchestrator(storage);
+      
+      const result = await comparisonOrchestrator.runForUser({
+        userId,
+        forceRerun
+      });
+      
+      logger.info('[Admin] ComparisonOrchestrator completed', { 
+        userId, 
+        comparisonsCreated: result.comparisonsCreated,
+        comparisonsFailed: result.comparisonsFailed
+      });
+      
+      res.json({
+        message: `Sammenligning kørt for bruger`,
+        result: {
+          comparisonsCreated: result.comparisonsCreated,
+          comparisonsFailed: result.comparisonsFailed,
+          comparisonIds: result.comparisonIds || []
+        }
+      });
+    } catch (error: any) {
+      logger.error('[Admin] ComparisonOrchestrator failed', error);
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   // Gmail OAuth routes
   app.get("/auth/gmail", async (req, res) => {
     try {
