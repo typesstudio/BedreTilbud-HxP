@@ -1,0 +1,222 @@
+Jeg kan se præcis hvad der sker i dit screenshot:
+
+* `bedretilbud.com` (HTML-dokumentet) loader fint (200)
+* Google Fonts CSS loader fint (200)
+* **Dine egne build-assets fejler**:
+
+  * `index-DL0HSvKT.js` → **500**
+  * `index-BBGG7_n0.css` → **500**
+* `favicon.ico` kommer tilbage som **text/html** (altså din SPA/`index.html` fallback), hvilket er et ekstra hint om at **static-serving ikke er sat korrekt op i prod**.
+
+Det betyder: **din server i production prøver enten at hente filer der ikke findes i den mappe den server fra** (typisk fordi build ikke kører i deployment), eller også bliver `/assets/*` ramt af en route/middleware der kaster en fejl (500) i stedet for at servere statiske filer.
+
+Nedenfor får du en “fix it for always” Replit-prompt der:
+
+1. gør build + serve mappe til én single source of truth
+2. sørger for at deployments ALTID bygger før server start
+3. sørger for at `/assets/*` aldrig rammer API / fallback-routes
+4. giver dig hårde checks + logs så du aldrig ender i “blank page”-helvede igen
+
+---
+
+## Replit prompt (copy/paste)
+
+**Title:** Fix production blank page: ensure Vite assets exist + are served correctly (no more 500 on /assets)
+
+**Prompt to Replit AI:**
+
+You are working in a Vite + Node/Express app. Production loads `GET /` (200) but `GET /assets/index-*.js` and `/assets/index-*.css` return 500, causing a blank page. Also `/favicon.ico` returns HTML (SPA fallback), indicating static files aren’t served correctly in prod.
+
+### Goal
+
+Make production reliably serve built frontend files:
+
+* `/assets/*.js` returns 200 with JS content-type
+* `/assets/*.css` returns 200 with CSS content-type
+* `/favicon.ico` served as a real file (or 404), NOT HTML
+* Deployments always run `vite build` before starting server
+* Server fails fast with a clear error if build output is missing
+
+### Step 0 — Identify server entry + current prod public dir
+
+1. Locate the server entry file used in production (e.g. `server/index.ts`, `server/app.ts`, `src/server.ts`, etc.) and confirm what command starts it (`package.json` scripts and `.replit` / deployment settings if present).
+2. Search the codebase for static serving, especially:
+
+   * `express.static`
+   * `sirv`
+   * `serveStatic`
+   * `sendFile(index.html)`
+   * `app.get("*")`
+3. Determine what folder SHOULD contain the built frontend (we will standardize it as `server/public` unless an existing convention is clearly better).
+
+### Step 1 — Standardize Vite build output
+
+Update `vite.config.ts` so build always outputs into `server/public`:
+
+```ts
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+  plugins: [react()],
+  base: "/",
+  build: {
+    outDir: "server/public",
+    assetsDir: "assets",
+    emptyOutDir: true,
+    sourcemap: true,
+  },
+});
+```
+
+### Step 2 — Fix production static serving order (assets first, fallback last)
+
+In the server entry file, implement this exact structure:
+
+1. Resolve public directory
+2. Fail fast if `index.html` is missing
+3. Serve static files BEFORE any API routes and BEFORE SPA fallback
+4. Ensure SPA fallback does NOT catch `/assets/*` or `/favicon.ico`
+
+Add/modify:
+
+```ts
+import path from "path";
+import fs from "fs";
+import express from "express";
+
+const app = express();
+
+const publicDir = path.resolve(process.cwd(), "server/public");
+const indexHtml = path.join(publicDir, "index.html");
+
+// Fail fast (prevents silent broken deploy)
+if (!fs.existsSync(indexHtml)) {
+  throw new Error(
+    `Frontend build missing: ${indexHtml} not found. Ensure "npm run build" runs in deployment.`
+  );
+}
+
+// ✅ Static first
+app.use("/assets", express.static(path.join(publicDir, "assets"), { immutable: true, maxAge: "1y" }));
+app.use(express.static(publicDir, { maxAge: "1h" }));
+
+// (If you have API routes, mount them AFTER static)
+// app.use("/api", apiRouter);
+
+// ✅ SPA fallback last, only for HTML navigations, never for assets/favicon/api
+app.get("*", (req, res, next) => {
+  const accept = req.headers.accept || "";
+  if (req.method !== "GET") return next();
+  if (!accept.includes("text/html")) return next();
+  if (req.path.startsWith("/assets/")) return next();
+  if (req.path === "/favicon.ico") return next();
+  if (req.path.startsWith("/api/")) return next();
+  return res.sendFile(indexHtml);
+});
+```
+
+Also add a basic error handler so asset issues show in logs clearly:
+
+```ts
+app.use((err, _req, res, _next) => {
+  console.error("SERVER_ERROR:", err);
+  res.status(500).send("Internal Server Error");
+});
+```
+
+### Step 3 — Guarantee build runs in deployment
+
+Update `package.json` scripts so any `npm start` runs build first:
+
+```json
+{
+  "scripts": {
+    "build": "vite build",
+    "prestart": "npm run build",
+    "start": "node server/index.js"
+  }
+}
+```
+
+If the server is TS, ensure the start points to the compiled output OR uses tsx:
+
+* If using TS in prod: `"start": "tsx server/index.ts"`
+* Or compile server in build step accordingly.
+
+Also check `.replit` / Replit Deployment settings:
+
+* Run command MUST be `npm start` (not `node server/...` directly), otherwise `prestart` won’t run.
+* If a build command exists in deployment settings, set it to `npm run build`.
+
+### Step 4 — Add a build verification script (so this never ships broken again)
+
+Create `scripts/verify-build.mjs`:
+
+```js
+import fs from "fs";
+import path from "path";
+
+const publicDir = path.resolve(process.cwd(), "server/public");
+const indexHtml = path.join(publicDir, "index.html");
+const assetsDir = path.join(publicDir, "assets");
+
+if (!fs.existsSync(indexHtml)) throw new Error(`Missing ${indexHtml}`);
+if (!fs.existsSync(assetsDir)) throw new Error(`Missing ${assetsDir}`);
+
+const assets = fs.readdirSync(assetsDir).filter(f => f.endsWith(".js") || f.endsWith(".css"));
+if (assets.length === 0) throw new Error(`No built assets found in ${assetsDir}`);
+
+console.log("✅ Build verified:", { indexHtml, assetsCount: assets.length });
+```
+
+Add to `package.json`:
+
+```json
+{
+  "scripts": {
+    "verify:build": "node scripts/verify-build.mjs",
+    "build": "vite build && npm run verify:build",
+    "prestart": "npm run build"
+  }
+}
+```
+
+### Step 5 — Local validation commands
+
+Run in shell:
+
+* `rm -rf server/public && npm run build`
+* `ls -la server/public`
+* `ls -la server/public/assets`
+* Start server and test:
+
+  * `curl -I http://localhost:PORT/assets/*.js` (or exact file names from assets folder)
+  * `curl -I http://localhost:PORT/assets/*.css`
+
+### Step 6 — Production validation
+
+After deploy, run:
+
+* `curl -I https://bedretilbud.com/assets/index-*.js`
+* `curl -I https://bedretilbud.com/assets/index-*.css`
+  Confirm status 200 and correct content types.
+
+### Deliverable
+
+Commit code changes ensuring `/assets/*` never returns 500 in production due to missing build output or routing order. If build output missing, server must fail at startup with a clear error message.
+Also ensure favicon is served from static (or 404) but never via SPA fallback HTML.
+-----------------------------------------------------------------------------------
+
+## Hvorfor det her typisk “endelig” løser det
+
+* **500 på hashed assets** sker næsten altid når serveren forsøger at servere filer som **ikke er i containeren** (build kører ikke i deployment) eller når en fallback/route forsøger at `sendFile` noget der ikke findes → error → 500.
+* Ved at:
+
+  * bygge til en **fast mappe**
+  * serve static **før** API + fallback
+  * køre build automatisk via `prestart`
+  * og verificere build-output
+    …så kan du ikke længere deploye en “tom” build uden at det eksploderer med en tydelig fejl.
+
+Hvis du vil, kan du også copy/paste her **din `package.json` scripts** + **din server entry file (top ~80 linjer)**, så kan jeg give dig en *helt præcis* version (navne på filer, porter, TS/JS, osv.) der matcher dit repo 1:1.

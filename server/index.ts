@@ -3,7 +3,7 @@ import compression from "compression";
 import path from "path";
 import fs from "fs";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { setupVite, log } from "./vite";
 import { emailService } from "./services/emailService";
 import { createEmailPollingLock } from "./utils/distributedLock";
 import { validateSecrets } from "./config/secrets";
@@ -11,6 +11,36 @@ import { globalLimiter } from "./middleware/rateLimiting";
 import { corsConfig, securityHeaders } from "./middleware/security";
 import { sanitizeDatabaseError, logSensitiveError } from "./utils/errorSanitization";
 import { performanceMonitor } from "./utils/performanceMonitor";
+
+// Resolve the static build directory for production
+// Returns { publicDir, assetsDir, indexHtml } or null if not found
+function resolveStaticBuild(): { publicDir: string; assetsDir: string; indexHtml: string } | null {
+  const possiblePaths = [
+    path.resolve(process.cwd(), "server", "public"),  // sync-static output (primary)
+    path.resolve(process.cwd(), "dist", "public"),    // vite build output
+    path.resolve(import.meta.dirname, "public"),      // relative to bundled index.js
+  ];
+  
+  for (const publicDir of possiblePaths) {
+    const assetsDir = path.join(publicDir, "assets");
+    const indexHtml = path.join(publicDir, "index.html");
+    
+    if (fs.existsSync(indexHtml) && fs.existsSync(assetsDir)) {
+      const files = fs.readdirSync(assetsDir);
+      const hasJs = files.some(f => f.endsWith('.js'));
+      const hasCss = files.some(f => f.endsWith('.css'));
+      
+      if (hasJs && hasCss) {
+        return { publicDir, assetsDir, indexHtml };
+      }
+    }
+  }
+  
+  return null;
+}
+
+// Cached resolved paths for production
+let resolvedBuild: { publicDir: string; assetsDir: string; indexHtml: string } | null = null;
 
 // Validate all required environment variables before starting the server
 validateSecrets();
@@ -90,55 +120,88 @@ app.use((req, res, next) => {
 // Health check endpoint for assets verification (works in both dev and production)
 app.get("/healthz/assets", (_req, res) => {
   try {
-    const possiblePaths = [
-      path.resolve(process.cwd(), "dist", "public", "assets"),
-      path.resolve(import.meta.dirname, "public", "assets"),
-      path.resolve(process.cwd(), "server", "public", "assets"),
-    ];
+    const build = resolvedBuild || resolveStaticBuild();
     
-    let assetsPath: string | null = null;
-    for (const tryPath of possiblePaths) {
-      if (fs.existsSync(tryPath)) {
-        assetsPath = tryPath;
-        break;
-      }
-    }
-    
-    if (!assetsPath) {
+    if (!build) {
       res.status(500).json({ 
         status: "error", 
         message: "Assets directory not found",
-        triedPaths: possiblePaths
+        triedPaths: [
+          path.resolve(process.cwd(), "server", "public"),
+          path.resolve(process.cwd(), "dist", "public"),
+          path.resolve(import.meta.dirname, "public"),
+        ]
       });
       return;
     }
     
-    const files = fs.readdirSync(assetsPath);
+    const files = fs.readdirSync(build.assetsDir);
     const jsFiles = files.filter(f => f.endsWith('.js'));
     const cssFiles = files.filter(f => f.endsWith('.css'));
-    
-    if (jsFiles.length === 0 || cssFiles.length === 0) {
-      res.status(500).json({ 
-        status: "error", 
-        message: "Missing JS or CSS assets",
-        jsCount: jsFiles.length,
-        cssCount: cssFiles.length,
-        assetsPath
-      });
-      return;
-    }
     
     res.json({ 
       status: "ok", 
       jsCount: jsFiles.length, 
       cssCount: cssFiles.length,
       totalAssets: files.length,
-      assetsPath
+      assetsPath: build.assetsDir,
+      publicDir: build.publicDir
     });
   } catch (error) {
     res.status(500).json({ status: "error", message: "Cannot read assets directory" });
   }
 });
+
+// PRODUCTION ONLY: Serve static assets BEFORE API routes
+// In development, Vite middleware handles this via setupVite()
+if (process.env.NODE_ENV !== "development") {
+  resolvedBuild = resolveStaticBuild();
+  
+  if (!resolvedBuild) {
+    console.error("❌ CRITICAL ERROR: Production build not found!");
+    console.error("   Expected index.html and assets/ in one of:");
+    console.error("   - server/public/");
+    console.error("   - dist/public/");
+    console.error("   Did you run 'npm run build' before starting?");
+    process.exit(1);
+  }
+  
+  log(`📦 Production mode: Serving static assets from ${resolvedBuild.publicDir}`);
+  
+  // Serve /assets/* with correct MIME types and immutable caching (hashed filenames)
+  app.use("/assets", express.static(resolvedBuild.assetsDir, {
+    immutable: true,
+    maxAge: "1y",
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith(".css")) {
+        res.setHeader("Content-Type", "text/css; charset=utf-8");
+      } else if (filePath.endsWith(".js")) {
+        res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+      } else if (filePath.endsWith(".map")) {
+        res.setHeader("Content-Type", "application/json; charset=utf-8");
+      } else if (filePath.endsWith(".woff2")) {
+        res.setHeader("Content-Type", "font/woff2");
+      } else if (filePath.endsWith(".woff")) {
+        res.setHeader("Content-Type", "font/woff");
+      } else if (filePath.endsWith(".svg")) {
+        res.setHeader("Content-Type", "image/svg+xml");
+      } else if (filePath.endsWith(".png")) {
+        res.setHeader("Content-Type", "image/png");
+      } else if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) {
+        res.setHeader("Content-Type", "image/jpeg");
+      } else if (filePath.endsWith(".webp")) {
+        res.setHeader("Content-Type", "image/webp");
+      }
+      res.setHeader("Vary", "Accept-Encoding");
+    }
+  }));
+  
+  // Serve other static files (favicon, robots.txt, etc.) with shorter cache
+  app.use(express.static(resolvedBuild.publicDir, { 
+    maxAge: "1h",
+    index: false // Don't serve index.html here; SPA fallback handles it
+  }));
+}
 
 (async () => {
   const server = await registerRoutes(app);
@@ -160,8 +223,37 @@ app.get("/healthz/assets", (_req, res) => {
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
-    // Use the battle-tested serveStatic from server/vite.ts
-    serveStatic(app);
+    // PRODUCTION: SPA fallback - serve index.html for all non-API, non-asset GET requests
+    // This MUST come after all API routes are registered
+    app.get("*", (req, res, next) => {
+      // Only handle GET requests
+      if (req.method !== "GET") {
+        return next();
+      }
+      
+      // Don't serve HTML for API routes - let them 404 properly
+      if (req.path.startsWith("/api")) {
+        return res.status(404).json({ error: "Not found" });
+      }
+      
+      // Don't serve HTML for missing assets - let them 404 properly
+      if (req.path.startsWith("/assets")) {
+        return res.status(404).json({ error: "Asset not found" });
+      }
+      
+      // Check if client accepts HTML (browser request vs API client)
+      const acceptHeader = req.get("Accept") || "";
+      if (!acceptHeader.includes("text/html") && !acceptHeader.includes("*/*")) {
+        return next();
+      }
+      
+      // Serve the SPA
+      if (resolvedBuild) {
+        res.sendFile(resolvedBuild.indexHtml);
+      } else {
+        res.status(500).send("Server configuration error: build not found");
+      }
+    });
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
