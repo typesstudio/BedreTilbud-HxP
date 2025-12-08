@@ -1,0 +1,166 @@
+Din anden experts analyse giver mega god mening ud fra symptomerne:
+
+* **CSS/JS requests får 500**
+* **response-body er JSON** (`{ error: "Internal Server Error" }`)
+* browser brokker sig over **MIME type** (CSS bliver “application/json”)
+
+Det mønster betyder næsten altid: **requesten rammer ikke “ren” static-serving**, men falder ind i noget middleware/route/error-handler, som svarer JSON.
+
+Og ja: den mest robuste, “fix it forever” måde er:
+
+1. **Static assets først**
+2. **Static assets må aldrig falde igennem til SPA fallback eller global error handler**
+3. **Fallback må kun slå til på HTML-navigations (Accept: text/html)**
+
+Nedenfor får du en *strammere* version end din experts snippet (med 2 vigtige upgrades: `fallthrough:false` og HTML-only fallback).
+
+---
+
+## Den sikre løsning (kode du vil ende med)
+
+**Øverst i `server/index.ts` (før compression/json/helmet osv.)**
+
+```ts
+import express from "express";
+import path from "path";
+import fs from "fs";
+
+const app = express();
+
+const publicDir = path.resolve(process.cwd(), "server/public");
+const indexHtml = path.join(publicDir, "index.html");
+
+// Fail fast hvis build ikke er der (så du aldrig deployer “blank page” igen)
+if (!fs.existsSync(indexHtml)) {
+  throw new Error(`Missing frontend build: ${indexHtml}`);
+}
+
+/**
+ * 1) STATIC FIRST
+ * - fallthrough:false gør at missing assets bliver 404 her,
+ *   og IKKE rammer næste middleware (hvilket ofte ender i JSON/SPA fallback)
+ */
+app.use(
+  "/assets",
+  express.static(path.join(publicDir, "assets"), {
+    immutable: true,
+    maxAge: "1y",
+    index: false,
+    fallthrough: false,
+  })
+);
+
+app.use(
+  express.static(publicDir, {
+    maxAge: "1h",
+    index: false,
+  })
+);
+```
+
+**Så først derefter** dine “app middlewares”:
+
+```ts
+import compression from "compression";
+
+// 2) Middlewares AFTER static
+app.use(compression());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// ... API routes here ...
+// app.use("/api", apiRouter);
+```
+
+**SPA fallback helt til sidst – og kun for HTML:**
+
+```ts
+app.get("*", (req, res, next) => {
+  const accept = req.headers.accept || "";
+
+  // Kun GET + HTML navigations
+  if (req.method !== "GET") return next();
+  if (!accept.includes("text/html")) return next();
+
+  // Beskyt assets/api/favicon mod fallback
+  if (req.path.startsWith("/assets/")) return next();
+  if (req.path === "/favicon.ico") return next();
+  if (req.path.startsWith("/api/")) return next();
+
+  return res.sendFile(indexHtml);
+});
+```
+
+**Global error handler – men giv assets plain text (ikke JSON):**
+
+```ts
+app.use((err: any, req: any, res: any, _next: any) => {
+  console.error("SERVER_ERROR:", err?.stack || err);
+
+  // Hvis det er asset-request, send ikke JSON (ellers får du MIME type issues)
+  if (req.path?.startsWith("/assets/")) {
+    return res.status(500).type("text/plain").send("Asset error");
+  }
+
+  return res.status(500).json({ error: "Internal Server Error" });
+});
+```
+
+---
+
+## Hvorfor `fallthrough:false` er nøglen
+
+Uden den kan en asset-request (selv hvis filen *burde* findes) ende med at “falde igennem” og blive håndteret af:
+
+* en catch-all route
+* en auth middleware
+* en SPA fallback
+* en global error handler der altid svarer JSON
+
+… og så får du præcis dit symptom: **CSS/JS request → JSON → MIME mismatch → blank page**.
+
+---
+
+## Replit prompt (copy/paste) til at få det gjort korrekt i dit repo
+
+**Prompt:**
+
+We have a Vite + Express app in production. `/` returns 200 but `/assets/*.js` and `/assets/*.css` return 500 and the browser reports CSS MIME type is `application/json`. This indicates the asset requests are being handled by non-static middleware / error handler.
+
+Implement a permanent fix:
+
+1. In `server/index.ts` (or the actual production server entry), move static serving to the very top BEFORE compression, helmet, express.json, urlencoded, logging, auth, or API routers.
+
+2. Use:
+
+* `publicDir = path.resolve(process.cwd(), "server/public")`
+* Serve `/assets` with `express.static(path.join(publicDir, "assets"), { immutable:true, maxAge:"1y", index:false, fallthrough:false })`
+* Serve root static with `express.static(publicDir, { maxAge:"1h", index:false })`
+
+3. Add a fail-fast check: if `server/public/index.html` does not exist at startup, throw an Error (so we never deploy a broken build silently).
+
+4. Ensure SPA fallback is LAST and only triggers for HTML navigation requests (Accept includes `text/html`). It must NOT catch `/assets/*`, `/api/*`, or `/favicon.ico`.
+
+5. Update the global error handler so that if `req.path` starts with `/assets/`, it returns `text/plain` (not JSON) to avoid MIME-type issues.
+
+6. Verify locally and in prod:
+
+* `/assets/*.css` returns 200 with content-type `text/css`
+* `/assets/*.js` returns 200 with content-type `application/javascript`
+* `/favicon.ico` is served as a file or 404, but not HTML.
+
+Provide the exact code changes in the correct files for this repo.
+
+---
+
+## Hurtig verifikation (når du har deployet)
+
+Åbn i browseren:
+
+* `https://bedretilbud.com/assets/index-....css` → **200** + “stylesheet”
+* `https://bedretilbud.com/assets/index-....js` → **200** + “script”
+* Network tab: “Type” bør være **stylesheet** og **script**, ikke “fetch”/“json”.
+
+---
+
+Hvis du smider de første ~120 linjer af din **`server/index.ts`** her (eller den fil der rent faktisk starter serveren i deploy), kan jeg give dig en helt konkret “indsæt præcis her / flyt præcis dette blok op”-patch, så du ikke skal gætte hvor i filen det skal ligge.

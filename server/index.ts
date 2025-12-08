@@ -12,40 +12,59 @@ import { corsConfig, securityHeaders } from "./middleware/security";
 import { sanitizeDatabaseError, logSensitiveError } from "./utils/errorSanitization";
 import { performanceMonitor } from "./utils/performanceMonitor";
 
-// Resolve the static build directory for production
-// Returns { publicDir, assetsDir, indexHtml } or null if not found
-function resolveStaticBuild(): { publicDir: string; assetsDir: string; indexHtml: string } | null {
-  const possiblePaths = [
-    path.resolve(process.cwd(), "server", "public"),  // sync-static output (primary)
-    path.resolve(process.cwd(), "dist", "public"),    // vite build output
-    path.resolve(import.meta.dirname, "public"),      // relative to bundled index.js
-  ];
-  
-  for (const publicDir of possiblePaths) {
-    const assetsDir = path.join(publicDir, "assets");
-    const indexHtml = path.join(publicDir, "index.html");
-    
-    if (fs.existsSync(indexHtml) && fs.existsSync(assetsDir)) {
-      const files = fs.readdirSync(assetsDir);
-      const hasJs = files.some(f => f.endsWith('.js'));
-      const hasCss = files.some(f => f.endsWith('.css'));
-      
-      if (hasJs && hasCss) {
-        return { publicDir, assetsDir, indexHtml };
-      }
-    }
-  }
-  
-  return null;
-}
-
-// Cached resolved paths for production
-let resolvedBuild: { publicDir: string; assetsDir: string; indexHtml: string } | null = null;
+// =============================================================================
+// PRODUCTION STATIC FILE PATHS - Resolved at module load time
+// =============================================================================
+const publicDir = path.resolve(process.cwd(), "server/public");
+const assetsDir = path.join(publicDir, "assets");
+const indexHtml = path.join(publicDir, "index.html");
 
 // Validate all required environment variables before starting the server
 validateSecrets();
 
 const app = express();
+
+// =============================================================================
+// 1) STATIC ASSETS FIRST - Before ANY other middleware
+//    This is critical: static files must never fall through to compression,
+//    json parsing, error handlers, or SPA fallback
+// =============================================================================
+if (process.env.NODE_ENV !== "development") {
+  // Fail fast if build is missing - never deploy a blank page silently
+  if (!fs.existsSync(indexHtml)) {
+    console.error("❌ CRITICAL ERROR: Production build not found!");
+    console.error(`   Expected: ${indexHtml}`);
+    console.error("   Did you run 'npm run build' before starting?");
+    process.exit(1);
+  }
+  
+  if (!fs.existsSync(assetsDir)) {
+    console.error("❌ CRITICAL ERROR: Assets directory not found!");
+    console.error(`   Expected: ${assetsDir}`);
+    process.exit(1);
+  }
+  
+  log(`📦 Production mode: Serving static assets from ${publicDir}`);
+  
+  // Serve /assets/* with fallthrough:false - missing assets get 404 HERE,
+  // never falling through to other middleware or error handlers
+  app.use("/assets", express.static(assetsDir, {
+    immutable: true,
+    maxAge: "1y",
+    index: false,
+    fallthrough: false, // KEY: 404 for missing assets, no fallthrough
+  }));
+  
+  // Serve other static files (favicon, robots.txt, etc.)
+  app.use(express.static(publicDir, {
+    maxAge: "1h",
+    index: false, // Don't serve index.html here; SPA fallback handles it
+  }));
+}
+
+// =============================================================================
+// 2) MIDDLEWARE - After static serving
+// =============================================================================
 
 // Trust proxy in development (for Replit environment)
 if (app.get("env") === "development") {
@@ -69,8 +88,8 @@ app.use(compression({
     }
     return compression.filter(req, res);
   },
-  threshold: 1024, // Only compress responses larger than 1KB
-  level: 6, // Compression level (0-9, 6 is default balance)
+  threshold: 1024,
+  level: 6,
 }));
 
 declare module 'http' {
@@ -85,9 +104,10 @@ app.use(express.json({
 }));
 app.use(express.urlencoded({ extended: false }));
 
+// Request logging middleware (API routes only)
 app.use((req, res, next) => {
   const start = Date.now();
-  const path = req.path;
+  const reqPath = req.path;
   let capturedJsonResponse: Record<string, any> | undefined = undefined;
 
   const originalResJson = res.json;
@@ -98,8 +118,8 @@ app.use((req, res, next) => {
 
   res.on("finish", () => {
     const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
+    if (reqPath.startsWith("/api")) {
+      let logLine = `${req.method} ${reqPath} ${res.statusCode} in ${duration}ms`;
       if (capturedJsonResponse) {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
@@ -110,32 +130,31 @@ app.use((req, res, next) => {
 
       log(logLine);
       
-      performanceMonitor.trackApiRequest(path, duration);
+      performanceMonitor.trackApiRequest(reqPath, duration);
     }
   });
 
   next();
 });
 
-// Health check endpoint for assets verification (works in both dev and production)
+// =============================================================================
+// 3) DIAGNOSTIC ENDPOINTS
+// =============================================================================
+
+// Health check endpoint for assets verification
 app.get("/healthz/assets", (_req, res) => {
   try {
-    const build = resolvedBuild || resolveStaticBuild();
-    
-    if (!build) {
+    if (!fs.existsSync(assetsDir)) {
       res.status(500).json({ 
         status: "error", 
         message: "Assets directory not found",
-        triedPaths: [
-          path.resolve(process.cwd(), "server", "public"),
-          path.resolve(process.cwd(), "dist", "public"),
-          path.resolve(import.meta.dirname, "public"),
-        ]
+        assetsDir,
+        publicDir,
       });
       return;
     }
     
-    const files = fs.readdirSync(build.assetsDir);
+    const files = fs.readdirSync(assetsDir);
     const jsFiles = files.filter(f => f.endsWith('.js'));
     const cssFiles = files.filter(f => f.endsWith('.css'));
     
@@ -144,8 +163,9 @@ app.get("/healthz/assets", (_req, res) => {
       jsCount: jsFiles.length, 
       cssCount: cssFiles.length,
       totalAssets: files.length,
-      assetsPath: build.assetsDir,
-      publicDir: build.publicDir
+      assetsDir,
+      publicDir,
+      indexHtmlExists: fs.existsSync(indexHtml),
     });
   } catch (error) {
     res.status(500).json({ status: "error", message: "Cannot read assets directory" });
@@ -169,28 +189,18 @@ app.get("/debug/paths", (_req, res) => {
     const checkPath = (p: string) => ({
       path: p,
       exists: fs.existsSync(p),
-      files: safeReaddir(p).slice(0, 20), // Limit to 20 files
+      files: safeReaddir(p).slice(0, 20),
       hasAssets: fs.existsSync(path.join(p, "assets")),
       hasIndexHtml: fs.existsSync(path.join(p, "index.html")),
     });
     
     const possiblePaths = [
-      path.resolve(cwd, "server", "public"),
+      publicDir,
       path.resolve(cwd, "dist", "public"),
       path.resolve(dirname, "public"),
-      path.resolve(dirname, "..", "public"),
       cwd,
       dirname,
     ];
-    
-    const pathChecks = possiblePaths.map(checkPath);
-    
-    // Check specific CSS file
-    const cssFileName = "index-BBGG7_n0.css";
-    const cssFileChecks = possiblePaths.map(p => ({
-      path: path.join(p, "assets", cssFileName),
-      exists: fs.existsSync(path.join(p, "assets", cssFileName)),
-    }));
     
     res.json({
       environment: {
@@ -198,83 +208,41 @@ app.get("/debug/paths", (_req, res) => {
         cwd,
         dirname,
       },
-      resolvedBuild: resolvedBuild ? {
-        publicDir: resolvedBuild.publicDir,
-        assetsDir: resolvedBuild.assetsDir,
-        indexHtml: resolvedBuild.indexHtml,
-        indexHtmlExists: fs.existsSync(resolvedBuild.indexHtml),
-        assetsDirExists: fs.existsSync(resolvedBuild.assetsDir),
-        assetsFiles: safeReaddir(resolvedBuild.assetsDir).slice(0, 10),
-      } : null,
-      pathChecks,
-      cssFileChecks,
+      configuredPaths: {
+        publicDir,
+        assetsDir,
+        indexHtml,
+        indexHtmlExists: fs.existsSync(indexHtml),
+        assetsDirExists: fs.existsSync(assetsDir),
+        assetsFiles: safeReaddir(assetsDir).slice(0, 10),
+      },
+      pathChecks: possiblePaths.map(checkPath),
     });
   } catch (error: any) {
     res.status(500).json({ 
       error: "Debug endpoint error", 
       message: error?.message || "Unknown error",
-      stack: error?.stack,
     });
   }
 });
 
-// PRODUCTION ONLY: Serve static assets BEFORE API routes
-// In development, Vite middleware handles this via setupVite()
-if (process.env.NODE_ENV !== "development") {
-  resolvedBuild = resolveStaticBuild();
-  
-  if (!resolvedBuild) {
-    console.error("❌ CRITICAL ERROR: Production build not found!");
-    console.error("   Expected index.html and assets/ in one of:");
-    console.error("   - server/public/");
-    console.error("   - dist/public/");
-    console.error("   Did you run 'npm run build' before starting?");
-    process.exit(1);
-  }
-  
-  log(`📦 Production mode: Serving static assets from ${resolvedBuild.publicDir}`);
-  
-  // Serve /assets/* with correct MIME types and immutable caching (hashed filenames)
-  app.use("/assets", express.static(resolvedBuild.assetsDir, {
-    immutable: true,
-    maxAge: "1y",
-    setHeaders: (res, filePath) => {
-      if (filePath.endsWith(".css")) {
-        res.setHeader("Content-Type", "text/css; charset=utf-8");
-      } else if (filePath.endsWith(".js")) {
-        res.setHeader("Content-Type", "application/javascript; charset=utf-8");
-      } else if (filePath.endsWith(".map")) {
-        res.setHeader("Content-Type", "application/json; charset=utf-8");
-      } else if (filePath.endsWith(".woff2")) {
-        res.setHeader("Content-Type", "font/woff2");
-      } else if (filePath.endsWith(".woff")) {
-        res.setHeader("Content-Type", "font/woff");
-      } else if (filePath.endsWith(".svg")) {
-        res.setHeader("Content-Type", "image/svg+xml");
-      } else if (filePath.endsWith(".png")) {
-        res.setHeader("Content-Type", "image/png");
-      } else if (filePath.endsWith(".jpg") || filePath.endsWith(".jpeg")) {
-        res.setHeader("Content-Type", "image/jpeg");
-      } else if (filePath.endsWith(".webp")) {
-        res.setHeader("Content-Type", "image/webp");
-      }
-      res.setHeader("Vary", "Accept-Encoding");
-    }
-  }));
-  
-  // Serve other static files (favicon, robots.txt, etc.) with shorter cache
-  app.use(express.static(resolvedBuild.publicDir, { 
-    maxAge: "1h",
-    index: false // Don't serve index.html here; SPA fallback handles it
-  }));
-}
+// =============================================================================
+// 4) API ROUTES AND ERROR HANDLING
+// =============================================================================
 
 (async () => {
   const server = await registerRoutes(app);
 
+  // Global error handler - returns text/plain for assets to avoid MIME issues
   app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
     // Log sensitive error details securely
     logSensitiveError(err, `${req.method} ${req.path}`);
+    
+    // If it's an asset request, return text/plain (not JSON) to avoid MIME type issues
+    if (req.path?.startsWith("/assets/")) {
+      console.error("Asset error:", err?.message || err);
+      return res.status(500).type("text/plain").send("Asset error");
+    }
     
     // Sanitize database errors to prevent schema disclosure
     const sanitized = sanitizeDatabaseError(err);
@@ -283,49 +251,39 @@ if (process.env.NODE_ENV !== "development") {
     res.status(sanitized.statusCode).json({ message: sanitized.message });
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
+  // =============================================================================
+  // 5) SPA FALLBACK - Only for HTML navigation requests
+  // =============================================================================
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
-    // PRODUCTION: SPA fallback - serve index.html for all non-API, non-asset GET requests
-    // This MUST come after all API routes are registered
+    // PRODUCTION: SPA fallback - serve index.html ONLY for HTML navigation
     app.get("*", (req, res, next) => {
+      const accept = req.headers.accept || "";
+      
       // Only handle GET requests
       if (req.method !== "GET") {
         return next();
       }
       
-      // Don't serve HTML for API routes - let them 404 properly
-      if (req.path.startsWith("/api")) {
-        return res.status(404).json({ error: "Not found" });
-      }
-      
-      // Don't serve HTML for missing assets - let them 404 properly
-      if (req.path.startsWith("/assets")) {
-        return res.status(404).json({ error: "Asset not found" });
-      }
-      
-      // Check if client accepts HTML (browser request vs API client)
-      const acceptHeader = req.get("Accept") || "";
-      if (!acceptHeader.includes("text/html") && !acceptHeader.includes("*/*")) {
+      // Only serve HTML for requests that accept HTML
+      if (!accept.includes("text/html")) {
         return next();
       }
       
+      // Never serve HTML for these paths - let them 404 properly
+      if (req.path.startsWith("/assets/")) return next();
+      if (req.path.startsWith("/api/")) return next();
+      if (req.path === "/favicon.ico") return next();
+      
       // Serve the SPA
-      if (resolvedBuild) {
-        res.sendFile(resolvedBuild.indexHtml);
-      } else {
-        res.status(500).send("Server configuration error: build not found");
-      }
+      return res.sendFile(indexHtml);
     });
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
+  // =============================================================================
+  // 6) START SERVER
+  // =============================================================================
   const port = parseInt(process.env.PORT || '5000', 10);
   server.listen({
     port,
@@ -335,12 +293,11 @@ if (process.env.NODE_ENV !== "development") {
     log(`serving on port ${port}`);
     
     // Auto-polling: Check inbox every 2 minutes with distributed lock
-    const POLLING_INTERVAL = 2 * 60 * 1000; // 2 minutes
+    const POLLING_INTERVAL = 2 * 60 * 1000;
     const pollingLock = createEmailPollingLock();
     
     setInterval(async () => {
       try {
-        // Use distributed lock to prevent duplicate polling across multiple instances
         const result = await pollingLock.executeWithLock(async () => {
           console.log('🔄 Auto-checking inbox...');
           return await emailService.checkInbox();
