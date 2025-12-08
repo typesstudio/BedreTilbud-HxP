@@ -1,0 +1,173 @@
+Klart — her er en **“fix it for always” Replit prompt** der ikke bare lapper symptomerne, men gør setup’et robust med **guardrails, tests, build-verifikation og korrekt routing-prioritet**, så `/assets/*` aldrig igen bliver fanget af API/catch-all eller serveret med forkert MIME.
+
+---
+
+## Replit prompt: “Permanent fix for Vite assets (500 + wrong MIME)”
+
+**Goal:** Make frontend assets (`/assets/*.js`, `/assets/*.css`, sourcemaps, images, fonts) ALWAYS serve as static files with correct `Content-Type`, never return JSON, never 500 due to route ordering, and fail loudly if build output is missing. Fix both local + production deploy.
+
+### 0) Diagnose (don’t guess)
+
+1. Find the runtime server entrypoint (Express/Fastify/Hono/etc.) and the frontend build tool (Vite).
+2. Locate the build output directory: usually `dist/` with `dist/assets/`.
+3. Reproduce:
+
+   * `curl -I /assets/<some>.css`
+   * `curl -I /assets/<some>.js`
+   * note status + `Content-Type`.
+4. Identify what currently handles `/assets/*`:
+
+   * Is it an API router (`/api`), a catch-all (`*`), a JSON middleware default, or a rewrite?
+
+### 1) Implement a “Static Assets First” rule (critical)
+
+No matter the framework, enforce this order:
+
+**(A) static assets middleware/routes FIRST**
+**(B) API routes SECOND**
+**(C) SPA fallback (serve index.html) LAST**
+**(D) 404 last**
+
+Also ensure no middleware sets JSON response headers globally.
+
+### 2) Hardening: explicit assets router with correct MIME + caching
+
+Implement a dedicated handler for `/assets/*` that:
+
+* Serves from `<distDir>/assets`
+* Sets correct MIME types for `.css`, `.js`, `.map`, fonts, images
+* Returns **404** (not JSON) if file missing (and logs a helpful error)
+* Adds aggressive cache headers for fingerprinted assets:
+
+  * `Cache-Control: public, max-age=31536000, immutable`
+* Ensures `Vary: Accept-Encoding` is fine
+
+If using Express, implement:
+
+* `app.use('/assets', express.static(distAssetsDir, { immutable: true, maxAge: '1y', setHeaders }))`
+* `setHeaders(res, filePath)`:
+
+  * if `.css` => `text/css; charset=utf-8`
+  * if `.js`  => `application/javascript; charset=utf-8`
+  * if `.map` => `application/json; charset=utf-8` (maps are JSON and that’s fine)
+  * DO NOT set JSON for css/js
+
+### 3) SPA fallback (must never intercept /assets or /api)
+
+Implement SPA fallback only for “document navigations”, and explicitly exclude:
+
+* `/assets/*`
+* `/api/*` (or whatever API prefix)
+* `/healthz`, `/robots.txt`, etc.
+
+Rule:
+
+* If request `Accept` includes `text/html` AND method is GET AND path is not under excluded prefixes → serve `dist/index.html`
+* Otherwise let it pass to API/404.
+
+### 4) Build output verification (prevents “works locally / fails in prod”)
+
+Add a startup check:
+
+* Confirm `dist/index.html` exists
+* Confirm `dist/assets/` exists and contains at least one `.js` and `.css` file
+* If missing, crash with a clear message like:
+
+  > “Build output missing. Run npm run build before starting server.”
+
+This avoids silent 500s that show up only in incognito / cold deploy.
+
+### 5) Lock down deploy/start commands so the fix stays
+
+Update `package.json` scripts so production always runs:
+
+* `npm run build` before `npm run start`
+  Examples:
+* `"start": "node server.js"`
+* `"build": "vite build && tsc -p server/tsconfig.json (if needed)"`
+* `"deploy": "npm run build && npm run start"` (or Replit’s equivalent)
+
+If Replit uses a “Run” command: ensure it runs build when needed OR deploy pipeline builds.
+
+### 6) Add regression tests that fail the build if this breaks again
+
+Create a minimal integration test (Node script) that boots the server and asserts:
+
+* `/assets/*.css` returns 200 and `Content-Type` starts with `text/css`
+* `/assets/*.js` returns 200 and `Content-Type` starts with `application/javascript`
+* `/assets/does-not-exist.css` returns 404 (not 200 and not SPA index)
+* `/api/health` still works (if exists)
+* `/some-spa-route` returns HTML (`text/html`)
+
+Wire it into CI or `npm test` so it can’t regress.
+
+### 7) Deliverables
+
+* Show the exact code changes (diff) in server entrypoint
+* Show updated `package.json` scripts
+* Show the new regression test file
+* Provide proof outputs:
+
+  * `curl -I` for css/js
+  * demonstrate correct status + Content-Type
+
+---
+
+## Bonus: Drop-in Express snippet (use if it matches the stack)
+
+```js
+import path from "path";
+import fs from "fs";
+import express from "express";
+
+const app = express();
+
+const distDir = path.resolve(process.cwd(), "dist");
+const distAssetsDir = path.join(distDir, "assets");
+
+function assertBuildOutput() {
+  const indexPath = path.join(distDir, "index.html");
+  if (!fs.existsSync(indexPath)) {
+    throw new Error(`Missing ${indexPath}. Run "npm run build" before starting.`);
+  }
+  if (!fs.existsSync(distAssetsDir)) {
+    throw new Error(`Missing ${distAssetsDir}. Run "npm run build" before starting.`);
+  }
+}
+assertBuildOutput();
+
+// 1) Assets FIRST
+app.use("/assets", express.static(distAssetsDir, {
+  immutable: true,
+  maxAge: "1y",
+  setHeaders(res, filePath) {
+    if (filePath.endsWith(".css")) res.setHeader("Content-Type", "text/css; charset=utf-8");
+    if (filePath.endsWith(".js")) res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+  }
+}));
+
+// 2) API SECOND (example)
+// app.use("/api", apiRouter);
+
+// 3) Static root (optional)
+app.use(express.static(distDir, { maxAge: "1h" }));
+
+// 4) SPA fallback LAST, exclude assets/api
+app.get("*", (req, res, next) => {
+  const accept = req.headers.accept || "";
+  const isHtmlNav = req.method === "GET" && accept.includes("text/html");
+  const p = req.path || "";
+
+  if (!isHtmlNav) return next();
+  if (p.startsWith("/assets/")) return next();
+  if (p.startsWith("/api/")) return next();
+
+  res.sendFile(path.join(distDir, "index.html"));
+});
+
+app.listen(process.env.PORT || 3000);
+```
+
+---
+
+Hvis du vil gøre det endnu mere “bulletproof”, kan du også tilføje en `/healthz/assets` endpoint der checker at CSS/JS filer findes i `dist/assets` og returnerer 500 hvis ikke — super nice til deploy-monitorering.
