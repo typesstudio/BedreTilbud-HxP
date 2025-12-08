@@ -58,6 +58,7 @@ export const documents = pgTable("documents", {
   extractionStages: jsonb("extraction_stages"), // Debug data: { stage1_ocr, stage2_segmentation, stage3_extraction }
   documentKind: text("document_kind").default("insurance_policy"), // "insurance_policy" or "unknown"
   documentKindConfidence: integer("document_kind_confidence"), // 0-100 confidence score
+  isActive: boolean("is_active").default(true), // Whether document is active for inquiries
   createdAt: timestamp("created_at").defaultNow(),
 }, (table) => ({
   userIdIdx: index("documents_user_id_idx").on(table.userId),
