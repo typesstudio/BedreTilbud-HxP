@@ -77,12 +77,15 @@ export default function AdminDashboard() {
   const userId = localStorage.getItem("userId");
   const [, setLocation] = useLocation();
   const [activeTab, setActiveTab] = useState<'attention' | 'threads' | 'debug'>('attention');
+  const [editingDraftId, setEditingDraftId] = useState<string | null>(null);
+  const [editedBody, setEditedBody] = useState<string>("");
+  const { toast } = useToast();
 
   const { data: threadsData, isLoading: threadsLoading } = useQuery<{ threads: ThreadData[]; count: number }>({
     queryKey: ["/api/admin/threads"],
   });
 
-  const { data: draftsData, isLoading: draftsLoading } = useQuery<{ drafts: DraftData[]; count: number }>({
+  const { data: draftsData, isLoading: draftsLoading, refetch: refetchDrafts } = useQuery<{ drafts: DraftData[]; count: number }>({
     queryKey: ["/api/admin/drafts"],
   });
 
@@ -97,6 +100,77 @@ export default function AdminDashboard() {
   const threads = threadsData?.threads || [];
   const drafts = draftsData?.drafts || [];
   const reports = reportsData?.reports || [];
+
+  const checkInboxMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/emails/check-inbox", {});
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: data.message || "Inbox tjekket" });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/drafts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/threads"] });
+    },
+    onError: () => {
+      toast({ title: "Kunne ikke tjekke inbox", variant: "destructive" });
+    },
+  });
+
+  const approveDraftMutation = useMutation({
+    mutationFn: async (draftId: string) => {
+      const response = await apiRequest("POST", `/api/emails/draft/${draftId}/approve`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Email sendt!" });
+      refetchDrafts();
+      setEditingDraftId(null);
+    },
+    onError: () => {
+      toast({ title: "Kunne ikke sende email", variant: "destructive" });
+    },
+  });
+
+  const rejectDraftMutation = useMutation({
+    mutationFn: async (draftId: string) => {
+      const response = await apiRequest("POST", `/api/emails/draft/${draftId}/reject`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Kladde afvist" });
+      refetchDrafts();
+      setEditingDraftId(null);
+    },
+    onError: () => {
+      toast({ title: "Kunne ikke afvise kladde", variant: "destructive" });
+    },
+  });
+
+  const editDraftMutation = useMutation({
+    mutationFn: async ({ draftId, body }: { draftId: string; body: string }) => {
+      const response = await apiRequest("PATCH", `/api/emails/draft/${draftId}`, { body });
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Kladde opdateret" });
+      refetchDrafts();
+    },
+    onError: () => {
+      toast({ title: "Kunne ikke opdatere kladde", variant: "destructive" });
+    },
+  });
+
+  const startEditing = (draft: DraftData) => {
+    setEditingDraftId(draft.id);
+    setEditedBody(draft.body || "");
+  };
+
+  const saveAndApprove = async (draftId: string) => {
+    if (editedBody !== drafts.find(d => d.id === draftId)?.body) {
+      await editDraftMutation.mutateAsync({ draftId, body: editedBody });
+    }
+    approveDraftMutation.mutate(draftId);
+  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -115,13 +189,24 @@ export default function AdminDashboard() {
     <AppLayoutWithNav userId={userId!}>
       <div className="flex h-full w-full flex-col bg-default-background px-4 md:px-12 py-6 md:py-12 overflow-auto">
         <div className="max-w-7xl w-full mx-auto">
-          <div className="mb-8">
-            <h1 className="text-heading-1 font-heading-1 text-default-font mb-2">
-              Admin Dashboard
-            </h1>
-            <p className="text-body text-subtext-color">
-              Administrer alle email-tråde og overvåg AI-performance
-            </p>
+          <div className="mb-8 flex items-start justify-between flex-wrap gap-4">
+            <div>
+              <h1 className="text-heading-1 font-heading-1 text-default-font mb-2">
+                Admin Dashboard
+              </h1>
+              <p className="text-body text-subtext-color">
+                Administrer alle email-tråde og overvåg AI-performance
+              </p>
+            </div>
+            <Button
+              variant="brand-primary"
+              onClick={() => checkInboxMutation.mutate()}
+              disabled={checkInboxMutation.isPending}
+              data-testid="btn-check-inbox"
+            >
+              <FeatherRefreshCw className={`w-4 h-4 mr-2 ${checkInboxMutation.isPending ? 'animate-spin' : ''}`} />
+              {checkInboxMutation.isPending ? "Tjekker..." : "Tjek inbox nu"}
+            </Button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -237,8 +322,7 @@ export default function AdminDashboard() {
                     {drafts.map((draft) => (
                       <div 
                         key={draft.id} 
-                        className="border border-warning-200 bg-warning-50 rounded-lg p-4 hover:border-warning-400 transition-colors cursor-pointer"
-                        onClick={() => setLocation(`/emails/${draft.threadId}`)}
+                        className="border border-warning-200 bg-warning-50 rounded-lg p-4"
                         data-testid={`draft-card-${draft.id}`}
                       >
                         <div className="flex items-start justify-between mb-2">
@@ -262,26 +346,76 @@ export default function AdminDashboard() {
                             </p>
                           </div>
                         </div>
-                        <div className="mt-3 bg-white rounded p-3 border border-warning-100">
-                          <p className="text-caption text-subtext-color mb-1">Kladde-indhold:</p>
-                          <p className="text-body text-default-font line-clamp-3">
-                            {draft.body?.substring(0, 200) || 'Ingen indhold'}
-                            {(draft.body?.length || 0) > 200 && '...'}
-                          </p>
-                        </div>
-                        <div className="mt-3 flex justify-end">
-                          <Button
-                            size="small"
-                            variant="brand-primary"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setLocation(`/emails/${draft.threadId}`);
-                            }}
-                            data-testid={`btn-review-draft-${draft.id}`}
-                          >
-                            Gennemse og godkend
-                          </Button>
-                        </div>
+                        
+                        {editingDraftId === draft.id ? (
+                          <div className="mt-3">
+                            <p className="text-caption text-subtext-color mb-2">Rediger kladde:</p>
+                            <textarea
+                              className="w-full h-48 p-3 border border-neutral-border rounded-md text-body text-default-font bg-white resize-y"
+                              value={editedBody}
+                              onChange={(e) => setEditedBody(e.target.value)}
+                              data-testid={`textarea-draft-${draft.id}`}
+                            />
+                            <div className="mt-3 flex gap-2 justify-end">
+                              <Button
+                                size="small"
+                                variant="neutral-secondary"
+                                onClick={() => setEditingDraftId(null)}
+                                data-testid={`btn-cancel-edit-${draft.id}`}
+                              >
+                                Annuller
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="destructive-secondary"
+                                onClick={() => rejectDraftMutation.mutate(draft.id)}
+                                disabled={rejectDraftMutation.isPending}
+                                data-testid={`btn-reject-draft-${draft.id}`}
+                              >
+                                <FeatherX className="w-4 h-4 mr-1" />
+                                Afvis
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="brand-primary"
+                                onClick={() => saveAndApprove(draft.id)}
+                                disabled={approveDraftMutation.isPending || editDraftMutation.isPending}
+                                data-testid={`btn-approve-draft-${draft.id}`}
+                              >
+                                <FeatherCheck className="w-4 h-4 mr-1" />
+                                {approveDraftMutation.isPending ? "Sender..." : "Godkend og send"}
+                              </Button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="mt-3 bg-white rounded p-3 border border-warning-100">
+                              <p className="text-caption text-subtext-color mb-1">Kladde-indhold:</p>
+                              <p className="text-body text-default-font whitespace-pre-wrap">
+                                {draft.body || 'Ingen indhold'}
+                              </p>
+                            </div>
+                            <div className="mt-3 flex gap-2 justify-end">
+                              <Button
+                                size="small"
+                                variant="neutral-secondary"
+                                onClick={() => setLocation(`/emails/${draft.threadId}`)}
+                                data-testid={`btn-view-thread-${draft.id}`}
+                              >
+                                Se tråd
+                              </Button>
+                              <Button
+                                size="small"
+                                variant="brand-primary"
+                                onClick={() => startEditing(draft)}
+                                data-testid={`btn-edit-draft-${draft.id}`}
+                              >
+                                <FeatherEdit3 className="w-4 h-4 mr-1" />
+                                Rediger og godkend
+                              </Button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
