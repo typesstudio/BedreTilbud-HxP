@@ -3,7 +3,7 @@ import compression from "compression";
 import path from "path";
 import fs from "fs";
 import { registerRoutes } from "./routes";
-import { setupVite, serveStatic, log } from "./vite";
+import { setupVite, log } from "./vite";
 import { emailService } from "./services/emailService";
 import { createEmailPollingLock } from "./utils/distributedLock";
 import { validateSecrets } from "./config/secrets";
@@ -90,12 +90,28 @@ app.use((req, res, next) => {
 // PRODUCTION ONLY: Static assets middleware with correct MIME types (must be before API routes)
 // In development, Vite handles this via setupVite()
 if (process.env.NODE_ENV !== "development") {
-  // Build output is synced to server/public (matching server/vite.ts expectations)
-  const distPath = path.resolve(import.meta.dirname, "public");
-  const distAssetsPath = path.join(distPath, "assets");
+  // Try multiple possible paths for production assets
+  // Order of priority: dist/public (vite output), then relative to bundle
+  const possiblePaths = [
+    path.resolve(process.cwd(), "dist", "public"),  // Vite build output
+    path.resolve(import.meta.dirname, "public"),    // Relative to bundled index.js
+    path.resolve(process.cwd(), "server", "public"), // Sync-static output
+  ];
+  
+  let distPath: string | null = null;
+  let distAssetsPath: string | null = null;
+  
+  for (const tryPath of possiblePaths) {
+    const tryAssetsPath = path.join(tryPath, "assets");
+    if (fs.existsSync(tryAssetsPath)) {
+      distPath = tryPath;
+      distAssetsPath = tryAssetsPath;
+      break;
+    }
+  }
   
   // Verify build output exists
-  if (fs.existsSync(distAssetsPath)) {
+  if (distPath && distAssetsPath) {
     log("📦 Production mode: Serving static assets from " + distAssetsPath);
     
     // Serve /assets/* with correct MIME types and aggressive caching
@@ -154,7 +170,10 @@ if (process.env.NODE_ENV !== "development") {
       }
     });
   } else {
-    log("⚠️ Warning: Production assets directory not found at " + distAssetsPath);
+    log("⚠️ Warning: Production assets directory not found. Tried paths:");
+    for (const tryPath of possiblePaths) {
+      log("   - " + path.join(tryPath, "assets"));
+    }
   }
 }
 
@@ -178,7 +197,38 @@ if (process.env.NODE_ENV !== "development") {
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
-    serveStatic(app);
+    // Custom serveStatic that tries multiple paths for production assets
+    const staticPaths = [
+      path.resolve(process.cwd(), "dist", "public"),  // Vite build output
+      path.resolve(import.meta.dirname, "public"),    // Relative to bundled index.js
+      path.resolve(process.cwd(), "server", "public"), // Sync-static output
+    ];
+    
+    let staticDistPath: string | null = null;
+    for (const tryPath of staticPaths) {
+      if (fs.existsSync(path.join(tryPath, "index.html"))) {
+        staticDistPath = tryPath;
+        break;
+      }
+    }
+    
+    if (!staticDistPath) {
+      log("❌ Could not find build directory with index.html. Tried:");
+      for (const tryPath of staticPaths) {
+        log("   - " + tryPath);
+      }
+      throw new Error("Could not find the build directory, make sure to build the client first");
+    }
+    
+    log("📄 Serving index.html from " + staticDistPath);
+    
+    // Serve static files (fallback for non-asset files)
+    app.use(express.static(staticDistPath));
+    
+    // Fall through to index.html for SPA routing
+    app.use("*", (_req, res) => {
+      res.sendFile(path.resolve(staticDistPath as string, "index.html"));
+    });
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
