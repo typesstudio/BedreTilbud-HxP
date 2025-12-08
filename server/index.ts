@@ -152,6 +152,72 @@ app.get("/healthz/assets", (_req, res) => {
   }
 });
 
+// Diagnostic endpoint to debug production file paths
+app.get("/debug/paths", (_req, res) => {
+  try {
+    const cwd = process.cwd();
+    const dirname = import.meta.dirname;
+    
+    const safeReaddir = (dir: string): string[] => {
+      try {
+        return fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+      } catch {
+        return ["ERROR: Cannot read"];
+      }
+    };
+    
+    const checkPath = (p: string) => ({
+      path: p,
+      exists: fs.existsSync(p),
+      files: safeReaddir(p).slice(0, 20), // Limit to 20 files
+      hasAssets: fs.existsSync(path.join(p, "assets")),
+      hasIndexHtml: fs.existsSync(path.join(p, "index.html")),
+    });
+    
+    const possiblePaths = [
+      path.resolve(cwd, "server", "public"),
+      path.resolve(cwd, "dist", "public"),
+      path.resolve(dirname, "public"),
+      path.resolve(dirname, "..", "public"),
+      cwd,
+      dirname,
+    ];
+    
+    const pathChecks = possiblePaths.map(checkPath);
+    
+    // Check specific CSS file
+    const cssFileName = "index-BBGG7_n0.css";
+    const cssFileChecks = possiblePaths.map(p => ({
+      path: path.join(p, "assets", cssFileName),
+      exists: fs.existsSync(path.join(p, "assets", cssFileName)),
+    }));
+    
+    res.json({
+      environment: {
+        NODE_ENV: process.env.NODE_ENV,
+        cwd,
+        dirname,
+      },
+      resolvedBuild: resolvedBuild ? {
+        publicDir: resolvedBuild.publicDir,
+        assetsDir: resolvedBuild.assetsDir,
+        indexHtml: resolvedBuild.indexHtml,
+        indexHtmlExists: fs.existsSync(resolvedBuild.indexHtml),
+        assetsDirExists: fs.existsSync(resolvedBuild.assetsDir),
+        assetsFiles: safeReaddir(resolvedBuild.assetsDir).slice(0, 10),
+      } : null,
+      pathChecks,
+      cssFileChecks,
+    });
+  } catch (error: any) {
+    res.status(500).json({ 
+      error: "Debug endpoint error", 
+      message: error?.message || "Unknown error",
+      stack: error?.stack,
+    });
+  }
+});
+
 // PRODUCTION ONLY: Serve static assets BEFORE API routes
 // In development, Vite middleware handles this via setupVite()
 if (process.env.NODE_ENV !== "development") {
