@@ -1006,6 +1006,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Toggle document active status
+  app.patch("/api/documents/:id/active", requireAuth, requireCSRFToken, async (req, res) => {
+    try {
+      const document = await storage.getDocument(req.params.id);
+      if (!document) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      const userId = req.headers['x-user-id'] as string;
+      if (document.userId !== userId) {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      const { isActive } = req.body;
+      if (typeof isActive !== 'boolean') {
+        return res.status(400).json({ message: "isActive must be a boolean" });
+      }
+
+      const { db } = await import("./db");
+      const { documents: documentsTable } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+
+      await db.update(documentsTable)
+        .set({ isActive })
+        .where(eq(documentsTable.id, req.params.id));
+
+      logger.info('[Document] Active status updated', { documentId: req.params.id, isActive });
+      res.json({ id: req.params.id, isActive });
+    } catch (error: any) {
+      logger.error('Failed to update document active status', error, { documentId: req.params.id });
+      res.status(500).json({ message: error.message });
+    }
+  });
+
   app.delete("/api/documents/:id", requireAuth, requireCSRFToken, async (req, res) => {
     try {
       const document = await storage.getDocument(req.params.id);
