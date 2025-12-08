@@ -1632,6 +1632,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Email routes
+  // DRAFT WORKFLOW: All outgoing emails must be approved by admin before sending
+  // This creates drafts for admin review instead of sending directly
   app.post("/api/emails/send-inquiries", emailLimiter, requireAuth, requireCSRFToken, async (req, res) => {
     try {
       const { userId, companyIds, customMessage } = req.body;
@@ -1685,26 +1687,80 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!company) continue;
 
         // Generate personalized email with simplified context
+        // NOTE: For initial inquiries, we intentionally DO NOT include CPR numbers
+        // PII validation happens below to catch any accidental inclusion
         const emailBody = customMessage || await comparisonService.generatePersonalizedEmail(
           company.name,
           {
             userName: user.name || undefined,
-            cprNumber: user.personalIdNumber || undefined,
+            // DO NOT include cprNumber in initial inquiry - privacy protection
             requestedInsurances
           }
         );
 
-        const threadId = await emailService.sendInsuranceInquiry(
+        // PII VALIDATION: Block CPR, phone numbers, and addresses in first contact
+        const { validateEmailForPII } = await import("./utils/piiValidator");
+        const piiValidation = validateEmailForPII(emailBody);
+        
+        if (!piiValidation.isValid) {
+          console.warn(`[PII] Blocked PII in initial inquiry to ${company.name}:`, 
+            piiValidation.blockedItems.map(i => `${i.type}: ${i.match.substring(0, 4)}...`));
+          return res.status(400).json({
+            message: piiValidation.message,
+            blockedItems: piiValidation.blockedItems.map(i => ({
+              type: i.type,
+              redacted: i.redacted
+            }))
+          });
+        }
+
+        // DRAFT WORKFLOW: Create thread and draft for admin approval instead of sending directly
+        // This ensures all initial outreach emails are reviewed before sending
+        const subject = `Forespørgsel om forsikringstilbud - ${user.name || user.email}`;
+        const { generateRequestToken, formatReplyToEmail } = await import("./utils/tokenGenerator");
+        const requestToken = generateRequestToken();
+        const replyToEmail = formatReplyToEmail(requestToken);
+
+        // Create email thread with draft_pending status
+        const thread = await storage.createEmailThread({
           userId,
           companyId,
-          emailBody,
-          attachmentPaths
-        );
+          subject,
+          threadId: '', // Will be populated when email is actually sent
+          requestToken,
+          replyToEmail,
+          status: 'draft_pending',
+          aiMode: 'draft'
+        });
 
-        threadIds.push(threadId);
+        // Create draft email for admin approval
+        // Store attachment paths in metadata for when the email is approved and sent
+        await storage.createEmail({
+          threadId: thread.id,
+          messageId: '',
+          direction: 'outbound',
+          subject,
+          body: emailBody,
+          attachments: attachmentPaths.map(p => ({ fileName: require('path').basename(p), filePath: p })),
+          metadata: { 
+            isInitialInquiry: true, 
+            attachmentPaths,
+            companyEmail: company.email
+          },
+          sentAt: new Date(),
+          status: 'draft',
+          authorType: 'user'
+        });
+
+        console.log(`[Draft] Created initial inquiry draft for ${company.name} (thread: ${thread.id})`);
+        threadIds.push(thread.id);
       }
 
-      res.json({ threadIds, message: "Inquiries sent successfully" });
+      res.json({ 
+        threadIds, 
+        message: "Dine forespørgsler er oprettet og afventer godkendelse fra administrator.",
+        isDraft: true
+      });
     } catch (error: any) {
       res.status(500).json({ message: error.message });
     }
@@ -1909,7 +1965,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Approve and send an AI draft
+  // Approve and send a draft (handles both AI reply drafts and initial inquiry drafts)
   app.post("/api/emails/draft/:id/approve", requireAuth, async (req, res) => {
     try {
       const draftId = req.params.id;
@@ -1917,7 +1973,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const authenticatedUser = await storage.getUser(authenticatedUserId);
       const isAdmin = authenticatedUser?.isAdmin === true;
       
-      console.log("📤 Approving AI draft:", draftId, "by user:", authenticatedUserId, "isAdmin:", isAdmin);
+      console.log("📤 Approving draft:", draftId, "by user:", authenticatedUserId, "isAdmin:", isAdmin);
 
       // Get the draft with thread for authorization
       const result = await storage.getEmailWithThread(draftId);
@@ -1938,14 +1994,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Du har ikke adgang til denne kladde" });
       }
 
-      // Send the email through the email service
-      const sentEmail = await emailService.sendFollowUpEmail(
-        thread.id,
-        draft.body || '',
-        { existingDraftId: draftId }
-      );
+      // Check if this is an initial inquiry draft (needs Gmail with attachments)
+      const metadata = draft.metadata as { isInitialInquiry?: boolean; attachmentPaths?: string[]; companyEmail?: string } | null;
+      const isInitialInquiry = metadata?.isInitialInquiry === true;
 
-      console.log("✅ Draft approved and sent:", sentEmail.id);
+      let sentEmail;
+      
+      if (isInitialInquiry) {
+        // INITIAL INQUIRY: Send via Gmail with attachments
+        console.log("📨 Sending initial inquiry via Gmail with attachments");
+        
+        const attachmentPaths = metadata?.attachmentPaths || [];
+        const companyEmail = metadata?.companyEmail;
+        
+        if (!companyEmail) {
+          return res.status(400).json({ message: "Mangler forsikringsselskabets email" });
+        }
+        
+        // Import Gmail client and send email
+        const { getUncachableGmailClient } = await import("./googleMailClient");
+        const { gmailOAuthService } = await import("./services/gmailOAuthService");
+        const fs = await import("fs");
+        const path = await import("path");
+        
+        // Get Gmail client
+        let gmail;
+        try {
+          if (gmailOAuthService.isConfigured()) {
+            gmail = await gmailOAuthService.getGmailClient();
+          } else {
+            gmail = await getUncachableGmailClient();
+          }
+        } catch (gmailError) {
+          console.error("[Draft Approve] Gmail client error:", gmailError);
+          return res.status(500).json({ message: "Kunne ikke forbinde til Gmail" });
+        }
+        
+        // Get user for sender name
+        const user = thread.userId ? await storage.getUser(thread.userId) : null;
+        const senderName = user?.name ? `${user.name} via BedreTilbud` : 'BedreTilbud';
+        
+        // Encode header for Danish characters
+        const encodeEmailHeader = (text: string): string => {
+          const hasNonAscii = /[^\x00-\x7F]/.test(text);
+          if (!hasNonAscii) return text;
+          const base64 = Buffer.from(text, 'utf8').toString('base64');
+          return `=?UTF-8?B?${base64}?=`;
+        };
+        
+        const fromHeader = `${encodeEmailHeader(senderName)} <hej@bedretilbud.com>`;
+        
+        // Build email with attachments
+        let emailContent = [
+          `To: ${companyEmail}`,
+          `From: ${fromHeader}`,
+          `Reply-To: ${thread.replyToEmail}`,
+          `Subject: ${encodeEmailHeader(draft.subject || '')}`,
+          'MIME-Version: 1.0',
+          'Content-Type: multipart/mixed; boundary="boundary123"',
+          '',
+          '--boundary123',
+          'Content-Type: text/plain; charset=UTF-8',
+          '',
+          draft.body || '',
+          '',
+        ];
+
+        // Add attachments
+        for (const filePath of attachmentPaths) {
+          if (fs.existsSync(filePath)) {
+            const fileContent = fs.readFileSync(filePath).toString('base64');
+            const fileName = path.basename(filePath);
+            
+            emailContent.push(
+              '--boundary123',
+              `Content-Type: application/pdf; name="${fileName}"`,
+              'Content-Transfer-Encoding: base64',
+              `Content-Disposition: attachment; filename="${fileName}"`,
+              '',
+              fileContent,
+              ''
+            );
+          }
+        }
+        
+        emailContent.push('--boundary123--');
+        
+        const raw = Buffer.from(emailContent.join('\n')).toString('base64');
+        
+        const gmailResult = await gmail.users.messages.send({
+          userId: 'me',
+          requestBody: { raw }
+        });
+        
+        // Update draft to sent status
+        sentEmail = await storage.updateEmail(draftId, {
+          messageId: gmailResult.data.id || '',
+          status: 'sent',
+          sentAt: new Date()
+        });
+        
+        // Update thread with Gmail thread ID and change status to sent
+        await storage.updateEmailThread(thread.id, {
+          threadId: gmailResult.data.threadId || '',
+          status: 'sent'
+        });
+        
+        console.log("✅ Initial inquiry sent via Gmail:", gmailResult.data.id);
+        
+      } else {
+        // REPLY DRAFT: Send via Resend (existing flow)
+        sentEmail = await emailService.sendFollowUpEmail(
+          thread.id,
+          draft.body || '',
+          { existingDraftId: draftId }
+        );
+        
+        console.log("✅ Reply draft approved and sent:", sentEmail.id);
+      }
 
       res.json({
         success: true,
