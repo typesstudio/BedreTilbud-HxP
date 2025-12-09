@@ -1,0 +1,541 @@
+Okay, lad os få det her gjort ordentligt – det her er kernen i appen, så jeg er helt enig: det skal være *stabilt, deterministisk og kedeligt på den gode måde*.
+
+Jeg deler svaret i to dele:
+
+1. **Plan (arkitektur + konkrete ændringer)**
+2. **Replit-prompt du kan copy/paste direkte**
+
+---
+
+## 1. Plan: Sådan fikser vi Types Studio / Lærerstandens-casen og gør systemet robust
+
+### Problemopsummering (det vi ved)
+
+Ud fra den tidligere analyse på dokumentet `111793e5-417f-49e4-b5dd-d55388d71f35`:
+
+1. **PDF’en indeholder 3 policer** (fritidshus/hus, indbo, ulykke) i én samlet PDF.
+2. **Segmenteringen har faktisk fundet 3 policies**, men:
+
+   * PricingAgent har taget **“Din pris pr. år 995,10 kr”** fra ulykkesforsikringen
+   * … og tilskrevet den **hus/fritidshus-policen**, hvor den rigtige pris er ca. **5.682 kr**
+3. I UI har du oplevet:
+
+   * Kun fritidshus / hus bliver vist korrekt i comparison/health check i nogle views
+   * De andre typer opfører sig ikke konsistent (tabs/list mismatch)
+4. PDF’en er sendt fra **Types Studio**, men selve indholdet er fra **Lærerstandens Brandforsikring**, så der er også en **company-navn forvirring**.
+
+Med andre ord:
+
+* **Scope-fejl**: PricingAgent kigger for bredt (hele dokumentet / forkert segment).
+* **Manglende guard rails**: Selv åbenlyst “for lav” pris på hus/fritidshus bliver accepteret.
+* **Ikke 100% 1:1 kobling** mellem segmenteret tekst → snapshot → health check → comparison.
+
+---
+
+### Overordnet strategi
+
+Vi gør tre ting:
+
+1. **Gør segmentering → snapshot 100% deterministisk**
+
+   * Hver policy får sin egen tekst-“bubble”, og *ingen* andre policers tekst må slippe ind.
+2. **Opgrader PricingAgent til at arbejde *kun* på segment-tekst + få sanity checks**
+
+   * Først søg efter pris lokalt i segmentet
+   * Hvis ingen totalpris → bed LLM om at udlede den ud fra delpriser
+   * Til sidst sanity check (f.eks. “hus/fritidshus under 1.500 kr/år = mistænkeligt”)
+3. **Sørg for at alle segmenter faktisk bliver kørt igennem health check og comparison**
+
+   * Så alle 3 policer fra et tilbud altid ender i UI, både i “samlet” og pr. policetype.
+
+Jeg skriver det som konkrete steps du kan give til din dev / Replit-AI.
+
+---
+
+### Step 1: Stram segmenteringen op (per policy-tekst)
+
+**Mål:** For dokumenter med flere policer (som Lærerstandens/Types Studio) skal hver policy-segment være *helt isoleret*.
+
+**Ændringer:**
+
+1. **Udvid / bekræft data-strukturen for `segmented_policies` i `documents`**
+
+   * Hvert element skal som minimum have:
+
+     ```ts
+     type SegmentedPolicy = {
+       policyType: 'hus' | 'fritidshus' | 'indbo' | 'ulykke' | ...;
+       rawText: string;          // Kun tekst for denne police
+       pageRange?: [number, number]; // valgfrit, men nice to have
+       meta?: {
+         insurerName?: string;
+         internalName?: string;
+       };
+     }
+     ```
+   * Hvis den allerede findes, skal vi sikre at `rawText` **faktisk** er beskåret korrekt.
+
+2. **I den kode der laver `policy_snapshots` ud fra `segmented_policies`**
+
+   * Sørg for at hvert snapshot gemmer entydigt link til segmentet:
+
+     ```ts
+     {
+       document_id,
+       segment_index,
+       policy_type,
+       raw_text_for_pricing, // fra segmented_policies[i].rawText
+       ...
+     }
+     ```
+   * Ingen steder må vi længere bruge *hele* OCR-teksten, når vi henter pris.
+
+3. **Test på Types Studio-dokumentet**
+
+   * Brug SQL (som Replit-AI allerede gjorde) til at hente:
+
+     ```sql
+     SELECT extraction_stages, segmented_policies
+     FROM documents
+     WHERE id = '111793e5-417f-49e4-b5dd-d55388d71f35';
+     ```
+   * Sørg for at:
+
+     * `segmented_policies` indeholder 3 entries
+     * `rawText` for fritidshus/hus **ikke** indeholder “Din pris pr. år 995,10 kr” fra ulykkesforsikring
+     * Ulykkes-segmentet *gør* indeholde denne linje
+
+Hvis segmentet stadig indeholder blandet tekst, skal segmenterings-prompten/agenten justeres til tydeligt at bruge overskrifter som “Fritidshusforsikring”, “Indboforsikring”, “Ulykkesforsikring” og kun tage teksten indtil næste overskrift.
+
+---
+
+### Step 2: Gør PricingAgent lokal og robust
+
+**Mål:** PricingAgent må aldrig “stjæle” en pris fra en anden policy, og den skal være robust, når totalprisen ikke står ét sted.
+
+**Ændringer:**
+
+1. **Input til PricingAgent = kun segment-tekst**
+
+   * Sikr at det sted hvor PricingAgent kaldes, ser ca. sådan ud:
+
+     ```ts
+     pricingAgent.getPrice({
+       policyType: snapshot.policy_type,
+       segmentText: snapshot.raw_text_for_pricing,
+     });
+     ```
+   * Ingen `fullDocumentText`, ingen anden global tekst.
+
+2. **To-trins strategi inde i PricingAgent**
+
+   **(a) Regelbaseret extraction i segmentet**
+
+   * Kør regex på *segmentet* for at finde linjer som:
+
+     * `Din pris pr. år`
+     * `Pris i alt pr. år`
+     * `Din årlige pris`
+     * `Årspris`
+   * Og deres varianter med dansk talformat: `\d{1,3}(\.\d{3})*,\d{2}\s*kr`
+   * Returnér kandidat-liste med:
+
+     ```ts
+     type PriceCandidate = {
+       amount: number;
+       period: 'year' | 'month';
+       line: string;
+       confidence: number; // baseret på keywords
+     }
+     ```
+   * Vælg den kandidat med højest confidence.
+
+   **(b) LLM-fallback når der ikke findes en klar total**
+
+   * Hvis der *ikke* findes en god kandidat i segmentet:
+
+     * Send kun `segmentText` til LLM med en stram prompt:
+
+       * “Du ser kun teksten for én police ({{policyType}}). Find den samlede pris pr. år for præmien. Hvis den ikke står eksplcicit, så læg delpriserne sammen. Returner JSON `{ "annualPremium": number, "monthlyPremium": number | null }`.”
+     * Parse svaret og gem i `annualPremium` / `monthlyPremium`.
+
+3. **Sanity checks (guard rails)**
+
+   * Tilføj simple checks baseret på `policyType`:
+
+     ```ts
+     function isPlausibleAnnualPremium(policyType: string, amount: number): boolean {
+       if (['hus', 'fritidshus'].includes(policyType)) {
+         return amount >= 1500 && amount <= 30000;
+       }
+       if (policyType === 'indbo') {
+         return amount >= 300 && amount <= 15000;
+       }
+       if (policyType === 'ulykke') {
+         return amount >= 200 && amount <= 10000;
+       }
+       return true;
+     }
+     ```
+
+   * Hvis beløbet ikke er plausibelt:
+
+     * Sæt `pricing_confidence = 'low'`
+     * Enten:
+
+       * a) Kør LLM-fallback én gang mere *kun* på segmentet, eller
+       * b) Returnér `null` som pris og lad UI vise “Pris kunne ikke udtrækkes – vi viser ingen besparelse”.
+
+   **Helst vil vi hellere have “ingen pris” end en *forkert* pris.**
+
+4. **Logging til debugging**
+
+   * For hver policy snapshot, log fx:
+
+     ```ts
+     log.info('pricing_result', {
+       policyType,
+       annualPremium,
+       strategy: 'regex' | 'llm-fallback',
+       confidence,
+       docId,
+       segmentIndex,
+     });
+     ```
+
+   * Så kan vi senere søge efter mistænkelige cases.
+
+---
+
+### Step 3: Company-navn mismatch (Types Studio vs. Lærerstandens)
+
+Det er ikke den mest kritiske bug ift. pris, men det giver forvirring.
+
+**Løsning:**
+
+* Skeln mellem:
+
+  * **`sender_company_id`** (den “kanal” / samarbejdspartner = Types Studio)
+  * **`insurer_name`** ekstraheret fra PDF (Lærerstandens Brandforsikring)
+* Gem `insurer_name` i et felt på snapshot / policy (eller i `segmented_policies.meta.insurerName`).
+* I UI:
+
+  * Vis primært “Types Studio” som afsender (det er det brugeren genkender som samarbejdspartner)
+  * Men evt. supplement: “Forsikringen er fra Lærerstandens Brandforsikring” i detalje-view.
+
+---
+
+### Step 4: Sikr at alle policer kører igennem health check + comparison
+
+Når segmentering og pricing er fixet, skal vi sikre at:
+
+1. For hvert `segmented_policy` → der oprettes **én aktiv `policy_snapshot`**.
+2. For hver `policy_snapshot` i et company-request:
+
+   * Health check bliver kørt (og gemt i `health_check_json` / tilsvarende)
+   * Comparison bliver kørt mod brugerens aktuelle police af *samme type*.
+
+Hvis der står “fritidshus” i tilbuddet, men brugeren kun har “hus”, skal jeres matching-service afgøre om:
+
+* De skal matches (hvis det giver mening for jer)
+* Eller om fritidshus skal stå som “ekstra police” (edge-case du allerede har tænkt over).
+
+---
+
+### Step 5: Regression tests på den konkrete Types Studio PDF
+
+Til sidst skal den her PDF aldrig kunne knække det igen.
+
+Lav mindst én integrationstest, der:
+
+1. Loader OCR-teksten for dokument `111793e5-417f-49e4-b5dd-d55388d71f35` (via fixture eller direkte query).
+
+2. Kører den fulde pipeline:
+
+   * segmentering → snapshots → pricing → health check.
+
+3. Asserter:
+
+   ```ts
+   - der findes 3 policer (hus/fritidshus, indbo, ulykke)
+   - hus/fritidshus annualPremium ≈ 5682 kr (den præcise værdi som står i PDF’en)
+   - ulykkesforsikring annualPremium ≈ 995,10 kr
+   - indbo annualPremium ≈ 504,69 kr (hvis det er korrekt i PDF’en)
+   ```
+
+4. (Valgfrit) Kør også comparison og assert at alle 3 typer dukker op.
+
+---
+
+## 2. Replit-prompt (copy-paste)
+
+Her er en prompt du kan smide direkte i Replit’s AI (Assistant / Plan), så den implementerer ovenstående. Du kan selvfølgelig tweake navnene, hvis de ikke matcher 1:1.
+
+---
+
+**Replit prompt:**
+
+> You are a senior full-stack TypeScript engineer working on the “BedreTilbud” insurance comparison app.
+> The app ingests insurance PDFs, runs OCR + AI extraction, segments them into individual policies, and then computes prices, health checks and comparisons.
+>
+> We have a critical bug in the extraction pipeline for multi-policy PDFs that must be fixed robustly.
+>
+> ---
+>
+> ### Context / Bug description
+>
+> We have a document in the `documents` table:
+>
+> * `id = '111793e5-417f-49e4-b5dd-d55388d71f35'`
+> * It contains **three policies in one PDF** from “Lærerstandens Brandforsikring” (sent via Types Studio):
+>
+>   * house / fritidshus
+>   * contents (indbo)
+>   * accident (ulykke)
+>
+> Problems:
+>
+> 1. **Wrong annual premium for the house/fritidshus policy**
+>
+>    * The correct annual premium in the PDF is ~ **5.682 kr**
+>    * Our PricingAgent currently assigns **995,10 kr**, which is actually the accident policy’s premium (“Din pris pr. år inkl. statsafgifter 995,10 kr”).
+>    * Root cause: the PricingAgent is picking up the first “Din pris pr. år … kr” line from the *wrong* policy segment / from the whole document instead of only the relevant segment.
+> 2. **Multi-policy segmentation not enforced strictly enough**
+>
+>    * `segmented_policies` for this document contains 3 entries, but the `rawText` for each policy is not strict enough, so pricing logic can still “see” lines belonging to other policies.
+> 3. (Secondary) **Company name confusion**
+>
+>    * The PDF content is from “Lærerstandens Brandforsikring” but the offer is sent via “Types Studio”.
+>    * The OCR extraction currently picks up “Lærerstandens Brandforsikring” as company name, but in the UI the user expects to see the sending partner (Types Studio).
+>
+> This bug has shown up many times (we’ve processed this case ~100 times), so we need a solid, deterministic fix – not a band-aid.
+>
+> ---
+>
+> ### Goal
+>
+> Make multi-policy extraction **deterministic and local**:
+>
+> * Each policy segment has its own isolated text.
+> * PricingAgent only ever looks at the **segment text** for that policy.
+> * If there is no explicit total annual price in the segment, the agent should compute it from the partial premiums via LLM.
+> * Add simple sanity checks so obviously wrong prices are rejected.
+> * Add tests specifically for the document `111793e5-417f-49e4-b5dd-d55388d71f35` so this never regresses again.
+>
+> ---
+>
+> ### Tasks
+>
+> #### 1) Inspect the current pipeline
+>
+> 1. Search the codebase for:
+>
+>    * `segmented_policies`
+>    * `PricingAgent`
+>    * `extraction_stages`
+>    * `policy_snapshots`
+> 2. Identify:
+>
+>    * Where segmented policies are created and stored on the `documents` row.
+>    * Where `policy_snapshots` are created from `segmented_policies`.
+>    * Where the PricingAgent is invoked (which inputs it gets).
+>
+> ---
+>
+> #### 2) Make segmentation → snapshots 1:1 and local
+>
+> 1. Ensure the `segmented_policies` type looks roughly like this (or extend the existing type accordingly):
+>
+>    ```ts
+>    type SegmentedPolicy = {
+>      policyType: string;        // 'hus' | 'fritidshus' | 'indbo' | 'ulykke' | ...
+>      rawText: string;           // ONLY the text for this policy
+>      pageRange?: [number, number];
+>      meta?: {
+>        insurerName?: string;
+>        internalName?: string;
+>      };
+>    };
+>    ```
+>
+> 2. In the code that creates `policy_snapshots` from `segmented_policies`:
+>
+>    * Make sure each snapshot stores:
+>
+>      * `segment_index`
+>      * `policy_type`
+>      * `raw_text_for_pricing` (from `segmented_policies[i].rawText`, **not** the full OCR text).
+>    * Ensure no later step replaces `raw_text_for_pricing` with the whole OCR text.
+>
+> 3. For debugging, re-run a SQL query (using the existing DB helpers) for:
+>
+>    ```sql
+>    SELECT extraction_stages, segmented_policies
+>    FROM documents
+>    WHERE id = '111793e5-417f-49e4-b5dd-d55388d71f35';
+>    ```
+>
+>    * Confirm:
+>
+>      * There are 3 segments.
+>      * The fritidshus/house segment’s `rawText` does **not** contain the accident line:
+>        `"Din pris pr. år inkl. statsafgifter 995,10 kr."`
+>      * The accident segment’s `rawText` **does** contain that line.
+>
+>    If necessary, adjust the segmentation agent / logic so that it uses headings like “Fritidshusforsikring”, “Indboforsikring”, “Ulykkesforsikring” as section markers and only includes text until the next heading.
+>
+> ---
+>
+> #### 3) Refactor PricingAgent to work on segment text only
+>
+> 1. Find where `PricingAgent` (or equivalent) is called.
+>
+> 2. Change the call so that it receives:
+>
+>    ```ts
+>    pricingAgent.getPrice({
+>      policyType: snapshot.policy_type,
+>      segmentText: snapshot.raw_text_for_pricing,
+>    });
+>    ```
+>
+>    Remove any usage of full document OCR text from the pricing inputs.
+>
+> 3. Inside the PricingAgent implementation:
+>
+>    * Implement a **two-step pricing strategy**:
+>
+>      **Step A: Regex-based candidate search (local to the segment)**
+>
+>      * Run regex only on `segmentText` to find lines containing patterns like:
+>
+>        * `Din pris pr. år`
+>        * `Pris i alt pr. år`
+>        * `Din årlige pris`
+>        * `Årspris`
+>
+>      * Parse Danish formatted numbers: `\d{1,3}(\.\d{3})*,\d{2}\s*kr`.
+>
+>      * Convert to a list of candidates:
+>
+>        ```ts
+>        type PriceCandidate = {
+>          amount: number;
+>          period: 'year' | 'month';
+>          line: string;
+>          confidence: number; // based on presence of "Din pris", "pr. år", etc.
+>        };
+>        ```
+>
+>      * If at least one good candidate exists, pick the one with highest confidence and set:
+>
+>        * `annualPremium`
+>        * `monthlyPremium` (if “pr. måned” or similar is found).
+>
+>      **Step B: LLM fallback (still local to the segment)**
+>
+>      * If no suitable candidate was found in Step A:
+>
+>        * Call the LLM with a prompt along the lines of:
+>
+>          > “You see the text for exactly one insurance policy of type {{policyType}}. Find the total annual premium for the insurance. If there is no explicit total price, sum the sub-premiums (e.g. `Bygningsbrand: 2.758,79 kr`, `Bygningsbeskadigelse: 947,46 kr`, etc.). Return JSON with this schema: `{ "annualPremium": number, "monthlyPremium": number | null }`. Use Danish number format correctly but output pure numbers in JSON.”
+>
+>        * Parse the JSON and fill `annualPremium` / `monthlyPremium`.
+>
+> 4. Add simple **sanity checks**:
+>
+>    Implement a helper like:
+>
+>    ```ts
+>    function isPlausibleAnnualPremium(policyType: string, amount: number): boolean {
+>      if (['hus', 'fritidshus'].includes(policyType)) {
+>        return amount >= 1500 && amount <= 30000;
+>      }
+>      if (policyType === 'indbo') {
+>        return amount >= 300 && amount <= 15000;
+>      }
+>      if (policyType === 'ulykke') {
+>        return amount >= 200 && amount <= 10000;
+>      }
+>      return true;
+>    }
+>    ```
+>
+>    * If the extracted price is not plausible:
+>
+>      * Set a `pricing_confidence = 'low'`.
+>      * Option A: try the LLM fallback once more (if we originally used regex).
+>      * Option B (simpler and safer): return `null` for price and mark the snapshot so the UI knows not to show a “savings” badge.
+>
+> 5. Add structured logging for pricing results:
+>
+>    ```ts
+>    log.info('pricing_result', {
+>      docId,
+>      segmentIndex,
+>      policyType,
+>      annualPremium,
+>      strategy: 'regex' | 'llm-fallback',
+>      confidence,
+>    });
+>    ```
+>
+> ---
+>
+> #### 4) Company name handling (Types Studio vs Lærerstandens)
+>
+> 1. Identify where the company/insurer name is extracted and stored (likely in the extraction stages or structured policy).
+> 2. Introduce a clear distinction:
+>
+>    * **Sending partner** (`sender_company_id` / `company_id` = Types Studio).
+>    * **Underlying insurer name** (from OCR, e.g., “Lærerstandens Brandforsikring”).
+> 3. Store the underlying insurer name on either:
+>
+>    * the `segmented_policies[i].meta.insurerName`, or
+>    * the `policy_snapshots` row.
+> 4. Ensure the UI can show:
+>
+>    * “Types Studio” as the offer source (so it matches navigation).
+>    * Optionally, the underlying insurer name in the detailed view (“Forsikringen er fra Lærerstandens Brandforsikring”).
+>
+> ---
+>
+> #### 5) Tests & regression protection
+>
+> 1. Create a test fixture for the Types Studio / Lærerstandens document:
+>
+>    * Use the OCR text from `extraction_stages` or from `segmented_policies` for `document_id = '111793e5-417f-49e4-b5dd-d55388d71f35'`.
+>    * Store it under a suitable path like `apps/web/src/server/ai/__fixtures__/types-studio-lærerstandens-ocr.json` (or similar).
+> 2. Add **unit tests** for PricingAgent:
+>
+>    * One test where a segment contains both house/fritidshus partial premiums **and** an accident section with “Din pris pr. år 995,10 kr” but in a different segment.
+>    * Assert that:
+>
+>      * For the house/fritidshus segment, the agent **does not** pick 995,10 kr.
+>      * Instead, it either:
+>
+>        * picks the correct explicit annual premium if present in the segment, or
+>        * computes the sum of partial premiums in the segment via the LLM fallback.
+> 3. Add an **integration test** that:
+>
+>    * Runs the full pipeline (segmentation → snapshots → pricing) for the document `111793e5-417f-49e4-b5dd-d55388d71f35`.
+>    * Asserts:
+>
+>      * There are 3 policy snapshots for this document.
+>      * The house/fritidshus policy has an annual premium close to the correct value from the PDF (~5.682 kr).
+>      * The accident policy has ~995,10 kr as annual premium.
+>      * The contents policy has ~504,69 kr as annual premium (if that matches the PDF).
+> 4. After implementation, re-run whatever command we use to recompute extraction/pricing for this document and verify in the UI that:
+>
+>    * All 3 policies appear under the offer.
+>    * The house/fritidshus price is correct.
+>    * Health check and comparison use the corrected prices.
+>
+> ---
+>
+> Please implement these changes step by step, keeping the code clean and well-typed.
+> Prioritize correctness and robustness for multi-policy PDFs over micro-optimizations.
+
+---
+
+Hvis du vil, kan vi bagefter lave en lille “smoke test-checkliste” du selv kan køre hver gang du får et nyt tilbud, så du lynhurtigt kan se om segmentering + pris + tabs opfører sig korrekt.
