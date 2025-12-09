@@ -332,14 +332,27 @@ async function extractPriceWithLLMFallback(
   
   const systemPrompt = `Du er en dansk forsikringsekspert der præcist udtrækker årlige præmier.
 
-OPGAVE: Find den ÅRLIGE pris for specifikt "${policyType}" forsikring.
+OPGAVE: Find den ÅRLIGE pris for SPECIFIKT "${policyType}" forsikring.
 
 KRITISKE REGLER:
-1. Find KUN prisen for "${policyType}" - IKKE andre forsikringstyper
-2. Søg efter mønstre som "Din pris pr. år", "Årspris", "Pris i alt pr. år"
-3. Konverter månedlige priser til årlige (gang med 12)
-4. Hvis prisen er summen af delpriser, beregn totalen
-5. Returner NULL hvis du ikke er 100% sikker på at prisen tilhører "${policyType}"
+1. Find KUN prisen for "${policyType}" - ALDRIG priser fra andre forsikringstyper
+2. Søg efter mønstre som:
+   - "Din pris pr. år" efterfulgt af et beløb i kr
+   - "Årspris: X kr"
+   - Delpris-komponenter der skal summeres (fx bygningsbrand + bygningsbeskadigelse + osv.)
+3. VIGTIG FOR DELPRISER: Hvis dokumentet viser individuelle dækningspriser under "${policyType}" sektionen:
+   - Summer alle delpriserne for at få den årlige totalpris
+   - Eksempel: Bygningsbrand 2.758,79 kr + Bygningsbeskadigelse 947,46 kr + ... = Total
+4. Konverter månedlige priser til årlige (gang med 12)
+5. KRITISK: Returner NULL hvis:
+   - Du ikke er 100% sikker på at prisen tilhører "${policyType}"
+   - Prisen du finder er under en ANDEN forsikringstype overskrift
+   - Du kun finder forsikringssummer (fx "Forsikringssum: 835.600 kr") - det er IKKE præmien
+
+FORSIKRINGSTYPE-SPECIFIKKE HINTS:
+- Fritidshus/hus: Se efter dækningspriser (bygningsbrand, bygningsbeskadigelse, etc.) og summer dem
+- Ulykke: Se efter enkelt "Din pris pr. år" værdi
+- Indbo: Se efter enkelt "Din pris pr. år" værdi eller dækningspriser
 
 RETURNER JSON:
 {
