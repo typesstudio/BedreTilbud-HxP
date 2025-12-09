@@ -953,7 +953,12 @@ export class ExtractionOrchestratorService {
       }
 
       // Phase 1b: Run PricingAgent for each policy and attach pricing
+      // CRITICAL FIX (Dec 2025): Use SEGMENT-ONLY text to prevent price cross-contamination
       console.log(`[Orchestrator] Phase 1b: Running PricingAgent for ${extractionResult.policies.length} policies...`);
+      
+      // Get segmentation data for segment-isolated pricing extraction
+      const segmentationData = this.extractionStagesData.stage2_segmentation?.rawOutput || [];
+      console.log(`[Orchestrator] Found ${segmentationData.length} segments for segment-isolated pricing`);
       
       const pricingResults: any[] = [];
       let pricingSuccessCount = 0;
@@ -962,11 +967,78 @@ export class ExtractionOrchestratorService {
       
       for (const structuredPolicy of extractionResult.policies) {
         try {
+          // CRITICAL: Find the matching segment for this policy type
+          // This ensures PricingAgent only sees text for THIS policy, not the entire document
+          const policyType = structuredPolicy.policyType.toLowerCase();
+          
+          // Extended policy type equivalences for matching
+          const policyTypeEquivalences: Record<string, string[]> = {
+            'hus': ['hus', 'fritidshus', 'villa', 'sommerhus', 'husforsikring'],
+            'fritidshus': ['fritidshus', 'hus', 'sommerhus', 'fritidshusforsikring'],
+            'indbo': ['indbo', 'indboforsikring'],
+            'ulykke': ['ulykke', 'ulykkesforsikring', 'personulykke'],
+            'bil': ['bil', 'bilforsikring', 'auto', 'autoforsikring'],
+            'rejse': ['rejse', 'rejseforsikring'],
+            'ansvar': ['ansvar', 'ansvarsforsikring'],
+            'husdyr': ['husdyr', 'dyreforsikring', 'hund', 'kat'],
+          };
+          
+          const matchingSegment = segmentationData.find((seg: any) => {
+            const segType = (seg.policyType || '').toLowerCase();
+            // Direct match
+            if (segType === policyType) return true;
+            // Check equivalences
+            const equivalents = policyTypeEquivalences[policyType] || [];
+            if (equivalents.includes(segType)) return true;
+            const reverseEquivalents = policyTypeEquivalences[segType] || [];
+            if (reverseEquivalents.includes(policyType)) return true;
+            return false;
+          });
+          
+          // CRITICAL FIX: Skip pricing if no segment found to prevent cross-contamination
+          // We explicitly DO NOT fall back to full OCR text for multi-policy documents
+          if (!matchingSegment || !matchingSegment.rawContent || matchingSegment.rawContent.length < 100) {
+            console.warn(`[Orchestrator] ⚠️ NO SEGMENT FOUND for ${policyType} - SKIPPING PRICING to prevent cross-contamination`);
+            pricingFailureCount++;
+            pricingFailures.push({ 
+              policyType: structuredPolicy.policyType, 
+              reason: `No segment found - pricing skipped to prevent cross-policy contamination` 
+            });
+            
+            // Set pricing to unknown with explicit reason
+            structuredPolicy.pricing = {
+              pricingStatus: "unknown",
+              pricingConfidence: 0,
+              annualPremium: null,
+              billingFrequency: "unknown",
+              rawPrices: [],
+              bindingMonths: null,
+              hasIntroPrice: false,
+              introPeriodMonths: null,
+              introAnnualPremium: null,
+              postBindingIncreasePercent: null,
+              notes: `No isolated segment found for ${policyType}. Pricing extraction skipped to prevent cross-policy contamination in multi-policy documents.`,
+              extractionVersion: "pricing_agent_v1"
+            };
+            structuredPolicy.annualPremium = null;
+            
+            pricingResults.push({
+              policyType: structuredPolicy.policyType,
+              status: "skipped_no_segment",
+              annualPremium: null,
+              confidence: 0
+            });
+            continue;
+          }
+          
+          const textForPricing = matchingSegment.rawContent;
+          console.log(`[Orchestrator] Using segment-isolated text for ${policyType} pricing (${textForPricing.length} chars)`);
+          
           const pricing = await policyPricingService.extractPricingForPolicy({
             policyType: structuredPolicy.policyType,
             companyName: structuredPolicy.company || null,
             currency: "DKK",
-            rawText: ocrOutput.markdown // Full OCR markdown - PricingAgent will filter relevant sections
+            rawText: textForPricing // FIXED: Use segment text, not full OCR
           });
 
           // Attach pricing to structuredPolicy

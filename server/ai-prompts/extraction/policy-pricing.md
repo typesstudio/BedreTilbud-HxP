@@ -52,6 +52,8 @@ Marker:
 
 ### 3) Beregn ÅRLIG præmie (annualPremium)
 
+**VIGTIGT: Du arbejder KUN med tekst for ÉN police. Ignorer alle priser der tydeligt hører til andre forsikringstyper.**
+
 - Hvis du har en klar årlig præmie for netop denne police:
   - Brug den direkte
 - Hvis du har en månedlig pris for netop denne police:
@@ -60,6 +62,17 @@ Marker:
   - annualPremium = quarterly * 4
 - Hvis du kun har halvårlig pris:
   - annualPremium = halfYear * 2
+- **HVIS DER IKKE FINDES EN SAMLET PRIS, MEN KUN DELPRISER:**
+  - Typisk ses dette i hus/fritidshusforsikringer hvor der vises:
+    - "Bygningsbrand: 2.758,79 kr"
+    - "Bygningsbeskadigelse: 947,46 kr"
+    - "Råd, svamp og insekt: 278,66 kr"
+    - "Stikledninger: 1.142,53 kr"
+    - osv.
+  - **SUM ALLE DELPRISERNE for at beregne annualPremium**
+  - Inkluder kun delpriser der hører til DENNE police
+  - Dokumenter beregningen i notes: "Samlet fra delpriser: 2758.79 + 947.46 + ... = X kr"
+  - pricingStatus = "ok" (hvis summen giver mening)
 - Hvis prisen tydeligt er en samlet pakke for flere policer, og du IKKE med sikkerhed kan splitte den ud:
   - annualPremium = null
   - pricingStatus = "package_only"
