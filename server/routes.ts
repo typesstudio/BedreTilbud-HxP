@@ -2978,103 +2978,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Offers with comparison status (Phase 1: Make offers visible)
+  // REFACTORED: Group by company_comparisons to avoid duplicate cards for multiple offer documents from same company
   app.get("/api/offers/user/:userId", requireAuth, async (req, res) => {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = (page - 1) * limit;
+      const userId = req.params.userId;
 
-      // Get only ACTIVE offer documents for the user (documents with isActive !== false)
-      const offerDocuments = await storage.getActiveUserDocuments(req.params.userId, 'offer');
-      const totalCount = offerDocuments.length;
-      const paginatedOffers = offerDocuments.slice(offset, offset + limit);
-
-      // Enrich each offer with comparison status, snapshots, and health checks
-      const enrichedOffers = await Promise.all(
-        paginatedOffers.map(async (doc: DocumentType) => {
-          const company = doc.companyId ? await storage.getCompany(doc.companyId) : null;
+      const { getOverallStatusLabel } = await import('./utils/companyStatusLabels');
+      const results: any[] = [];
+      
+      // PART 1: Get all active (non-superseded) company_comparisons - these are completed offers
+      // Each comparison represents ONE offer card, regardless of how many PDF documents it contains
+      const activeComparisons = await storage.getActiveCompanyComparisonsByUser(userId);
+      
+      for (const comparison of activeComparisons) {
+        const offerCompany = comparison.offerCompany 
+          ? await storage.getCompany(comparison.offerCompany) 
+          : null;
+        
+        // Count offer snapshots linked to this comparison's offer company
+        const offerDocs = await storage.getActiveUserDocuments(userId, 'offer');
+        const relevantDocs = offerDocs.filter((d: DocumentType) => d.companyId === comparison.offerCompany);
+        let totalSnapshots = 0;
+        for (const doc of relevantDocs) {
           const snapshots = await storage.getOfferSnapshotsByDocument(doc.id);
-          const healthChecks = await storage.getHealthChecksByDocument(doc.id);
-          
-          // Determine comparison status using both old comparisons and new company_comparisons
-          const comparisons = await storage.getComparisonsByOfferDocument(doc.id);
-          let comparisonStatus: 'ok' | 'failed' | 'pending' = 'pending';
-          let statusReason: string | null = null;
-          
-          if (comparisons.length > 0) {
-            // Check if any comparison is successful (has valid comparison data)
-            const hasSuccessful = comparisons.some((c: Comparison) => 
-              c.comparisonData && Object.keys(c.comparisonData as object).length > 0
-            );
-            comparisonStatus = hasSuccessful ? 'ok' : 'failed';
-          }
+          totalSnapshots += snapshots.length;
+        }
+        
+        const comparisonStatus = comparison.status === 'completed' ? 'ok' : 
+                                 comparison.status === 'failed' ? 'failed' : 'pending';
+        
+        const statusLabels = getOverallStatusLabel(
+          comparison.status as any,
+          comparison.statusReason || null,
+          comparison.notificationStatus as any,
+          comparison.notificationError || null
+        );
 
-          // Also check company_comparisons for more detailed status
-          let comparisonData: any = null;
-          let comparisonId: string | null = null;
-          let currentCompanyId: string | null = null;
-          let notificationStatus: string | null = null;
-          let notificationError: string | null = null;
-          
-          if (doc.companyId) {
-            // Step 2.4: Only use active (non-superseded) comparisons
-            const companyComparisons = await storage.getActiveCompanyComparisonsByUser(req.params.userId);
-            const relevantComparison = companyComparisons.find((cc: CompanyComparison) => 
-              cc.offerCompany === doc.companyId
-            );
-            
-            if (relevantComparison) {
-              // Step 5.1: Include notification status
-              notificationStatus = relevantComparison.notificationStatus || 'pending';
-              notificationError = relevantComparison.notificationError || null;
-              
-              if (relevantComparison.status === 'completed' && relevantComparison.comparisonJSON) {
-                comparisonStatus = 'ok';
-                comparisonData = relevantComparison.comparisonJSON;
-                comparisonId = relevantComparison.id;
-                currentCompanyId = relevantComparison.currentCompany;
-              } else if (relevantComparison.status === 'failed') {
-                comparisonStatus = 'failed';
-                statusReason = relevantComparison.statusReason || null;
-              }
-            }
-          }
+        results.push({
+          id: comparison.id,
+          fileName: null,
+          createdAt: comparison.createdAt,
+          company: offerCompany,
+          snapshotCount: totalSnapshots,
+          healthCheckCount: 0,
+          comparisonStatus,
+          comparisonCount: 1,
+          statusReason: comparison.statusReason || null,
+          comparisonData: comparison.comparisonJSON,
+          comparisonId: comparison.id,
+          currentCompanyId: comparison.currentCompany,
+          notificationStatus: comparison.notificationStatus || 'pending',
+          notificationError: comparison.notificationError || null,
+          statusLabel: statusLabels.comparison.label,
+          statusDescription: statusLabels.comparison.description,
+          statusVariant: statusLabels.comparison.variant,
+          notificationLabel: statusLabels.notification?.label || null,
+          notificationDescription: statusLabels.notification?.description || null,
+          documentCount: relevantDocs.length
+        });
+      }
+      
+      // PART 2: Get offer documents that DON'T have a comparison yet (pending/failed extraction)
+      // These are shown as pending/failed cards
+      const comparedCompanyIds = new Set(activeComparisons.map((c: CompanyComparison) => c.offerCompany));
+      const offerDocuments = await storage.getActiveUserDocuments(userId, 'offer');
+      
+      // Group documents by companyId to avoid duplicates
+      const pendingDocsByCompany = new Map<string, DocumentType[]>();
+      
+      for (const doc of offerDocuments) {
+        // Skip documents whose company already has a comparison
+        if (doc.companyId && comparedCompanyIds.has(doc.companyId)) {
+          continue;
+        }
+        
+        const key = doc.companyId || doc.id; // Group by company, or use doc ID if no company
+        if (!pendingDocsByCompany.has(key)) {
+          pendingDocsByCompany.set(key, []);
+        }
+        pendingDocsByCompany.get(key)!.push(doc);
+      }
+      
+      // Create one card per pending company/document group
+      for (const [key, docs] of pendingDocsByCompany) {
+        const firstDoc = docs[0];
+        const company = firstDoc.companyId ? await storage.getCompany(firstDoc.companyId) : null;
+        
+        // Count total snapshots across all docs in this group
+        let totalSnapshots = 0;
+        for (const doc of docs) {
+          const snapshots = await storage.getOfferSnapshotsByDocument(doc.id);
+          totalSnapshots += snapshots.length;
+        }
+        
+        // Determine status based on extraction status
+        let comparisonStatus: 'ok' | 'failed' | 'pending' = 'pending';
+        let statusReason: string | null = null;
+        
+        const hasFailedDoc = docs.some((d: DocumentType) => d.extractionStatus === 'failed');
+        const allCompleted = docs.every((d: DocumentType) => d.extractionStatus === 'completed');
+        
+        if (hasFailedDoc) {
+          comparisonStatus = 'failed';
+          const failedDoc = docs.find((d: DocumentType) => d.extractionStatus === 'failed');
+          statusReason = (failedDoc as any)?.errorReason || 'extraction_failed';
+        } else if (allCompleted && totalSnapshots > 0) {
+          // Documents are extracted but no comparison yet - still pending
+          comparisonStatus = 'pending';
+        }
+        
+        const statusLabels = getOverallStatusLabel(
+          comparisonStatus === 'ok' ? 'completed' : comparisonStatus === 'failed' ? 'failed' : 'pending',
+          statusReason,
+          null,
+          null
+        );
 
-          // Step 5.2: Map status to Danish labels
-          const { getOverallStatusLabel } = await import('./utils/companyStatusLabels');
-          const statusLabels = getOverallStatusLabel(
-            comparisonStatus === 'ok' ? 'completed' : comparisonStatus === 'failed' ? 'failed' : 'pending',
-            statusReason,
-            notificationStatus as any,
-            notificationError
-          );
-
-          return {
-            id: doc.id,
-            fileName: doc.fileName,
-            createdAt: doc.createdAt,
-            company,
-            snapshotCount: snapshots.length,
-            healthCheckCount: healthChecks.length,
-            comparisonStatus,
-            comparisonCount: comparisons.length,
-            statusReason,
-            comparisonData,
-            comparisonId,
-            currentCompanyId,
-            notificationStatus,
-            notificationError,
-            statusLabel: statusLabels.comparison.label,
-            statusDescription: statusLabels.comparison.description,
-            statusVariant: statusLabels.comparison.variant,
-            notificationLabel: statusLabels.notification?.label || null,
-            notificationDescription: statusLabels.notification?.description || null
-          };
-        })
-      );
+        results.push({
+          id: firstDoc.id,
+          fileName: docs.length === 1 ? firstDoc.fileName : `${docs.length} dokumenter`,
+          createdAt: firstDoc.createdAt,
+          company,
+          snapshotCount: totalSnapshots,
+          healthCheckCount: 0,
+          comparisonStatus,
+          comparisonCount: 0,
+          statusReason,
+          comparisonData: null,
+          comparisonId: null,
+          currentCompanyId: null,
+          notificationStatus: null,
+          notificationError: null,
+          statusLabel: statusLabels.comparison.label,
+          statusDescription: statusLabels.comparison.description,
+          statusVariant: statusLabels.comparison.variant,
+          notificationLabel: null,
+          notificationDescription: null,
+          documentCount: docs.length
+        });
+      }
+      
+      // Sort by createdAt descending
+      results.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
+      const totalCount = results.length;
+      const paginatedResults = results.slice(offset, offset + limit);
 
       res.json({
-        data: enrichedOffers,
+        data: paginatedResults,
         pagination: {
           page,
           limit,
