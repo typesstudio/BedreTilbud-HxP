@@ -3688,6 +3688,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // FALLBACK: If snapshot not found, try to find it via company_comparisons policyType mapping
+      // This handles cases where snapshot IDs in comparison_json became stale after offer versioning
+      if (!snapshot) {
+        logger.info('[Health Check API] Snapshot not found, trying comparison_json fallback', { snapshotId });
+        
+        // Check if this snapshotId is referenced in any company_comparison's comparison_json
+        const { companyComparisons } = await import("@shared/schema");
+        const { db } = await import("./db");
+        const { sql } = await import("drizzle-orm");
+        
+        // Search all comparisons for this snapshotId in policyComparisons
+        const allComparisons = await db.select()
+          .from(companyComparisons)
+          .where(sql`comparison_json::text LIKE ${'%' + snapshotId + '%'}`);
+        
+        if (allComparisons.length > 0) {
+          const comparison = allComparisons[0];
+          const comparisonJson = comparison.comparisonJSON as any;
+          const policyComps = comparisonJson?.policyComparisons || [];
+          
+          // Find the policy type for this snapshotId
+          const matchingPolicy = policyComps.find((pc: any) => 
+            pc.offerPolicyId === snapshotId || pc.currentPolicyId === snapshotId
+          );
+          
+          if (matchingPolicy) {
+            const policyType = matchingPolicy.policyType;
+            const isOffer = matchingPolicy.offerPolicyId === snapshotId;
+            const kind = isOffer ? 'offer' : 'current';
+            const companyId = isOffer ? comparison.offerCompany : comparison.currentCompany;
+            
+            logger.info('[Health Check API] Found policyType from comparison_json', { 
+              snapshotId, policyType, kind, companyId 
+            });
+            
+            // Find the current active snapshot with this policyType AND matching company
+            const { policySnapshots, documents } = await import("@shared/schema");
+            const { eq, and, inArray } = await import("drizzle-orm");
+            
+            // Build query conditions including company constraint for offer snapshots
+            const conditions = [
+              eq(policySnapshots.userId, comparison.userId),
+              eq(policySnapshots.kind, kind),
+              eq(policySnapshots.policyType, policyType),
+              eq(policySnapshots.isActive, true)
+            ];
+            
+            // For offer snapshots, constrain to documents from the same company
+            if (kind === 'offer' && companyId) {
+              const companyDocIds = await db.select({ id: documents.id })
+                .from(documents)
+                .where(
+                  and(
+                    eq(documents.userId, comparison.userId),
+                    eq(documents.companyId, companyId)
+                  )
+                );
+              
+              if (companyDocIds.length > 0) {
+                const docIds = companyDocIds.map(d => d.id);
+                conditions.push(inArray(policySnapshots.documentId, docIds));
+              }
+            }
+            
+            const matchingSnapshots = await db.select()
+              .from(policySnapshots)
+              .where(and(...conditions))
+              .limit(1);
+            
+            if (matchingSnapshots.length > 0) {
+              snapshot = matchingSnapshots[0];
+              effectiveSnapshotId = snapshot.id;
+              snapshotSource = 'policy_snapshots';
+              
+              logger.info('[Health Check API] Found replacement snapshot via policyType', { 
+                originalId: snapshotId, 
+                newId: effectiveSnapshotId,
+                policyType 
+              });
+            }
+          }
+        }
+      }
+
       if (!snapshot) {
         return res.status(404).json({ message: `Snapshot ${snapshotId} not found in policy_snapshots or offer_snapshots` });
       }
