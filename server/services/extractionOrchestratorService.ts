@@ -995,50 +995,29 @@ export class ExtractionOrchestratorService {
             return false;
           });
           
-          // CRITICAL FIX: Skip pricing if no segment found to prevent cross-contamination
-          // We explicitly DO NOT fall back to full OCR text for multi-policy documents
-          if (!matchingSegment || !matchingSegment.rawContent || matchingSegment.rawContent.length < 100) {
-            console.warn(`[Orchestrator] ⚠️ NO SEGMENT FOUND for ${policyType} - SKIPPING PRICING to prevent cross-contamination`);
-            pricingFailureCount++;
-            pricingFailures.push({ 
-              policyType: structuredPolicy.policyType, 
-              reason: `No segment found - pricing skipped to prevent cross-policy contamination` 
-            });
-            
-            // Set pricing to unknown with explicit reason
-            structuredPolicy.pricing = {
-              pricingStatus: "unknown",
-              pricingConfidence: 0,
-              annualPremium: null,
-              billingFrequency: "unknown",
-              rawPrices: [],
-              bindingMonths: null,
-              hasIntroPrice: false,
-              introPeriodMonths: null,
-              introAnnualPremium: null,
-              postBindingIncreasePercent: null,
-              notes: `No isolated segment found for ${policyType}. Pricing extraction skipped to prevent cross-policy contamination in multi-policy documents.`,
-              extractionVersion: "pricing_agent_v1"
-            };
-            structuredPolicy.annualPremium = null;
-            
-            pricingResults.push({
-              policyType: structuredPolicy.policyType,
-              status: "skipped_no_segment",
-              annualPremium: null,
-              confidence: 0
-            });
-            continue;
+          // MULTI-PASS PRICING PIPELINE (Dec 2025)
+          // Pass 1: Try segment-only regex
+          // Pass 2: Search nearby OCR for policy-specific prices
+          // Pass 3: LLM fallback with full context
+          
+          const segmentText = matchingSegment?.rawContent || '';
+          const hasSegment = segmentText.length >= 100;
+          
+          if (hasSegment) {
+            console.log(`[Orchestrator] Using segment-isolated text for ${policyType} pricing (${segmentText.length} chars)`);
+          } else {
+            console.log(`[Orchestrator] ⚠️ No segment for ${policyType} - using multi-pass fallback with full OCR`);
           }
           
-          const textForPricing = matchingSegment.rawContent;
-          console.log(`[Orchestrator] Using segment-isolated text for ${policyType} pricing (${textForPricing.length} chars)`);
+          // CRITICAL: Always provide fullOcrText for multi-pass fallback
+          const fullOcrText = ocrOutput.markdown;
           
           const pricing = await policyPricingService.extractPricingForPolicy({
             policyType: structuredPolicy.policyType,
             companyName: structuredPolicy.company || null,
             currency: "DKK",
-            rawText: textForPricing // FIXED: Use segment text, not full OCR
+            rawText: segmentText || `[No segment - using full OCR fallback for ${policyType}]`,
+            fullOcrText: fullOcrText // NEW: Enable multi-pass fallback
           });
 
           // Attach pricing to structuredPolicy
