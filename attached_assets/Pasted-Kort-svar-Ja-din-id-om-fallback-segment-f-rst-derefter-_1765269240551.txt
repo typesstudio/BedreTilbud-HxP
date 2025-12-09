@@ -1,0 +1,441 @@
+Kort svar:
+Ja, din idé om fallback (segment først, derefter hele OCR med policy-kontekst) er den rigtige retning – men I har prøvet “små fixes” så mange gange nu, at vi er nødt til at gøre det til et *rigtigt system* med:
+
+* tydelige lag (pass 1, 2, 3)
+* klare “pricingStatus” værdier
+* UI der **aldrig** gemmer en police bare fordi prisen mangler
+* tests med Types Studio som “golden file”
+
+Jeg giver dig:
+
+1. En langsigtet strategi (hvordan systemet skal fungere fremover)
+2. Iteration 1 Replit-prompt (core fallback + UI-fix)
+3. Iteration 2 Replit-prompt (hvis Types Studio stadig driller: stærkere recovery-agent)
+
+---
+
+## 1. Fremtidssikret strategi (ikke bare endnu et hack)
+
+### A. Principper
+
+1. **Policy’en må aldrig forsvinde bare fordi prisen mangler**
+
+   * Ulykke + indbo skal stadig vises i frontend, med dækninger side-om-side.
+   * Pris og besparelse er “lag ovenpå”, ikke en forudsætning for at policen findes.
+
+2. **Pricing = multi-pass pipeline, ikke ét skud:**
+
+   For hver policy:
+
+   1. **Pass 1 – Segment-only (høj præcision, lav recall)**
+
+      * Regex + simpel logik på *kun* `segmentText`.
+   2. **Pass 2 – “Nearby OCR” (for cases som Types Studio)**
+
+      * Kig i *få* sider omkring segmentets `pageRange` efter prislinjer for netop den policyType.
+   3. **Pass 3 – LLM-reasoning**
+
+      * Enten summer af delpriser i segmentet, eller klassificer hvilken prislinje i OCR’en der tilhører denne policy.
+   4. **Hvis stadig ingen pris → pricingStatus = 'missing'**
+
+      * Hellere ingen pris end forkert pris.
+
+3. **Dækninger (coverage) skal altid være der**
+
+   * Hver policy har et `coverageItems[]` array (navn, inkluderet?, sum, egenandel).
+   * Comparison matcher policies af samme type og viser items side-om-side – også selv hvis pris mangler.
+
+4. **Fallback-AI = dedikeret RecoveryAgent**
+
+   * Når `pricingStatus` = 'missing' eller 'low_confidence', kan en ekstra (dyrere men smartere) agent køre i background / sync for at prøve igen.
+   * Men UI må aldrig være blind imens.
+
+5. **Golden tests**
+
+   * Types Studio / Lærerstandens PDF bliver jeres “kanariefugl”:
+
+     * 3 policer (fritidshus, indbo, ulykke)
+     * alle har pris
+     * alle vises i frontend
+   * Hver gang I ændrer noget i ekstraktionen, skal dén test stadig være grøn.
+
+---
+
+### B. Konkrete ændringer i pris-pipeline
+
+For hver `policy_snapshot`:
+
+```ts
+pricing: {
+  annualPremium: number | null;
+  monthlyPremium: number | null;
+  source: 'segment_regex' | 'segment_llm' | 'nearby_ocr' | 'global_recovery' | null;
+  confidence: 'high' | 'medium' | 'low' | 'missing';
+  status: 'ok' | 'missing' | 'needs_review';
+}
+```
+
+#### Pass 1 – Segment-only
+
+* Input: `segmentText`, `policyType`
+* Find linjer med fx:
+
+  * `Din pris pr. år`
+  * `Pris i alt pr. år`
+  * `Årspris`
+* Brug dansk talformat (`\d{1,3}(\.\d{3})*,\d{2}\s*kr`)
+* Hvis fundet og **plausibel** (se sanity-check nedenfor):
+
+  * udfyld `annualPremium`, `source = 'segment_regex'`, `confidence = 'high'`, `status = 'ok'`
+  * DONE
+
+#### Pass 2 – Nearby OCR (nyt lag for Types Studio-cases)
+
+* Hvis pass 1 ikke fandt pris:
+
+  * Tag `fullOcrText` + `pageRange` for segmentet (hvis I har det, ellers fallback til en heuristisk “blok-id”).
+  * Udtræk et lille vindue: fx ±1 side rundt om segmentet.
+  * Filtrér alle linjer i vinduet der både indeholder:
+
+    * ord relateret til policyType (fx “Ulykkesforsikring” / “Ulykke”) **og**
+    * pris-pattern (`kr`, `pr. år`).
+  * Hvis der er præcis 1 kandidat og den er plausibel:
+
+    * brug den, `source = 'nearby_ocr'`, `confidence = 'medium'`, `status = 'ok'`
+  * Hvis flere kandidater → gå til pass 3.
+
+#### Pass 3 – LLM-reasoning (segment + relevant OCR-bidder)
+
+* Prompt LLM med:
+
+  * `segmentText`
+  * de 3–5 mest relevante prislinjer fra hele OCR’en
+  * policyType
+* Opgave:
+  “Hvilken af disse prislinjer er den samlede årlige pris for netop denne policy? Hvis ingen, så summer delpriser i segmentet.”
+* Returner strikt JSON:
+  `{ "annualPremium": number | null, "monthlyPremium": number | null, "reason": string }`
+* Hvis plausibel → `source = 'segment_llm'` eller `'global_recovery'`, `confidence = 'medium'`, `status = 'ok'`.
+* Hvis ikke → `status = 'missing'`, `confidence = 'missing'`, `annualPremium = null`.
+
+#### Sanity check (samme som før, men *obligatorisk*)
+
+```ts
+function isPlausibleAnnualPremium(policyType: string, amount: number): boolean {
+  if (['hus', 'fritidshus'].includes(policyType)) {
+    return amount >= 1500 && amount <= 30000;
+  }
+  if (policyType === 'indbo') {
+    return amount >= 300 && amount <= 15000;
+  }
+  if (policyType === 'ulykke') {
+    return amount >= 200 && amount <= 10000;
+  }
+  return true;
+}
+```
+
+Hvis beløbet ikke er plausibelt → treat as `missing` (eller kør én ekstra recovery-runde).
+
+---
+
+### C. UI: stop med at koble “eksisterer” = “har pris”
+
+* “Samlet oversigt” og policetabs skal:
+
+  1. Vise ALLE policer i comparison, også hvis `annualPremium = null`.
+  2. Hvis pris mangler:
+
+     * Vis “Pris ikke fundet endnu” / “Pris mangler i tilbuddet”.
+     * Vis stadig:
+
+       * dækninger
+       * forbedringer/forringelser (hvis coverage er der)
+     * Ingen grøn “besparelse” badge, ingen “kr/år” sammenligning.
+
+* Det løser lige nu dit konkret issue:
+
+  * Ulykke + indbo kan vises *med det samme*, selv hvis pris fallback ikke er perfekt endnu.
+
+---
+
+### D. Coverage-fallback (dækningsliste side-om-side)
+
+* For hver policy:
+  `coverageItems: { key: string; label: string; included: boolean; value?: string | number; }[]`
+* Hvis `coverageItems` er tomt for en policy:
+
+  * kør en **CoverageAgent** der kun får segmentText + en meget stram schema-prompt.
+* Comparison:
+
+  * Normaliser `key` (synonymer → canonical nøgle), så ting matcher pænt side-om-side.
+
+---
+
+## 2. Iteration 1 – Replit-prompt (core fallback + UI-fix)
+
+**Brug denne først.**
+Mål:
+
+* Få multi-pass pricing (segment → nearby OCR → LLM)
+* Lade policies komme igennem til UI, selv uden pris
+
+> You are a senior TypeScript engineer working on the BedreTilbud app.
+> We have a regression in pricing extraction for multi-policy PDFs, especially for the Types Studio offer with comparison id:
+>
+> * `comparison_id = 'c41774ea-b8cd-4afd-97e3-2258d1187e6a'`
+> * company = Types Studio
+>
+> Symptoms:
+>
+> * In the frontend, only the “fritidshus” policy shows up with a price.
+> * “Ulykkesforsikring” and “indboforsikring” exist in the debug report, but have **null** prices and do not show correctly in the UI.
+> * Previously this worked; after we made pricing more segment-based, we now lose prices when they live on other pages of the PDF.
+>
+> ### Goal (Iteration 1)
+>
+> 1. Implement a **multi-pass pricing pipeline**:
+>
+>    * **Pass 1 – segment-only regex** on `segmentText`.
+>    * **Pass 2 – “nearby OCR”**: search a small window around the segment’s pages in the full OCR for price lines that match the specific `policyType`.
+>    * **Pass 3 – LLM fallback** using segmentText + a few candidate price lines.
+>    * Add plausibility checks and mark `pricing.status` + `pricing.source` + `pricing.confidence`.
+> 2. Make sure policies are **always visible in the frontend** even if their price is `null`:
+>
+>    * Do not filter policies out just because `pricing.annualPremium` is null.
+>    * Instead, show “Pris mangler” and hide savings badges for those policies.
+>
+> ---
+>
+> ### Step 1: Inspect current pricing and UI filtering
+>
+> 1. Search for:
+>
+>    * `pricingStatus`, `annualPremium`, `monthlyPremium`
+>    * `policy_snapshots` and how `structured_policy.pricing` is set
+>    * frontend code that **filters** policies based on prices, e.g. conditions like `if (!pricing?.annualPremium) return null;`.
+> 2. Identify:
+>
+>    * Where the PricingAgent is invoked
+>    * Where full OCR text for a document is available (for the fallback search)
+>    * Where `comparison_id = 'c41774ea-b8cd-4afd-97e3-2258d1187e6a'` is loaded and rendered
+>
+> ---
+>
+> ### Step 2: Implement multi-pass pricing pipeline
+>
+> For each `policy_snapshot`:
+>
+> 1. Extend or confirm this structure inside `structured_policy.pricing`:
+>
+>    ```ts
+>    pricing: {
+>      annualPremium: number | null;
+>      monthlyPremium: number | null;
+>      source: 'segment_regex' | 'segment_llm' | 'nearby_ocr' | 'global_recovery' | null;
+>      confidence: 'high' | 'medium' | 'low' | 'missing';
+>      status: 'ok' | 'missing' | 'needs_review';
+>    }
+>    ```
+>
+> 2. Refactor the PricingAgent (or equivalent) so that it:
+>
+>    * **Pass 1 – Segment-only**:
+>
+>      * Takes `segmentText` and `policyType`.
+>      * Runs regex for lines containing price keywords like `Din pris pr. år`, `Pris i alt pr. år`, `Årspris`.
+>      * Parses Danish-format amounts: `\d{1,3}(\.\d{3})*,\d{2}\s*kr`.
+>      * If a plausible candidate is found:
+>
+>        * set `annualPremium`, `source = 'segment_regex'`, `confidence = 'high'`, `status = 'ok'`.
+>        * return.
+>    * **Pass 2 – Nearby OCR**:
+>
+>      * If Pass 1 found nothing:
+>
+>        * Use `fullOcrText` + a `pageRange` for the segment (or equivalent marker).
+>        * Extract a window of text (±1 page worth) around the segment.
+>        * Look for lines containing both:
+>
+>          * the policyType name (or synonyms, e.g. "Ulykkesforsikring", "Ulykke"), and
+>          * a price pattern with `kr` and possibly `pr. år`.
+>        * If exactly one plausible line is found:
+>
+>          * parse it, set `annualPremium`, `source = 'nearby_ocr'`, `confidence = 'medium'`, `status = 'ok'`.
+>          * return.
+>    * **Pass 3 – LLM fallback**:
+>
+>      * If Pass 2 also fails:
+>
+>        * Call the LLM with:
+>
+>          * `segmentText`
+>          * a small list of price-like lines from the full OCR
+>          * the `policyType`
+>        * Prompt it to:
+>
+>          * either choose the right total annual price line for **this specific policy**, or
+>          * sum partial premiums in the segment.
+>        * Return strict JSON: `{ "annualPremium": number | null, "monthlyPremium": number | null }`.
+>        * If result is plausible:
+>
+>          * set `source = 'segment_llm'` or `'global_recovery'`, `confidence = 'medium'`, `status = 'ok'`.
+>        * Otherwise:
+>
+>          * `annualPremium = null`, `status = 'missing'`, `confidence = 'missing'`.
+>
+> 3. Implement and use a plausibility helper:
+>
+>    ```ts
+>    function isPlausibleAnnualPremium(policyType: string, amount: number): boolean {
+>      if (['hus', 'fritidshus'].includes(policyType)) {
+>        return amount >= 1500 && amount <= 30000;
+>      }
+>      if (policyType === 'indbo') {
+>        return amount >= 300 && amount <= 15000;
+>      }
+>      if (policyType === 'ulykke') {
+>        return amount >= 200 && amount <= 10000;
+>      }
+>      return true;
+>    }
+>    ```
+>
+>    * If the extracted price is not plausible:
+>
+>      * Treat it as `missing` (or run one last LLM attempt).
+>
+> 4. Add structured logging:
+>
+>    ```ts
+>    log.info('pricing_result', {
+>      docId,
+>      segmentIndex,
+>      policyType,
+>      annualPremium,
+>      source,
+>      confidence,
+>      status,
+>    });
+>    ```
+>
+> ---
+>
+> ### Step 3: Update frontend to never hide policies just because price is null
+>
+> 1. Locate all components that render:
+>
+>    * the comparison tabs
+>    * the “samlet oversigt” view
+>
+> 2. Remove any filters like:
+>
+>    ```ts
+>    if (!policy.pricing?.annualPremium) return null;
+>    ```
+>
+>    or equivalent.
+>
+> 3. Instead:
+>
+>    * Always render the policy.
+>    * If `pricing.status !== 'ok'` or `annualPremium` is null:
+>
+>      * Show a label like “Pris mangler i tilbuddet”.
+>      * Hide savings badges and price comparisons.
+>
+> ---
+>
+> ### Step 4: Test with Types Studio comparison
+>
+> 1. Rerun the extraction/pricing pipeline for the underlying document(s) of comparison:
+>
+>    * `c41774ea-b8cd-4afd-97e3-2258d1187e6a`
+> 2. Open the frontend comparison view for that comparison id.
+> 3. Verify:
+>
+>    * Fritidshus policy shows with a correct price.
+>    * Ulykkesforsikring and indboforsikring both appear:
+>
+>      * with a valid annual price if the pipeline can find it, OR
+>      * with a clear “Pris mangler” label but still with coverage items and presence in the UI.
+>
+> Please implement all these steps, keeping the code clean and well typed.
+> Focus on correctness and making sure Ulykkesforsikring + Indboforsikring **never disappear** from the frontend again just because price is missing.
+
+---
+
+## 3. Iteration 2 – hvis Types Studio stadig ikke får pris
+
+Hvis du efter Iteration 1 stadig oplever at ulykke/indbo ingen pris får, så går vi all-in på en dedikeret **PricingRecoveryAgent**, der kun kører for policies med `pricing.status = 'missing'`.
+
+Her er næste prompt du kan bruge:
+
+> We’ve implemented a multi-pass pricing pipeline and UI changes as in Iteration 1, but for the Types Studio offer (`comparison_id = 'c41774ea-b8cd-4afd-97e3-2258d1187e6a'`), some policies (typically ulykkesforsikring / indboforsikring) may still end up with `pricing.status = 'missing'`.
+>
+> We now want a dedicated **PricingRecoveryAgent** to run on these “missing” cases and try a more expensive, reasoning-heavy fallback without blocking the main flow.
+>
+> ### Goal (Iteration 2)
+>
+> * For any `policy_snapshot` where `pricing.status = 'missing'`, run a separate AI step:
+>
+>   * Use the full OCR text, segment text, policyType, and any price-like lines as context.
+>   * Ask the LLM to:
+>
+>     * decide if one of the price lines is the correct total annual premium for this specific policy, or
+>     * compute the total annual premium by summing component premiums.
+>   * Update `structured_policy.pricing` if a plausible price is found (`source = 'global_recovery'`, `confidence = 'medium'`).
+>
+> ### Tasks
+>
+> 1. Create a new server-side function/service, e.g. `PricingRecoveryAgent.runForSnapshot(snapshotId)`:
+>
+>    * It should:
+>
+>      * Load the snapshot.
+>      * Load `fullOcrText` and segment info for the parent document.
+>      * Collect all lines matching a price pattern from the full OCR.
+>      * Call the LLM with a clear JSON schema and enough context.
+>      * Apply the plausibility check before saving results.
+>
+> 2. Integrate this recovery step into the comparison pipeline:
+>
+>    * Option A: synchronous for now:
+>
+>      * After the main pricing pass, if `pricing.status = 'missing'`, call `PricingRecoveryAgent.runForSnapshot`.
+>    * Option B (later): background job queue that picks up snapshots with missing prices.
+>
+> 3. Add logging so we can see:
+>
+>    ```ts
+>    log.info('pricing_recovery', {
+>      snapshotId,
+>      policyType,
+>      previousStatus,
+>      newAnnualPremium,
+>      source: 'global_recovery',
+>      confidence,
+>    });
+>    ```
+>
+> 4. Re-run the full pipeline for the Types Studio / Lærerstandens document(s):
+>
+>    * Verify that ulykkesforsikring and indboforsikring now get a non-null annual premium (if the information truly exists in the PDF).
+>    * The frontend should reflect this without any code changes (because it already handles missing/default cases from Iteration 1).
+>
+> Make sure the recovery logic is **well isolated**:
+>
+> * It should only run when main pricing failed.
+> * It should never overwrite a `status = 'ok'` price.
+
+---
+
+Hvis du vil, kan vi bagefter lave en lille liste over “golden PDF’er” (Types Studio, Tryg, Alm. Brand osv.) og designe 100% konkrete asserts for hver, så du har et rigtigt regressions-net og ikke står og gætter, hver gang du tweaker noget.
+
+Men helt konkret:
+Hvis du smider Iteration-1 prompten i Replit nu, og derefter tester Types Studio-tilbuddet igen, bør du **mindst** få:
+
+* fritidshus med pris
+* ulykke + indbo synlige i UI (med eller uden pris)
+
+Og så kan Iteration-2 prompten tage sig af de sidste stubborn pricing-cases.
